@@ -6,6 +6,16 @@ UTask dùng hai workflow điều phối và một workflow dùng lại trong Git
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` chỉ chạy sau khi workflow CI hoàn tất thành công cho lần đẩy lên `main`. Workflow dựng và đẩy sáu image lên GitHub Container Registry đúng một lần, sau đó triển khai staging bằng Docker Compose qua SSH.
 
+## Kiểm tra CI local trước khi đẩy mã
+
+Chạy từ thư mục gốc repository:
+
+```powershell
+python scripts/ci_local.py
+```
+
+Lệnh này kiểm tra Compose, Nginx, script PostgreSQL, lint/format/test của sáu service Python, lint/typecheck/test/build của Web và dựng Docker image. Dùng `python scripts/ci_local.py --skip-images` để bỏ qua bước dựng image khi cần vòng lặp nhanh hơn. GitHub Actions vẫn là bước kiểm tra bắt buộc trên remote; script local không đẩy image hoặc triển khai staging.
+
 ## Cấu hình GitHub
 
 Tạo Environment có tên `staging` và giới hạn nhánh triển khai là `main`. Việc yêu cầu người duyệt trước khi triển khai là tùy chọn quản trị, không thay đổi cơ chế workflow tự khởi động sau CI.

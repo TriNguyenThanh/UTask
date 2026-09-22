@@ -130,6 +130,7 @@ contracts/     API và Kafka event schema có version
 datasets/      fixture và regression evaluation cho AI
 infra/         asset Docker, Nginx, PostgreSQL, Redis và Kafka
 docs/          tài liệu kiến trúc, API và ADR
+scripts/       công cụ kiểm tra CI local trước khi đẩy mã
 .github/       CI workflow
 ```
 
@@ -150,6 +151,18 @@ corepack pnpm lint
 corepack pnpm typecheck
 corepack pnpm test
 corepack pnpm build
+```
+
+Trước khi đẩy mã lên remote, chạy bộ kiểm tra CI local:
+
+```powershell
+python scripts/ci_local.py
+```
+
+Lệnh trên kiểm tra Compose, Nginx, script PostgreSQL, sáu service Python, Web và dựng Docker image. Nếu chỉ cần kiểm tra mã nguồn nhanh, bỏ qua bước dựng image:
+
+```powershell
+python scripts/ci_local.py --skip-images
 ```
 
 GitHub Actions chạy các check tương đương theo đường dẫn thay đổi; bộ Pytest của AI bao gồm regression evaluation. Pull Request dựng image của service bị ảnh hưởng để kiểm tra Dockerfile. Khi CI trên `main` thành công, workflow phát hành dựng và đẩy sáu image lên GHCR đúng một lần, sau đó tự động triển khai staging theo [tài liệu CI/CD](docs/ci-cd.md). Có thể kiểm tra cấu hình bằng `docker compose config`; build image local dùng `docker compose build`.
