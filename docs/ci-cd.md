@@ -1,10 +1,10 @@
 # CI/CD
 
-UTask dùng hai workflow điều phối và một workflow dùng lại trong GitHub Actions:
+UTask dùng một workflow điều phối và hai workflow dùng lại trong GitHub Actions:
 
-1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Pytest của AI bao gồm regression evaluation. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` không dựng image tại bước này.
+1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Pytest của AI bao gồm regression evaluation. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` chỉ gọi phát hành sau khi mọi kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
-3. `release-staging.yml` chỉ chạy sau khi workflow CI hoàn tất thành công cho lần đẩy lên `main`. Workflow dựng và đẩy sáu image lên GitHub Container Registry đúng một lần, sau đó triển khai staging bằng Docker Compose qua SSH.
+3. `release-staging.yml` là workflow dùng lại do `ci.yml` gọi. Workflow chỉ dựng và đẩy image của service có mã nguồn thay đổi. Với service không đổi, workflow gắn thẻ SHA mới cho manifest `main` hiện có mà không dựng lại image. Sau khi đủ sáu image của cùng bản phát hành, workflow triển khai staging bằng Docker Compose qua SSH.
 
 ## Kiểm tra CI local trước khi đẩy mã
 
@@ -80,14 +80,14 @@ KAFKA_CLUSTER_ID=<kraft-cluster-id>
 ```text
 Pull Request → CI theo đường dẫn → merge vào main
                                   ↓
-                        build + push image lên GHCR
+             build image đổi + gắn thẻ lại image không đổi
                                   ↓
                     Environment staging gate (nếu cấu hình)
                                   ↓
                  SSH → compose pull → compose up --wait
 ```
 
-Image được gắn hai thẻ: `main` và `sha-<commit>`. Staging triển khai bằng thẻ SHA của chính commit đã vượt qua CI, nhờ đó lần triển khai không bị thay thế bởi một lần đẩy khác lên `main`; thẻ `main` vẫn dùng để tra cứu image mới nhất.
+Mỗi service vẫn có image độc lập. Image thay đổi được gắn hai thẻ: `main` và `sha-<commit>`. Image không đổi giữ nguyên manifest và chỉ nhận thêm thẻ `sha-<commit>`, nhờ đó Compose vẫn triển khai một bộ sáu image đồng nhất theo cùng SHA mà không dựng lại service không liên quan. Thẻ `main` là nguồn hiện hành để tái sử dụng; nếu image này chưa tồn tại, phát hành dừng thay vì tạo kết quả giả.
 
 Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ dừng với thông báo thiếu cấu hình; không có triển khai giả hoặc tự động bỏ qua lỗi.
 

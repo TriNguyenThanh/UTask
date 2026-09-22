@@ -1,10 +1,30 @@
 name: Release images and deploy staging
 
 on:
-  workflow_run:
-    workflows: [Continuous integration]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Commit SHA that passed continuous integration
+        required: true
+        type: string
+      identity_changed:
+        required: true
+        type: boolean
+      work_changed:
+        required: true
+        type: boolean
+      classroom_changed:
+        required: true
+        type: boolean
+      integration_changed:
+        required: true
+        type: boolean
+      notification_changed:
+        required: true
+        type: boolean
+      ai_changed:
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -15,10 +35,6 @@ env:
 
 jobs:
   publish-images:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -27,18 +43,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - identity-service
-          - work-service
-          - classroom-service
-          - integration-service
-          - notification-service
-          - ai-service
+        include:
+          - service: identity-service
+            changed: ${{ inputs.identity_changed }}
+          - service: work-service
+            changed: ${{ inputs.work_changed }}
+          - service: classroom-service
+            changed: ${{ inputs.classroom_changed }}
+          - service: integration-service
+            changed: ${{ inputs.integration_changed }}
+          - service: notification-service
+            changed: ${{ inputs.notification_changed }}
+          - service: ai-service
+            changed: ${{ inputs.ai_changed }}
     steps:
       - name: Check out tested commit
+        if: matrix.changed == true
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -50,32 +73,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract image metadata
-        id: metadata
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
-          tags: |
-            type=raw,value=main
-            type=raw,value=sha-${{ github.event.workflow_run.head_sha }}
-
-      - name: Build and push image
+      - name: Build and push changed image
+        if: matrix.changed == true
         uses: docker/build-push-action@v6
         with:
           context: ./apps/${{ matrix.service }}
           file: ./apps/${{ matrix.service }}/Dockerfile
           push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
+          tags: |
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:main
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:sha-${{ inputs.source_sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
+      - name: Reuse unchanged image for this release
+        if: matrix.changed != true
+        env:
+          IMAGE: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${IMAGE}:sha-${SOURCE_SHA}" \
+            "${IMAGE}:main"
+
   deploy-staging:
     needs: publish-images
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -96,14 +120,14 @@ jobs:
       STAGING_REGISTRY_TOKEN: ${{ secrets.STAGING_REGISTRY_TOKEN }}
       STAGING_REGISTRY: ghcr.io
       STAGING_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/utask
-      # Deploy the exact image built from the successful CI commit. The mutable
-      # `main` tag is still published for discovery, but is not used for rollout.
-      STAGING_IMAGE_TAG: sha-${{ github.event.workflow_run.head_sha }}
+      # Deploy the exact release assembled from the tested commit. Changed
+      # images are built; unchanged images reuse their existing manifests.
+      STAGING_IMAGE_TAG: sha-${{ inputs.source_sha }}
     steps:
       - name: Check out tested deployment files
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
 
       - name: Validate staging settings
         shell: bash

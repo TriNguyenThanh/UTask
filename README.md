@@ -165,7 +165,7 @@ Lệnh trên kiểm tra Compose, Nginx, script PostgreSQL, sáu service Python, 
 python scripts/ci_local.py --skip-images
 ```
 
-GitHub Actions chạy các check tương đương theo đường dẫn thay đổi; bộ Pytest của AI bao gồm regression evaluation. Pull Request dựng image của service bị ảnh hưởng để kiểm tra Dockerfile. Khi CI trên `main` thành công, workflow phát hành dựng và đẩy sáu image lên GHCR đúng một lần, sau đó tự động triển khai staging theo [tài liệu CI/CD](docs/ci-cd.md). Có thể kiểm tra cấu hình bằng `docker compose config`; build image local dùng `docker compose build`.
+GitHub Actions chạy các check tương đương theo đường dẫn thay đổi; bộ Pytest của AI bao gồm regression evaluation. Pull Request dựng image của service bị ảnh hưởng để kiểm tra Dockerfile. Khi CI trên `main` thành công, workflow phát hành chỉ dựng image của service thay đổi và tái sử dụng manifest của service không đổi, sau đó triển khai một bộ image cùng thẻ SHA lên staging theo [tài liệu CI/CD](docs/ci-cd.md). Có thể kiểm tra cấu hình bằng `docker compose config`; build image local dùng `docker compose build`.
 
 ### Cấu hình GitHub Environment `staging`
 

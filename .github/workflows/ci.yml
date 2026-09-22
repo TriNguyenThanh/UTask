@@ -25,7 +25,9 @@ jobs:
       integration: ${{ steps.filter.outputs.integration }}
       notification: ${{ steps.filter.outputs.notification }}
       ai: ${{ steps.filter.outputs.ai }}
+      ai_image: ${{ steps.filter.outputs.ai_image }}
       web: ${{ steps.filter.outputs.web }}
+      deployment: ${{ steps.filter.outputs.deployment }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
@@ -52,8 +54,16 @@ jobs:
             ai:
               - 'apps/ai-service/**'
               - 'datasets/**'
+            ai_image:
+              - 'apps/ai-service/**'
             web:
               - 'apps/web/**'
+            deployment:
+              - 'docker-compose.yml'
+              - 'infra/env/*.env'
+              - 'infra/nginx/nginx.conf'
+              - 'infra/postgres/init-databases.sh'
+              - 'datasets/**'
 
   compose-config:
     needs: changes
@@ -146,3 +156,44 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  release-staging:
+    needs:
+      - changes
+      - compose-config
+      - identity-service
+      - work-service
+      - classroom-service
+      - integration-service
+      - notification-service
+      - ai-service
+      - web
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.result == 'success' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (
+        needs.changes.outputs.identity == 'true' ||
+        needs.changes.outputs.work == 'true' ||
+        needs.changes.outputs.classroom == 'true' ||
+        needs.changes.outputs.integration == 'true' ||
+        needs.changes.outputs.notification == 'true' ||
+        needs.changes.outputs.ai_image == 'true' ||
+        needs.changes.outputs.deployment == 'true'
+      )
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-staging.yml
+    with:
+      source_sha: ${{ github.sha }}
+      identity_changed: ${{ needs.changes.outputs.identity == 'true' }}
+      work_changed: ${{ needs.changes.outputs.work == 'true' }}
+      classroom_changed: ${{ needs.changes.outputs.classroom == 'true' }}
+      integration_changed: ${{ needs.changes.outputs.integration == 'true' }}
+      notification_changed: ${{ needs.changes.outputs.notification == 'true' }}
+      ai_changed: ${{ needs.changes.outputs.ai_image == 'true' }}
+    secrets: inherit
