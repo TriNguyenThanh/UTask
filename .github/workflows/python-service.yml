@@ -1,0 +1,42 @@
+name: Python service checks
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Python service directory below apps.
+        required: true
+        type: string
+      validate_image:
+        description: Build the service image without publishing it.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/${{ inputs.service }}
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-production-secret
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install locked dependencies
+        run: uv sync --all-groups --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Test, including AI evaluations when present
+        run: uv run pytest
+      - name: Validate Docker image
+        if: inputs.validate_image
+        run: docker build --tag "utask/${{ inputs.service }}:ci" .

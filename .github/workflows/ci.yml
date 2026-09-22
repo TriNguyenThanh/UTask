@@ -1,0 +1,139 @@
+name: Continuous integration
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      identity: ${{ steps.filter.outputs.identity }}
+      work: ${{ steps.filter.outputs.work }}
+      classroom: ${{ steps.filter.outputs.classroom }}
+      integration: ${{ steps.filter.outputs.integration }}
+      notification: ${{ steps.filter.outputs.notification }}
+      ai: ${{ steps.filter.outputs.ai }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            shared:
+              - '.github/workflows/**'
+              - 'docker-compose.yml'
+              - '.env.example'
+              - 'infra/**'
+              - 'contracts/**'
+              - 'docs/architecture/**'
+              - 'AGENTS.md'
+            identity:
+              - 'apps/identity-service/**'
+            work:
+              - 'apps/work-service/**'
+            classroom:
+              - 'apps/classroom-service/**'
+            integration:
+              - 'apps/integration-service/**'
+            notification:
+              - 'apps/notification-service/**'
+            ai:
+              - 'apps/ai-service/**'
+              - 'datasets/**'
+            web:
+              - 'apps/web/**'
+
+  compose-config:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: sh -n infra/postgres/init-databases.sh
+      - run: docker run --rm -v "$GITHUB_WORKSPACE/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.27-alpine nginx -t
+
+  identity-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.identity == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: identity-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  work-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.work == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: work-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  classroom-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.classroom == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: classroom-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  integration-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.integration == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: integration-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  notification-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.notification == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: notification-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  ai-service:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.ai == 'true'
+    uses: ./.github/workflows/python-service.yml
+    with:
+      service: ai-service
+      validate_image: ${{ github.event_name == 'pull_request' }}
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

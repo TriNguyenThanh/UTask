@@ -1,0 +1,175 @@
+name: Release images and deploy staging
+
+on:
+  workflow_run:
+    workflows: [Continuous integration]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ghcr.io/${{ github.repository_owner }}/utask
+
+jobs:
+  publish-images:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - identity-service
+          - work-service
+          - classroom-service
+          - integration-service
+          - notification-service
+          - ai-service
+    steps:
+      - name: Check out tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
+          tags: |
+            type=raw,value=main
+            type=raw,value=sha-${{ github.event.workflow_run.head_sha }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/${{ matrix.service }}
+          file: ./apps/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy-staging:
+    needs: publish-images
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    concurrency:
+      group: staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_WORKDIR: ${{ vars.STAGING_WORKDIR }}
+      STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+      STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+      STAGING_REGISTRY_USERNAME: ${{ secrets.STAGING_REGISTRY_USERNAME }}
+      STAGING_REGISTRY_TOKEN: ${{ secrets.STAGING_REGISTRY_TOKEN }}
+      STAGING_REGISTRY: ghcr.io
+      STAGING_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/utask
+      # Deploy the exact image built from the successful CI commit. The mutable
+      # `main` tag is still published for discovery, but is not used for rollout.
+      STAGING_IMAGE_TAG: sha-${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Check out tested deployment files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Validate staging settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable_name in STAGING_HOST STAGING_USER STAGING_WORKDIR STAGING_KNOWN_HOSTS STAGING_SSH_PRIVATE_KEY STAGING_REGISTRY_USERNAME STAGING_REGISTRY_TOKEN; do
+            if [[ -z "${!variable_name}" ]]; then
+              echo "Missing required staging setting: ${variable_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Upload deployment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${STAGING_USER}@${STAGING_HOST}"
+          printf '%s\n' "$STAGING_WORKDIR" | ssh "$target" '
+            IFS= read -r workdir
+            mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets"
+          '
+          scp docker-compose.yml "$target:${STAGING_WORKDIR}/docker-compose.yml"
+          scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"
+          scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
+          scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.conf"
+          scp -r datasets/* "$target:${STAGING_WORKDIR}/datasets/"
+
+      - name: Pull images and restart staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${STAGING_USER}@${STAGING_HOST}"
+          {
+            printf '%s\n' "$STAGING_REGISTRY_TOKEN"
+            printf '%s\n' "$STAGING_WORKDIR"
+            printf '%s\n' "$STAGING_REGISTRY"
+            printf '%s\n' "$STAGING_REGISTRY_USERNAME"
+            printf '%s\n' "$STAGING_IMAGE_PREFIX"
+            printf '%s\n' "$STAGING_IMAGE_TAG"
+            cat <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
+          trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
+          cd "$workdir"
+          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose config --quiet
+          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose pull --quiet
+          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose up -d --remove-orphans --wait --wait-timeout 120
+          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose ps
+          REMOTE_SCRIPT
+          } | ssh "$target" '
+            IFS= read -r registry_token
+            IFS= read -r workdir
+            IFS= read -r registry
+            IFS= read -r registry_user
+            IFS= read -r image_prefix
+            IFS= read -r image_tag
+            export registry_token workdir registry registry_user image_prefix image_tag
+            bash -s
+          '
