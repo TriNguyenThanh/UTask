@@ -1,0 +1,93 @@
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.envrc
+
+# Python and uv virtual environments
+.venv/
+venv/
+# Keep generic virtual environments ignored only at the repository root so
+# infra/env/ remains available for the tracked Compose env_file mappings.
+/env/
+/ENV/
+.python-version
+__pypackages__/
+
+# Python bytecode and native extensions
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Python tooling, tests, coverage, and package output
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+*.cover
+*.py.cover
+*.lcov
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-log.txt
+
+# Django local runtime files
+*.sqlite3
+*.sqlite3-*
+local_settings.py
+apps/*/media/
+apps/*/staticfiles/
+*.log
+
+# Celery, Redis, and Kafka local state
+celerybeat-schedule
+celerybeat.pid
+*.rdb
+*.aof
+kafka-logs/
+kraft-combined-logs/
+
+# Node.js, pnpm, Vite, and TypeScript generated files
+node_modules/
+.pnpm-store/
+.vite/
+*.tsbuildinfo
+vite.config.*.timestamp-*
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# Docker local overrides
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# IDE and operating-system files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+tempCodeRunnerFile.py
+
+# Certificates and private keys kept only on local machines
+*.pem
+*.key
