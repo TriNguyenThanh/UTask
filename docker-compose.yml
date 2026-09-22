@@ -1,0 +1,159 @@
+name: utask
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/postgres.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.0
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/kafka.env
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+  identity-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/identity-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/identity-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/identity-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: &django_healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  work-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/work-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/work-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+
+  classroom-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/classroom-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/classroom-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/classroom-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+
+  integration-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/integration-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/integration-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/integration-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+
+  notification-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/notification-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/notification-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/notification-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+
+  ai-service:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/ai-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/ai-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/ai-service.env
+    volumes:
+      - ./datasets:/app/datasets:ro
+    depends_on:
+      work-service:
+        condition: service_healthy
+      integration-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${UTASK_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      work-service:
+        condition: service_healthy
+      classroom-service:
+        condition: service_healthy
+      integration-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
