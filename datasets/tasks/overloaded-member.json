@@ -1,0 +1,35 @@
+[
+    {
+        "id": "task-1",
+        "title": "Create AI API",
+        "status": "IN_PROGRESS",
+        "priority": "HIGH",
+        "story_points": 8,
+        "due_date": "2026-09-22",
+        "assignee_ids": [
+            "user-ana"
+        ]
+    },
+    {
+        "id": "task-2",
+        "title": "Evaluate workload",
+        "status": "TODO",
+        "priority": "MEDIUM",
+        "story_points": 5,
+        "due_date": "2026-09-23",
+        "assignee_ids": [
+            "user-ana"
+        ]
+    },
+    {
+        "id": "task-3",
+        "title": "Set up Nginx",
+        "status": "TODO",
+        "priority": "LOW",
+        "story_points": 3,
+        "due_date": "2026-10-01",
+        "assignee_ids": [
+            "user-binh"
+        ]
+    }
+]
