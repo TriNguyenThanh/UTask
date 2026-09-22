@@ -39,7 +39,6 @@ jobs:
               - 'infra/**'
               - 'contracts/**'
               - 'docs/architecture/**'
-              - 'AGENTS.md'
             identity:
               - 'apps/identity-service/**'
             work:
@@ -65,7 +64,17 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - run: sh -n infra/postgres/init-databases.sh
-      - run: docker run --rm -v "$GITHUB_WORKSPACE/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.27-alpine nginx -t
+      - name: Validate Nginx configuration
+        run: |
+          docker run --rm \
+            --add-host identity-service:127.0.0.1 \
+            --add-host work-service:127.0.0.1 \
+            --add-host classroom-service:127.0.0.1 \
+            --add-host integration-service:127.0.0.1 \
+            --add-host notification-service:127.0.0.1 \
+            --add-host ai-service:127.0.0.1 \
+            -v "$GITHUB_WORKSPACE/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            nginx:1.27-alpine nginx -t
 
   identity-service:
     needs: changes
@@ -126,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.26.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
