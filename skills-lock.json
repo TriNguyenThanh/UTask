@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "api-security-review": {
+      "source": "owasp/secure-agent-playbook",
+      "sourceType": "github",
+      "skillPath": "plugins/code-security-skills/skills/api-security-review/SKILL.md",
+      "computedHash": "fac03deef4e335dcae09bd9b7687489881261e8abdc6cbcb6e160cb81e571fda"
+    },
+    "developing-kafka-python-client": {
+      "source": "confluentinc/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/developing-kafka-python-client/SKILL.md",
+      "computedHash": "23ef04b37b416d08f467a7062c28603eed1a464cb125065b920b3128808728e7"
+    },
+    "django-expert": {
+      "source": "vintasoftware/django-ai-plugins",
+      "sourceType": "github",
+      "skillPath": "skills/django-expert/SKILL.md",
+      "computedHash": "3efd4c5513e401438dd3c275a7ce7c7838566bfc455d22ed731fbc5879cb56c1"
+    },
+    "postgres-best-practices": {
+      "source": "neondatabase/postgres-skills",
+      "sourceType": "github",
+      "skillPath": "skills/postgres-best-practices/SKILL.md",
+      "computedHash": "316f8f76c582ff3bf9a6c8e4238867dbdbf70735587f40cb634c4d046ff5db42"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "128fac78002d916c8ca908245d398e634f540d8bcf20915b2b2359aeb18eba59"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/composition-patterns/SKILL.md",
+      "computedHash": "10eb4ec94577b79ae98c63ce3e7f35f8a6a06436a4011bff083b397de6960eeb"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "6b526d013e28073246a36f99b529bc43745d30832ecfa8217b359c34f260ca6b"
+    }
+  }
+}
