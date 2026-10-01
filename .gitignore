@@ -91,3 +91,4 @@ tempCodeRunnerFile.py
 # Certificates and private keys kept only on local machines
 *.pem
 *.key
+docs/temp

@@ -1,3 +1,6 @@
-# Architecture decisions
+# Quyết định kiến trúc
 
-Record decisions that change or clarify the baseline here. This foundation implements the existing baseline and introduces no ADR.
+Ghi ADR tại đây khi một quyết định mới làm thay đổi hoặc làm rõ kiến trúc đã
+được ghi trong [tài liệu hệ thống](../system/README.md). ADR nên nêu bối cảnh,
+các lựa chọn, quyết định, hệ quả và trạng thái. Không dùng ADR để nhân bản
+tài liệu vận hành hoặc danh mục API/sự kiện.

@@ -1,3 +1,8 @@
 # API contracts
 
-OpenAPI is served by implemented Django services at `/api/schema/` and `/api/docs/`. AI schemas are served by FastAPI OpenAPI. Service-local API paths are versioned under `/api/v1/`; Nginx strips its service prefix before forwarding.
+Đặt tại đây các hợp đồng API máy đọc được, nếu đã được chốt. Tài liệu giải
+thích dành cho đội phát triển nằm trong `docs/<service>/`. Sự hiện diện của thư
+mục này không khẳng định một endpoint đã được triển khai hoặc công bố.
+
+Phân biệt API người dùng, API nội bộ, webhook và endpoint health. Đánh dấu rõ
+hợp đồng mục tiêu chưa triển khai; không tạo schema giả để lấp đầy thư mục.
