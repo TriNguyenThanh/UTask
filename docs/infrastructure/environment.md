@@ -7,6 +7,8 @@ Các giá trị được tách giữa tệp `.env` cục bộ và các tệp án
 - `django.env`: cấu hình dùng chung cho các dịch vụ Django.
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
+- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
+  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
 Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo `.env` cục bộ
 theo mẫu repository rồi kiểm tra cấu hình Compose:

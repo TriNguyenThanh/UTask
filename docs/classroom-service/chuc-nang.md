@@ -64,7 +64,8 @@ cụ thể.
 Việc sinh viên có thể thuộc nhiều nhóm trong cùng khóa học, giới hạn số lượng
 thành viên nhóm, thời điểm đổi nhóm và quyền giảng viên được thêm vào khóa học
 đối với thao tác nhóm đều cần được quyết định. Tên sự kiện trong bảng là tên mục
-tiêu; schema, producer và consumer chưa được xác nhận.
+tiêu. Producer Kafka nền tảng đã được cấu hình; luồng phát sự kiện nghiệp vụ,
+topic, schema, phiên bản và consumer vẫn chưa được chốt.
 
 ## Xem dữ liệu theo quyền
 

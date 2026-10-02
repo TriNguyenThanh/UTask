@@ -36,6 +36,13 @@ kết nối PostgreSQL qua biến môi trường, Dockerfile và dependency đư
 bằng `uv` với lockfile. **Chưa triển khai**: mô hình dữ liệu và chức năng nghiệp
 vụ nêu trong tài liệu này.
 
+Classroom Service được cấu hình địa chỉ Kafka qua `KAFKA_BOOTSTRAP_SERVERS`
+(Compose local dùng `kafka:9092`) và có factory tạo JSON producer tại
+`config.kafka.create_producer()`. Producer chỉ được khởi tạo khi được gọi; lỗi
+hoặc chưa sẵn sàng của Kafka không làm hỏng khởi động Django hay `/healthz`.
+Chưa có luồng nghiệp vụ nào gọi producer: schema, phiên bản và topic cho các sự
+kiện thành viên nhóm vẫn cần chốt trước khi phát sự kiện.
+
 Chạy qua Docker Compose từ thư mục gốc repo:
 
 ```sh
