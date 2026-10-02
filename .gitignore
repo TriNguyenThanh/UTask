@@ -92,3 +92,5 @@ tempCodeRunnerFile.py
 *.pem
 *.key
 docs/temp
+.agents/
+.claude/

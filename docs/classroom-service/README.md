@@ -1,22 +1,55 @@
 # Classroom Service
 
-**Trạng thái tài liệu: Thiết kế mục tiêu; hiện trạng mã nguồn chưa xác minh.**
+Tài liệu:
 
-Classroom Service quản lý cấu trúc học tập và quan hệ trong lớp: môn học, lớp,
-giảng viên, sinh viên, ghi danh, nhóm, thành viên nhóm và kỳ học nếu cần. Câu
-hỏi service này trả lời là: **ai học với ai, thuộc lớp nào và thuộc nhóm nào?**
+- [Phân tích chức năng và hiện trạng triển khai](chuc-nang.md)
+- [Chức năng theo tác nhân](objects.md)
+- [Mô hình dữ liệu đề xuất](data-model.md)
+
+Classroom Service là service quản lý cấu trúc học tập và quan hệ học tập.
+Service chỉ dùng **khóa học** (`Course`) để quản lý, không tách thêm tầng lớp
+học riêng biệt. Câu hỏi service này trả lời là: **ai học với ai, thuộc khóa học
+nào và thuộc nhóm nào?**
+
 
 ```text
-Teacher → Class → Group → Project → Sprint → Task
+Teacher → Course → Group → Project → Sprint → Task
    └────────── Classroom Service ─────┘
                          └── Project Service ──┘
 ```
 
-Classroom Service sở hữu `GroupMember`; Project Service sở hữu
-`ProjectMember`. Giảng viên xem project qua quan hệ lớp → nhóm → project, không
-cần được thêm làm thành viên dự án. `class_id` và `group_id` ở Project Service
-chỉ là ID tham chiếu, không phải khóa ngoại xuyên database.
+Phạm vi dữ liệu mục tiêu gồm khóa học (`Course`), giảng viên khóa học
+(`CourseInstructor`), sinh viên khóa học (`CourseStudent`), nhóm (`Group`) và
+thành viên nhóm (`GroupMember`). Classroom Service sở hữu quan hệ thành viên
+nhóm; Project Service sở hữu thành viên dự án. Giảng viên theo dõi project qua
+quan hệ giảng viên → khóa học → nhóm → project, không cần được thêm làm thành
+viên dự án. `course_id` và `group_id` ở Project Service chỉ là ID tham chiếu,
+không phải khóa ngoại xuyên database.
 
-Thay đổi cần câu trả lời ngay có thể dùng REST. Thông báo việc lớp, nhóm hoặc
-thành viên thay đổi đi qua Kafka. API và sự kiện cụ thể chỉ được ghi như đã có
-sau khi đối chiếu hợp đồng API/sự kiện.
+Các API và sự kiện cụ thể cần được xác nhận bằng hợp đồng trước khi xem là đã
+chốt.
+
+## Trạng thái khởi tạo
+
+**Đã triển khai**: khung Django tối thiểu, endpoint kiểm tra sức khỏe `/healthz`,
+kết nối PostgreSQL qua biến môi trường, Dockerfile và dependency được quản lý
+bằng `uv` với lockfile. **Chưa triển khai**: mô hình dữ liệu và chức năng nghiệp
+vụ nêu trong tài liệu này.
+
+Chạy qua Docker Compose từ thư mục gốc repo:
+
+```sh
+docker compose up --build classroom-service
+```
+
+Để chạy trực tiếp trong môi trường Python:
+
+```sh
+cd apps/classroom-service
+uv sync --locked
+uv run python manage.py runserver 0.0.0.0:8000
+```
+
+Khi chạy trực tiếp, cung cấp `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`,
+`DATABASE_NAME`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` và
+`POSTGRES_PORT` theo cấu hình local trong [biến môi trường](../infrastructure/environment.md).
