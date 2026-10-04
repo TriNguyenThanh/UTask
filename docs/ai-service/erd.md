@@ -28,7 +28,7 @@ erDiagram
         varchar intent_type
         jsonb target_scope "logical refs: project/task/user"
         varchar status
-        varchar idempotency_key
+        varchar idempotency_key "giá trị từ header Idempotency-Key"
         jsonb input_payload
         jsonb result_payload
         varchar output_schema_version

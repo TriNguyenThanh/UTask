@@ -1,0 +1,346 @@
+asyncapi: 3.0.0
+info:
+  title: UTask AI Context Events
+  version: 1.0.0
+  description: |
+    Hợp đồng Kafka mục tiêu để cập nhật bản đọc context của AI Service.
+    Producer vẫn thuộc service sở hữu dữ liệu; AI Service chỉ consume và lưu
+    projection cục bộ. Hợp đồng đã chốt thiết kế nhưng producer/consumer chưa
+    có implementation được xác minh.
+  x-utask-status: designed-not-implemented
+defaultContentType: application/json
+servers:
+  kafka:
+    host: kafka:9092
+    protocol: kafka
+    description: Kafka cluster nội bộ; địa chỉ triển khai thực tế do môi trường cung cấp.
+channels:
+  projectEvents:
+    address: utask.project.events.v1
+    messages:
+      projectChanged:
+        $ref: '#/components/messages/ProjectChanged'
+      sprintChanged:
+        $ref: '#/components/messages/SprintChanged'
+      taskChanged:
+        $ref: '#/components/messages/TaskChanged'
+  integrationEvents:
+    address: utask.integration.events.v1
+    messages:
+      githubActivityChanged:
+        $ref: '#/components/messages/GithubActivityChanged'
+  progressEvents:
+    address: utask.progress.events.v1
+    messages:
+      progressMetricChanged:
+        $ref: '#/components/messages/ProgressMetricChanged'
+operations:
+  consumeProjectEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/projectEvents'
+    summary: AI Service cập nhật project, sprint và task projection.
+    messages:
+      - $ref: '#/channels/projectEvents/messages/projectChanged'
+      - $ref: '#/channels/projectEvents/messages/sprintChanged'
+      - $ref: '#/channels/projectEvents/messages/taskChanged'
+  consumeIntegrationEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/integrationEvents'
+    summary: AI Service cập nhật GitHub activity projection.
+    messages:
+      - $ref: '#/channels/integrationEvents/messages/githubActivityChanged'
+  consumeProgressEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/progressEvents'
+    summary: AI Service cập nhật progress metric projection.
+    messages:
+      - $ref: '#/channels/progressEvents/messages/progressMetricChanged'
+components:
+  messages:
+    ProjectChanged:
+      name: project.changed
+      title: Project changed
+      payload:
+        $ref: '#/components/schemas/ProjectChangedEvent'
+    SprintChanged:
+      name: sprint.changed
+      title: Sprint changed
+      payload:
+        $ref: '#/components/schemas/SprintChangedEvent'
+    TaskChanged:
+      name: task.changed
+      title: Task changed
+      payload:
+        $ref: '#/components/schemas/TaskChangedEvent'
+    GithubActivityChanged:
+      name: github.activity.changed
+      title: GitHub activity changed
+      payload:
+        $ref: '#/components/schemas/GithubActivityChangedEvent'
+    ProgressMetricChanged:
+      name: progress.metric.changed
+      title: Progress metric changed
+      payload:
+        $ref: '#/components/schemas/ProgressMetricChangedEvent'
+  schemas:
+    EventEnvelope:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, event_version, occurred_at, producer, data]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        event_version:
+          type: string
+          const: '1'
+        occurred_at:
+          type: string
+          format: date-time
+        producer:
+          type: string
+          enum: [project-service, integration-service, progress-service]
+        data:
+          type: object
+          additionalProperties: false
+          required: [operation, entity]
+          properties:
+            operation:
+              type: string
+              enum: [upsert, delete]
+            entity:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+
+    SourceFields:
+      type: object
+      additionalProperties: false
+      required: [source_version, source_updated_at]
+      properties:
+        source_version:
+          type: string
+          minLength: 1
+        source_updated_at:
+          type: string
+          format: date-time
+
+    Project:
+      allOf:
+        - $ref: '#/components/schemas/SourceFields'
+        - type: object
+          required: [id, name, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            class_id:
+              type: string
+              format: uuid
+            group_id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            status:
+              type: string
+
+    Sprint:
+      allOf:
+        - $ref: '#/components/schemas/SourceFields'
+        - type: object
+          required: [id, project_id, name, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            project_id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            status:
+              type: string
+            start_at:
+              type: string
+              format: date
+            end_at:
+              type: string
+              format: date
+            goal:
+              type: string
+
+    Task:
+      allOf:
+        - $ref: '#/components/schemas/SourceFields'
+        - type: object
+          required: [id, project_id, title, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            project_id:
+              type: string
+              format: uuid
+            sprint_id:
+              type: string
+              format: uuid
+            assignee_user_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            status:
+              type: string
+            priority:
+              type: string
+            estimate_points:
+              type: number
+            due_at:
+              type: string
+              format: date-time
+
+    GithubActivity:
+      allOf:
+        - $ref: '#/components/schemas/SourceFields'
+        - type: object
+          required: [id, project_id, repository_key, activity_type, external_id, occurred_at]
+          properties:
+            id:
+              type: string
+              format: uuid
+            project_id:
+              type: string
+              format: uuid
+            task_id:
+              type: string
+              format: uuid
+            actor_user_id:
+              type: string
+              format: uuid
+            repository_key:
+              type: string
+            activity_type:
+              type: string
+            external_id:
+              type: string
+            activity_status:
+              type: string
+            occurred_at:
+              type: string
+              format: date-time
+
+    ProgressMetric:
+      allOf:
+        - $ref: '#/components/schemas/SourceFields'
+        - type: object
+          required: [id, scope_type, scope_id, metric_key, metric_value, measured_at, calculation_version]
+          properties:
+            id:
+              type: string
+              format: uuid
+            scope_type:
+              type: string
+              enum: [project, sprint, task]
+            scope_id:
+              type: string
+              format: uuid
+            metric_key:
+              type: string
+            metric_value:
+              type: number
+            measured_at:
+              type: string
+              format: date-time
+            calculation_version:
+              type: string
+
+    ProjectChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            event_type:
+              const: project.changed
+            producer:
+              const: project-service
+            data:
+              properties:
+                entity:
+                  $ref: '#/components/schemas/Project'
+
+    SprintChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            event_type:
+              const: sprint.changed
+            producer:
+              const: project-service
+            data:
+              properties:
+                entity:
+                  $ref: '#/components/schemas/Sprint'
+
+    TaskChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            event_type:
+              const: task.changed
+            producer:
+              const: project-service
+            data:
+              properties:
+                entity:
+                  $ref: '#/components/schemas/Task'
+
+    GithubActivityChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            event_type:
+              const: github.activity.changed
+            producer:
+              const: integration-service
+            data:
+              properties:
+                entity:
+                  $ref: '#/components/schemas/GithubActivity'
+
+    ProgressMetricChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            event_type:
+              const: progress.metric.changed
+            producer:
+              const: progress-service
+            data:
+              properties:
+                entity:
+                  $ref: '#/components/schemas/ProgressMetric'
+
+x-utask-consumer:
+  consumer_group: ai-service-context-v1
+  processing:
+    idempotency_key: event_id
+    duplicate_behavior: acknowledge-without-reapplying
+    ordering: preserve-order-per-entity-key
+    entity_key: data.entity.id
+    delete_behavior: remove-the-local-projection-after-duplicate-check
+  replay: |
+    Replay/snapshot bootstrap chưa được chốt trong v1. Không được coi Kafka
+    retention mặc định là cơ chế rebuild đầy đủ context.

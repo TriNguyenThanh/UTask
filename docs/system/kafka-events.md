@@ -12,9 +12,12 @@
 | `progress.*`, `progress.risk_detected` | Progress Service | Web, Notification, AI | Công bố chỉ số và tín hiệu tính theo luật |
 | `ai.completed` | AI Service | Notification hoặc thành phần gọi | Ví dụ kết quả AI dùng cho notification |
 
-Các sự kiện cụ thể ở trên là ví dụ trong thiết kế mục tiêu, chưa phải hợp đồng
-đã chốt. Trước khi tích hợp cần xác định schema, phiên bản, service phát, service nhận
-và quy tắc xử lý lặp. Không suy ra một sự kiện mới từ dấu `*` trong bảng.
+Các sự kiện cụ thể ở trên là danh mục mục tiêu. Hợp đồng context v1 dành cho AI
+đã được chốt riêng tại
+[`contracts/events/ai-context-v1.yaml`](../../contracts/events/ai-context-v1.yaml),
+bao gồm project, sprint, task, GitHub activity và progress metric. Các event
+khác vẫn chưa phải hợp đồng máy đọc được. Không suy ra một sự kiện mới từ dấu
+`*` trong bảng.
 
 Envelope mục tiêu có các trường chung như `event_id`, `event_type`,
 `event_version`, `occurred_at`, `producer` và `data`. Schema cuối cùng thuộc

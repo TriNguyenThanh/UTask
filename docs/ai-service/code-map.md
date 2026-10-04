@@ -48,8 +48,9 @@ phạm vi hiện tại**.
   GitHub activity đã chuẩn hóa.
 - Agent không biết Kafka; deterministic consumer và Context Layer che giấu
   topic, offset, replay, consumer group và database phía dưới.
-- Event names trong `docs/system/kafka-events.md` chỉ là danh mục thiết kế;
-  `contracts/events/` hiện chưa có schema AI đã chốt.
+- Event names ngoài phạm vi context v1 trong `docs/system/kafka-events.md` chỉ
+  là danh mục thiết kế. Schema AI context đã chốt nằm tại
+  `contracts/events/ai-context-v1.yaml`; producer/consumer runtime chưa có.
 
 ## LLM providers
 

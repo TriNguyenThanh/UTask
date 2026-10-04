@@ -1,7 +1,8 @@
 # API AI Service — giai đoạn 1
 
-**Trạng thái: Thiết kế mục tiêu; chưa triển khai và chưa phải hợp đồng máy đọc
-được.**
+**Trạng thái: Contract v1 đã chốt; implementation chưa triển khai.** Schema
+máy đọc được nằm tại
+[`contracts/api/ai-service-v1.yaml`](../../contracts/api/ai-service-v1.yaml).
 
 Tài liệu này mô tả API mà client dùng để yêu cầu AI xử lý một ý định cụ thể.
 API chỉ nhận yêu cầu và trả về bản phân tích hoặc đề xuất có cấu trúc. Ngữ cảnh
@@ -73,9 +74,8 @@ Quy ước dữ liệu:
 - Thời gian dùng RFC 3339 UTC, ví dụ `2026-10-04T09:30:00Z`.
 - Mỗi request nên có `X-Request-ID` để trace. Nếu client không gửi, API tạo
   một giá trị mới và trả lại trong response/header.
-- `Idempotency-Key` là khóa tùy chọn nhưng được khuyến nghị cho request tạo
-  kết quả. Cùng một key phải đi kèm cùng payload; dùng lại key với payload khác
-  phải trả lỗi `409`.
+- Header `Idempotency-Key` là bắt buộc cho `POST`. Cùng một key phải đi kèm
+  cùng user và payload; dùng lại key với payload khác phải trả lỗi `409`.
 
 ## 4. Tạo yêu cầu AI
 
@@ -101,8 +101,7 @@ Tạo một yêu cầu xử lý cho một trong ba intent giai đoạn 1.
     ],
     "additional_instruction": "Ưu tiên chia theo vertical slice"
   },
-  "output_schema_version": "task_decomposition.v1",
-  "idempotency_key": "decompose-task-2b7f4e0a-v1"
+  "output_schema_version": "task_decomposition.v1"
 }
 ```
 
@@ -114,7 +113,7 @@ Tạo một yêu cầu xử lý cho một trong ba intent giai đoạn 1.
 | `target.id` | Khi có `target` | ID của đối tượng trong service sở hữu dữ liệu. |
 | `input` | Có | Dữ liệu trực tiếp do user cung cấp; không thay thế context canonical từ read model. |
 | `output_schema_version` | Không | Phiên bản schema client mong muốn; mặc định là phiên bản hiện hành nếu API cho phép bỏ qua. |
-| `idempotency_key` | Không | Khóa chống tạo cùng một yêu cầu nhiều lần. Header `Idempotency-Key` có thể được dùng thay cho field này sau khi contract chốt. |
+| `Idempotency-Key` | Có ở header | Khóa chống tạo cùng một yêu cầu nhiều lần; không đặt trong body. |
 
 `requester_user_id` không xuất hiện trong request body. API lấy user từ identity
 context đã được gateway hoặc cơ chế xác thực nội bộ kiểm tra.
@@ -433,18 +432,27 @@ Budget tối thiểu cần cấu hình cho mỗi workflow: số model call, số
 call, số specialist call, output token và wall-clock timeout. Không có retry vô
 hạn.
 
-## 11. Các điểm cần chốt trước khi tạo contract/OpenAPI
+## 11. Các quyết định contract v1
 
-Tài liệu này chưa thay thế schema trong `contracts/`. Trước khi implementation
-hoặc tạo OpenAPI chính thức, cần quyết định:
+Các quyết định dưới đây đã được ghi vào schema máy đọc được:
 
-1. Header/token cụ thể để gateway truyền identity và cách kiểm tra quyền target.
-2. POST luôn synchronous hay cho phép `202`; ngưỡng timeout chuyển sang queue.
-3. Enum/status/error code chính thức và format pagination nếu bổ sung history.
-4. Giới hạn kích thước `input`, số item tối đa và quy tắc estimate/priority.
-5. Quyền gọi `task_decomposition` của Member hay chỉ Leader.
-6. Output schema version chính thức và chính sách tương thích ngược.
-7. Rate limit, retention/ẩn danh của input/result và cơ chế truy vấn lịch sử.
-8. Event `ai.completed` có cần phát hay không; event contract phải được chốt
-   riêng, không dùng API này để suy ra schema Kafka.
+1. API dùng Bearer token; gateway chịu trách nhiệm xác thực và truyền identity
+   đã xác minh vào request context. AI Service vẫn kiểm tra quyền truy cập
+   target trước khi chạy workflow.
+2. `POST` chạy đồng bộ tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
+   `GET` để polling. Hard timeout của workflow là 30 giây.
+3. V1 chỉ hỗ trợ các status `queued`, `running`, `succeeded`, `failed`; không
+   có endpoint liệt kê lịch sử.
+4. `input` có giới hạn kích thước và số phần tử theo từng intent trong OpenAPI;
+   output cũng giới hạn số item để bảo vệ budget.
+5. Quyền `task_decomposition` được kiểm tra theo quyền trên target của domain
+   service; contract không tự cấp quyền Member hoặc Leader.
+6. Output schema hiện hành được version theo intent: `backlog_generation.v1`,
+   `task_decomposition.v1` và `risk_analysis.v1`.
+7. Rate limit và retention cụ thể là cấu hình vận hành, nhưng lỗi và boundary
+   đã cố định trong error schema; không lưu raw provider response.
+8. V1 chưa phát `ai.completed`; Kafka chỉ cập nhật context theo
+   [`ai-context-v1.yaml`](../../contracts/events/ai-context-v1.yaml).
 
+Contract không xác nhận endpoint hoặc event producer/consumer đã chạy. Mọi thay
+đổi contract sau v1 phải tăng version hoặc bổ sung quy tắc tương thích ngược.

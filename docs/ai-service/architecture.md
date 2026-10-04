@@ -17,7 +17,8 @@ bằng chứng implementation.
 - Nginx route `/api/ai/` tới `ai-service:8000`.
 - CI gọi `uv sync --all-groups --locked`, Ruff, Pytest và Docker build cho
   service; hiện checkout không có project files để chạy các lệnh đó.
-- `contracts/events/` chưa có schema máy đọc được cho AI.
+- `contracts/events/ai-context-v1.yaml` đã chốt schema context mục tiêu cho AI;
+  producer/consumer runtime chưa được xác minh.
 
 ## Responsibilities — thiết kế mục tiêu
 
