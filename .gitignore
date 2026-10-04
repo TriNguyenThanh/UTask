@@ -92,3 +92,9 @@ tempCodeRunnerFile.py
 *.pem
 *.key
 docs/temp
+
+# GitNexus local index and generated context/skills
+.gitnexus/
+CLAUDE.md
+.agents/skills/gitnexus-*/
+.claude/skills/gitnexus-*/

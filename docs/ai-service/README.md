@@ -1,58 +1,58 @@
 # AI Service
 
-**Trạng thái tài liệu: Thiết kế mục tiêu; hiện trạng triển khai chưa xác minh.**
+**Trạng thái: Chưa triển khai / Chưa xác minh.**
 
-AI Service là service nội bộ của UTask. OpenAI, Gemini hoặc nhà cung cấp mô hình
-ngôn ngữ lớn (LLM) khác là hệ thống bên ngoài. Google ADK hoặc framework tác tử
-khác là lựa chọn triển khai, không làm thay đổi ranh giới service.
+Đây là trang điều hướng cho tài liệu AI Service. Không coi các ví dụ API, event,
+provider hoặc agent trong tài liệu hệ thống là implementation đã chạy.
 
-## Yêu cầu và ngữ cảnh
+## Phạm vi giai đoạn 1
 
-API AI nhận ý định của người dùng, chẳng hạn phân rã task, gợi ý ưu tiên, phân
-tích khối lượng công việc hoặc giải thích nguy cơ trễ. Yêu cầu không cần gửi toàn bộ dữ
-liệu project. Đường dẫn `POST /api/v1/ai/tasks/{task_id}/decompose` chỉ là ví
-dụ thiết kế, chưa phải hợp đồng API đã xác nhận.
+AI Service giai đoạn 1 chỉ hỗ trợ ba intent:
 
-Ngữ cảnh nghiệp vụ được đồng bộ qua Kafka vào database riêng `ai_context_db`.
-Đây là bản sao đọc tối thiểu để phân tích, không phải dữ liệu gốc. Công cụ của
-tác tử chỉ đọc bản sao nội bộ, chẳng hạn dữ liệu project/task, khối lượng công việc, hoạt
-động GitHub đã chuẩn hóa và chỉ số tiến độ. AI không gọi REST hoặc database của
-Project, Classroom, Integration hay Progress Service để lấy ngữ cảnh trong lúc
-xử lý yêu cầu.
+- `backlog_generation`: tạo backlog nháp từ mô tả project hoặc chức năng;
+- `task_decomposition`: phân rã một task phức tạp thành các subtask;
+- `risk_analysis`: tổng hợp và giải thích nguy cơ ảnh hưởng Sprint hoặc deadline.
 
-Project Service là nguồn dữ liệu đúng cho project và task; Classroom Service
-sở hữu lớp/nhóm; Integration Service sở hữu dữ liệu GitHub; Progress Service
-sở hữu chỉ số đã tính. Bản sao AI có thể cũ do đồng bộ bất đồng bộ. Mỗi kết quả
-cần lưu mốc thời gian và phiên bản dữ liệu đã dùng.
+`deadline_check` độc lập, gợi ý priority, tạo mô tả task, phân bổ lại workload
+và các hành động tự động nằm ngoài giai đoạn 1, dành cho giai đoạn sau.
 
-## Thay đổi nghiệp vụ và khả năng chịu lỗi
+## Chọn tài liệu theo task
 
-AI chỉ đưa ra gợi ý. Người dùng xác nhận; service sở hữu dữ liệu kiểm tra quyền
-và thực hiện thay đổi. AI không ghi thẳng vào service hoặc database nghiệp vụ.
+Đây là bộ định tuyến đọc tài liệu, không yêu cầu agent nạp toàn bộ thư mục
+`docs/ai-service/` cho mỗi task. Sau khi đọc trang này, chỉ đọc tài liệu bắt
+buộc và phần liên quan trong cột tùy chọn.
 
-Khi AI hoặc nhà cung cấp LLM lỗi, chỉ tính năng AI tạm ngừng. Đăng nhập, lớp
-học, project, task, tích hợp GitHub, dashboard tiến độ và notification chính
-vẫn phải hoạt động.
+| Loại task | Bắt buộc đọc | Chỉ đọc thêm khi cần |
+| --- | --- | --- |
+| API, request/response, OpenAPI | `api.md` và phần boundary trong `architecture.md` | `workflow.md` khi thay đổi orchestration/output; `erd.md` khi thay đổi persistence |
+| Workflow, agent, tool, prompt, budget | Phần workflow liên quan trong `workflow.md` và phần boundary trong `architecture.md` | `api.md` khi thay đổi API output; `erd.md` khi lưu execution/context |
+| Context, Kafka consumer, read model | Phần Context/Kafka trong `architecture.md`, `workflow.md` và `erd.md` | `api.md` nếu context metadata xuất hiện trong response; `code-map.md` khi định vị implementation |
+| Database, projection, migration | `erd.md` và phần Context flow trong `architecture.md` | `api.md` nếu schema ảnh hưởng request/result; `workflow.md` nếu ảnh hưởng tool/runtime |
+| Provider, model, retry, structured output | Phần output/budget/model trong `workflow.md` | `api.md` khi thay đổi schema trả cho client; `architecture.md` khi thay đổi failure boundary |
+| Tìm entry point hoặc audit implementation | `code-map.md` và tài liệu của thành phần đang kiểm tra | Chỉ đọc `architecture.md`, `api.md`, `workflow.md` hoặc `erd.md` khi kết quả audit cần đối chiếu thiết kế |
+| Chỉ sửa tài liệu | File đích và các file được nó liên kết trực tiếp | Không đọc file dài nếu không cần đối chiếu nội dung |
 
-## Sự kiện và dựng lại ngữ cảnh
+### Quy tắc đọc file dài
 
-Nhóm sự kiện ngữ cảnh mục tiêu gồm `group.member.added`,
-`group.member.removed`, `project.*`, `sprint.*`, `task.*`, `github.*` và
-`progress.*`. AI có thể phát kết quả như `ai.completed` nếu hợp đồng use case
-được chốt. Các tên này chưa được xác nhận bằng schema trong `contracts/events/`.
+- Với `workflow.md`, trước tiên dùng heading để chọn section: agent/workflow,
+  Context Tool Pool, Kafka, bounded autonomy, proposal, budget, structured
+  output hoặc model strategy. Không đọc toàn bộ file nếu task chỉ thuộc một
+  section.
+- Với `architecture.md`, chọn một trong các phần: boundary/request,
+  context-flow, dependency hoặc failure isolation.
+- Với `erd.md`, chỉ đọc ERD và ràng buộc/index khi task liên quan persistence;
+  không dùng ERD để suy ra endpoint đã triển khai.
+- `tech-stack.md` chỉ dùng để kiểm tra lựa chọn công nghệ mục tiêu; không cần
+  đọc cho task API, workflow hoặc context trừ khi task thay đổi stack.
+- Nếu task thuộc nhiều nhóm, lấy hợp của các tài liệu bắt buộc; vẫn bỏ qua
+  các tài liệu tùy chọn không ảnh hưởng.
 
-Để dựng lại database ngữ cảnh, service nhận sự kiện cần nạp lại lịch sử sự kiện hoặc nhận
-một ảnh chụp dữ liệu có phiên bản. Cách phát lại sự kiện, thời hạn lưu dữ liệu
-và mục tiêu độ trễ hiện **cần quyết định**. Tài liệu này không khẳng định đã có
-service nhận sự kiện hoặc quy trình dựng lại.
+- [Kiến trúc, boundary và discrepancy](architecture.md)
+- [API mục tiêu giai đoạn 1](api.md)
+- [Workflow bounded agent và Context Tool Pool](workflow.md)
+- [ERD và schema mục tiêu](erd.md)
+- [Code map và các entry point đã xác minh](code-map.md)
 
-## Kiểm thử và vận hành
-
-Kiểm thử bằng bộ dữ liệu mẫu được kiểm soát, gồm trường hợp thiếu, trùng và cũ;
-không cần dữ liệu production. Kết quả nên có cấu trúc, căn cứ, loại phân tích
-và phiên bản luật/mô hình khi đã có môi trường chạy. Cách quản lý chỉ dẫn cho
-mô hình, nhà cung cấp, xác thực API và thời hạn lưu dữ liệu vẫn cần được xác
-minh hoặc quyết định.
-
-Không có API, service nhận sự kiện, sự kiện phát đi, công cụ, môi trường chạy mô hình hoặc
-quy trình dựng lại nào được khẳng định là đã chạy trong tài liệu này.
+Instruction mặc định khi làm việc trong source nằm tại
+[`apps/ai-service/AGENTS.md`](../../apps/ai-service/AGENTS.md). Plan cho thay đổi
+lớn nằm tại [`apps/ai-service/.agent/PLANS.md`](../../apps/ai-service/.agent/PLANS.md).
