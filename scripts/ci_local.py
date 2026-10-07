@@ -8,7 +8,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 COREPACK = "corepack.cmd" if os.name == "nt" else "corepack"
 PYTHON_SERVICES = (
@@ -74,6 +73,24 @@ def main() -> None:
     run(
         "Validate Docker Compose configuration",
         ["docker", "compose", "--env-file", ".env.example", "config", "--quiet"],
+    )
+    run(
+        "Validate staging Compose configuration",
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            ".env.example",
+            "-f",
+            "docker-compose.staging.yml",
+            "config",
+            "--quiet",
+        ],
+        env={
+            **os.environ,
+            "UTASK_IMAGE_PREFIX": "ghcr.io/utask-ci/utask",
+            "UTASK_IMAGE_TAG": "sha-" + "0" * 40,
+        },
     )
     run(
         "Validate PostgreSQL initialization script",

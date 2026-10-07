@@ -159,8 +159,8 @@ jobs:
             IFS= read -r workdir
             mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets"
           '
-          scp docker-compose.yml "$target:${STAGING_WORKDIR}/docker-compose.yml"
-          scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"
+          scp docker-compose.staging.yml "$target:${STAGING_WORKDIR}/docker-compose.staging.yml"
+          scp infra/env/database.env infra/env/django.env infra/env/postgres.env infra/env/kafka.env infra/env/identity-service.env infra/env/work-service.env infra/env/classroom-service.env infra/env/integration-service.env infra/env/notification-service.env infra/env/ai-service.env "$target:${STAGING_WORKDIR}/infra/env/"
           scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
           scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.conf"
           scp -r datasets/* "$target:${STAGING_WORKDIR}/datasets/"
@@ -182,10 +182,12 @@ jobs:
           printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
           trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
           cd "$workdir"
-          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose config --quiet
-          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose pull --quiet
-          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose up -d --remove-orphans --wait --wait-timeout 120
-          UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag" docker compose ps
+          test -s .env || { echo "Missing staging .env on server" >&2; exit 1; }
+          export UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag"
+          docker compose -f docker-compose.staging.yml config --quiet
+          docker compose -f docker-compose.staging.yml pull --quiet
+          docker compose -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 120
+          docker compose -f docker-compose.staging.yml ps
           REMOTE_SCRIPT
           } | ssh "$target" '
             IFS= read -r registry_token
