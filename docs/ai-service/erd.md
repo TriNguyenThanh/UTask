@@ -8,12 +8,18 @@ các bảng `CONTEXT_*` chỉ triển khai khi chọn lưu snapshot/projection q
 Không bắt buộc tạo toàn bộ bảng chỉ để chạy internal-context API. Xem
 [kiến trúc AI](architecture.md) và [baseline](../architecture/README.md).
 
-Phạm vi dữ liệu có thể lưu khi use case cần:
+Request/kết quả và ý định giao job bền vững là bắt buộc cho
+[pipeline API/worker đã chốt](architecture.md). Projection context vẫn tùy
+use case. ERD hiện chưa đặc tả đủ cơ chế giao job/phục hồi; các yêu cầu dưới
+đây phải được chuyển thành schema/migration có kiểm thử khi triển khai.
+
+Phạm vi dữ liệu mục tiêu:
 
 1. yêu cầu và kết quả AI;
 2. projection (bản sao đọc tối thiểu) của project/task/sprint;
 3. một vài chỉ số tiến độ và hoạt động GitHub đã chuẩn hóa;
 4. event đã nhận để chống xử lý trùng.
+5. ý định giao job và metadata phục hồi; outbox event kết quả chỉ khi có contract.
 
 Các bảng nguồn vẫn thuộc service nghiệp vụ tương ứng. Những ID như `user_id`,
 `project_id` và `scope_id` trỏ sang service khác là logical reference, không
@@ -193,6 +199,30 @@ hạn, raw provider response và trạng thái “đã áp dụng” của sugge
 dụng thay đổi vẫn do service sở hữu domain thực hiện sau khi người dùng xác
 nhận.
 
+## Persistence phục vụ pipeline API/worker
+
+**Thiết kế mục tiêu; chưa có schema/migration được xác minh.** API và Celery
+worker dùng chung database của AI qua application/repository. Redis chuyển
+task; trạng thái và kết quả bền vững nằm trong PostgreSQL của AI.
+
+- Request `queued` và bản ghi chờ giao job phải lưu trong cùng transaction
+  trước khi xác nhận nhận job. Dispatcher đọc bản ghi đó để gửi hoặc giao lại
+  qua Redis; cần phân biệt đã gửi task với đã hoàn tất xử lý.
+- Idempotency cần fingerprint payload, phạm vi user/key và bảo vệ nhiều POST
+  đồng thời. Worker cũng phải chống xử lý trùng khi task được giao lại.
+- Cần metadata để worker nhận quyền xử lý, phục hồi sau khi worker chết và
+  ngăn worker cũ ghi đè kết quả mới. Request đã kết thúc không chạy lại LLM.
+- Lưu trạng thái cuối `succeeded`/`failed`, result/error và context metadata
+  để API đọc sau kiểm tra ownership. Không cần consumer event kết quả để API
+  cập nhật database.
+- Khi đã có contract Kafka event kết quả, lưu kết quả và outbox trong cùng
+  transaction. Dead-letter cần thông tin thông điệp, nguồn, lỗi và số lần xử
+  lý phù hợp để điều tra/replay; không tự tạo topic hoặc schema chưa chốt.
+
+Tên bảng, cột, cơ chế nhận quyền xử lý, retention và index cho các yêu cầu này
+chưa được chốt. Không coi ERD `AI_REQUEST` hiện tại là đủ để bảo đảm giao job,
+retry hay phục hồi. Quy tắc thực thi nằm trong [kiến trúc AI](architecture.md).
+
 ## Quyết định cần chốt trước migration
 
 1. Output schema cụ thể cho `backlog_generation`, `task_decomposition` và
@@ -206,5 +236,6 @@ nhận.
 
 Baseline không ấn định ORM hoặc tên database AI; `ai_context_db` là tên trong
 thiết kế AI trước, chưa có trong Compose/init script. Job scheduling/outbox,
-claim job, phục hồi retry và credential riêng cần thiết kế trước migration;
+claim job (nhận quyền xử lý), phục hồi retry/dead-letter và credential riêng
+cần được đặc tả schema trước migration theo các yêu cầu pipeline đã chốt;
 không tự thêm bảng/index giả trong lần cập nhật tài liệu này.

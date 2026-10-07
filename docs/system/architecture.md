@@ -56,6 +56,15 @@ React + Vite + TypeScript. Mỗi service có package/dependency và Docker image
 riêng. Một service có thể có API process, Celery worker và Kafka consumer;
 worker không tự trở thành một service mới và không bắt buộc singleton.
 
+AI Service đã chọn tách đường nhận HTTP và thực thi AI: API tiếp nhận request,
+dispatcher giao job qua Redis, Celery worker chạy application/workflow và lưu
+kết quả vào PostgreSQL của AI. API và worker dùng chung code nghiệp vụ và
+persistence của cùng service; client đọc kết quả qua API. Kafka consumer chỉ
+thêm khi có use case/event contract, chạy ngoài vòng suy luận. Quyết định tại
+[ADR-002](../adr/002-ai-request-pipeline.md); pipeline chi tiết tại
+[kiến trúc AI](../ai-service/architecture.md). Đây là thiết kế mục tiêu,
+bootstrap chưa có các process/persistence này.
+
 - REST: command/query cần phản hồi trực tiếp.
 - Celery + Redis: job nội bộ service.
 - Kafka: sự kiện giữa các service; dùng outbox khi lưu thay đổi và phát event.

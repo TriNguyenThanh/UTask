@@ -43,21 +43,21 @@ src/
 └── models/
 ```
 
-| File                        | Trách nhiệm                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `main.py`                   | `create_app` lắp ghép settings, repository, provider, workflow và HTTP transport |
-| `api/routes.py`             | Nhận HTTP, gọi application, trả JSON                                             |
-| `api/dependencies.py`       | Lấy application từ app state và đọc identity header bootstrap                    |
-| `api/middleware.py`         | `request_id_middleware` gắn trace ID cho request/response                        |
-| `api/exception_handlers.py` | `handle_service_error` chuyển `ServiceError` sang HTTP error envelope            |
-| `application/service.py`   | Kiểm tra idempotency, gọi workflow qua protocol, lưu response, kiểm tra ownership khi GET |
-| `application/responses.py` | Dựng envelope thành công/thất bại và metadata bootstrap                         |
-| `application/ports.py`     | `RequestWorkflow`, `RequestRepository` và record `StoredRequest`                |
-| `workflow/bounded.py`      | `BoundedWorkflow.run` gọi provider dưới timeout                                  |
-| `workflow/ports.py`        | Protocol `ModelProvider` mà workflow cần                                        |
-| `infrastructure/providers.py` | Adapter `UnconfiguredProvider` trả lỗi 502 khi chưa có provider thật         |
-| `infrastructure/repositories.py` | Adapter `InMemoryRequestRepository` lưu request trong memory             |
-| `models/`                   | Request, result và response model bằng Pydantic                                  |
+| File                             | Trách nhiệm                                                                               |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `main.py`                        | `create_app` lắp ghép settings, repository, provider, workflow và HTTP transport          |
+| `api/routes.py`                  | Nhận HTTP, gọi application, trả JSON                                                      |
+| `api/dependencies.py`            | Lấy application từ app state và đọc identity header bootstrap                             |
+| `api/middleware.py`              | `request_id_middleware` gắn trace ID cho request/response                                 |
+| `api/exception_handlers.py`      | `handle_service_error` chuyển `ServiceError` sang HTTP error envelope                     |
+| `application/service.py`         | Kiểm tra idempotency, gọi workflow qua protocol, lưu response, kiểm tra ownership khi GET |
+| `application/responses.py`       | Dựng envelope thành công/thất bại và metadata bootstrap                                   |
+| `application/ports.py`           | `RequestWorkflow`, `RequestRepository` và record `StoredRequest`                          |
+| `workflow/bounded.py`            | `BoundedWorkflow.run` gọi provider dưới timeout                                           |
+| `workflow/ports.py`              | Protocol `ModelProvider` mà workflow cần                                                  |
+| `infrastructure/providers.py`    | Adapter `UnconfiguredProvider` trả lỗi 502 khi chưa có provider thật                      |
+| `infrastructure/repositories.py` | Adapter `InMemoryRequestRepository` lưu request trong memory                              |
+| `models/`                        | Request, result và response model bằng Pydantic                                           |
 
 **Đã triển khai:** application phụ thuộc vào protocol workflow/repository,
 workflow phụ thuộc vào protocol provider; cả hai không import HTTP hoặc
@@ -125,6 +125,12 @@ phạm vi hiện tại**.
   nằm trong package AI, gọi application/workflow; API/worker có thể dùng chung
   image và tách process/container. Không ghi file hoặc lệnh chưa tồn tại như
   entry point đã xác minh; xem [job nền](../infrastructure/background-jobs.md).
+- Pipeline mục tiêu đã chốt tại [kiến trúc AI](architecture.md) và
+  [ADR-002](../adr/002-ai-request-pipeline.md): lưu queued + ý định giao job,
+  dispatcher gửi task qua Redis, worker chạy workflow và lưu kết quả để API
+  đọc. Dispatcher, persistence bền vững, chống chạy trùng/phục hồi worker,
+  retry/dead-letter và polling bất đồng bộ: **Chưa triển khai**. Pipeline POST
+  ở trên vẫn là lời gọi workflow trực tiếp trong bootstrap.
 
 ## Context và events
 

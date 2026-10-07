@@ -46,13 +46,16 @@ HTTP timeout và số lời gọi. Adapter provider phục vụ lời gọi LLM 
 Projection/cache qua Kafka có thể bổ sung khi có nhu cầu, không bắt buộc là
 nguồn context duy nhất theo baseline mới.
 
-Nếu chọn xử lý nền, Celery worker thuộc AI Service nhận job qua Redis và gọi
-Application/Workflow. Consumer Kafka nhận domain event/cập nhật projection;
-không đồng nhất consumer với Celery worker. Source và trạng thái job thuộc AI,
-API/worker có thể tách process/container. Xem [job nền](../infrastructure/background-jobs.md).
+Pipeline đã chọn lưu request và ý định giao job trước khi dispatcher gửi
+Celery task qua Redis. Worker thuộc AI gọi Application/Workflow rồi lưu kết
+quả vào persistence chung của AI để API trả cho client. Consumer Kafka chạy
+ngoài agent loop; khi có use case/contract, consumer cập nhật projection hoặc
+tạo job qua cùng application/dispatcher. Xem nguồn chi tiết tại
+[pipeline AI](architecture.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
 
-Baseline chưa chốt worker singleton, mọi POST trả `202` ngay hoặc kênh đẩy
-kết quả. API v1 vẫn có ngưỡng chờ/polling riêng trong [API](api.md).
+API/worker có thể tách process/container, không bắt buộc singleton. MVP dùng
+polling và giữ ngưỡng chờ 10 giây của [API v1](api.md); luôn trả `202` hoặc
+SSE/WebSocket cần contract riêng. Các thành phần này **chưa triển khai**.
 
 ---
 
@@ -313,16 +316,25 @@ thể kích hoạt phân tích tự động hoặc cập nhật projection khi u
 Domain service → transaction + outbox → publisher → Kafka
     → AI consumer: validate schema/version + chống lặp
         ├── cập nhật projection (nếu được chọn)
-        └── giao job nội bộ qua Redis → Celery worker → Application/Workflow
+        └── Application: lưu job + ý định giao job
+            → dispatcher → Redis → Celery worker → Application/Workflow
 ```
 
 Consumer cập nhật context ngoài agent loop; agent không quyết định topic,
 offset hoặc replay. Không bắt LlmAgent consume/publish Kafka.
+Consumer không dùng Kafka để hỏi quyền hoặc lấy context đồng bộ. Khi tạo job,
+consumer phải bàn giao bền vững và chống trùng trước khi xác nhận xử lý event;
+retry/dead-letter không được làm mất job hoặc chạy AI ngoài budget. Chi tiết
+nằm trong [job nền](../infrastructure/background-jobs.md) và
+[Kafka/outbox](../infrastructure/kafka.md).
 
 Sau khi lưu kết quả, AI có thể phát event theo baseline cho Notification.
 `ai.analysis.completed`/`ai.project.risk.detected` chưa có schema/topic được
 chốt; API v1 hiện chưa phát event kết quả. Cần contract/version trước runtime,
 không coi đây là response HTTP cho client.
+Khi có contract, application lưu kết quả và outbox trong cùng transaction;
+publisher retry việc phát event độc lập, không gọi lại workflow. API đọc
+persistence của AI, không chờ event hoàn tất để cập nhật database.
 
 `ai-context-v1.yaml` là contract projection cũ có Project/Progress producer;
 cần mapping/version nếu dùng với Work. Xem [danh mục event](../system/kafka-events.md).
@@ -499,6 +511,11 @@ timeout              = cấu hình phù hợp
 ```
 
 Không cho agent loop vô hạn.
+Workflow có hard timeout 30 giây theo API v1, bao gồm revise/retry thực thi;
+retry task hoặc giao lại job không tự đặt lại budget đã dùng. Phân biệt retry
+lời gọi model, revise output và retry giao thông điệp; phối hợp các lớp để
+không nhân số lần gọi LLM. Quy tắc phục hồi và dead-letter nằm trong
+[kiến trúc AI](architecture.md).
 
 ---
 
@@ -718,9 +735,14 @@ AI API / Celery task
                     projection/cache nội bộ khi được chọn
 
 Kafka consumer / publisher chạy ngoài vòng suy luận.
-Job nội bộ: Redis → Celery worker thuộc AI Service.
+Job nội bộ: lưu request + ý định giao job → dispatcher → Redis → Celery worker AI.
 Trạng thái/kết quả: persistence AI → API → client.
 ```
+
+Sơ đồ này là hướng phụ thuộc logic trong lúc thực thi. Pipeline nhận request,
+kiểm tra quyền, idempotency, giao job và polling có nguồn chuẩn tại
+[kiến trúc AI](architecture.md); không chạy trực tiếp workflow dài trong HTTP
+handler của thiết kế mục tiêu.
 
 Side-effect flow:
 

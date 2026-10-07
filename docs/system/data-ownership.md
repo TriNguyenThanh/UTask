@@ -35,6 +35,14 @@ Schema job, result, context và retention chi tiết nằm tại
 Không coi toàn bộ các bảng projection cũ là bắt buộc nếu internal API đã đáp
 ứng use case.
 
+Trong [pipeline AI đã chốt](../ai-service/architecture.md), API và Celery
+worker thuộc cùng AI Service nên dùng chung PostgreSQL của AI qua repository.
+Persistence AI giữ request, idempotency, ý định giao job, trạng thái và kết
+quả; Redis là broker, không thay thế bản ghi bền vững. Worker lưu kết quả,
+API kiểm tra ownership và đọc lại cho client. Outbox event kết quả chỉ thêm
+khi có contract; projection context vẫn tùy use case. Schema giao job,
+phục hồi worker và dead-letter cần thiết kế trước migration.
+
 ## Hiện trạng hạ tầng
 
 **Một phần:** script PostgreSQL hiện tạo năm database nghiệp vụ theo Compose;

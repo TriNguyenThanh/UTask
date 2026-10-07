@@ -35,6 +35,33 @@ của lớp persistence đã chọn khi được triển khai.
 Giai đoạn đầu dùng outbox + Celery publisher; Debezium CDC là lựa chọn mở
 rộng khi có nhu cầu, không phải dependency bắt buộc của MVP.
 
+Với AI, event kết quả chỉ được phát khi đã có contract: application lưu kết
+quả và outbox trong cùng transaction, publisher gửi Kafka sau commit. API
+đọc kết quả từ persistence AI; không chờ event để cập nhật database. Publisher
+gửi lại event không được chạy lại workflow/LLM.
+
+## Consumer, bàn giao job và dead-letter
+
+AI consumer chạy ngoài agent loop. Khi có use case/contract, consumer có thể
+cập nhật projection hoặc gọi application tạo job; job đi qua bản ghi chờ giao
+job → dispatcher → Redis → Celery worker của AI. Cần lưu dấu chống trùng
+`event_id` cùng cập nhật/job một cách nhất quán trước khi commit offset.
+Thông điệp giao lại không được tạo thêm job hoặc kết quả trùng. Xem
+[giao job bền vững](background-jobs.md).
+
+Retry consumer phải phân loại lỗi tạm thời và lỗi không thể xử lý, có backoff
+và giới hạn. Event sai schema/version hoặc hết giới hạn xử lý phải được lưu
+bền vững vào nơi dead-letter (thông điệp lỗi chờ điều tra), cùng thông tin nguồn
+và lỗi cần thiết trước khi bỏ qua/commit offset. Cần chốt nơi lưu/topic,
+retention và thao tác replay; không có topic DLQ mặc định được xác minh.
+Replay phải qua validation và chống trùng, không bypass quyền hoặc budget.
+
+Kafka thông báo thay đổi đã xảy ra; không dùng request/reply topic để kiểm
+tra quyền hoặc lấy context đồng bộ. Các bước này dùng internal REST API của
+service sở hữu. Event đổi quyền có thể làm mất hiệu lực cache, nhưng bản sao
+context không thay quyết định quyền hiện hành. Pipeline chuẩn nằm tại
+[kiến trúc AI](../ai-service/architecture.md).
+
 ## Hiện trạng và vận hành
 
 Compose khai báo Kafka 3.9.0, cấu hình KRaft, volume và healthcheck. Chưa xác

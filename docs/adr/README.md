@@ -8,3 +8,4 @@ tài liệu vận hành hoặc danh mục API/sự kiện.
 ## ADR hiện có
 
 - [ADR-001 — Đồng bộ tài liệu với architecture baseline](001-adopt-architecture-baseline.md).
+- [ADR-002 — Pipeline request và job nền của AI Service](002-ai-request-pipeline.md).

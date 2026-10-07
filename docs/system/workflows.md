@@ -47,11 +47,17 @@ Integration là service duy nhất gọi GitHub API.
 ## Yêu cầu AI
 
 ```text
-User → AI API → Application → Workflow/Agent → proposal có cấu trúc
-                                  │
-                         Context Tool Pool / Context Layer
-                                  │
-                         internal API của Work / service sở hữu
+User → AI API / Application
+    → kiểm tra identity, input, quyền qua internal REST API và idempotency
+    → AI DB: request queued + bản ghi chờ giao job
+    → dispatcher → Redis → Celery worker của AI
+    → Application → Workflow/Agent → proposal có cấu trúc
+                      ↕
+              Context Tool Pool / Context Layer
+                      → internal REST API của Work / service sở hữu
+    → lưu succeeded/result hoặc failed/error vào AI DB
+
+User GET polling → AI API: kiểm tra ownership → đọc AI DB → status/result
 
 User xác nhận proposal → Work: kiểm tra quyền + business rule → áp dụng
 ```
@@ -59,10 +65,19 @@ User xác nhận proposal → Work: kiểm tra quyền + business rule → áp d
 Context nội bộ được lọc/tổng hợp trước khi đưa cho agent. Snapshot hoặc
 projection qua Kafka có thể bổ sung khi cần; AI không đọc database service khác.
 
-Nếu chọn xử lý nền: Application giao job qua Redis tới Celery worker thuộc
-AI, worker gọi workflow và lưu kết quả trong database AI. Baseline chưa chốt
-trả `202` ngay cho mọi request, singleton hay kênh đẩy kết quả. Chi tiết API
-v1 và khác biệt với baseline nằm trong [API AI](../ai-service/api.md).
+Pipeline này đã được chọn cho thiết kế AI, **chưa triển khai**. API và worker
+cùng thuộc AI Service, dùng chung persistence; worker không phải service mới
+và không cần phát event về API process để lưu kết quả. POST chờ tối đa 10 giây:
+thành công trả `200`, chưa xong trả `202`; workflow có hard timeout 30 giây.
+MVP dùng polling. Số worker/concurrency và SSE/WebSocket chưa chốt. Chi tiết
+nằm trong [pipeline AI](../ai-service/architecture.md),
+[API AI](../ai-service/api.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
+
+Kafka consumer của AI có thể nhận event Work/Integration để cập nhật context
+hoặc tạo job qua application và dispatcher khi có use case/contract; agent
+không consume event. Không dùng Kafka để hỏi quyền hoặc lấy context đồng bộ.
+Giao job, xử lý trùng, retry có giới hạn và dead-letter phải được thiết kế/test
+trước runtime; hết retry phải lưu `failed` cho client.
 
 Event hoàn tất AI có thể phục vụ Notification theo baseline; schema, topic
 và quy tắc phát phải được chốt trước khi triển khai. Không dùng event làm

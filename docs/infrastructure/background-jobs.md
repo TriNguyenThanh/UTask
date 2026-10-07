@@ -48,6 +48,42 @@ thông điệp. Với domain event, dùng transactional outbox theo
 [Kafka và outbox](kafka.md). Cơ chế bảo đảm giao job tới Redis cần được thiết
 kế và kiểm thử trước khi công bố SLA.
 
+### Giao job bền vững của AI Service
+
+[Pipeline AI](../ai-service/architecture.md) đã chọn lưu request `queued`
+cùng bản ghi chờ giao job trong một transaction của PostgreSQL AI. Dispatcher
+đọc bản ghi đó và gửi Celery task qua Redis sau commit; khi Redis lỗi hoặc
+process dừng giữa chừng, bản ghi bền vững cho phép giao lại. Không xác nhận
+đã nhận job trước khi lưu thành công.
+
+Task có thể được giao nhiều lần. Application phải kiểm soát quyền xử lý một
+job, phục hồi khi worker chết, bỏ qua request đã kết thúc và ngăn worker cũ
+ghi đè kết quả. Kiểm tra idempotency ở API không thay thế kiểm tra ở worker.
+Worker lưu kết quả qua repository vào AI DB; API đọc cùng persistence.
+
+Khi Kafka consumer tạo job, cần lưu dấu chống trùng event cùng job/ý định giao
+job một cách nhất quán trước khi commit offset. Chỉ commit offset sau khi
+bàn giao bền vững; không coi gửi Redis thành công là bằng chứng đã có kết quả.
+Tên bảng, cơ chế nhận quyền xử lý, lịch dispatcher và phục hồi cần thiết kế
+trước runtime; xem [yêu cầu persistence AI](../ai-service/erd.md).
+
+### Phân loại retry và dead-letter
+
+- Retry lỗi tạm thời như timeout mạng, rate limit hoặc provider chưa sẵn sàng
+  theo backoff tăng dần, jitter và số lần giới hạn. Lỗi quyền/input không
+  được retry như lỗi hạ tầng.
+- Phân biệt retry giao task, retry thực thi và revise output. Với AI, phối hợp
+  retry Celery và workflow trong cùng budget/hard timeout; không tự đặt lại
+  budget khi task được giao lại.
+- Job hết retry phải lưu lỗi cuối và trạng thái `failed`. Worker chết hoặc
+  request bị kẹt cần cơ chế phát hiện/phục hồi và thời hạn chờ queue riêng.
+- Dead-letter lưu thông điệp không xử lý được cùng thông tin lỗi để điều tra
+  và replay có kiểm soát. Không giả định Celery + Redis tự tạo DLQ; nơi lưu,
+  retention và quy tắc replay phải được đặc tả/test. Kafka event lỗi có quy
+  tắc cách ly riêng trong [Kafka](kafka.md).
+- Nếu đã lưu kết quả AI nhưng gửi event thất bại, chỉ retry outbox publisher,
+  không chạy lại workflow/LLM.
+
 ## Trả kết quả cho client
 
 Job dài có thể dùng `202` kèm ID và endpoint xem trạng thái. Nếu chọn polling,
@@ -55,8 +91,18 @@ client gửi GET mới để lấy kết quả; nếu cần chủ động thông
 SSE/WebSocket riêng. Kafka không tự gửi response HTTP thứ hai cho request
 đã kết thúc. Hành vi cụ thể của AI v1 nằm trong [API AI](../ai-service/api.md).
 
+AI MVP dùng polling; POST vẫn chờ tối đa 10 giây và trả `200` khi thành công
+hoặc `202` nếu chưa hoàn tất. API chờ kết quả từ persistence, không chờ Kafka
+event. Hết ngưỡng HTTP không hủy job; hard timeout workflow là 30 giây.
+
 ## Kiểm thử khi triển khai
 
 Kiểm tra thành công, lỗi có thể retry/không thể retry, thông điệp trùng,
 timeout, worker dừng giữa chừng và broker tạm ngừng. Kiểm tra quyền trên API
 tạo/xem job và xác nhận job chỉ truy cập dữ liệu của service sở hữu.
+
+Với pipeline AI, kiểm tra thêm POST đồng thời cùng key, quyền bị thu hồi khi
+job đang chờ, lỗi giữa commit database và gửi Redis, gửi trùng task, worker
+chết trước/sau khi lưu kết quả, worker cũ ghi muộn, retry không vượt budget,
+dead-letter/replay và lỗi publisher không gây gọi LLM lại. Kiểm tra client
+vẫn lấy kết quả bằng GET sau khi POST đã trả `202`.

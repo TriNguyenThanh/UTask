@@ -16,6 +16,14 @@ và 18. Các quyết định chuyển đổi nằm trong
 Redis cho job nội bộ; Kafka cho event giữa service; AI lấy context qua internal
 API sau domain tool/Context Layer. Worker và context adapter chưa có trong source.
 
+Pipeline đã chốt là API kiểm tra quyền qua REST, lưu request và ý định giao
+job bền vững, dispatcher giao task qua Redis, Celery worker chạy workflow và
+lưu kết quả vào PostgreSQL của AI. API đọc cùng persistence để client polling;
+Kafka phục vụ sự kiện giữa service. Nguồn chi tiết là
+[pipeline trong kiến trúc AI](architecture.md) và quyết định tại
+[ADR-002](../adr/002-ai-request-pipeline.md). Đây là **thiết kế mục tiêu**,
+không thay thế pipeline bootstrap trong [code map](code-map.md).
+
 Baseline nêu roadmap AI rộng hơn contract v1. Không coi ba intent dưới đây là
 thứ tự Phase 1–4 của roadmap hệ thống, hoặc tự thêm intent ngoài contract.
 
