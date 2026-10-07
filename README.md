@@ -19,14 +19,19 @@ UTask hướng tới việc giúp sinh viên và giảng viên tổ chức proje
 
 ## Công nghệ
 
-| Lớp | Công nghệ nổi bật |
-| --- | --- |
-| Web | React, TypeScript, Vite; React Router, TanStack Query và Zustand |
-| Backend | Python, Django REST Framework, FastAPI |
-| Dữ liệu và xử lý bất đồng bộ | PostgreSQL, Apache Kafka, Redis |
-| Hạ tầng và triển khai | Docker Compose, Nginx, GitHub Actions, GitHub Container Registry (GHCR) |
+| Lớp                          | Công nghệ nổi bật                                                       |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| Web                          | React, TypeScript, Vite; React Router, TanStack Query và Zustand        |
+| Backend                      | Python, Django REST Framework, FastAPI                                  |
+| Dữ liệu và xử lý bất đồng bộ | PostgreSQL; Kafka cho event giữa service; Celery + Redis cho job nội bộ |
+| Lưu trữ file production      | Cloudflare R2 qua S3-compatible API                                     |
+| Hạ tầng và triển khai        | Docker Compose, Nginx, GitHub Actions, GitHub Container Registry (GHCR) |
 
-Web shell và cấu hình hạ tầng hiện có trong repository. Các công nghệ backend được Compose/CI tham chiếu, nhưng mã nguồn backend chưa có trong checkout hiện tại.
+Các lựa chọn trên là **thiết kế mục tiêu** theo
+[architecture baseline](docs/architecture/README.md). Web shell, cấu hình hạ
+tầng và AI Service bootstrap hiện có trong repository; các backend nghiệp vụ
+chưa có mã triển khai đầy đủ. AI chưa có provider thật, ADK, Celery, Kafka hay
+persistence; xem [code map AI](docs/ai-service/code-map.md).
 
 ## Cấu trúc project
 
@@ -39,6 +44,7 @@ contracts/
   events/                 hợp đồng Kafka
 datasets/                 fixture JSON cho project, task và workload
 docs/
+  architecture/           baseline công nghệ và kiến trúc
   system/                 kiến trúc và luồng hệ thống
   <service>/              tài liệu theo service
   infrastructure/         cấu hình local và CI/CD
@@ -48,7 +54,7 @@ scripts/                  script kiểm tra CI local
 docker-compose.yml        cấu hình stack
 ```
 
-Các service dự kiến gồm Identity, Project (`work-service`), Classroom, Integration, Notification và AI. Ranh giới service và quyền sở hữu dữ liệu được mô tả trong [kiến trúc hệ thống](docs/system/architecture.md).
+Các service theo baseline gồm Identity, Work (bao gồm Project/Task và tiến độ), Classroom, Integration, Notification và AI. Ranh giới service và quyền sở hữu dữ liệu được mô tả trong [kiến trúc hệ thống](docs/system/architecture.md).
 
 ## Cấu hình và chạy
 
@@ -69,7 +75,9 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
 
-Toàn bộ stack chưa chạy được trong checkout hiện tại vì các backend service chưa có mã nguồn và Dockerfile.
+Toàn bộ stack chưa được xác minh chạy được vì các backend nghiệp vụ chưa có
+mã nguồn/Dockerfile đầy đủ. AI bootstrap có thể chạy riêng theo
+[hướng dẫn AI Service](docs/ai-service/README.md).
 
 ## Triển khai
 

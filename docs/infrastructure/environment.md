@@ -27,7 +27,17 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
 - Staging giữ `.env` với giá trị thật trên máy staging; workflow cập nhật các tệp ánh xạ `infra/env/`.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
 
-Các service Django dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD` theo baseline, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng của mình.
+**Một phần:** cấu hình local/staging hiện dùng chung `POSTGRES_USER` và
+`POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
+yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
+hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
+khoảng trống triển khai, không phải lựa chọn bảo mật production.
+
+Celery broker, Kafka client và R2 là công nghệ mục tiêu theo baseline; biến
+môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
+triển khai. Không xem URL service trong file env là bằng chứng client đã gọi
+service đó. Xem [job nền](background-jobs.md), [Kafka](kafka.md) và
+[lưu trữ file](storage.md).
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 

@@ -1,11 +1,25 @@
 # AI Service
 
-**Trạng thái: Chưa triển khai / Chưa xác minh.**
+**Trạng thái: Một phần.** Bootstrap transport/application đã có trong
+`apps/ai-service/`; provider thật, ADK workflow, Celery worker, context adapter, Kafka và
+persistence production chưa triển khai.
 
-Đây là trang điều hướng cho tài liệu AI Service. Không coi các ví dụ API, event,
-provider hoặc agent trong tài liệu hệ thống là implementation đã chạy.
+Đây là trang điều hướng cho tài liệu AI Service. Không coi các phần thiết kế
+API, event, provider hoặc agent là runtime đã hoàn chỉnh nếu code map chưa xác
+nhận.
 
-## Phạm vi giai đoạn 1
+## Baseline và phạm vi
+
+Thiết kế mục tiêu theo [baseline](../architecture/README.md), mục 4.6, 9–11
+và 18. Các quyết định chuyển đổi nằm trong
+[ADR-001](../adr/001-adopt-architecture-baseline.md). Baseline chọn Celery +
+Redis cho job nội bộ; Kafka cho event giữa service; AI lấy context qua internal
+API sau domain tool/Context Layer. Worker và context adapter chưa có trong source.
+
+Baseline nêu roadmap AI rộng hơn contract v1. Không coi ba intent dưới đây là
+thứ tự Phase 1–4 của roadmap hệ thống, hoặc tự thêm intent ngoài contract.
+
+## Phạm vi API v1
 
 AI Service giai đoạn 1 chỉ hỗ trợ ba intent:
 
@@ -16,21 +30,43 @@ AI Service giai đoạn 1 chỉ hỗ trợ ba intent:
 `deadline_check` độc lập, gợi ý priority, tạo mô tả task, phân bổ lại workload
 và các hành động tự động nằm ngoài giai đoạn 1, dành cho giai đoạn sau.
 
+## Chạy bootstrap local
+
+Chạy trong `apps/ai-service/`:
+
+```sh
+uv sync --all-groups --locked
+uv run uvicorn main:app --app-dir src --reload
+```
+
+Kiểm tra trực tiếp `GET http://localhost:8000/healthz`. Provider mặc định trả
+`502 PROVIDER_UNAVAILABLE` cho yêu cầu AI hợp lệ có identity header bootstrap.
+Đường đi và giới hạn triển khai nằm trong [code map](code-map.md).
+
+Kiểm tra chất lượng:
+
+```sh
+uv run ruff format --check .
+uv run ruff check .
+uv run pytest
+docker build --tag utask/ai-service:local .
+```
+
 ## Chọn tài liệu theo task
 
 Đây là bộ định tuyến đọc tài liệu, không yêu cầu agent nạp toàn bộ thư mục
 `docs/ai-service/` cho mỗi task. Sau khi đọc trang này, chỉ đọc tài liệu bắt
 buộc và phần liên quan trong cột tùy chọn.
 
-| Loại task | Bắt buộc đọc | Chỉ đọc thêm khi cần |
-| --- | --- | --- |
-| API, request/response, OpenAPI | `api.md` và phần boundary trong `architecture.md` | `workflow.md` khi thay đổi orchestration/output; `erd.md` khi thay đổi persistence |
-| Workflow, agent, tool, prompt, budget | Phần workflow liên quan trong `workflow.md` và phần boundary trong `architecture.md` | `api.md` khi thay đổi API output; `erd.md` khi lưu execution/context |
-| Context, Kafka consumer, read model | Phần Context/Kafka trong `architecture.md`, `workflow.md` và `erd.md` | `api.md` nếu context metadata xuất hiện trong response; `code-map.md` khi định vị implementation |
-| Database, projection, migration | `erd.md` và phần Context flow trong `architecture.md` | `api.md` nếu schema ảnh hưởng request/result; `workflow.md` nếu ảnh hưởng tool/runtime |
-| Provider, model, retry, structured output | Phần output/budget/model trong `workflow.md` | `api.md` khi thay đổi schema trả cho client; `architecture.md` khi thay đổi failure boundary |
-| Tìm entry point hoặc audit implementation | `code-map.md` và tài liệu của thành phần đang kiểm tra | Chỉ đọc `architecture.md`, `api.md`, `workflow.md` hoặc `erd.md` khi kết quả audit cần đối chiếu thiết kế |
-| Chỉ sửa tài liệu | File đích và các file được nó liên kết trực tiếp | Không đọc file dài nếu không cần đối chiếu nội dung |
+| Loại task                                 | Bắt buộc đọc                                                                         | Chỉ đọc thêm khi cần                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| API, request/response, OpenAPI            | `api.md` và phần boundary trong `architecture.md`                                    | `workflow.md` khi thay đổi orchestration/output; `erd.md` khi thay đổi persistence                        |
+| Workflow, agent, tool, prompt, budget     | Phần workflow liên quan trong `workflow.md` và phần boundary trong `architecture.md` | `api.md` khi thay đổi API output; `erd.md` khi lưu execution/context                                      |
+| Context, Kafka consumer, read model       | Phần Context/Kafka trong `architecture.md`, `workflow.md` và `erd.md`                | `api.md` nếu context metadata xuất hiện trong response; `code-map.md` khi định vị implementation          |
+| Database, projection, migration           | `erd.md` và phần Context flow trong `architecture.md`                                | `api.md` nếu schema ảnh hưởng request/result; `workflow.md` nếu ảnh hưởng tool/runtime                    |
+| Provider, model, retry, structured output | Phần output/budget/model trong `workflow.md`                                         | `api.md` khi thay đổi schema trả cho client; `architecture.md` khi thay đổi failure boundary              |
+| Tìm entry point hoặc audit implementation | `code-map.md` và tài liệu của thành phần đang kiểm tra                               | Chỉ đọc `architecture.md`, `api.md`, `workflow.md` hoặc `erd.md` khi kết quả audit cần đối chiếu thiết kế |
+| Chỉ sửa tài liệu                          | File đích và các file được nó liên kết trực tiếp                                     | Không đọc file dài nếu không cần đối chiếu nội dung                                                       |
 
 ### Quy tắc đọc file dài
 
@@ -51,6 +87,8 @@ buộc và phần liên quan trong cột tùy chọn.
 - [API mục tiêu giai đoạn 1](api.md)
 - [Workflow bounded agent và Context Tool Pool](workflow.md)
 - [ERD và schema mục tiêu](erd.md)
+- [Stack mục tiêu và dependency hiện tại](tech-stack.md)
+- [Job nền và worker](../infrastructure/background-jobs.md)
 - [Code map và các entry point đã xác minh](code-map.md)
 
 Instruction mặc định khi làm việc trong source nằm tại

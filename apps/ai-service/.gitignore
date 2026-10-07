@@ -1,0 +1,2 @@
+# Ghi nhận phiên bản Python của service dù root ignore pin cục bộ.
+!.python-version

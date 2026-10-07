@@ -1,24 +1,22 @@
 # Quy tắc phát triển AI Service
 
-**Trạng thái hiện tại: Chưa triển khai.** Khi audit ngày 2026-10-04, thư mục
-này chưa có source code, test, package manifest, Dockerfile hoặc implementation
-AI nào được theo dõi trong Git. Không suy ra framework hay endpoint từ tài liệu
-thiết kế và cấu hình hạ tầng.
+**Trạng thái hiện tại: Một phần.** Source bootstrap, test, package manifest và
+Dockerfile đã có. Provider thật, ADK, Celery, Kafka, context adapter và persistence chưa triển khai;
+xem code map để kiểm tra entry point trước khi sửa.
 
 ## Vai trò
 
-AI Service là capability hỗ trợ nội bộ: nhận yêu cầu hoặc ý định AI, đọc bản
-sao ngữ cảnh tối thiểu và trả về đề xuất có cấu trúc. AI không sở hữu dữ liệu
+AI Service là capability hỗ trợ nội bộ: nhận ý định, lấy context tối thiểu
+qua domain tools/adapters theo tài liệu chuẩn và trả proposal có cấu trúc. AI không sở hữu dữ liệu
 nghiệp vụ gốc, không tự áp dụng thay đổi nghiệp vụ và không được trở thành
 dependency bắt buộc của authentication, classroom/project, task, integration,
 progress hoặc notification.
 
 ## Công nghệ đã xác minh
 
-- Repository/CI dự kiến service Python và gọi `uv`, Ruff, Pytest.
-- CI cũng dự kiến Docker image cho `apps/ai-service/`.
-- Chưa xác minh framework HTTP, LLM SDK, agent framework, Kafka client,
-  provider, database client, cache, type checker hoặc package manifest.
+- Bootstrap dùng Python 3.12, FastAPI/Uvicorn, Pydantic v2, `pydantic-settings`,
+  `uv`, Ruff và Pytest; có Dockerfile.
+- Chưa có LLM SDK, ADK implementation, Kafka client hoặc database client.
 - Không ghi thêm công nghệ chỉ vì README hay thiết kế mục tiêu có nhắc tới nó.
 
 ## Phạm vi và đường dẫn
@@ -36,15 +34,15 @@ Sau khi tuân thủ quy tắc đọc `docs/system/README.md` ở root, đọc
 `docs/ai-service/` mặc định. Chỉ nạp tài liệu bắt buộc và section liên quan;
 phần tùy chọn chỉ đọc khi thay đổi thực sự chạm vào nó.
 
-| Task | Đọc bắt buộc | Đọc thêm khi cần |
-| --- | --- | --- |
-| API/request/response | `../../docs/ai-service/api.md`, phần boundary/request của `architecture.md` | `workflow.md` cho orchestration/output; `erd.md` cho persistence |
-| Workflow/agent/tool/prompt | section tương ứng của `workflow.md`, phần boundary của `architecture.md` | `api.md` cho API output; `erd.md` cho lưu trữ |
-| Context/Kafka/read model | phần Context flow của `architecture.md`, section Context Tool Pool/Kafka của `workflow.md`, `erd.md` | `api.md` nếu response có context metadata; `code-map.md` để tìm entry point |
-| Persistence/projection/migration | `erd.md`, phần Context flow của `architecture.md` | `api.md` nếu schema request/result đổi |
-| Provider/model/budget/output | section Budget/Structured Output/Model Strategy của `workflow.md` | `api.md` cho contract; `architecture.md` cho failure boundary |
-| Định vị/audit code | `code-map.md` và file source đích | Tài liệu thiết kế liên quan đến kết quả audit |
-| Chỉ sửa tài liệu | file đích và link trực tiếp của file đó | Không đọc file dài ngoài phạm vi |
+| Task                             | Đọc bắt buộc                                                                                         | Đọc thêm khi cần                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| API/request/response             | `../../docs/ai-service/api.md`, phần boundary/request của `architecture.md`                          | `workflow.md` cho orchestration/output; `erd.md` cho persistence            |
+| Workflow/agent/tool/prompt       | section tương ứng của `workflow.md`, phần boundary của `architecture.md`                             | `api.md` cho API output; `erd.md` cho lưu trữ                               |
+| Context/Kafka/read model         | phần Context flow của `architecture.md`, section Context Tool Pool/Kafka của `workflow.md`, `erd.md` | `api.md` nếu response có context metadata; `code-map.md` để tìm entry point |
+| Persistence/projection/migration | `erd.md`, phần Context flow của `architecture.md`                                                    | `api.md` nếu schema request/result đổi                                      |
+| Provider/model/budget/output     | section Budget/Structured Output/Model Strategy của `workflow.md`                                    | `api.md` cho contract; `architecture.md` cho failure boundary               |
+| Định vị/audit code               | `code-map.md` và file source đích                                                                    | Tài liệu thiết kế liên quan đến kết quả audit                               |
+| Chỉ sửa tài liệu                 | file đích và link trực tiếp của file đó                                                              | Không đọc file dài ngoài phạm vi                                            |
 
 Với file dài, tìm heading trước bằng `rg -n '^#|^##|^###' <file>` rồi chỉ đọc
 section cần thiết bằng `sed`. Không đọc `workflow.md` toàn bộ cho một task API
@@ -64,8 +62,7 @@ Routing chi tiết và từ khóa chọn section nằm tại
 
 ## Commands
 
-Các lệnh dưới đây là lệnh CI đã được khai báo cho service; hiện chưa chạy
-được xác nhận vì project files còn thiếu:
+Các lệnh dưới đây là lệnh CI cho service; chạy từ `apps/ai-service/`:
 
 ```text
 uv sync --all-groups --locked
@@ -75,9 +72,8 @@ uv run pytest
 docker build --tag utask/ai-service:local .
 ```
 
-Chưa có command start development server nào được xác minh. Không tự ghi
-`uvicorn`, `fastapi`, `pytest` option hoặc health endpoint như implementation
-cho tới khi source/config tương ứng xuất hiện.
+Lệnh chạy local và pipeline source nằm trong tài liệu chuẩn
+`../../docs/ai-service/README.md` và `../../docs/ai-service/code-map.md`.
 
 ## Quy tắc làm việc
 
@@ -95,9 +91,10 @@ cho tới khi source/config tương ứng xuất hiện.
    Không thêm dependency nếu chưa cần và chưa kiểm tra dependency hiện có.
 6. AI chỉ đề xuất. Service sở hữu dữ liệu phải xác thực quyền và áp dụng thay
    đổi; AI không ghi database nghiệp vụ và không tạo foreign key xuyên service.
-7. Context nghiệp vụ ưu tiên đi qua contract/event và bản đọc nội bộ. Không
-   biến Kafka thành request-response, không đọc database service khác và không
-   gọi hàng loạt REST service để dựng context nếu contract không yêu cầu.
+7. Đối chiếu context boundary với `docs/ai-service/architecture.md` và ADR hiện
+   hành theo baseline; không áp dụng quy tắc projection-only cũ từ skill. Adapter
+   internal API phải kiểm tra quyền, timeout và giới hạn dữ liệu. Không đọc
+   database service khác hoặc biến Kafka thành request-response.
 8. Giữ kiến trúc bounded agent: ADK Workflow kiểm soát macro-flow, `LlmAgent`
    kiểm soát micro-flow/reasoning. Agent chỉ được thấy Context Tool Pool, không
    biết Kafka, database, cache, topic, offset hoặc consumer group.
@@ -111,10 +108,10 @@ cho tới khi source/config tương ứng xuất hiện.
     khi output không hợp lệ phải có giới hạn; proposal không được tự gây side
     effect lên dữ liệu nghiệp vụ.
 12. Test AI phải deterministic khi có thể: dùng fake/mock provider, kiểm tra
-   schema và business rule độc lập với production LLM.
+    schema và business rule độc lập với production LLM.
 13. Mỗi hàm chức năng mới hoặc được thay đổi phải có unit test đi kèm trong cùng
-   thay đổi. Test tối thiểu phải bao phủ đường đi thành công và nhánh lỗi/biên
-   có ý nghĩa; không đẩy unit test sang milestone sau.
+    thay đổi. Test tối thiểu phải bao phủ đường đi thành công và nhánh lỗi/biên
+    có ý nghĩa; không đẩy unit test sang milestone sau.
 14. Sau mỗi prompt dẫn đến thay đổi code trong `apps/ai-service/**`, phải cập
     nhật [`TASKS.md`](.agent/TASKS.md) trong cùng thay đổi. Chuyển task đã hoàn
     thành vào mục **Đã hoàn thành**, ghi file và kiểm thử liên quan; cập nhật

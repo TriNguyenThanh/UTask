@@ -1,69 +1,91 @@
 # Kiến trúc UTask
 
-Tài liệu này ghi lại **thiết kế mục tiêu** theo yêu cầu kiến trúc hiện hành.
-Nó không xác nhận thiết kế đã được triển khai trong mã nguồn.
+**Trạng thái: Thiết kế mục tiêu.** Tài liệu được cập nhật theo
+[architecture baseline](../architecture/README.md), mục 2–4 và 26–29.
+Không xác nhận các service hoặc luồng nghiệp vụ đã chạy.
 
 ## Các thành phần
 
-UTask chia service theo nhóm nghiệp vụ lớn. Không tách service theo từng bảng.
+UTask dùng coarse-grained microservices: chia service theo nhóm nghiệp vụ
+lớn, không chia theo bảng hay entity. Work là core domain (nghiệp vụ trung tâm).
 
 ```text
-Người dùng
-    │
-Web Application ── API Gateway / Nginx
-    │                    │
-    ├── Identity Service ├── Classroom Service
-    ├── Project Service  ├── Integration Service ── GitHub
-    ├── Progress Service ├── AI Service ── nhà cung cấp LLM
-    └── Notification Service ── email / nhà cung cấp push
-              │
-       PostgreSQL · Kafka · Redis
+Web → Nginx / reverse proxy
+       ├── Identity Service
+       ├── Work Service
+       ├── Classroom Service
+       ├── Integration Service → GitHub
+       ├── Notification Service → email / kênh thông báo
+       └── AI Service → nhà cung cấp LLM
+
+Hạ tầng: PostgreSQL · Kafka · Redis · Cloudflare R2 ở production
 ```
 
-Các service nghiệp vụ:
+| Service      | Phạm vi sở hữu                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity     | User, profile, global role, xác thực, access/refresh token và OAuth đăng nhập                                                         |
+| Work         | Project, ProjectMember, backlog, Epic/UserStory, Sprint, Task, assignment, label, Comment, Workflow, Activity và tiến độ task/project |
+| Classroom    | Môn học, lớp, giảng viên/sinh viên, Group/GroupMember, điểm danh, điểm số và liên kết nhóm–project                                    |
+| Integration  | GitHub App, repository, webhook, commit/branch/issue/PR và mapping task–GitHub                                                        |
+| Notification | Bản ghi thông báo, người nhận, kênh và trạng thái gửi                                                                                 |
+| AI           | Yêu cầu, context phục vụ phân tích và kết quả đề xuất; không sở hữu dữ liệu nghiệp vụ gốc                                             |
 
-| Service | Phạm vi sở hữu |
-| --- | --- |
-| Identity Service | Tài khoản, hồ sơ, vai trò toàn hệ thống, xác thực và phiên đăng nhập |
-| Classroom Service | Môn học, lớp, giảng viên, sinh viên, ghi danh, nhóm và thành viên nhóm |
-| Project Service | Project, thành viên dự án, backlog, sprint, task, bình luận và workflow |
-| Integration Service | Kết nối GitHub, repository, webhook và dữ liệu GitHub đã chuẩn hóa |
-| Progress Service | Chỉ số, tiến độ và tín hiệu rủi ro tính theo quy tắc rõ ràng |
-| AI Service | Yêu cầu AI, bản sao dữ liệu phục vụ phân tích và kết quả gợi ý |
-| Notification Service | Bản ghi thông báo, trạng thái gửi, kênh và tùy chọn thông báo |
+Work Service có tên triển khai `work-service`. Tên Project Service trong tài
+liệu cũ chỉ cùng service này, không phải một microservice riêng. Giữ đường
+dẫn [docs/project-service/](../project-service/README.md) để bảo toàn liên kết.
 
-Tên triển khai `work-service`, nếu còn được dùng, tương ứng với **Project
-Service** trong kiến trúc mục tiêu. Không đổi tên thư mục hoặc mã nguồn trong
-một thay đổi chỉ về tài liệu.
+Tiến độ task/project thuộc Work; tính bằng công thức/quy tắc rõ ràng, không
+phụ thuộc AI. Không triển khai Progress Service riêng trong baseline ban đầu.
+Analytics và Realtime là khả năng giai đoạn sau khi có nhu cầu; chưa tạo
+service hoặc hạ tầng cho chúng chỉ từ sơ đồ mục tiêu.
 
-## Quan hệ Classroom và Project
+## Quan hệ Classroom và Work
 
-```text
-Teacher → Class → Group → Project → Sprint → Task
-```
+Classroom sở hữu Group/GroupMember; Work sở hữu Project/ProjectMember.
+Hai quan hệ không thay thế nhau. `class_id`, `group_id`, `user_id` là tham
+chiếu logic; kiểm tra qua API công bố khi cần, không join database service khác.
 
-Classroom Service sở hữu Teacher, Class, Group và Group Member. Project Service
-sở hữu Project, Project Member, Sprint và Task. `GroupMember` cho biết người
-học thuộc nhóm nào; `ProjectMember` mô tả vai trò của một người trong dự án.
-Hai quan hệ này không thay thế cho nhau. Giảng viên xem dự án thông qua quan hệ
-giảng viên → lớp → nhóm → dự án, không cần trở thành Project Member.
+Classroom quản lý liên kết nhóm–project trong nghiệp vụ lớp học; Work giữ ID
+tham chiếu của project và nhóm. Chi tiết đồng bộ, ma trận quyền giảng viên và
+hỗ trợ project độc lập cần hợp đồng sản phẩm/API, không suy ra từ baseline.
 
-## Các ranh giới phải giữ
+## Công nghệ và runtime
 
-- Mỗi service sở hữu dữ liệu và database riêng. Có thể dùng chung cụm
-  PostgreSQL, nhưng không đọc chéo database và không tạo khóa ngoại xuyên
-  service.
-- Service khác chỉ giữ ID tham chiếu như `user_id`, `class_id` hoặc `group_id`.
-- Project, Task, Sprint, Comment và các chức năng workflow cùng thuộc Project
-  Service; không tách thành service riêng nếu chưa có quyết định nghiệp vụ mới.
-- Integration Service là service duy nhất gọi GitHub API.
-- Progress Service tự tính số liệu; dashboard không phụ thuộc AI.
-- AI Service là service nội bộ. OpenAI, Gemini hoặc nhà cung cấp mô hình ngôn
-  ngữ lớn (LLM) khác là hệ thống bên ngoài.
-- AI chỉ đề xuất. Thay đổi dữ liệu nghiệp vụ phải được người dùng xác nhận và
-  thực hiện qua service sở hữu dữ liệu.
-- Lỗi AI hoặc nhà cung cấp LLM chỉ làm giảm khả năng AI, không chặn đăng nhập,
-  quản lý lớp, project, task, tích hợp GitHub, dashboard hay thông báo chính.
+Backend nghiệp vụ dùng Django + DRF, AI dùng FastAPI + Google ADK, Web dùng
+React + Vite + TypeScript. Mỗi service có package/dependency và Docker image
+riêng. Một service có thể có API process, Celery worker và Kafka consumer;
+worker không tự trở thành một service mới và không bắt buộc singleton.
 
-Không thêm service hoặc công nghệ mới nếu chưa có quyết định kiến trúc được
-ghi nhận.
+- REST: command/query cần phản hồi trực tiếp.
+- Celery + Redis: job nội bộ service.
+- Kafka: sự kiện giữa các service; dùng outbox khi lưu thay đổi và phát event.
+- R2: lưu file production qua S3-compatible API; local dùng filesystem.
+
+Chi tiết nằm trong [giao tiếp](communication.md) và
+[hạ tầng](../infrastructure/README.md).
+
+## Ranh giới phải giữ
+
+- Database và credential riêng theo service, có thể cùng PostgreSQL cluster.
+  Không đọc chéo database, không tạo foreign key xuyên service.
+- Service sở hữu tài nguyên kiểm tra quyền nghiệp vụ ở backend; Nginx là
+  reverse proxy, không thay thế kiểm tra permission của service.
+- Integration là service duy nhất gọi trực tiếp GitHub API.
+- AI lấy context qua internal API được service sở hữu công bố, đặt sau Context
+  Layer/domain tool. Projection qua event là tối ưu tùy nhu cầu; agent không
+  tự gọi HTTP tùy ý hoặc truy cập database service khác.
+- AI chỉ đề xuất. User xác nhận; Work/service sở hữu dữ liệu kiểm tra quyền
+  và business rule rồi áp dụng thay đổi.
+- Lỗi AI không chặn auth, quản lý lớp/project/task, dashboard hoặc thông báo
+  chính. Work vẫn cung cấp tiến độ khi AI hoặc LLM lỗi.
+
+Production dùng container ứng dụng không giữ dữ liệu bền vững trong memory,
+hạ tầng PostgreSQL/Redis/Kafka bên ngoài và R2. Kubernetes, Debezium, Keycloak,
+service mesh hoặc realtime service riêng chỉ thêm khi có nhu cầu và quyết định.
+
+## Chuyển từ thiết kế cũ
+
+[ADR cập nhật baseline](../adr/001-adopt-architecture-baseline.md) ghi việc
+thay Project/Progress bằng Work và cập nhật cách lấy context AI. Contract
+đã chốt được kiểm tra riêng; không tự đổi URL, producer hoặc envelope bằng
+cách thay tên trong tài liệu.

@@ -1,61 +1,35 @@
-# Stack AI Service giai đoạn 1
+# Stack AI Service
 
-**Trạng thái: Thiết kế mục tiêu; chưa được xác minh trong implementation.**
+**Trạng thái: Một phần.** Bootstrap đã dùng Python 3.12, FastAPI/Uvicorn,
+Pydantic v2, `pydantic-settings`, `uv`, Pytest, Ruff và Docker. Các adapter
+provider/context, ADK, Celery, Kafka và persistence chưa triển khai.
 
-Stack đề xuất cho ba workflow `backlog_generation`, `task_decomposition` và
-`risk_analysis` như sau:
+Thiết kế công nghệ theo [baseline](../architecture/README.md), mục 4.6, 9–11,
+18 và 28; trạng thái dependency thực tế nằm trong [code map](code-map.md).
 
-| Lớp           | Lựa chọn                                                |
-| ------------- | ------------------------------------------------------- |
-| Runtime       | Python 3.12.x, pin bằng `.python-version`               |
-| API           | FastAPI + Uvicorn                                       |
-| Schema/config | Pydantic v2 + `pydantic-settings`                       |
-| Dependency    | `uv`, `pyproject.toml`, `uv.lock`                       |
-| Kafka         | `aiokafka` cho consumer bất đồng bộ                     |
-| Context DB    | PostgreSQL `ai_context_db`                              |
-| Persistence   | SQLAlchemy 2 async + `asyncpg` + Alembic                |
-| LLM provider  | Model/provider adapter hoặc router; model cụ thể cần benchmark |
-| Agent layer   | Google ADK 2.0: Workflow + LlmAgent + Context Tool Pool |
-| Test          | Pytest + HTTPX, fake LLM provider                       |
-| Quality       | Ruff                                                    |
-| Deploy        | Docker                                                  |
+| Lớp                | Lựa chọn mục tiêu                                                                 | Hiện trạng                                                       |
+| ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| API/runtime        | Python + FastAPI; bootstrap Python 3.12/Uvicorn                                   | Đã có bootstrap                                                  |
+| Agent              | Google ADK; workflow và domain tools                                              | Chưa có dependency/runtime                                       |
+| Provider           | Model/provider adapter; model chọn qua evaluation                                 | Chỉ có protocol và provider mặc định báo lỗi                     |
+| Schema/config      | Pydantic và cấu hình môi trường                                                   | Đã có bootstrap                                                  |
+| Context            | Internal API qua Context Layer; projection/cache khi có use case                  | Chưa có adapter/tool                                             |
+| Job nội bộ         | Celery + Redis                                                                    | Chưa có dependency/worker/queue                                  |
+| Event giữa service | Kafka; Python ưu tiên `confluent-kafka`                                           | Chưa có SDK/producer/consumer                                    |
+| Dữ liệu AI         | PostgreSQL riêng; SQLAlchemy/asyncpg/Alembic là phương án trong thiết kế AI trước | Chưa có database client/migration; baseline không ấn định ORM AI |
+| Package            | `uv`, `pyproject.toml`, `uv.lock`                                                 | Đã có                                                            |
+| Test/quality       | Pytest/HTTPX, fake provider, evaluation; Ruff                                     | Có test bootstrap, chưa có evaluation LLM                        |
+| Deploy             | Docker; API và worker có entry point riêng khi triển khai job                     | Có Dockerfile API, chưa có worker topology                       |
 
-Lý do chọn:
+Redis là broker job nội bộ theo baseline, không cần đợi một use case cache
+mới để ghi nhận lựa chọn Celery + Redis. Kafka không thay Redis trong luồng
+Celery. Worker thuộc AI Service, không phải service worker dùng chung và chưa
+được quy định singleton. Xem [job nền](../infrastructure/background-jobs.md).
 
-- FastAPI phù hợp API AI, hỗ trợ type hints, OpenAPI, JSON Schema và Pydantic validation. [FastAPI documentation](https://fastapi.tiangolo.com/)
-- `uv` đã khớp với CI hiện tại của repository và cung cấp lockfile reproducible. [uv project guide](https://docs.astral.sh/uv/guides/projects/)
-- `aiokafka` phù hợp với service Python async và mô hình context nhận qua Kafka. [aiokafka documentation](https://aiokafka.readthedocs.io/en/stable/)
-- SQLAlchemy có hỗ trợ asyncio chính thức; Alembic phù hợp migration cho PostgreSQL. [SQLAlchemy asyncio](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html), [Alembic](https://alembic.sqlalchemy.org/en/latest/)
-- Google ADK 2.0 phù hợp với kiến trúc bounded agent của UTask: Workflow kiểm
-  soát macro-flow, `LlmAgent` tự reasoning và chọn tool, còn Context Tool Pool
-  che giấu Kafka/database/cache. Model/provider phải nằm sau adapter để có thể
-  benchmark, đổi model hoặc fallback mà không đổi business logic.
+Không pin phiên bản SDK hoặc model chỉ từ tài liệu: kiểm tra dependency và
+đánh giá provider tại thời điểm triển khai. Không thêm LangChain/CrewAI, vector
+DB hoặc nhiều agent framework nếu chưa có use case/quyết định. Baseline chưa
+chọn model cụ thể và không quy định toàn bộ các khả năng AI phải có trong API v1.
 
-Dependency direction nên là:
-
-```text
-FastAPI route
-    ↓
-Application service
-    ↓
-Google ADK Workflow
-    ↓
-LlmAgent / agent-as-tool
-    ↓
-Context Tool Pool
-    ↓
-Kafka, PostgreSQL, model/provider adapters
-```
-
-Chưa nên thêm ở v1:
-
-- LangChain, CrewAI hoặc nhiều agent framework cùng lúc;
-- Redis nếu chưa có yêu cầu cache/rate-limit cụ thể;
-- vector database;
-- multi-agent orchestration cho request đơn giản;
-- gọi REST đồng bộ sang Project/Classroom/Integration Service.
-
-Model cụ thể chưa được chốt; cần benchmark tại thời điểm triển khai. OpenAI,
-Gemini hoặc provider khác chỉ là lựa chọn phía sau adapter/router. Stack này
-cũng phù hợp với dấu vết CI Python service hiện có trong [CI Python service](/home/trislord/Code/UTask/UTask/.github/workflows/python-service.yml:1)
-và cấu hình FastAPI dự kiến trong [README root](/home/trislord/Code/UTask/UTask/README.md:24).
+Tài liệu framework/provider chỉ phục vụ tra cứu kỹ thuật; các quyết định UTask
+lấy từ baseline và tài liệu service, không từ tính năng mới của SDK.

@@ -1,9 +1,9 @@
 # UTask AI Service Workflow
 
-**Trạng thái: Thiết kế mục tiêu; chưa xác minh trong implementation.**
+**Trạng thái: Thiết kế mục tiêu; ADK, agent, tool và worker chưa triển khai.**
 
-Tài liệu này là nguồn mô tả workflow bounded agent của AI Service. Giai đoạn 1
-chỉ triển khai `backlog_generation`, `task_decomposition` và `risk_analysis`.
+Tài liệu này là nguồn mô tả workflow bounded agent của AI Service. API v1 chỉ
+đặc tả `backlog_generation`, `task_decomposition` và `risk_analysis`.
 Các intent khác thuộc giai đoạn sau. Kafka, database, cache và provider trong
 tài liệu là chi tiết thiết kế, không phải bằng chứng runtime đã tồn tại.
 
@@ -27,47 +27,32 @@ Nguyên tắc cốt lõi:
 
 ## 2. Kiến trúc tổng thể
 
+Thiết kế theo [baseline](../architecture/README.md), mục 4.6, 9–11 và 18.
+Các layer dưới đây là thiết kế, chưa phải ADK/Celery/context runtime.
+
 ```text
-User Request
-    |
-    v
-AI Service API
-    |
-    v
-Application Layer
-    |
-    v
-ADK Workflow
-    |
-    v
-LlmAgent
-    |
-    |-- tự quyết định cần context nào
-    |-- tự chọn tool
-    |-- reasoning
-    |-- có thể gọi specialist agent
-    |-- self-review trong giới hạn
-    |
-    v
-Context Tool Pool
-    |
-    v
-Context Layer
-    |
-    v
-ai_context_db / cache
-    ^
-    |
-Kafka Consumers
-    ^
-    |
-+------------+-------------+-------------+----------------+
-|            |             |             |                |
-Project   Classroom     Progress     Integration      Service khác
-Service    Service       Service       Service
+AI API / task entry point
+    → Application → ADK Workflow → LlmAgent → proposal
+                                      │
+                                Context Tool Pool
+                                      │
+                                Context Layer/adapters
+                                      │
+                         internal API của Work/service sở hữu
 ```
 
-Agent chỉ thấy **Context Tool Pool**. Kafka, database, cache và cách đồng bộ dữ liệu là chi tiết triển khai phía dưới.
+Agent chỉ thấy domain tool; Context Layer kiểm soát quyền, phạm vi dữ liệu,
+HTTP timeout và số lời gọi. Adapter provider phục vụ lời gọi LLM riêng.
+Projection/cache qua Kafka có thể bổ sung khi có nhu cầu, không bắt buộc là
+nguồn context duy nhất theo baseline mới.
+
+Nếu chọn xử lý nền, Celery worker thuộc AI Service nhận job qua Redis và gọi
+Application/Workflow. Consumer Kafka nhận domain event/cập nhật projection;
+không đồng nhất consumer với Celery worker. Source và trạng thái job thuộc AI,
+API/worker có thể tách process/container. Xem [job nền](../infrastructure/background-jobs.md).
+
+Baseline chưa chốt worker singleton, mọi POST trả `202` ngay hoặc kênh đẩy
+kết quả. API v1 vẫn có ngưỡng chờ/polling riêng trong [API](api.md).
 
 ---
 
@@ -220,7 +205,7 @@ get_development_context()
 
 Agent không biết:
 
-- dữ liệu đến từ Kafka;
+- dữ liệu đến từ internal API hay projection Kafka;
 - database nào đang được dùng;
 - cache nào đang được dùng;
 - topic nào đang tồn tại;
@@ -318,36 +303,29 @@ Agent không nên quyết định:
 
 Đây là trách nhiệm infrastructure.
 
-### 5.2. Kafka dùng để đồng bộ context
+### 5.2. Kafka truyền sự kiện giữa service
 
-Luồng chuẩn:
+Baseline dùng Kafka cho Work → AI, Integration → Work/AI và AI → Notification
+khi có event contract. AI lấy Project/Task context qua internal API; Kafka có
+thể kích hoạt phân tích tự động hoặc cập nhật projection khi use case cần.
 
 ```text
-Project Service
-Progress Service
-Integration Service
-Classroom Service
-      |
-      v
-    Kafka
-      |
-      v
-Deterministic Consumers
-      |
-      v
-Context Projection
-      |
-      v
-ai_context_db
-      |
-      v
-Context Tool Pool
-      |
-      v
-Agent
+Domain service → transaction + outbox → publisher → Kafka
+    → AI consumer: validate schema/version + chống lặp
+        ├── cập nhật projection (nếu được chọn)
+        └── giao job nội bộ qua Redis → Celery worker → Application/Workflow
 ```
 
-Agent không biết Kafka tồn tại.
+Consumer cập nhật context ngoài agent loop; agent không quyết định topic,
+offset hoặc replay. Không bắt LlmAgent consume/publish Kafka.
+
+Sau khi lưu kết quả, AI có thể phát event theo baseline cho Notification.
+`ai.analysis.completed`/`ai.project.risk.detected` chưa có schema/topic được
+chốt; API v1 hiện chưa phát event kết quả. Cần contract/version trước runtime,
+không coi đây là response HTTP cho client.
+
+`ai-context-v1.yaml` là contract projection cũ có Project/Progress producer;
+cần mapping/version nếu dùng với Work. Xem [danh mục event](../system/kafka-events.md).
 
 ### 5.3. Không dùng Kafka như request-response thông thường
 
@@ -382,7 +360,8 @@ Cách này tạo thêm:
 - latency;
 - lifecycle phức tạp.
 
-Context nên được đồng bộ trước vào `ai_context_db`.
+Context được lấy qua internal API sau adapter hoặc projection đã đồng bộ;
+không dựng cơ chế hỏi–đáp Kafka cho mỗi lần agent cần dữ liệu.
 
 ---
 
@@ -407,8 +386,8 @@ Agent không được phép:
 ```text
 - consume Kafka trực tiếp
 - gọi database của service khác
-- gọi REST sang service khác để gom context
-- ghi trực tiếp Project DB
+- gọi REST tùy ý ngoài domain tool/adapter được kiểm soát
+- ghi trực tiếp Work DB
 - assign member
 - thay đổi sprint
 - sửa task
@@ -709,10 +688,10 @@ Chi phí lớn nhất có khả năng đến từ AI inference, không phải s�
 PostgreSQL cluster/server
 ├── identity_db
 ├── classroom_db
-├── project_db
+├── work_db
 ├── integration_db
-├── progress_db
-└── ai_context_db
+├── notification_db
+└── ai_context_db (tên thiết kế AI, chưa có trong Compose)
 
 Redis instance/cluster
 └── namespace theo service
@@ -725,59 +704,22 @@ Shared infrastructure không làm mất data ownership của từng microservice
 
 ---
 
-## 14. Kiến trúc cuối cùng
+## 14. Kiến trúc mục tiêu
 
 ```text
-                          USER
-                            |
-                            v
-                     AI Service API
-                            |
-                            v
-                    Application Layer
-                            |
-                            v
-                   +----------------+
-                   |  ADK Workflow  |
-                   +--------+-------+
-                            |
-                            v
-                   +----------------+
-                   |    LlmAgent    |
-                   |                |
-                   | reason         |
-                   | choose context |
-                   | choose tool    |
-                   | self-review    |
-                   +--------+-------+
-                            |
-                            v
-                 +---------------------+
-                 | Context Tool Pool   |
-                 |                     |
-                 | task context        |
-                 | project context     |
-                 | team context        |
-                 | progress context    |
-                 | development context |
-                 +----------+----------+
-                            |
-                            v
-                    Context Layer
-                            |
-                    +-------+-------+
-                    |               |
-                    v               v
-              ai_context_db       cache
-                    ^
-                    |
-             Kafka Consumers
-                    ^
-                    |
-       +------------+-------------+-------------+
-       |            |             |             |
-    Project      Classroom     Progress     Integration
-    Service       Service       Service       Service
+AI API / Celery task
+    → Application → ADK Workflow → LlmAgent → validated proposal
+                                      │
+                                Context Tool Pool
+                                      │
+                                Context Layer/adapters
+                                      │
+                    internal API của Work / service sở hữu
+                    projection/cache nội bộ khi được chọn
+
+Kafka consumer / publisher chạy ngoài vòng suy luận.
+Job nội bộ: Redis → Celery worker thuộc AI Service.
+Trạng thái/kết quả: persistence AI → API → client.
 ```
 
 Side-effect flow:

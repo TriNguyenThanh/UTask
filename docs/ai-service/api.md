@@ -1,24 +1,27 @@
 # API AI Service — giai đoạn 1
 
-**Trạng thái: Contract v1 đã chốt; implementation chưa triển khai.** Schema
-máy đọc được nằm tại
+**Trạng thái: Contract v1 đã chốt; bootstrap implementation đã triển khai một
+phần.** Schema máy đọc được nằm tại
 [`contracts/api/ai-service-v1.yaml`](../../contracts/api/ai-service-v1.yaml).
+Healthcheck và request boundary đã có; provider thật, xử lý bất đồng bộ và
+persistence chưa có.
 
 Tài liệu này mô tả API mà client dùng để yêu cầu AI xử lý một ý định cụ thể.
-API chỉ nhận yêu cầu và trả về bản phân tích hoặc đề xuất có cấu trúc. Ngữ cảnh
-nghiệp vụ được AI Service đồng bộ vào bản đọc nội bộ qua Kafka; client không gửi
-toàn bộ dữ liệu nghiệp vụ và AI không gọi Kafka, database hoặc REST của service
-khác trong lúc xử lý.
+API chỉ nhận yêu cầu và trả bản phân tích hoặc proposal có cấu trúc. Theo
+[baseline](../architecture/README.md), AI lấy context qua internal API sau
+Context Layer/domain tool; projection qua Kafka có thể bổ sung khi cần.
+Client không gửi toàn bộ dữ liệu nghiệp vụ; agent không tự gọi HTTP tùy ý,
+Kafka hoặc database service khác. Xem [kiến trúc](architecture.md).
 
 ## 1. Phạm vi
 
 Giai đoạn 1 chỉ hỗ trợ ba giá trị `intent`:
 
-| Intent | Mục đích | Phạm vi đích |
-| --- | --- | --- |
-| `backlog_generation` | Tạo backlog nháp từ mô tả project hoặc một chức năng | Project hiện có hoặc bản nháp chưa gắn project |
-| `task_decomposition` | Phân rã một task phức tạp thành các subtask | Task |
-| `risk_analysis` | Phân tích và giải thích nguy cơ ảnh hưởng tiến độ, Sprint hoặc deadline | Project hoặc Sprint |
+| Intent               | Mục đích                                                                | Phạm vi đích                                   |
+| -------------------- | ----------------------------------------------------------------------- | ---------------------------------------------- |
+| `backlog_generation` | Tạo backlog nháp từ mô tả project hoặc một chức năng                    | Project hiện có hoặc bản nháp chưa gắn project |
+| `task_decomposition` | Phân rã một task phức tạp thành các subtask                             | Task                                           |
+| `risk_analysis`      | Phân tích và giải thích nguy cơ ảnh hưởng tiến độ, Sprint hoặc deadline | Project hoặc Sprint                            |
 
 `deadline_check` độc lập, gợi ý priority, tạo mô tả task, tự phân bổ lại
 workload và các hành động tự động thuộc giai đoạn sau. API giai đoạn 1 không
@@ -37,7 +40,7 @@ AI Service API
 Application -> ADK Workflow -> LlmAgent -> Context Tool Pool
                                       |
                                       v
-                              Context Layer / read model
+                              Context Layer / internal API adapters
 ```
 
 - API nhận ý định, phạm vi đối tượng và các chỉ dẫn bổ sung cần thiết.
@@ -56,8 +59,7 @@ Application -> ADK Workflow -> LlmAgent -> Context Tool Pool
 
 ## 3. Base path và quy ước chung
 
-Gateway hiện có route mục tiêu `/api/ai/`. Prefix version được đề xuất cho API
-v1 là:
+Nginx hiện có route `/api/ai/`. Prefix đã được contract v1 đặc tả là:
 
 ```text
 /api/ai/v1
@@ -96,24 +98,22 @@ Tạo một yêu cầu xử lý cho một trong ba intent giai đoạn 1.
     "acceptance_criteria": [
       "Người dùng có thể đăng nhập bằng email và mật khẩu"
     ],
-    "dependencies": [
-      "Identity Service"
-    ],
+    "dependencies": ["Identity Service"],
     "additional_instruction": "Ưu tiên chia theo vertical slice"
   },
   "output_schema_version": "task_decomposition.v1"
 }
 ```
 
-| Field | Bắt buộc | Mô tả |
-| --- | --- | --- |
-| `intent` | Có | Một trong ba intent được hỗ trợ ở phase 1. |
-| `target` | Tùy intent | Logical reference tới project, task hoặc Sprint. Không gửi target nếu tạo backlog nháp chưa gắn project. |
-| `target.type` | Khi có `target` | `project`, `task` hoặc `sprint`; phải phù hợp với `intent`. |
-| `target.id` | Khi có `target` | ID của đối tượng trong service sở hữu dữ liệu. |
-| `input` | Có | Dữ liệu trực tiếp do user cung cấp; không thay thế context canonical từ read model. |
-| `output_schema_version` | Không | Phiên bản schema client mong muốn; mặc định là phiên bản hiện hành nếu API cho phép bỏ qua. |
-| `Idempotency-Key` | Có ở header | Khóa chống tạo cùng một yêu cầu nhiều lần; không đặt trong body. |
+| Field                   | Bắt buộc        | Mô tả                                                                                                    |
+| ----------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
+| `intent`                | Có              | Một trong ba intent được hỗ trợ ở phase 1.                                                               |
+| `target`                | Tùy intent      | Logical reference tới project, task hoặc Sprint. Không gửi target nếu tạo backlog nháp chưa gắn project. |
+| `target.type`           | Khi có `target` | `project`, `task` hoặc `sprint`; phải phù hợp với `intent`.                                              |
+| `target.id`             | Khi có `target` | ID của đối tượng trong service sở hữu dữ liệu.                                                           |
+| `input`                 | Có              | Dữ liệu trực tiếp do user cung cấp; không thay thế context từ service sở hữu hoặc bản sao đã kiểm soát.  |
+| `output_schema_version` | Không           | Phiên bản schema client mong muốn; mặc định là phiên bản hiện hành nếu API cho phép bỏ qua.              |
+| `Idempotency-Key`       | Có ở header     | Khóa chống tạo cùng một yêu cầu nhiều lần; không đặt trong body.                                         |
 
 `requester_user_id` không xuất hiện trong request body. API lấy user từ identity
 context đã được gateway hoặc cơ chế xác thực nội bộ kiểm tra.
@@ -131,10 +131,7 @@ context đã được gateway hoặc cơ chế xác thực nội bộ kiểm tra
   },
   "input": {
     "description": "Nền tảng đặt lịch phòng họp cho nhóm trong công ty",
-    "goals": [
-      "Đặt và hủy lịch",
-      "Tránh trùng lịch"
-    ],
+    "goals": ["Đặt và hủy lịch", "Tránh trùng lịch"],
     "tech_stack": ["React", "Django", "PostgreSQL"],
     "deadline": "2026-12-31T00:00:00Z",
     "constraints": ["Phải hỗ trợ phân quyền theo nhóm"]
@@ -166,7 +163,7 @@ context và task context hiện có.
 }
 ```
 
-`target.type` phải là `task`. Nếu task đã có trong context read model, API có
+`target.type` phải là `task`. Nếu lấy được task qua context adapter hoặc read model, API có
 thể chỉ cần `target`; các field trong `input` dùng để bổ sung hoặc làm rõ yêu
 cầu, không được dùng để giả mạo quyền truy cập task.
 
@@ -329,12 +326,12 @@ Kafka không được dùng để client chờ response; client truy vấn statu
 
 Trả về trạng thái của request thuộc user đã xác thực.
 
-| `status` | Ý nghĩa |
-| --- | --- |
-| `queued` | Đã nhận nhưng workflow chưa bắt đầu. |
-| `running` | Workflow hoặc agent đang xử lý. |
-| `succeeded` | Đã có result hợp lệ. |
-| `failed` | Không thể tạo result hợp lệ trong budget/retry cho phép. |
+| `status`    | Ý nghĩa                                                  |
+| ----------- | -------------------------------------------------------- |
+| `queued`    | Đã nhận nhưng workflow chưa bắt đầu.                     |
+| `running`   | Workflow hoặc agent đang xử lý.                          |
+| `succeeded` | Đã có result hợp lệ.                                     |
+| `failed`    | Không thể tạo result hợp lệ trong budget/retry cho phép. |
 
 Request ở trạng thái `succeeded` trả cùng envelope và `result` như response
 `200` của POST. Request ở trạng thái `queued` hoặc `running` chỉ trả metadata
@@ -352,11 +349,7 @@ Response lỗi dùng format thống nhất:
     "message": "intent không thuộc phạm vi giai đoạn 1",
     "details": {
       "field": "intent",
-      "allowed": [
-        "backlog_generation",
-        "task_decomposition",
-        "risk_analysis"
-      ]
+      "allowed": ["backlog_generation", "task_decomposition", "risk_analysis"]
     },
     "request_id": "8b7f4e0a-4a7d-4f69-9f4c-444444444444",
     "retryable": false
@@ -364,24 +357,24 @@ Response lỗi dùng format thống nhất:
 }
 ```
 
-| HTTP | Error code mẫu | Khi dùng |
-| --- | --- | --- |
-| `400` | `INVALID_REQUEST`, `INVALID_INTENT`, `INVALID_INPUT` | JSON hoặc field không hợp lệ. |
-| `401` | `AUTHENTICATION_REQUIRED` | Không có identity hợp lệ. |
-| `403` | `TARGET_ACCESS_DENIED` | User không được yêu cầu phân tích target. |
-| `404` | `REQUEST_NOT_FOUND` | Không tìm thấy request thuộc user hiện tại. |
-| `409` | `IDEMPOTENCY_CONFLICT` | Idempotency key đã gắn với payload khác. |
-| `422` | `OUTPUT_VALIDATION_FAILED` | Agent không tạo được output đúng schema sau retry hữu hạn. |
-| `429` | `RATE_LIMITED` | Vượt giới hạn request hoặc budget dùng chung. |
-| `500` | `INTERNAL_ERROR` | Lỗi không xác định trong AI Service. |
-| `502`/`504` | `PROVIDER_UNAVAILABLE`, `WORKFLOW_TIMEOUT` | Provider lỗi hoặc workflow vượt timeout; tùy khả năng retry. |
+| HTTP        | Error code mẫu                                       | Khi dùng                                                     |
+| ----------- | ---------------------------------------------------- | ------------------------------------------------------------ |
+| `400`       | `INVALID_REQUEST`, `INVALID_INTENT`, `INVALID_INPUT` | JSON hoặc field không hợp lệ.                                |
+| `401`       | `AUTHENTICATION_REQUIRED`                            | Không có identity hợp lệ.                                    |
+| `403`       | `TARGET_ACCESS_DENIED`                               | User không được yêu cầu phân tích target.                    |
+| `404`       | `REQUEST_NOT_FOUND`                                  | Không tìm thấy request thuộc user hiện tại.                  |
+| `409`       | `IDEMPOTENCY_CONFLICT`                               | Idempotency key đã gắn với payload khác.                     |
+| `422`       | `OUTPUT_VALIDATION_FAILED`                           | Agent không tạo được output đúng schema sau retry hữu hạn.   |
+| `429`       | `RATE_LIMITED`                                       | Vượt giới hạn request hoặc budget dùng chung.                |
+| `500`       | `INTERNAL_ERROR`                                     | Lỗi không xác định trong AI Service.                         |
+| `502`/`504` | `PROVIDER_UNAVAILABLE`, `WORKFLOW_TIMEOUT`           | Provider lỗi hoặc workflow vượt timeout; tùy khả năng retry. |
 
 Không trả raw prompt, API credential, raw provider response hoặc thông tin
 database trong `message`/`details`.
 
 ## 8. Context và tính đúng đắn
 
-API không nhận `context` tùy ý từ client để thay thế dữ liệu đã đồng bộ. Context
+API không nhận `context` tùy ý từ client để thay dữ liệu của service sở hữu. Context
 được chọn qua các domain tool ở mức như:
 
 - `get_task_context`;
@@ -392,8 +385,8 @@ API không nhận `context` tùy ý từ client để thay thế dữ liệu đ�
 
 Context Layer lọc và tổng hợp dữ liệu trước khi đưa cho agent. Response phải
 cho biết `as_of`, nguồn dữ liệu và cảnh báo stale/missing/partial khi có. Bản
-đọc AI không phải nguồn đúng; Project, Classroom, Integration và Progress
-Service vẫn là chủ sở hữu dữ liệu tương ứng.
+đọc/snapshot AI không phải nguồn đúng; Work, Classroom và Integration vẫn
+sở hữu dữ liệu tương ứng. Work tính chỉ số tiến độ bằng công thức/quy tắc.
 
 ## 9. Luồng xác nhận proposal
 
@@ -414,19 +407,19 @@ Domain service phát domain event nếu cần
 ```
 
 Ví dụ, `task_decomposition` chỉ trả danh sách subtask nháp. Việc tạo subtask
-thật phải do Project Service thực hiện sau khi user xác nhận. Tương tự,
+thật phải do Work Service thực hiện sau khi user xác nhận. Tương tự,
 `backlog_generation` không tự tạo Work Item và `risk_analysis` không tự đổi
 deadline hoặc trạng thái task.
 
 ## 10. Mapping API với workflow
 
-| Bước API | Thành phần workflow | Quy tắc |
-| --- | --- | --- |
-| Parse và kiểm tra body | API/Application | Kiểm tra intent, target, input, identity và idempotency. |
-| Chọn xử lý | ADK Workflow | Điều phối macro-flow, không hard-code mọi context fetch. |
+| Bước API                | Thành phần workflow            | Quy tắc                                                            |
+| ----------------------- | ------------------------------ | ------------------------------------------------------------------ |
+| Parse và kiểm tra body  | API/Application                | Kiểm tra intent, target, input, identity và idempotency.           |
+| Chọn xử lý              | ADK Workflow                   | Điều phối macro-flow, không hard-code mọi context fetch.           |
 | Suy luận và lấy context | `LlmAgent` + Context Tool Pool | Agent tự chọn domain tool trong budget; không thấy Kafka/database. |
-| Kiểm tra kết quả | Workflow + typed schema | Reject hoặc revise/retry có giới hạn nếu output không hợp lệ. |
-| Lưu và trả kết quả | Application/Persistence | Lưu request, result, schema version và context metadata. |
+| Kiểm tra kết quả        | Workflow + typed schema        | Reject hoặc revise/retry có giới hạn nếu output không hợp lệ.      |
+| Lưu và trả kết quả      | Application/Persistence        | Lưu request, result, schema version và context metadata.           |
 
 Budget tối thiểu cần cấu hình cho mỗi workflow: số model call, số context-tool
 call, số specialist call, output token và wall-clock timeout. Không có retry vô
@@ -451,8 +444,27 @@ Các quyết định dưới đây đã được ghi vào schema máy đọc đ�
    `task_decomposition.v1` và `risk_analysis.v1`.
 7. Rate limit và retention cụ thể là cấu hình vận hành, nhưng lỗi và boundary
    đã cố định trong error schema; không lưu raw provider response.
-8. V1 chưa phát `ai.completed`; Kafka chỉ cập nhật context theo
-   [`ai-context-v1.yaml`](../../contracts/events/ai-context-v1.yaml).
+8. V1 chưa phát event kết quả AI. Contract context projection cũ nằm tại
+   [`ai-context-v1.yaml`](../../contracts/events/ai-context-v1.yaml); cần đối chiếu
+   producer/envelope với baseline trước khi dùng cho Work.
 
 Contract không xác nhận endpoint hoặc event producer/consumer đã chạy. Mọi thay
 đổi contract sau v1 phải tăng version hoặc bổ sung quy tắc tương thích ngược.
+
+## 12. Đối chiếu baseline và công việc chuyển đổi
+
+Các quyết định contract v1 ở mục 11 được giữ nguyên YAML trong lần cập nhật
+này. Baseline là chuẩn kiến trúc mới, không tự đổi wire contract (cấu trúc
+truyền qua API/event). Các khoảng trống cần giải quyết trước implementation:
+
+| Chủ đề        | Baseline / thiết kế mới                                          | Hợp đồng hoặc hiện trạng còn lại                                                            |
+| ------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền   | YAML v1 mô tả gateway xác thực; bootstrap chỉ đọc header user. Cần hợp đồng auth thống nhất |
+| Context       | Internal API của Work qua adapter/domain tool                    | Chưa có contract endpoint context hoặc adapter; projection v1 dùng producer cũ              |
+| Job nội bộ    | Celery + Redis thuộc AI khi triển khai job                       | Chưa có task/worker/queue; baseline không đổi ngưỡng chờ/polling v1                         |
+| Event kết quả | Baseline nêu `ai.analysis.completed`, `ai.project.risk.detected` | Chưa có event schema/topic/consumer; v1 chưa phát event                                     |
+| URL/version   | Nginx reverse proxy và API có version                            | Giữ `/api/ai/v1/requests`; ví dụ URL trong baseline không tự đổi route                      |
+
+Cơ chế luôn trả `202` hoặc SSE/WebSocket cần quyết định và cập nhật contract
+riêng. Sau `202`, polling dùng HTTP GET mới; Kafka không gửi response thứ hai
+trên request POST đã kết thúc. Xem [ADR-001](../adr/001-adopt-architecture-baseline.md).

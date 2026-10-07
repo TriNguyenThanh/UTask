@@ -2,7 +2,13 @@
 
 **Trạng thái: Thiết kế mục tiêu; chưa triển khai và chưa có migration để kiểm chứng.**
 
-Có thể tối giản ERD đáng kể cho phiên bản đầu. AI Service chỉ cần lưu:
+ERD dưới đây là phương án persistence của thiết kế AI trước; baseline mục
+4.6 cho lấy context qua internal API. `AI_REQUEST` phục vụ yêu cầu/kết quả;
+các bảng `CONTEXT_*` chỉ triển khai khi chọn lưu snapshot/projection qua event.
+Không bắt buộc tạo toàn bộ bảng chỉ để chạy internal-context API. Xem
+[kiến trúc AI](architecture.md) và [baseline](../architecture/README.md).
+
+Phạm vi dữ liệu có thể lưu khi use case cần:
 
 1. yêu cầu và kết quả AI;
 2. projection (bản sao đọc tối thiểu) của project/task/sprint;
@@ -116,7 +122,7 @@ erDiagram
     CONTEXT_PROGRESS_METRIC {
         uuid id PK
         varchar scope_type
-        uuid scope_id "logical ref Progress"
+        uuid scope_id "logical ref Work scope"
         varchar metric_key
         numeric metric_value
         timestamptz measured_at
@@ -127,7 +133,7 @@ erDiagram
     }
 ```
 
-## Vì sao chỉ cần các bảng này?
+## Vai trò của các bảng đề xuất
 
 - `ai_request` chứa cả trạng thái, metadata lần gọi và kết quả JSON đã validate.
   Với MVP, chỉ lưu lần xử lý hiện tại; chưa cần tách `ai_run`, `ai_result` và
@@ -137,7 +143,7 @@ erDiagram
 - `context_project` và `context_task` đủ cho các use case tạo backlog và phân rã
   task; `context_sprint`, `context_progress_metric` và
   `context_github_activity` bổ sung dữ liệu cho `risk_analysis`.
-- `context_progress_metric` cho phép AI diễn giải chỉ số do Progress Service
+- `context_progress_metric` cho phép AI diễn giải chỉ số do Work Service
   tính; AI không tự tính lại chỉ số nguồn.
 - `context_event` giữ `event_id` và trạng thái xử lý để consumer Kafka
   idempotent. Đây là bảng vận hành, không thay thế event contract.
@@ -146,12 +152,17 @@ Context được lưu như **trạng thái mới nhất**, không phải lịch 
 cột `source_version`, `source_updated_at`, `synced_at` và `context_as_of` cho
 biết kết quả AI đã dùng dữ liệu đến thời điểm nào.
 
-## Ràng buộc và index tối thiểu
+## Ràng buộc và index đề xuất khi chọn persistence này
+
+Các ràng buộc dưới đây cần xác minh theo schema/API thực tế trước migration.
+Với job `queued` chưa được chạy, cần chốt cách đếm attempt trước khi dùng
+`attempt_count >= 1`; không áp dụng CHECK này như schema production đã chốt.
 
 - Khóa chính dùng `uuid`; thời gian dùng `timestamptz`.
 - `UNIQUE (requester_user_id, idempotency_key)` trên `ai_request` khi key khác
   `NULL`.
-- `CHECK` cho `status` và `attempt_count >= 1`.
+- `CHECK` cho `status`; ràng buộc `attempt_count` cần chốt cách đếm job chưa
+  bắt đầu và retry trước migration.
 - `CHECK (jsonb_typeof(input_payload) = 'object')` nếu API luôn nhận object.
 - Index `ai_request (requester_user_id, requested_at DESC)` và
   `ai_request (status, requested_at DESC)`.
@@ -160,7 +171,7 @@ biết kết quả AI đã dùng dữ liệu đến thời điểm nào.
 - Index `context_github_activity (project_id, occurred_at DESC)` và
   `context_github_activity (task_id, occurred_at DESC)`.
 - Index `context_progress_metric (scope_type, scope_id, metric_key,
-  measured_at DESC)`.
+measured_at DESC)`.
 - Primary key trên `context_event.event_id`; index retry theo
   `(processing_status, received_at)`.
 
@@ -187,7 +198,13 @@ nhận.
 1. Output schema cụ thể cho `backlog_generation`, `task_decomposition` và
    `risk_analysis`.
 2. Quyền gọi `task_decomposition` của Member hay chỉ Leader.
-3. Schema Kafka cụ thể cho các event context và retention của `context_event`.
+3. Có cần projection Kafka hay chỉ snapshot context từ internal API. Nếu dùng
+   Kafka, version/mapping contract cũ với Work và retention của `context_event`.
 4. Retention/ẩn danh cho `input_payload`, `result_payload` và event payload.
 5. Có cần tách lịch sử execution ngay từ v1 hay chấp nhận lưu lần xử lý hiện
    tại trong `ai_request`.
+
+Baseline không ấn định ORM hoặc tên database AI; `ai_context_db` là tên trong
+thiết kế AI trước, chưa có trong Compose/init script. Job scheduling/outbox,
+claim job, phục hồi retry và credential riêng cần thiết kế trước migration;
+không tự thêm bảng/index giả trong lần cập nhật tài liệu này.

@@ -1,35 +1,44 @@
 # Quyền sở hữu dữ liệu
 
-Mỗi service là nơi ghi dữ liệu gốc trong phạm vi nghiệp vụ của mình. Một
-service có thể lưu ID tham chiếu tới dữ liệu của service khác, nhưng không trở
-thành chủ sở hữu dữ liệu đó.
+**Trạng thái: Thiết kế mục tiêu.** Theo baseline mục 8, mỗi service sở hữu dữ
+liệu gốc và database riêng. Có thể dùng chung PostgreSQL server/cluster,
+nhưng database user/credential phải riêng và chỉ có quyền trong phạm vi service.
+Xem [baseline](../architecture/README.md).
 
-| Database | Service sở hữu | Dữ liệu mục tiêu |
-| --- | --- | --- |
-| `identity_db` | Identity Service | Tài khoản, hồ sơ, vai trò, thông tin xác thực và phiên |
-| `classroom_db` | Classroom Service | Môn học, lớp, giảng viên, sinh viên, ghi danh, nhóm và thành viên nhóm |
-| `project_db` | Project Service | Project, Project Member, backlog, sprint, task, comment, label và workflow |
-| `integration_db` | Integration Service | Kết nối, repository, webhook và hoạt động GitHub đã chuẩn hóa |
-| `progress_db` | Progress Service | Chỉ số, tiến độ và kết quả tính toán |
-| `ai_context_db` | AI Service | Bản sao đọc tối thiểu để phân tích; yêu cầu và kết quả AI nếu cần lưu |
-| `notification_db` | Notification Service | Thông báo, trạng thái gửi và tùy chọn |
+| Database mục tiêu | Service sở hữu | Dữ liệu                                                                                             |
+| ----------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| `identity_db`     | Identity       | User, profile, global role, phiên/token metadata                                                    |
+| `work_db`         | Work           | Project/ProjectMember, backlog, Sprint, Task, Comment, Workflow, Activity và tiến độ                |
+| `classroom_db`    | Classroom      | Môn học, lớp, Group/GroupMember, điểm danh/điểm số và liên kết nhóm–project                         |
+| `integration_db`  | Integration    | GitHub App, repository, webhook và dữ liệu GitHub đã chuẩn hóa                                      |
+| `notification_db` | Notification   | Notification, người nhận, trạng thái gửi, template/tùy chọn khi được chọn                           |
+| `ai_context_db`   | AI             | Tên thiết kế riêng của AI cho yêu cầu/kết quả và context khi cần; baseline chưa đặt tên database AI |
 
-Tên database là tên mục tiêu. Một PostgreSQL server/cluster có thể chứa nhiều
-database này.
+Tên database không chứng minh database hoặc migration đã tồn tại.
+`project_db` và `progress_db` là tên thiết kế cũ, không phải mục tiêu triển
+khai theo baseline mới. Không tạo database Progress riêng cho tiến độ Work.
 
-## ID tham chiếu và quan hệ
+## ID tham chiếu và dữ liệu đọc
 
-Ví dụ, Project Service có thể lưu `class_id` và `group_id`, nhưng không tạo
-foreign key sang Classroom DB. `user_id`, `project_id`, `task_id` và các ID
-xuyên service khác cũng là tham chiếu logic.
+Các ID xuyên service như `user_id`, `group_id`, `project_id` chỉ là tham
+chiếu logic, không phải foreign key. Khi cần xác minh đồng bộ, dùng API của
+service sở hữu. Khi thường xuyên cần tên/avatar hoặc dữ liệu đọc khác, có
+thể giữ local projection (bản sao chỉ các trường cần thiết), đồng bộ bằng event.
 
-## AI Context DB
+AI lấy Project/Task context qua internal API của Work theo baseline. Nếu lưu
+snapshot/projection ở AI, dữ liệu đó phục vụ phân tích và audit, không thay
+thế dữ liệu nguồn hay bằng chứng phân quyền. Chỉ số tiến độ được Work tính
+bằng quy tắc; AI có thể giải thích nhưng không quyết định giá trị nguồn.
 
-AI Context DB là bản sao dữ liệu được tổ chức để đọc và phân tích. Nó không phải
-dữ liệu gốc, không được ghi ngược vào nghiệp vụ và chỉ nên giữ các trường cần
-cho use case AI.
+Schema job, result, context và retention chi tiết nằm tại
+[ERD AI](../ai-service/erd.md); chưa có migration hoặc database client.
+Không coi toàn bộ các bảng projection cũ là bắt buộc nếu internal API đã đáp
+ứng use case.
 
-Nếu Task trong Project DB có trạng thái `DONE` nhưng bản sao AI cũ ghi trạng
-thái khác, Project Service vẫn là nguồn đúng. Context AI được cập nhật từ Kafka;
-quy trình dựng lại bản sao phải dựa trên hợp đồng và khả năng đọc lại sự kiện đã
-được quyết định, không giả định đã có sẵn.
+## Hiện trạng hạ tầng
+
+**Một phần:** script PostgreSQL hiện tạo năm database nghiệp vụ theo Compose;
+chưa tạo database AI hoặc credential/role riêng. Local/staging đang dùng
+chung tài khoản PostgreSQL. Đây là khoảng trống so với baseline, xem
+[biến môi trường](../infrastructure/environment.md). Không sửa dữ liệu hoặc
+migration trong lần cập nhật tài liệu này.

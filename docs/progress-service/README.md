@@ -1,22 +1,14 @@
-# Progress Service
+# Tiến độ — chuyển về Work Service
 
-**Trạng thái tài liệu: Thiết kế mục tiêu; hiện trạng triển khai chưa xác minh.**
+**Trạng thái: Thiết kế cũ đã được thay thế.** Baseline mục 4.2 đặt Task Progress
+và Project Progress trong Work Service, không có Progress Service riêng ở
+giai đoạn đầu. Giữ trang này làm điểm chuyển hướng cho liên kết cũ.
 
-Progress Service nhận các sự kiện cần thiết từ Project, Classroom và Integration,
-tính chỉ số bằng công thức hoặc quy tắc rõ ràng, rồi công bố kết quả cho
-dashboard và các service nhận sự kiện phù hợp.
+Nguồn chuẩn hiện tại: [Work Service](../project-service/README.md) và
+[quyền sở hữu dữ liệu](../system/data-ownership.md). Tiến độ tính bằng công
+thức/quy tắc và không phụ thuộc AI. Không tạo `progress_db` hoặc process
+Progress riêng từ tài liệu cũ.
 
-Các chỉ số mục tiêu gồm tỷ lệ hoàn thành, tiến độ sprint, số task đã xong, task
-trễ hạn, khối lượng công việc và phân bố khối lượng công việc, mức hoạt động, đóng góp GitHub, thời gian
-không hoạt động và tín hiệu rủi ro. Ví dụ:
-
-```text
-completion_rate = completed_tasks / total_tasks
-```
-
-Quy tắc phải giải thích được và tính nhất quán từ dữ liệu đầu vào. AI có thể
-diễn giải kết quả hoặc đề xuất hành động nhưng không quyết định giá trị chỉ số.
-Dashboard tiến độ không phụ thuộc AI Service.
-
-Chỉ số cụ thể, cửa sổ thời gian, xử lý dữ liệu thiếu và hợp đồng sự kiện cần được
-chốt trước khi công bố API hoặc kết quả là đã triển khai.
+Contract context cũ có producer `progress-service`; đó là khoảng trống chuyển
+đổi, không xác nhận runtime. Xem [danh mục sự kiện](../system/kafka-events.md)
+và [ADR cập nhật baseline](../adr/001-adopt-architecture-baseline.md).
