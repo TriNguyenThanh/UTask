@@ -37,6 +37,7 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 ACCOUNT_EMAIL_CONFIRMATION_HMAC = False
 ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 7
+ACCOUNT_ADAPTER = 'authentication.adapters.account.IdentityAccountAdapter'
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False
 ACCOUNT_PREVENT_ENUMERATION = True
 SOCIALACCOUNT_STORE_TOKENS = False
@@ -60,7 +61,7 @@ IDENTITY_JWT_ISSUER = _first_environment_value('IDENTITY_JWT_ISSUER', default='h
 IDENTITY_JWT_AUDIENCE = _first_environment_value('IDENTITY_JWT_AUDIENCE', default='utask-platform')
 REST_FRAMEWORK = {'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', 'DEFAULT_AUTHENTICATION_CLASSES': ['authentication.adapters.access_token_authentication.IdentityJWTAuthentication'], 'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'], 'EXCEPTION_HANDLER': 'common.exception_handler.identity_exception_handler', 'DEFAULT_RENDERER_CLASSES': ['common.renderers.EnvelopeJSONRenderer'], 'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.ScopedRateThrottle'], 'DEFAULT_THROTTLE_RATES': {'dj_rest_auth': '30/min', 'registration': '5/min', 'recovery': '3/min', 'oauth': '10/min'}}
 SPECTACULAR_SETTINGS = {'TITLE': 'UTask Identity API', 'VERSION': '1.8', 'COMPONENT_SPLIT_REQUEST': True, 'SERVE_INCLUDE_SCHEMA': False}
-REST_AUTH = {'USE_JWT': True, 'SESSION_LOGIN': False, 'TOKEN_MODEL': None, 'JWT_AUTH_COOKIE': None, 'JWT_AUTH_REFRESH_COOKIE': 'refresh_token', 'JWT_AUTH_REFRESH_COOKIE_PATH': '/api/v1/auth', 'JWT_AUTH_SECURE': True, 'JWT_AUTH_HTTPONLY': True, 'JWT_AUTH_SAMESITE': 'Lax', 'JWT_AUTH_RETURN_EXPIRATION': False, 'LOGIN_SERIALIZER': 'authentication.serializers.auth.LoginRequestSerializer', 'USER_DETAILS_SERIALIZER': 'accounts.serializers.profiles.CurrentUserSerializer', 'JWT_TOKEN_CLAIMS_SERIALIZER': 'authentication.serializers.auth.SessionTokenSerializer', 'OLD_PASSWORD_FIELD_ENABLED': True, 'LOGOUT_ON_PASSWORD_CHANGE': True}
+REST_AUTH = {'USE_JWT': True, 'SESSION_LOGIN': False, 'TOKEN_MODEL': None, 'JWT_AUTH_COOKIE': None, 'JWT_AUTH_REFRESH_COOKIE': 'refresh_token', 'JWT_AUTH_REFRESH_COOKIE_PATH': '/api/v1/auth', 'JWT_AUTH_SECURE': True, 'JWT_AUTH_HTTPONLY': True, 'JWT_AUTH_SAMESITE': 'Lax', 'JWT_AUTH_RETURN_EXPIRATION': False, 'LOGIN_SERIALIZER': 'authentication.serializers.auth.LoginRequestSerializer', 'USER_DETAILS_SERIALIZER': 'accounts.serializers.profiles.CurrentUserSerializer', 'JWT_TOKEN_CLAIMS_SERIALIZER': 'authentication.serializers.auth.SessionTokenSerializer', 'REGISTER_SERIALIZER': 'authentication.serializers.registration.StudentRegisterSerializer', 'PASSWORD_RESET_SERIALIZER': 'authentication.serializers.passwords.IdentityPasswordResetSerializer', 'PASSWORD_RESET_CONFIRM_SERIALIZER': 'authentication.serializers.passwords.IdentityPasswordResetConfirmSerializer', 'PASSWORD_CHANGE_SERIALIZER': 'authentication.serializers.passwords.IdentityPasswordChangeSerializer', 'OLD_PASSWORD_FIELD_ENABLED': True, 'LOGOUT_ON_PASSWORD_CHANGE': True}
 _signing_key = Path(IDENTITY_JWT_PRIVATE_KEY_PATH).read_text(encoding='utf-8') if IDENTITY_JWT_PRIVATE_KEY_PATH else ''
 _verifying_key = ''
 if _signing_key:
