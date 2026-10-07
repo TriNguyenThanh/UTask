@@ -17,13 +17,29 @@ Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datas
 có thể kích hoạt release trên push `main`. Đổi workflow riêng vẫn chỉ kiểm CI như quy tắc
 phát hành hiện tại.
 
-Job test Identity khởi tạo PostgreSQL16 và Redis7 bằng service containers của GitHub
-Actions, đợi health checks rồi chạy toàn bộ `uv run pytest`. PostgreSQL dùng database
-`identity_ci`, user `utask_ci` và credential chỉ dành cho runner tạm thời; pytest-django
-tự tạo/migrate/xóa `test_identity_ci`. Redis dùng DB15 cho OAuth context và avatar receipts.
-Job nhận `POSTGRES_*`, `DATABASE_NAME`, `IDENTITY_TEST_DB_NAME` và
-`IDENTITY_TEST_REDIS_URL` trực tiếp; không cần `.env` local hay secrets staging.
-Các job service khác không khởi tạo hai container này.
+Workflow dùng chung nhận ba input tùy chọn từ job gọi trong `ci.yml`:
+
+| Input | Mặc định | Trách nhiệm |
+| --- | --- | --- |
+| `postgres` | `false` | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
+| `redis` | `false` | Khởi tạo Redis 7 tại `127.0.0.1:6379`. |
+| `test_env` | `{}` | Chuỗi JSON chứa biến môi trường không bí mật, chỉ truyền vào bước pytest. |
+
+Hai container thuộc riêng từng job trên runner tạm thời. Health checks phải đạt trước
+khi chạy các bước kiểm tra. Credential trên chỉ dành cho CI; không dùng secrets
+staging/production hoặc `.env` local cho pytest. `test_env` không phải cơ chế truyền secrets.
+
+Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME=ci`,
+`IDENTITY_TEST_DB_NAME=test_identity_ci` cùng `IDENTITY_TEST_REDIS_URL` dùng Redis DB15.
+pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một bước
+`uv run pytest`, không rẽ nhánh theo tên service.
+
+Các job khác hiện dùng mặc định, không khởi tạo hai container. Khi service được triển
+khai, khai báo dependency và biến kiểm thử tại job của service đó trong `ci.yml` theo
+code/test thực tế; không cần sao chép workflow hoặc tạo môi trường staging cho test.
+Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` vẫn gọi
+cả sáu job, nên thay đổi file dùng chung có thể khiến các service chưa triển khai thất
+bại do thiếu đầu vào; cấu hình dependency không thay thế việc triển khai service.
 
 Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
 Không so với `contracts/api/identity.openapi.json` khi artifact này không được lưu trong

@@ -12,6 +12,21 @@ on:
         required: false
         default: true
         type: boolean
+      postgres:
+        description: Start PostgreSQL 16 for tests (database ci, user utask_ci).
+        required: false
+        default: false
+        type: boolean
+      redis:
+        description: Start Redis 7 for tests.
+        required: false
+        default: false
+        type: boolean
+      test_env:
+        description: JSON object of non-secret test environment variables.
+        required: false
+        default: '{}'
+        type: string
 
 permissions:
   contents: read
@@ -21,20 +36,20 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: ${{ inputs.service == 'identity-service' && 'postgres:16-alpine' || '' }}
+        image: ${{ inputs.postgres && 'postgres:16-alpine' || '' }}
         env:
           POSTGRES_USER: utask_ci
           POSTGRES_PASSWORD: ci-only-postgres-password
-          POSTGRES_DB: identity_ci
+          POSTGRES_DB: ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U utask_ci -d identity_ci"
+          --health-cmd "pg_isready -U utask_ci -d ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: ${{ inputs.service == 'identity-service' && 'redis:7-alpine' || '' }}
+        image: ${{ inputs.redis && 'redis:7-alpine' || '' }}
         ports:
           - 6379:6379
         options: >-
@@ -58,19 +73,8 @@ jobs:
         run: uv run ruff check .
       - name: Check formatting
         run: uv run ruff format --check .
-      - name: Test Identity with PostgreSQL and Redis
-        if: inputs.service == 'identity-service'
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: "5432"
-          POSTGRES_USER: utask_ci
-          POSTGRES_PASSWORD: ci-only-postgres-password
-          DATABASE_NAME: identity_ci
-          IDENTITY_TEST_DB_NAME: test_identity_ci
-          IDENTITY_TEST_REDIS_URL: redis://127.0.0.1:6379/15
-        run: uv run pytest
       - name: Test, including AI evaluations when present
-        if: inputs.service != 'identity-service'
+        env: ${{ fromJSON(inputs.test_env) }}
         run: uv run pytest
       - name: Validate Docker image
         if: inputs.validate_image

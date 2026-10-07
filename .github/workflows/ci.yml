@@ -108,6 +108,13 @@ jobs:
     with:
       service: identity-service
       validate_image: ${{ github.event_name == 'pull_request' }}
+      postgres: true
+      redis: true
+      test_env: >-
+        {"POSTGRES_HOST":"127.0.0.1","POSTGRES_PORT":"5432",
+        "POSTGRES_USER":"utask_ci","POSTGRES_PASSWORD":"ci-only-postgres-password",
+        "DATABASE_NAME":"ci","IDENTITY_TEST_DB_NAME":"test_identity_ci",
+        "IDENTITY_TEST_REDIS_URL":"redis://127.0.0.1:6379/15"}
 
   work-service:
     needs: changes
