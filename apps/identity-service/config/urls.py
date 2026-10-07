@@ -1,6 +1,18 @@
-from django.urls import path
+"""Project routing; Identity endpoints are owned by authentication.urls."""
 
-urlpatterns = []
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns = [
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/schema/swagger/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    path("", include("authentication.urls")),
+    path("", include("accounts.urls")),
+]
 
 handler404 = "common.http_errors.not_found"
 handler403 = "common.http_errors.forbidden"

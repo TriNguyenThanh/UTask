@@ -31,7 +31,7 @@ ALLOWED_HOSTS = [host.strip() for host in _first_environment_value('DJANGO_ALLOW
 INSTALLED_APPS = ['django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.sites', 'django.contrib.messages', 'rest_framework', 'drf_spectacular', 'allauth', 'allauth.account', 'allauth.socialaccount', 'allauth.socialaccount.providers.google', 'dj_rest_auth', 'dj_rest_auth.registration', 'rest_framework_simplejwt.token_blacklist', 'axes', 'accounts.apps.AccountsConfig']
 AUTH_USER_MODEL = 'accounts.User'
 SITE_ID = 1
-AUTHENTICATION_BACKENDS = ['axes.backends.AxesStandaloneBackend', 'allauth.account.auth_backends.AuthenticationBackend']
+AUTHENTICATION_BACKENDS = ['axes.backends.AxesStandaloneBackend', 'authentication.adapters.password_authentication.IdentityAuthenticationBackend']
 ACCOUNT_LOGIN_METHODS = {'email', 'username'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
@@ -58,16 +58,16 @@ PASSWORD_HASHERS = ['django.contrib.auth.hashers.Argon2PasswordHasher', 'django.
 IDENTITY_JWT_PRIVATE_KEY_PATH = _first_environment_value('IDENTITY_JWT_PRIVATE_KEY_PATH')
 IDENTITY_JWT_ISSUER = _first_environment_value('IDENTITY_JWT_ISSUER', default='https://identity.utask.internal')
 IDENTITY_JWT_AUDIENCE = _first_environment_value('IDENTITY_JWT_AUDIENCE', default='utask-platform')
-REST_FRAMEWORK = {'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', 'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'], 'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'], 'EXCEPTION_HANDLER': 'common.exception_handler.identity_exception_handler', 'DEFAULT_RENDERER_CLASSES': ['common.renderers.EnvelopeJSONRenderer'], 'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.ScopedRateThrottle'], 'DEFAULT_THROTTLE_RATES': {'dj_rest_auth': '30/min', 'registration': '5/min', 'recovery': '3/min', 'oauth': '10/min'}}
+REST_FRAMEWORK = {'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema', 'DEFAULT_AUTHENTICATION_CLASSES': ['authentication.adapters.access_token_authentication.IdentityJWTAuthentication'], 'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'], 'EXCEPTION_HANDLER': 'common.exception_handler.identity_exception_handler', 'DEFAULT_RENDERER_CLASSES': ['common.renderers.EnvelopeJSONRenderer'], 'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.ScopedRateThrottle'], 'DEFAULT_THROTTLE_RATES': {'dj_rest_auth': '30/min', 'registration': '5/min', 'recovery': '3/min', 'oauth': '10/min'}}
 SPECTACULAR_SETTINGS = {'TITLE': 'UTask Identity API', 'VERSION': '1.8', 'COMPONENT_SPLIT_REQUEST': True, 'SERVE_INCLUDE_SCHEMA': False}
-REST_AUTH = {'USE_JWT': True, 'SESSION_LOGIN': False, 'TOKEN_MODEL': None, 'JWT_AUTH_COOKIE': None, 'JWT_AUTH_REFRESH_COOKIE': 'refresh_token', 'JWT_AUTH_REFRESH_COOKIE_PATH': '/api/v1/auth', 'JWT_AUTH_SECURE': True, 'JWT_AUTH_HTTPONLY': True, 'JWT_AUTH_SAMESITE': 'Lax', 'JWT_AUTH_RETURN_EXPIRATION': False, 'OLD_PASSWORD_FIELD_ENABLED': True, 'LOGOUT_ON_PASSWORD_CHANGE': True}
+REST_AUTH = {'USE_JWT': True, 'SESSION_LOGIN': False, 'TOKEN_MODEL': None, 'JWT_AUTH_COOKIE': None, 'JWT_AUTH_REFRESH_COOKIE': 'refresh_token', 'JWT_AUTH_REFRESH_COOKIE_PATH': '/api/v1/auth', 'JWT_AUTH_SECURE': True, 'JWT_AUTH_HTTPONLY': True, 'JWT_AUTH_SAMESITE': 'Lax', 'JWT_AUTH_RETURN_EXPIRATION': False, 'LOGIN_SERIALIZER': 'authentication.serializers.auth.LoginRequestSerializer', 'USER_DETAILS_SERIALIZER': 'accounts.serializers.profiles.CurrentUserSerializer', 'JWT_TOKEN_CLAIMS_SERIALIZER': 'authentication.serializers.auth.SessionTokenSerializer', 'OLD_PASSWORD_FIELD_ENABLED': True, 'LOGOUT_ON_PASSWORD_CHANGE': True}
 _signing_key = Path(IDENTITY_JWT_PRIVATE_KEY_PATH).read_text(encoding='utf-8') if IDENTITY_JWT_PRIVATE_KEY_PATH else ''
 _verifying_key = ''
 if _signing_key:
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, load_pem_private_key
     _verifying_key = load_pem_private_key(_signing_key.encode(), password=None).public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo).decode()
 SIMPLE_JWT = {'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15), 'REFRESH_TOKEN_LIFETIME': timedelta(days=7), 'ALGORITHM': 'RS256', 'SIGNING_KEY': _signing_key, 'VERIFYING_KEY': _verifying_key, 'ISSUER': IDENTITY_JWT_ISSUER, 'AUDIENCE': IDENTITY_JWT_AUDIENCE, 'USER_ID_CLAIM': 'sub', 'ROTATE_REFRESH_TOKENS': True, 'BLACKLIST_AFTER_ROTATION': True, 'CHECK_REVOKE_TOKEN': True}
-AUTH_PASSWORD_VALIDATORS = [{'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'}, {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'}, {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'}, {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'}]
+AUTH_PASSWORD_VALIDATORS = [{'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'}, {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'}, {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'}, {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'}, {'NAME': 'authentication.adapters.password_validation.PasswordCompositionValidator'}]
 PASSWORD_RESET_TIMEOUT = 900
 IDENTITY_FRONTEND_URL = _first_environment_value('IDENTITY_FRONTEND_URL', default='https://localhost')
 IDENTITY_MAIL_KEY = _first_environment_value('IDENTITY_MAIL_KEY')
@@ -96,6 +96,8 @@ AXES_LOCK_OUT_AT_FAILURE = True
 AXES_RESET_ON_SUCCESS = True
 AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
 AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_USERNAME_CALLABLE = 'authentication.adapters.login_lockout.identity_axes_username'
+AXES_LOCKOUT_CALLABLE = 'authentication.adapters.login_lockout.identity_axes_lockout_response'
 AXES_VERBOSE = False
 IDENTITY_SERVICE_KEYS = json.loads(os.environ.get('IDENTITY_SERVICE_KEYS', '{}'))
 IDENTITY_AVATAR_ENABLED = False
