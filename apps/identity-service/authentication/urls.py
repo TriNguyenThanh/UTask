@@ -1,3 +1,5 @@
 from django.urls import path
-from authentication.views.auth import LoginView, healthz, jwks
-urlpatterns = [path('healthz', healthz, name='healthz'), path('api/v1/auth/.well-known/jwks.json', jwks, name='identity-jwks'), path('api/v1/auth/login', LoginView.as_view(), name='identity-login')]
+from authentication.views.auth import LoginView, SessionRefreshView, healthz, jwks
+from authentication.views.devices import DeviceListView, DeviceRevokeView, LogoutAllView, SessionLogoutView
+from authentication.views.internal import SessionStatusView
+urlpatterns = [path('healthz', healthz, name='healthz'), path('api/v1/auth/.well-known/jwks.json', jwks, name='identity-jwks'), path('api/v1/auth/login', LoginView.as_view(), name='identity-login'), path('api/v1/internal/auth/session-status', SessionStatusView.as_view(), name='identity-session-status'), path('api/v1/auth/refresh', SessionRefreshView.as_view(), name='identity-refresh'), path('api/v1/auth/logout', SessionLogoutView.as_view(), name='identity-logout'), path('api/v1/auth/logout-all', LogoutAllView.as_view(), name='identity-logout-all'), path('api/v1/auth/sessions', DeviceListView.as_view(), name='identity-sessions'), path('api/v1/auth/sessions/<uuid:session_id>', DeviceRevokeView.as_view(), name='identity-revoke')]
