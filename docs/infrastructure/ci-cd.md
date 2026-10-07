@@ -2,9 +2,20 @@
 
 UTask dùng một workflow điều phối và hai workflow dùng lại trong GitHub Actions:
 
-1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Pytest của AI bao gồm regression evaluation. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` chỉ gọi phát hành sau khi mọi kiểm tra liên quan thành công.
+1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra service bị ảnh hưởng và cả Compose local/staging. Pull Request dựng image để kiểm tra Dockerfile; push lên `main` chỉ gọi phát hành sau khi các kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
-3. `release-staging.yml` là workflow dùng lại do `ci.yml` gọi. Workflow chỉ dựng và đẩy image của service có mã nguồn thay đổi. Với service không đổi, workflow gắn thẻ SHA mới cho manifest `main` hiện có mà không dựng lại image. Sau khi đủ sáu image của cùng bản phát hành, workflow triển khai staging bằng Docker Compose qua SSH.
+3. `release-staging.yml` dựng/đẩy image của service đổi; service không đổi được gắn thẻ SHA mới từ manifest `main`. Staging dùng riêng `docker-compose.staging.yml`, pull bộ sáu image theo SHA và chạy `up --no-build` qua SSH.
+
+`docker-compose.yml` dành cho local, có build context và port hỗ trợ phát triển.
+`docker-compose.staging.yml` là file độc lập dùng image đã phát hành, chỉ publish Nginx.
+PostgreSQL/Redis/Kafka vẫn thuộc stack staging; không dùng cấu hình này làm production.
+Hai file giữ project name `utask` và tên volume để server staging đang dùng có thể chuyển
+file mà không tạo một bộ dữ liệu khác. Không chạy cả hai stack trong cùng Docker host/project.
+
+Thay riêng Compose local chạy CI nhưng không kích hoạt deploy.
+Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datasets
+có thể kích hoạt release trên push `main`. Đổi workflow riêng vẫn chỉ kiểm CI như quy tắc
+phát hành hiện tại.
 
 ## Kiểm tra CI local trước khi đẩy mã
 
@@ -46,7 +57,14 @@ Trong cài đặt repository, bảo vệ `main` với các quy tắc sau:
 
 ## Chuẩn bị máy staging
 
-Máy staging cần có Docker Engine, Docker Compose plugin và tệp `.env` tại `STAGING_WORKDIR`. Workflow tự đồng bộ `docker-compose.yml`, các tệp ánh xạ `infra/env/*.env`, cấu hình Nginx, script PostgreSQL và datasets.
+Máy staging cần Docker Engine/Compose plugin, `.env` tại `STAGING_WORKDIR` và khóa RSA
+riêng cho Identity. Dùng [.env.example](../../.env.example) làm mẫu rồi thay toàn bộ
+giá trị local bằng cấu hình staging, gồm secrets, domain, Kafka cluster ID và đường dẫn
+PEM. Workflow không upload/ghi đè `.env` hoặc file PEM.
+
+Workflow upload `docker-compose.staging.yml`, bộ ánh xạ dùng chung `infra/env/*.env`,
+Nginx, init PostgreSQL và datasets. Các biến Google/GitHub/R2/caller keys nếu dùng
+được cung cấp trong `.env` server, không đặt giá trị bí mật vào file ánh xạ tracked.
 
 Các biến runtime bắt buộc trong `.env` staging:
 
@@ -71,9 +89,25 @@ NOTIFICATION_DJANGO_SECRET_KEY=<secret>
 DJANGO_DEBUG=false
 DJANGO_ALLOWED_HOSTS=<staging-domain>,nginx,identity-service,work-service,classroom-service,integration-service,notification-service
 KAFKA_CLUSTER_ID=<kraft-cluster-id>
+IDENTITY_JWT_PRIVATE_KEY_HOST_PATH=/etc/utask/secrets/identity-jwt-private.pem
 ```
 
-`UTASK_HTTP_PORT` là tùy chọn và mặc định là `8080`. Workflow đặt `UTASK_IMAGE_PREFIX` và `UTASK_IMAGE_TAG=sha-<commit>` tại lúc triển khai, vì vậy hai biến này không bắt buộc trong `.env` staging. Các tệp `infra/env/*.env` chỉ là ánh xạ không bí mật; workflow không sao chép hoặc ghi đè `.env`.
+File PEM phải tồn tại và user trong container Identity (UID10001) đọc được; bind mount
+read-only không tự tạo đường dẫn còn thiếu. Không sinh khóa mặc định trên server khi deploy.
+Mail key/key ID cần cho đăng ký/recovery; OAuth/R2 cần cấu hình riêng khi bật flags.
+
+`UTASK_HTTP_PORT` mặc định8080. Workflow đặt `UTASK_IMAGE_PREFIX` và
+`UTASK_IMAGE_TAG=sha-<commit>` khi triển khai. Chạy thủ công phải cung cấp hai biến đó;
+Compose staging không có fallback `utask:*:local`. Ví dụ lệnh trên server sau khi cấu hình:
+
+```bash
+docker compose -f docker-compose.staging.yml config --quiet
+docker compose -f docker-compose.staging.yml pull
+docker compose -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 120
+```
+
+Không dùng `docker compose down -v` khi chuyển file. File Compose local cũ trên server
+không còn được workflow gọi; không cần xóa nó để triển khai bằng `-f` rõ ràng.
 
 ## Luồng phát hành
 
@@ -84,7 +118,7 @@ Pull Request → CI theo đường dẫn → merge vào main
                                   ↓
                     Environment staging gate (nếu cấu hình)
                                   ↓
-                 SSH → compose pull → compose up --wait
+       SSH → staging Compose pull → up --no-build --wait
 ```
 
 Mỗi service vẫn có image độc lập. Image thay đổi được gắn hai thẻ: `main` và `sha-<commit>`. Image không đổi giữ nguyên manifest và chỉ nhận thêm thẻ `sha-<commit>`, nhờ đó Compose vẫn triển khai một bộ sáu image đồng nhất theo cùng SHA mà không dựng lại service không liên quan. Thẻ `main` là nguồn hiện hành để tái sử dụng; nếu image này chưa tồn tại, phát hành dừng thay vì tạo kết quả giả.
@@ -93,4 +127,6 @@ Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ d�
 
 ## Production
 
-Baseline chỉ cho phép triển khai production từ release/tag hoặc workflow được kiểm soát, đồng thời yêu cầu PostgreSQL, Redis và Kafka bên ngoài. Repository chỉ giữ một `docker-compose.yml` cho local và staging; không tạo thêm một Compose production khi chưa có nền tảng, mạng và cơ chế secrets được baseline chỉ định. Không dùng workflow staging cho production; khi có hạ tầng, cần tạo Environment production riêng và triển khai image theo thẻ SHA bất biến.
+Baseline yêu cầu production từ release/tag hoặc workflow được kiểm soát, với PostgreSQL,
+Redis/Kafka bên ngoài và secrets của nền tảng production. Compose local/staging không thay thế quyết
+định hạ tầng đó. Khi có production cần Environment/quy trình triển khai riêng và image SHA.
