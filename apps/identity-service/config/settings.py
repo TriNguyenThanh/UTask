@@ -40,6 +40,7 @@ ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 7
 ACCOUNT_ADAPTER = 'authentication.adapters.account.IdentityAccountAdapter'
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False
 ACCOUNT_PREVENT_ENUMERATION = True
+SOCIALACCOUNT_ADAPTER = 'authentication.adapters.social.IdentitySocialAccountAdapter'
 SOCIALACCOUNT_STORE_TOKENS = False
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
 MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware', 'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware', 'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware', 'allauth.account.middleware.AccountMiddleware', 'axes.middleware.AxesMiddleware']
@@ -76,8 +77,8 @@ IDENTITY_MAIL_KEY_ID = _first_environment_value('IDENTITY_MAIL_KEY_ID')
 IDENTITY_REDIS_URL = _first_environment_value('IDENTITY_REDIS_URL', default='redis://redis:6379/0')
 if os.environ.get('IDENTITY_REDIS_URL'):
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': IDENTITY_REDIS_URL}}
-IDENTITY_GOOGLE_ENABLED = False
-IDENTITY_GITHUB_ENABLED = False
+IDENTITY_GOOGLE_ENABLED = _environment_bool('IDENTITY_GOOGLE_ENABLED')
+IDENTITY_GITHUB_ENABLED = _environment_bool('IDENTITY_GITHUB_ENABLED')
 IDENTITY_GOOGLE_CALLBACK_URI = _first_environment_value('IDENTITY_GOOGLE_CALLBACK_URI')
 IDENTITY_GITHUB_CALLBACK_URI = _first_environment_value('IDENTITY_GITHUB_CALLBACK_URI')
 IDENTITY_GITHUB_CLIENT_ID = _first_environment_value('IDENTITY_GITHUB_CLIENT_ID')
