@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -210,15 +209,6 @@ def test_live_responses_conform_to_exported_envelopes(
     Draft202012Validator(
         {**body_schema, "components": schema["components"]}, format_checker=checker
     ).validate(response.json())
-
-
-@pytest.mark.contract
-def test_committed_contract_is_generated_from_current_handlers(tmp_path):
-    output = tmp_path / "identity.json"
-    call_command("export_identity_api", output=str(output))
-    root = Path(__file__).resolve().parents[3]
-    artifact = root / "contracts/api/identity.openapi.json"
-    assert json.loads(output.read_text()) == json.loads(artifact.read_text())
 
 
 @pytest.mark.contract

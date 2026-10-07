@@ -17,6 +17,18 @@ Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datas
 có thể kích hoạt release trên push `main`. Đổi workflow riêng vẫn chỉ kiểm CI như quy tắc
 phát hành hiện tại.
 
+Job test Identity khởi tạo PostgreSQL16 và Redis7 bằng service containers của GitHub
+Actions, đợi health checks rồi chạy toàn bộ `uv run pytest`. PostgreSQL dùng database
+`identity_ci`, user `utask_ci` và credential chỉ dành cho runner tạm thời; pytest-django
+tự tạo/migrate/xóa `test_identity_ci`. Redis dùng DB15 cho OAuth context và avatar receipts.
+Job nhận `POSTGRES_*`, `DATABASE_NAME`, `IDENTITY_TEST_DB_NAME` và
+`IDENTITY_TEST_REDIS_URL` trực tiếp; không cần `.env` local hay secrets staging.
+Các job service khác không khởi tạo hai container này.
+
+Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
+Không so với `contracts/api/identity.openapi.json` khi artifact này không được lưu trong
+repository; xem [cách xuất hợp đồng](../../contracts/api/README.md).
+
 ## Kiểm tra CI local trước khi đẩy mã
 
 Chạy từ thư mục gốc repository:
@@ -26,6 +38,10 @@ python scripts/ci_local.py
 ```
 
 Lệnh này kiểm tra Compose, Nginx, script PostgreSQL, lint/format/test của sáu service Python, lint/typecheck/test/build của Web và dựng Docker image. Dùng `python scripts/ci_local.py --skip-images` để bỏ qua bước dựng image khi cần vòng lặp nhanh hơn. GitHub Actions vẫn là bước kiểm tra bắt buộc trên remote; script local không đẩy image hoặc triển khai staging.
+
+Khi chạy tests Identity trên máy local, chuẩn bị PostgreSQL có quyền tạo test database
+và Redis dành kiểm thử, rồi cấp các biến kết nối tương ứng. Script local không tự tạo
+service containers như GitHub Actions; không dùng credential staging/production cho test.
 
 ## Cấu hình GitHub
 
