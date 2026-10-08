@@ -761,7 +761,7 @@ export function projectCodeFor(
   const syncState =
     scenario === "student-github-disconnected"
       ? "disconnected"
-      : scenario === "student-webhook-error"
+      : scenario === "student-webhook-error" || scenario === "teacher-github-error"
         ? "webhook-error"
         : scenario === "student-token-expired"
           ? "token-expired"

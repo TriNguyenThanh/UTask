@@ -12,6 +12,7 @@ import type {
   TeacherActivity,
   TeacherCourseSummary,
   TeacherSignal,
+  TeacherSignalCategory,
   TeacherTeamProgress,
 } from "@/lib/api/teacherFlow";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ const ACTIVITY_LABELS: Record<TeacherActivity["kind"], string> = {
   "issue-updated": "Cập nhật issue",
 };
 
-function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -171,13 +172,30 @@ export function ProgressMeter({
   );
 }
 
-/** Signals always carry their cause as text; colour is only reinforcement. */
+const CATEGORY_LABELS: Record<TeacherSignalCategory, string> = {
+  "no-data": "Thiếu dữ liệu",
+  "stale-data": "Dữ liệu cũ",
+  connection: "Kết nối GitHub",
+  unmapped: "Chưa ánh xạ",
+  structure: "Cơ cấu nhóm",
+};
+
+/**
+ * Signals always carry their cause as text, what kind of problem it is, when
+ * the evidence is from (or that there is no time) and where the data can be
+ * checked. Colour is only reinforcement. "Missing", "old", "disconnected" and
+ * "not mapped" are different labels on purpose: none of them says anything
+ * about a student, and none becomes a score.
+ */
 export function SignalList({
   signals,
   emptyText,
+  subject,
 }: {
   signals: TeacherSignal[];
   emptyText?: string;
+  /** Whose signals these are (a team name). Makes each source link's accessible name unique. */
+  subject?: string;
 }) {
   if (signals.length === 0) {
     return emptyText ? (
@@ -188,14 +206,36 @@ export function SignalList({
     ) : null;
   }
   return (
-    <ul className="space-y-1">
+    <ul className="space-y-1.5">
       {signals.map((signal) => (
         <li
           key={signal.code}
-          className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900"
+          className="space-y-1 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-950"
         >
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <span>{signal.label}</span>
+          <p className="flex items-start gap-1.5 font-medium">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <span>
+              <span className="mr-1.5 rounded border border-amber-300 bg-white/70 px-1 py-px text-[10px] font-semibold uppercase tracking-wide">
+                {CATEGORY_LABELS[signal.category]}
+              </span>
+              {signal.label}
+            </span>
+          </p>
+          <p className="pl-5 text-[11px] text-amber-900/80">
+            {signal.at ? `Bằng chứng lúc ${formatDateTime(signal.at)}` : "Nguồn không cho biết thời điểm"}
+            {signal.source ? (
+              <>
+                {" • "}
+                <Link
+                  to={signal.source.path}
+                  aria-label={subject ? `${signal.source.label} (${subject})` : undefined}
+                  className="font-semibold underline"
+                >
+                  {signal.source.label}
+                </Link>
+              </>
+            ) : null}
+          </p>
         </li>
       ))}
     </ul>

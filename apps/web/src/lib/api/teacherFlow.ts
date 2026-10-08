@@ -14,6 +14,16 @@ export interface TeacherActivity {
   kind: "issue-updated";
 }
 
+/**
+ * Overdue = has a deadline, is not done and the deadline is before `asOf`.
+ * `withDueDate` is the denominator. Always read with it: a project where no
+ * issue has a deadline is "no data", represented by null, never by 0.
+ */
+export interface TeacherOverdue {
+  overdue: number;
+  withDueDate: number;
+}
+
 export interface TeacherCourseSummary {
   courseId: string;
   /** Subject code. Several classes can share it; use `courseId` as the key. */
@@ -28,6 +38,8 @@ export interface TeacherCourseSummary {
   teamsWithoutProject: number;
   /** Teams with at least one rule-based signal (see TeacherSignal). */
   teamsWithSignals: number;
+  /** Summed over the class's teams; null when no issue in the class has a deadline. */
+  overdue: (TeacherOverdue & { asOf: string }) | null;
   /** Null when no team has recorded activity. */
   lastActivity: TeacherActivity | null;
 }
@@ -80,9 +92,28 @@ export interface TeacherTeam {
  * A fact worth the teacher's attention, stated with its cause. Signals come
  * from fixed rules over project data (not from AI) and never become a grade.
  */
+export type TeacherSignalCategory =
+  | "no-data" // the source has nothing to measure
+  | "stale-data" // there is data but it is old
+  | "connection" // GitHub sync is broken or not connected
+  | "unmapped" // the team/project is not mapped to a project or repository
+  | "structure"; // team composition
+
 export interface TeacherSignal {
-  code: "no-project" | "no-progress-data" | "no-activity" | "stale-activity" | "below-min-size";
+  code:
+    | "no-project"
+    | "no-progress-data"
+    | "no-activity"
+    | "stale-activity"
+    | "below-min-size"
+    | "github-unmapped"
+    | "github-sync-problem";
   label: string;
+  category: TeacherSignalCategory;
+  /** When the evidence happened (e.g. last issue update); null when the source gives no time. */
+  at: string | null;
+  /** Where the underlying data can be seen, as an app path; null when there is no page for it. */
+  source: { label: string; path: string } | null;
 }
 
 export interface TeacherOversightRow {
@@ -125,7 +156,7 @@ export interface TeacherTeamDetail {
    * reference time. `withDueDate` is the denominator. Null when no issue has
    * a deadline: "no data", not "none overdue".
    */
-  overdue: { overdue: number; withDueDate: number } | null;
+  overdue: TeacherOverdue | null;
   /** Reference time the overdue count was computed at (fixed demo clock). */
   asOf: string;
   lastActivity: TeacherActivity | null;
@@ -155,7 +186,7 @@ export function teacherTeamsRequest(client: ApiClient, courseId: string) {
 }
 
 export function teacherOversightRequest(client: ApiClient, courseId: string) {
-  return client.request<{ teams: TeacherOversightRow[]; staleAfterDays: number }>(
+  return client.request<{ teams: TeacherOversightRow[]; staleAfterDays: number; asOf: string }>(
     `${TEACHER_ROOT}/courses/${encodeURIComponent(courseId)}/oversight`,
   );
 }
