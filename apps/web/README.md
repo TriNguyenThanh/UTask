@@ -1,6 +1,8 @@
 # UTask Web
 
-React 18 + Vite frontend for UTask. Current slice: auth only — mock login, forgot-password and reset-password flows rebuilt one screen at a time from the `.stitch-assets` reference HTML.
+React 18 + Vite frontend for UTask, rebuilt one vertical slice at a time from the `.stitch-assets` reference HTML. Current slices: auth, My Work (Bàn làm việc), student flow (lớp/nhóm, thông báo, hồ sơ), project workspace.
+
+Architecture and per-feature status live in the canonical docs: [`docs/web/README.md`](../../docs/web/README.md) and [`docs/web/student-flow.md`](../../docs/web/student-flow.md). This README only covers how to run the app.
 
 ## Run locally
 
@@ -11,7 +13,7 @@ corepack pnpm install --frozen-lockfile
 corepack pnpm dev
 ```
 
-Development mode enables MSW by default, so test accounts work without creating `.env.local`. To connect a real backend instead:
+Set `VITE_ENABLE_MOCKS=true` to use MSW test accounts; otherwise point at a real gateway:
 
 ```env
 VITE_ENABLE_MOCKS=false
@@ -32,25 +34,12 @@ All accounts use password `demo1234`.
 
 ## Mock scenarios
 
-Set `VITE_MOCK_SCENARIO` to one of:
-
-- `default`
-- `slow-network` (all handlers delayed 1200 ms)
-- `server-error` (auth endpoints return 500)
-
-## Current scope
-
-- `/login`, `/forgot-password`, `/reset-password` with shared academic auth shell (`.stitch-assets/html/01..03`).
-- Login/refresh session flow; protected-route returnTo restore.
-- Workspace shell placeholder (`/`): navigation shell for future screens; only logout active.
-
-Project, task, classroom, notification and settings screens were intentionally removed; rebuild vertical slice by slice following `docs/frontend/UTask_Leader_Member_UX_Flow.md` and the Stitch HTML under `.stitch-assets/html`.
+Set `VITE_MOCK_SCENARIO` to any of the 27 scenarios defined in `src/mocks/scenarios.ts` — auth (`default`, `slow-network`, `server-error`), My Work states, and student-flow states (no team, join pending, leader/member topic, AI key missing, …).
 
 ## Verification
 
 ```bash
 corepack pnpm lint
-corepack pnpm typecheck
 corepack pnpm test
 corepack pnpm build
 ```
