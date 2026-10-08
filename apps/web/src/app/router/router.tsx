@@ -1,11 +1,13 @@
-import { Navigate, createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { RequireAuth } from "@/app/router/RequireAuth";
+import { HomeRedirect, RequireTeacherSpace } from "@/app/router/RequireTeacherSpace";
 import { RequireProjectManagePermission } from "@/features/projects/routes/RequireProjectManagePermission";
 import { RouteError } from "@/app/router/RouteError";
 
-export const appRouter = createBrowserRouter([
+/** Exported so tests exercise the real route table, guards included. */
+export const appRoutes: RouteObject[] = [
   {
     path: "/login",
     lazy: () => import("@/features/auth/routes/LoginRoute"),
@@ -29,7 +31,7 @@ export const appRouter = createBrowserRouter([
     ),
     errorElement: <RouteError />,
     children: [
-      { path: "/", element: <Navigate to="/my-work" replace /> },
+      { path: "/", element: <HomeRedirect /> },
       {
         path: "/my-work",
         handle: { crumb: "Trang Chủ" },
@@ -78,6 +80,36 @@ export const appRouter = createBrowserRouter([
         ],
       },
       {
+        path: "/teacher",
+        element: <RequireTeacherSpace />,
+        children: [
+          { index: true, lazy: () => import("@/features/teacher/routes/TeacherHomeRoute") },
+          { path: "courses", lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute") },
+          {
+            path: "courses/:courseId",
+            lazy: () => import("@/features/teacher/routes/TeacherCourseLayout"),
+            children: [
+              {
+                index: true,
+                lazy: () => import("@/features/teacher/routes/TeacherCourseOverviewRoute"),
+              },
+              {
+                path: "students",
+                lazy: () => import("@/features/teacher/routes/TeacherCourseStudentsRoute"),
+              },
+              {
+                path: "teams",
+                lazy: () => import("@/features/teacher/routes/TeacherCourseTeamsRoute"),
+              },
+              {
+                path: "oversight",
+                lazy: () => import("@/features/teacher/routes/TeacherCourseOversightRoute"),
+              },
+            ],
+          },
+        ],
+      },
+      {
         path: "/notifications",
         lazy: () => import("@/features/notifications/routes/NotificationsRoute"),
       },
@@ -96,4 +128,6 @@ export const appRouter = createBrowserRouter([
       { path: "*", lazy: () => import("@/app/router/NotFoundRoute") },
     ],
   },
-]);
+];
+
+export const appRouter = createBrowserRouter(appRoutes);
