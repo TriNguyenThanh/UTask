@@ -8,7 +8,7 @@ import type { HttpHandler } from "msw";
 export function createMockHandlers(scenario: MockScenario, repository: MockRepository): HttpHandler[] {
   return [
     ...createAuthHandlers(scenario, repository),
-    ...createMyWorkHandlers(scenario),
-    ...createStudentFlowHandlers(scenario),
+    ...createMyWorkHandlers(scenario, repository),
+    ...createStudentFlowHandlers(scenario, repository),
   ];
 }
