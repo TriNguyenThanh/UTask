@@ -4,6 +4,7 @@ export interface AuthUser {
   display_name: string;
   global_role: "USER";
   capabilities: string[];
+  roles?: ("STUDENT" | "TEACHER" | "SYSTEM_ADMIN")[];
 }
 
 export interface AuthSession {

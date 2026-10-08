@@ -5,10 +5,16 @@ import type {
 import type { CourseDetail, TeamMember } from "@/features/courses/types";
 
 import { MEMBER_ID, STUDENT_ID } from "@/mocks/data/database";
+import { MOCK_COURSE_META, MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
 import {
   assignmentFor,
+  classSizeFor,
+  membersOfTeam,
+  ownerInstructorId,
   pendingRequestFor,
   projectRoleForUser,
+  studentsOfCourse,
+  teamsOfCourse,
 } from "@/mocks/data/relationships";
 
 /**
@@ -20,6 +26,11 @@ import {
  */
 
 const ANCHOR_DATE = "2026-10-20T08:30:00.000Z";
+
+/** Fixed clock for read models that must be deterministic (Teacher dashboards). */
+export function mockAnchorDate(): Date {
+  return new Date(ANCHOR_DATE);
+}
 
 function daysFrom(now: Date, days: number, hours = 17, minutes = 0): string {
   const target = new Date(now);
@@ -35,121 +46,83 @@ function minutesBefore(now: Date, minutes: number): string {
 /* ------------------------------------------------------------------ */
 /* Courses & teams                                                     */
 /**
- * Demo rosters are shared between viewers: everyone on a team sees the
- * same members. Team NEXUS is the mock's co-leader simplification —
- * both the `leader` and `student` demo accounts lead it.
+ * Rosters, class size, lecturer and team names are derived from the shared
+ * relationship graph (relationships.ts + directory.ts), so the Student and
+ * Teacher views of the same class always agree.
  */
-const NEXUS_ROSTER: TeamMember[] = [
-  {
-    userId: "00000000-0000-4000-8000-000000000001",
-    displayName: "Nguyễn Hoàng Nam",
-    studentId: "21120015",
-    email: "nam.nh21120015@sis.edu.vn",
-    skill: "Backend Go & DevOps",
-    responsibility: "Quản lý dự án, Thiết kế kiến trúc Microservices",
-    role: "leader",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000003",
-    displayName: "Lê Minh Khoa",
-    studentId: "21020999",
-    email: "student@utask.test",
-    skill: "Frontend React & TypeScript",
-    responsibility: "Frontend Web Portal & tích hợp VNPay IPN",
-    role: "leader",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000002",
-    displayName: "Đặng Thảo Linh",
-    studentId: "21020872",
-    email: "linh.dt21020872@sis.edu.vn",
-    skill: "Frontend React & Tailwind",
-    responsibility: "Xây dựng giao diện Web & Mobile",
-    role: "member",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000004",
-    displayName: "Bùi Quang Thắng",
-    studentId: "21020215",
-    email: "thang.bq21020215@sis.edu.vn",
-    skill: "AI & Analytics",
-    responsibility: "Huấn luyện mô hình gợi ý & tối ưu hóa",
-    role: "member",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000005",
-    displayName: "Trần Bảo Long",
-    studentId: "21020301",
-    email: "long.tb21020301@sis.edu.vn",
-    skill: "Database & QA",
-    responsibility: "Thiết kế CSDL PostgreSQL, viết kịch bản kiểm thử",
-    role: "member",
-  },
-];
+function personName(userId: string): string {
+  return MOCK_PEOPLE[userId]?.displayName ?? "Chưa rõ";
+}
 
-const DELI_ROSTER: TeamMember[] = [
-  {
-    userId: "00000000-0000-4000-8000-00000000000c",
-    displayName: "Phạm Quốc Huy",
-    studentId: "21120020",
-    email: "huy.pq21120020@sis.edu.vn",
-    skill: "Backend FastAPI",
-    responsibility: "Kiến trúc API & CSDL",
-    role: "leader",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000003",
-    displayName: "Lê Minh Khoa",
-    studentId: "21020999",
-    email: "student@utask.test",
-    skill: "Frontend React & TypeScript",
-    responsibility: "UI Onboarding & đồng bộ Health Connect",
-    role: "member",
-  },
-  {
-    userId: "00000000-0000-4000-8000-000000000002",
-    displayName: "Đặng Thảo Linh",
-    studentId: "21020872",
-    email: "linh.dt21020872@sis.edu.vn",
-    skill: "Frontend React & Tailwind",
-    responsibility: "UI Cart, Checkout, Catalog",
-    role: "member",
-  },
-  {
-    userId: "00000000-0000-4000-8000-00000000000d",
-    displayName: "Ngô Diệu Anh",
-    studentId: "21021058",
-    email: "anh.nd21021058@sis.edu.vn",
-    skill: "UI/UX & Figma",
-    responsibility: "Thiết kế trải nghiệm người dùng",
-    role: "member",
-  },
-  {
-    userId: "00000000-0000-4000-8000-00000000000e",
-    displayName: "Lý Bảo Châu",
-    studentId: "21021090",
-    email: "chau.lb21021090@sis.edu.vn",
-    skill: "QA Automation",
-    responsibility: "Kiểm thử tự động",
-    role: "member",
-  },
-];
+function teamName(teamId: string): string {
+  return MOCK_TEAM_META[teamId]?.name ?? teamId;
+}
+
+function rosterFor(teamId: string): TeamMember[] {
+  return membersOfTeam(teamId).map((member) => {
+    const person = MOCK_PEOPLE[member.userId];
+    return {
+      userId: member.userId,
+      displayName: person?.displayName ?? "Chưa rõ",
+      studentId: person?.studentCode ?? "",
+      email: person?.email ?? "",
+      skill: person?.skill ?? "",
+      responsibility: member.responsibility ?? "",
+      role: member.role,
+    };
+  });
+}
+
+function courseBase(courseId: string) {
+  const meta = MOCK_COURSE_META[courseId];
+  const ownerId = ownerInstructorId(courseId);
+  return {
+    courseId,
+    courseCode: meta.courseCode,
+    courseName: meta.courseName,
+    semester: meta.term,
+    instructorName: ownerId ? personName(ownerId) : "Chưa phân công",
+    teamSize: meta.teamSize,
+    classSize: classSizeFor(courseId),
+  };
+}
+
+/** Formation view derived from the graph: open teams and classmates without a team. */
+function formationFromGraph(courseId: string): NonNullable<CourseDetail["formation"]> {
+  const maxMembers = MOCK_COURSE_META[courseId].teamSize.max;
+  return {
+    openTeams: teamsOfCourse(courseId).map((teamId) => {
+      const members = membersOfTeam(teamId);
+      const leader = members.find((member) => member.role === "leader");
+      return {
+        teamId,
+        teamName: teamName(teamId),
+        leaderName: leader ? personName(leader.userId) : "Chưa có",
+        memberCount: members.length,
+        maxMembers,
+        neededSkills: MOCK_TEAM_META[teamId]?.neededSkills ?? [],
+      };
+    }),
+    unassignedClassmates: studentsOfCourse(courseId)
+      .filter((userId) => assignmentFor(userId, courseId) === null)
+      .map((userId) => ({
+        userId,
+        displayName: personName(userId),
+        studentId: MOCK_PEOPLE[userId]?.studentCode ?? "",
+        skill: MOCK_PEOPLE[userId]?.skill ?? "",
+      })),
+  };
+}
 
 function buildCourseSe330(now: Date, userId: string): CourseDetail {
   const assignment = assignmentFor(userId, "course-se330");
   return {
-    courseId: "course-se330",
-    courseCode: "SE330",
-    courseName: "Đồ án Chuyên ngành Công nghệ Phần mềm",
-    semester: "HK1 2026–2027",
-    instructorName: "TS. Trần Minh Đức",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 45, teamed: 38 },
+    ...courseBase("course-se330"),
     membership: assignment
       ? {
           status: "assigned",
           teamId: "team-nexus",
-          teamName: "Team NEXUS",
+          teamName: teamName("team-nexus"),
           role: assignment.role,
         }
       : { status: "none" },
@@ -161,11 +134,11 @@ function buildCourseSe330(now: Date, userId: string): CourseDetail {
     team: assignment
       ? {
           teamId: "team-nexus",
-          teamName: "Team NEXUS",
+          teamName: teamName("team-nexus"),
           isLeader: assignment.role === "leader",
-          memberCount: 5,
-          maxMembers: 5,
-          members: NEXUS_ROSTER,
+          memberCount: membersOfTeam("team-nexus").length,
+          maxMembers: MOCK_COURSE_META["course-se330"].teamSize.max,
+          members: rosterFor("team-nexus"),
           topic: {
             status: "approved",
             title:
@@ -194,13 +167,7 @@ function buildCourseSe330(now: Date, userId: string): CourseDetail {
 
 function buildFormationSe330(now: Date): CourseDetail {
   return {
-    courseId: "course-se330",
-    courseCode: "SE330",
-    courseName: "Đồ án Chuyên ngành Công nghệ Phần mềm",
-    semester: "HK1 2026–2027",
-    instructorName: "TS. Trần Minh Đức",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 45, teamed: 38 },
+    ...courseBase("course-se330"),
     membership: { status: "none" },
     teamFormation: {
       mode: "self-select",
@@ -257,7 +224,7 @@ function buildFormationSe330(now: Date): CourseDetail {
           skill: "Backend FastAPI",
         },
         {
-          userId: "00000000-0000-4000-8000-000000000007",
+          userId: "00000000-0000-4000-8000-00000000000d",
           displayName: "Ngô Diệu Anh",
           studentId: "21021058",
           skill: "UI/UX & Figma",
@@ -269,7 +236,7 @@ function buildFormationSe330(now: Date): CourseDetail {
           skill: "Embedded & IoT",
         },
         {
-          userId: "00000000-0000-4000-8000-000000000009",
+          userId: "00000000-0000-4000-8000-00000000000e",
           displayName: "Lý Bảo Châu",
           studentId: "21021090",
           skill: "QA Automation",
@@ -294,18 +261,12 @@ function buildFormationSe330(now: Date): CourseDetail {
 function buildCourseCs402(now: Date, userId: string): CourseDetail {
   const assignment = assignmentFor(userId, "course-cs402");
   return {
-    courseId: "course-cs402",
-    courseCode: "CS402",
-    courseName: "Phát triển Ứng dụng Di động Nâng cao",
-    semester: "HK1 2026–2027",
-    instructorName: "ThS. Lê Thị Mai",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 40, teamed: 37 },
+    ...courseBase("course-cs402"),
     membership: assignment
       ? {
           status: "assigned",
           teamId: "team-deli",
-          teamName: "Team DELI",
+          teamName: teamName("team-deli"),
           role: assignment.role,
         }
       : { status: "none" },
@@ -317,11 +278,11 @@ function buildCourseCs402(now: Date, userId: string): CourseDetail {
     team: assignment
       ? {
           teamId: "team-deli",
-          teamName: "Team DELI",
+          teamName: teamName("team-deli"),
           isLeader: assignment.role === "leader",
-          memberCount: DELI_ROSTER.length,
-          maxMembers: 5,
-          members: DELI_ROSTER,
+          memberCount: membersOfTeam("team-deli").length,
+          maxMembers: MOCK_COURSE_META["course-cs402"].teamSize.max,
+          members: rosterFor("team-deli"),
           topic: {
             status: "under_review",
             title:
@@ -348,17 +309,11 @@ function buildCourseCs402(now: Date, userId: string): CourseDetail {
 
 function buildPendingCourseSe331(now: Date): CourseDetail {
   return {
-    courseId: "course-se331",
-    courseCode: "SE331",
-    courseName: "Kiểm thử Phần mềm",
-    semester: "HK1 2026–2027",
-    instructorName: "TS. Vũ Thu Hương",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 42, teamed: 39 },
+    ...courseBase("course-se331"),
     membership: {
       status: "pending",
       teamId: "team-phoenix",
-      teamName: "Team PHOENIX",
+      teamName: teamName("team-phoenix"),
       requestedAt: daysFrom(now, -3, 9, 15),
     },
     teamFormation: {
@@ -374,13 +329,7 @@ function buildPendingCourseSe331(now: Date): CourseDetail {
 /** SE331 as seen by an enrolled student without a team or pending request. */
 function buildUnTeamedCourseSe331(): CourseDetail {
   return {
-    courseId: "course-se331",
-    courseCode: "SE331",
-    courseName: "Kiểm thử Phần mềm",
-    semester: "HK1 2026–2027",
-    instructorName: "TS. Vũ Thu Hương",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 42, teamed: 39 },
+    ...courseBase("course-se331"),
     membership: { status: "none" },
     teamFormation: {
       mode: "instructor-assigned",
@@ -395,13 +344,7 @@ function buildUnTeamedCourseSe331(): CourseDetail {
 /** Class A fixture: the enrolled student has no team here. */
 function buildCourseIt3090(now: Date): CourseDetail {
   return {
-    courseId: "course-it3090",
-    courseCode: "IT3090",
-    courseName: "Đồ án IoT",
-    semester: "HK1 2026–2027",
-    instructorName: "TS. Đặng Văn Cường",
-    teamSize: { min: 3, max: 5 },
-    classSize: { total: 38, teamed: 30 },
+    ...courseBase("course-it3090"),
     membership: { status: "none" },
     teamFormation: {
       mode: "self-select",
@@ -409,46 +352,7 @@ function buildCourseIt3090(now: Date): CourseDetail {
       selfCreateAllowed: true,
     },
     team: null,
-    formation: {
-      openTeams: [
-        {
-          teamId: "team-iot-vision",
-          teamName: "Team VISION",
-          leaderName: "Phạm Quốc Huy",
-          memberCount: 3,
-          maxMembers: 5,
-          neededSkills: ["Embedded C", "Computer Vision"],
-        },
-        {
-          teamId: "team-iot-sense",
-          teamName: "Team SENSE",
-          leaderName: "Võ Thanh Mai",
-          memberCount: 4,
-          maxMembers: 5,
-          neededSkills: ["MQTT", "Backend Node.js"],
-        },
-      ],
-      unassignedClassmates: [
-        {
-          userId: STUDENT_ID,
-          displayName: "Lê Minh Khoa",
-          studentId: "21020999",
-          skill: "Frontend React & TypeScript",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000006",
-          displayName: "Hoàng Trọng Khang",
-          studentId: "21021004",
-          skill: "Backend FastAPI",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000008",
-          displayName: "Trần Đăng Khoa",
-          studentId: "21021061",
-          skill: "Embedded & IoT",
-        },
-      ],
-    },
+    formation: formationFromGraph("course-it3090"),
   };
 }
 
@@ -701,8 +605,8 @@ export function projectWorkspaceFor(
   projectId: string,
   scenario: string,
   userId: string,
+  now: Date = new Date(),
 ): ProjectWorkspace | null {
-  const now = new Date();
   if (projectId === "project-nexus") return buildNexusWorkspace(now, userId);
   if (projectId === "project-deli") return buildDeliWorkspace(now, userId);
   return null;

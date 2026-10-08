@@ -13,6 +13,7 @@ import {
 import type { MockCreatedTeam, MockDatabase } from "@/mocks/data/database";
 import {
   accessibleProjectsForUser,
+  classesVisibleForNotifications,
   enrolledCoursesFor,
   projectRoleForUser,
 } from "@/mocks/data/relationships";
@@ -59,9 +60,41 @@ function accessibleProjectsFor(userId: string): readonly string[] {
   return accessibleProjectsForUser(userId);
 }
 
-/** Courses the logged-in account is enrolled in. */
+/**
+ * Courses the logged-in account is enrolled in as a student. Instructors are
+ * deliberately excluded: these are Student endpoints, and a Teacher role must
+ * not unlock them (Teachers read classes through the /teacher/* endpoints).
+ */
 function accessibleCoursesFor(userId: string): readonly string[] {
   return enrolledCoursesFor(userId);
+}
+
+/**
+ * Access-failure policy shared by every resource endpoint: a resource that
+ * does not exist and one the caller may not open answer identically (404), so
+ * the response never reveals which ids exist. 403 is reserved for a caller who
+ * can open the resource but lacks the permission for the action (for example
+ * a Member opening project settings).
+ */
+function notFound(detail: string) {
+  return HttpResponse.json({ detail }, { status: 404 });
+}
+
+/**
+ * The single definition of which notifications a user may see. List, mark-read
+ * and read-all all go through it so their scopes cannot diverge. Class-level
+ * notifications need enrollment or an instructor assignment for that class;
+ * project-level ones need project membership.
+ */
+function visibleNotifications(scenario: MockScenario, userId: string) {
+  const classes = classesVisibleForNotifications(userId);
+  const projects = accessibleProjectsFor(userId);
+  return notificationsForScenario(scenario).filter((notification) => {
+    const target = notification.target;
+    if (!target) return false;
+    if ("courseId" in target) return classes.includes(target.courseId);
+    return projects.includes(target.projectId);
+  });
 }
 
 export function createStudentFlowHandlers(
@@ -89,13 +122,14 @@ export function createStudentFlowHandlers(
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
       const courseId = String(params.courseId);
+      // Enforced demo permission: only enrolled students open a course.
+      // Check access BEFORE existence to avoid leaking existence (R2).
+      if (!accessibleCoursesFor(userId).includes(courseId)) {
+        return notFound("Không tìm thấy môn học.");
+      }
       const detail = courseDetailForScenario(courseId, scenario, userId);
       if (!detail) {
-        return HttpResponse.json({ detail: "Không tìm thấy môn học." }, { status: 404 });
-      }
-      // Enforced demo permission: only enrolled students open a course.
-      if (!accessibleCoursesFor(userId).includes(courseId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy môn học.");
       }
       return HttpResponse.json(detail);
     }),
@@ -110,7 +144,7 @@ export function createStudentFlowHandlers(
       }
       const courseId = String(params.courseId);
       if (!accessibleCoursesFor(userId).includes(courseId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy môn học.");
       }
 
       // Parse the JSON payload — a non-object body means the client sent
@@ -272,13 +306,14 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: status === 403 ? FORBIDDEN_ERROR : SERVER_ERROR }, { status });
       }
       const projectId = String(params.projectId);
+      // Enforced demo permission: only project members open a workspace.
+      // Check access BEFORE existence to avoid leaking existence (R2).
+      if (!accessibleProjectsFor(userId).includes(projectId)) {
+        return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
+      }
       const workspace = projectWorkspaceFor(projectId, scenario, userId);
       if (!workspace) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
-      }
-      // Enforced demo permission: only project members open a workspace.
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
       }
       return HttpResponse.json(workspace);
     }),
@@ -292,7 +327,7 @@ export function createStudentFlowHandlers(
       }
       const projectId = String(params.projectId);
       if (!accessibleProjectsFor(userId).includes(projectId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy dự án.");
       }
       const detail = issueDetailFor(projectId, String(params.issueKey), userId);
       if (!detail) {
@@ -309,7 +344,7 @@ export function createStudentFlowHandlers(
       }
       const projectId = String(params.projectId);
       if (!accessibleProjectsFor(userId).includes(projectId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy dự án.");
       }
       const code = projectCodeFor(projectId, scenario);
       if (!code) {
@@ -318,7 +353,9 @@ export function createStudentFlowHandlers(
       return HttpResponse.json(code);
     }),
 
-    // Notifications — read state persists per user.
+    // Notifications — read state persists per user. List, mark-read and
+    // read-all share `visibleNotifications`, so none can reach an id the
+    // others hide.
     http.get(`${ROOT}/notifications`, async ({ request }) => {
       await sleepFor(scenario);
       const userId = parseTokenUserId(request);
@@ -326,35 +363,24 @@ export function createStudentFlowHandlers(
       if (scenario === "server-error" || scenario === "student-partial-error") {
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
       }
-      const readIds = db.notificationReadByUser[userId] ?? [];
-      const read = new Set(readIds);
-      // Default notifications reference the leader's projects; students
-      // without access only see course-scope notifications.
-      const visible = notificationsForScenario(scenario).filter((notification) => {
-        if (
-          notification.target?.kind === "team-hub" ||
-          notification.target?.kind === "team-formation" ||
-          notification.target?.kind === "join-request" ||
-          notification.target?.kind === "course-deadline"
-        ) {
-          return true;
-        }
-        const projectId =
-          notification.target && "projectId" in notification.target
-            ? notification.target.projectId
-            : null;
-        return projectId !== null && accessibleProjectsFor(userId).includes(projectId);
-      });
+      const read = new Set(db.notificationReadByUser[userId] ?? []);
       return HttpResponse.json(
-        visible.map((notification) => ({ ...notification, read: read.has(notification.id) })),
+        visibleNotifications(scenario, userId).map((notification) => ({
+          ...notification,
+          read: read.has(notification.id),
+        })),
       );
     }),
     http.post(`${ROOT}/notifications/:id/read`, async ({ params, request }) => {
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
+      const id = String(params.id);
+      if (!visibleNotifications(scenario, userId).some((notification) => notification.id === id)) {
+        return notFound("Không tìm thấy thông báo.");
+      }
       const readIds = db.notificationReadByUser[userId] ?? [];
-      if (!readIds.includes(String(params.id))) {
-        db.notificationReadByUser[userId] = [...readIds, String(params.id)];
+      if (!readIds.includes(id)) {
+        db.notificationReadByUser[userId] = [...readIds, id];
       }
       repository.save();
       return new HttpResponse(null, { status: 204 });
@@ -362,24 +388,8 @@ export function createStudentFlowHandlers(
     http.post(`${ROOT}/notifications/read-all`, async ({ request }) => {
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
-      const visible = notificationsForScenario(scenario).filter((notification) => {
-        if (
-          notification.target?.kind === "team-hub" ||
-          notification.target?.kind === "team-formation" ||
-          notification.target?.kind === "join-request" ||
-          notification.target?.kind === "course-deadline"
-        ) {
-          return true;
-        }
-        const projectId =
-          notification.target && "projectId" in notification.target
-            ? notification.target.projectId
-            : null;
-        return projectId !== null && accessibleProjectsFor(userId).includes(projectId);
-      });
-      const readIds = db.notificationReadByUser[userId] ?? [];
-      const read = new Set(readIds);
-      for (const notification of visible) {
+      const read = new Set(db.notificationReadByUser[userId] ?? []);
+      for (const notification of visibleNotifications(scenario, userId)) {
         read.add(notification.id);
       }
       db.notificationReadByUser[userId] = [...read];
@@ -476,12 +486,12 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
       }
       const projectId = String(params.projectId);
+      if (!accessibleProjectsFor(userId).includes(projectId)) {
+        return notFound("Không tìm thấy dự án.");
+      }
       const workspace = projectWorkspaceFor(projectId, scenario, userId);
       if (!workspace) {
-        return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
-      }
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy dự án.");
       }
       // Demo permission: project settings are leader-only.
       if (projectRoleForUser(userId, projectId) !== "leader") {
@@ -507,12 +517,12 @@ export function createStudentFlowHandlers(
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       const projectId = String(params.projectId);
+      if (!accessibleProjectsFor(userId).includes(projectId)) {
+        return notFound("Không tìm thấy dự án.");
+      }
       const workspace = projectWorkspaceFor(projectId, scenario, userId);
       if (!workspace) {
-        return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
-      }
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+        return notFound("Không tìm thấy dự án.");
       }
       // Demo permission: only the team leader may configure the AI key.
       if (projectRoleForUser(userId, projectId) !== "leader") {
