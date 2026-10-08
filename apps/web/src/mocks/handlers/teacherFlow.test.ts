@@ -166,6 +166,15 @@ describe("Teacher scenarios", () => {
     expect((await call("/teacher/courses/course-se330", TEACHER_ID)).status).toBe(404);
   });
 
+  it("teacher-empty: project access, which follows the same assignments, is gone too", async () => {
+    useRepo("teacher-empty");
+    for (const path of ["", "/issues/NEXUS-104", "/code", "/settings"]) {
+      expect((await call(`/projects/project-nexus${path}`, TEACHER_ID)).status, path).toBe(404);
+    }
+    // Team members are not instructors: their access does not depend on this scenario.
+    expect((await call("/projects/project-nexus", LEADER_ID)).status).toBe(200);
+  });
+
   it("teacher-partial-error: classes load, students and teams fail", async () => {
     useRepo("teacher-partial-error");
     expect((await call("/teacher/courses", TEACHER_ID)).status).toBe(200);

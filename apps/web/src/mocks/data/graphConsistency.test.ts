@@ -372,6 +372,47 @@ describe("Teacher team members and oversight signals", () => {
       expect(stale[0].label).toContain(`${STALE_AFTER_DAYS} ngày`);
     });
 
+    const withSync = (syncState: Parameters<typeof signalsFor>[3] extends infer C ? C extends { syncState: infer S } ? S : never : never) => ({
+      courseId: "c1",
+      teamId: "t1",
+      projectId: "p1",
+      syncState,
+    });
+
+    it("tells a project with no repository (not mapped) from a broken GitHub connection", () => {
+      const unmapped = signalsFor(facts(), 4, 3, withSync("no-repository"));
+      expect(unmapped.map((s) => [s.code, s.category])).toEqual([["github-unmapped", "unmapped"]]);
+      const broken = signalsFor(facts(), 4, 3, withSync("webhook-error"));
+      expect(broken.map((s) => [s.code, s.category])).toEqual([["github-sync-problem", "connection"]]);
+      expect(broken[0].label).toContain("có thể đã cũ");
+      expect(signalsFor(facts(), 4, 3, withSync("synced"))).toEqual([]);
+      expect(signalsFor(facts(), 4, 3, withSync("disconnected"))[0].label).toContain("chưa kết nối GitHub");
+    });
+
+    it("gives every signal a category, its evidence time when the source has one, and a source link", () => {
+      const stale = signalsFor(
+        facts({ lastActivity: { at: daysAgo(STALE_AFTER_DAYS + 2), kind: "issue-updated" } }),
+        2,
+        3,
+        withSync("no-repository"),
+      );
+      for (const signal of stale) {
+        expect(signal.category, signal.code).toBeTruthy();
+        expect(signal.source?.path, signal.code).toMatch(/^\/(projects|teacher)\//);
+      }
+      const old = stale.find((s) => s.code === "stale-activity")!;
+      expect(old.category).toBe("stale-data");
+      expect(old.at).toBe(daysAgo(STALE_AFTER_DAYS + 2));
+      expect(old.source?.path).toBe("/projects/p1/board");
+      expect(stale.find((s) => s.code === "github-unmapped")!.at).toBeNull();
+      expect(stale.find((s) => s.code === "below-min-size")!.source?.path).toBe("/teacher/courses/c1/teams/t1");
+    });
+
+    it("keeps 'no data' separate from 'old data'", () => {
+      const noData = signalsFor(facts({ progress: null, issues: null, lastActivity: null }), 4, 3);
+      expect(noData.map((s) => s.category)).toEqual(["no-data", "no-data"]);
+    });
+
     it("signals a team below the class minimum with the counts in the label", () => {
       const [signal] = signalsFor(facts(), 2, 3);
       expect(signal.code).toBe("below-min-size");
