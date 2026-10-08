@@ -12,6 +12,7 @@ import {
 import { loginRequest, logoutRequest, refreshRequest } from "@/features/auth/api/auth";
 import type { LoginPayload } from "@/features/auth/api/auth";
 import type { AuthSession, AuthStatus, AuthUser } from "@/features/auth/types";
+import { clearAllDrafts } from "@/features/teacher/lib/drafts";
 import { createApiClient } from "@/lib/api/client";
 
 const MOCK_REFRESH_TOKEN_KEY = "utask.mock.refresh-token";
@@ -144,6 +145,8 @@ export function AuthProvider({
     } catch {
       // Logout is local-authoritative after best-effort token revocation.
     } finally {
+      // An explicit sign-out also forgets unsent drafts; an expired session does not.
+      clearAllDrafts();
       clearSession();
     }
   }, [clearSession, session?.refreshToken, unauthenticatedClient]);
