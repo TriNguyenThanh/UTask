@@ -40,7 +40,7 @@ data behind them, are described in [`docs/web/teacher-flow.md`](../../docs/web/t
 
 ## Mock scenarios
 
-Set `VITE_MOCK_SCENARIO` to any of the 29 scenarios defined in `src/mocks/scenarios.ts` — auth (`default`, `slow-network`, `server-error`), My Work states, student-flow states (no team, join pending, leader/member topic, AI key missing, …) and teacher states (`teacher-empty`, `teacher-partial-error`).
+Set `VITE_MOCK_SCENARIO` to any of the 30 scenarios defined in `src/mocks/scenarios.ts` — auth (`default`, `slow-network`, `server-error`), My Work states, student-flow states (no team, join pending, leader/member topic, AI key missing, …) and teacher states (`teacher-empty`, `teacher-partial-error`, `teacher-github-error`).
 
 ## Verification
 

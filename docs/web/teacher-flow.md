@@ -1,6 +1,6 @@
 # Luồng giảng viên (Teacher Flow) — hiện trạng, phạm vi và kế hoạch
 
-**Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch); Phase 2 (dashboard nhóm T08, workspace chỉ xem cho giảng viên) ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem). Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
+**Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch); Phase 2 (dashboard nhóm T08, workspace chỉ xem cho giảng viên) ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem); Phase 3–5 (form tạo lớp, cài đặt lớp, import CSV, nháp phản hồi, xem trước điều chỉnh nhóm, tín hiệu rủi ro) ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro), chỉ ở mức giao diện/demo. Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
 
 Căn cứ: nhánh `fix/frontend-student-flow`, HEAD `c9df96b` (08/10/2026); phần
 Phase 1 nằm trong working tree, chưa commit. Mọi kết
@@ -175,14 +175,14 @@ trách" (analysis §2.2) chưa có đặc tả hành động: mặc định ch�
 | --- | --- | --- |
 | `/teacher` | T01 Home giảng viên | P0 |
 | `/teacher/courses` | T02 Danh sách lớp phụ trách | P0 |
-| `/teacher/courses/new` | T03 Tạo lớp | P0 (ghi chờ contract) |
+| `/teacher/courses/new` | T03 Tạo lớp | Đã triển khai giao diện; gửi disabled chờ contract (§16) |
 | `/teacher/courses/:courseId` | T04 Tổng quan lớp | P0 |
 | `/teacher/courses/:courseId/students` | T05 Sinh viên | P0 |
-| `/teacher/courses/:courseId/students/import` | T06 Nhập danh sách | P0 (ghi chờ contract) |
+| `/teacher/courses/:courseId/students/import` | T06 Nhập danh sách | Đã triển khai xem trước CSV; gửi disabled chờ contract (§16) |
 | `/teacher/courses/:courseId/teams` | T07 Nhóm + sinh viên chưa có nhóm | P0 xem, P1 điều chỉnh |
 | `/teacher/courses/:courseId/oversight` | Giám sát tiến độ nhóm (xem §14; thêm sau Phase 1) | Đã triển khai (Demo MSW, chỉ đọc) |
 | `/teacher/courses/:courseId/teams/:teamId` | T08 Dashboard nhóm | Đã triển khai (Demo MSW, chỉ đọc; §15) |
-| `/teacher/courses/:courseId/settings` | T10 Cài đặt lớp | P0 xem |
+| `/teacher/courses/:courseId/settings` | T10 Cài đặt lớp | Đã triển khai (chỉ đọc; đổi/vô hiệu mã disabled; §16) |
 | `/projects/:projectId/{backlog,board,code}` | T09 Workspace dùng chung | Đã triển khai chế độ chỉ xem cho giảng viên (Demo MSW; §15) |
 | `/notifications`, `/settings/*` | Màn dùng chung | Sau khi sửa R3 |
 
@@ -466,7 +466,7 @@ Commit dự kiến: `feat(web): add project viewer context for course instructor
 `feat(web): add teacher team dashboard and workspace breadcrumbs`,
 `test(web): cover teacher read-only workspace access`.
 
-### Phase 3 — UI tổ chức lớp
+### Phase 3 — UI tổ chức lớp (Đã làm ở mức giao diện/demo, chưa tích hợp; kết quả ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro))
 
 Điều kiện bắt đầu ghi: contract tạo lớp, mã tham gia, thêm sinh viên, import
 được chốt và có trong `contracts/`. Không cần chờ để làm UI: T03, T06 (preview),
@@ -477,7 +477,7 @@ phân biệt tạo mới/có sẵn/trùng/cần kiểm tra/lỗi theo dòng khi 
 
 Commit dự kiến: `feat(web): add teacher course setup and student import forms`.
 
-### Phase 4 — Phản hồi và điều chỉnh nhóm (P1)
+### Phase 4 — Phản hồi và điều chỉnh nhóm (P1) (Đã làm ở mức giao diện/demo, chưa tích hợp; kết quả ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro))
 
 Điều kiện: contract comment task/project và mutation membership; policy sĩ số,
 Leader thay thế, quyền đọc lịch sử sau chuyển nhóm.
@@ -485,7 +485,7 @@ Leader thay thế, quyền đọc lịch sử sau chuyển nhóm.
 Hoàn tất khi: Teacher comment mà task không đổi; nháp giữ khi gửi lỗi; chuyển
 nhóm giữ lịch sử và nhóm luôn có Leader.
 
-### Phase 5 — Rủi ro (P1) và hoàn thiện
+### Phase 5 — Rủi ro (P1) và hoàn thiện (Đã làm ở mức giao diện/demo, chưa tích hợp; kết quả ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro))
 
 Điều kiện: contract Progress cho tín hiệu rule-based có nguồn và thời điểm.
 
@@ -625,7 +625,7 @@ có). ID ngoài phạm vi trả 404, không còn báo thành công giả.
   — không bao giờ 0% giả.
 - Hoạt động gần nhất: `updatedAt` lớn nhất của issue, luôn kèm loại ("Cập nhật
   issue") và đồng hồ cố định của fixture; không có thì "Chưa ghi nhận hoạt động".
-- "Task quá hạn" trên Home: **"Chưa có dữ liệu"**, vì `Issue` chưa có hạn chót
+- "Task quá hạn" trên Home: **"Chưa có dữ liệu"**, vì `Issue` chưa có hạn chót (Phase 1; từ Phase 2 có `dueAt` và ô này đã đổi thành "Issue quá hạn", xem §16.10)
   (xem §9.3). Không hiển thị số 0.
 - Không dùng dữ liệu GitHub Home của Student cho nhóm nào.
 - "Chưa có nhóm" tính theo từng lớp: một sinh viên chưa có nhóm ở hai lớp được
@@ -955,3 +955,187 @@ vào graph dùng chung; sinh viên chỉ là danh sách, không có tài khoản
 nhóm nào có project (chưa có fixture project cho chúng), nên màn Giám sát hiện cả 19 nhóm
 với tín hiệu "Chưa có project". `teacher3@` chỉ dạy lớp này; các tài khoản khác không
 thấy lớp.
+
+## 16. Kết quả Phase 3, 4, 5 — tổ chức lớp, phản hồi/điều chỉnh nhóm, rủi ro
+
+Dữ liệu vẫn là Demo MSW. **Cả ba phase dừng ở mức giao diện và demo, không có tích hợp
+ghi nào**, vì chưa có hợp đồng nào cho thao tác ghi (xem 16.1). Chưa commit; đề xuất
+commit ở 16.8.
+
+### 16.1 Kiểm tra readiness trước khi làm
+
+| Thao tác | Hợp đồng | Kết luận |
+| --- | --- | --- |
+| Tạo lớp, đổi/vô hiệu mã, sửa lớp, thêm sinh viên | `contracts/api/` trống (chỉ có README); Classroom mới có khung ở `feat/classroom-service` | Chỉ giao diện; nút gửi disabled kèm lý do |
+| Import CSV/XLSX | Chỉ có mô tả trong Identity spec §3.5.1 trên `origin/main` (multipart, `Idempotency-Key`, `summary` + `results[]`); Classroom chưa xác nhận hợp đồng của chính nó; client chưa gửi được multipart | Chỉ kiểm tra định dạng và xem trước; không gửi; **không mở rộng client `FormData`** vì chưa có chỗ dùng |
+| Comment task/project | Không có | Soạn nháp; gửi disabled |
+| Tạo nhóm, chuyển thành viên, chỉ định Leader | Không có hợp đồng; chưa có chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm | Xem trước và kiểm tra điều kiện; xác nhận disabled |
+| Tín hiệu rủi ro | Không có hợp đồng Progress | Quy tắc cố định trên dữ liệu demo (§14.3), nhãn rõ là demo |
+
+Không có endpoint hay schema giả nào được thêm cho Phase 3 và 4. Phase 5 chỉ thêm trường vào
+các read model demo đã có (`TeacherSignal`, `asOf`) trên đường dẫn MSW `/teacher/*`.
+
+### 16.2 Phase 3 — UI tổ chức lớp (UI, chưa tích hợp)
+
+| Hạng mục | Route / thành phần | Trạng thái |
+| --- | --- | --- |
+| T03 tạo lớp | `/teacher/courses/new` | Form đủ trường (tên, mã môn tùy chọn, học kỳ, ngày bắt đầu/kết thúc, sĩ số tối thiểu/tối đa), kiểm tra ngay khi nhập, nút "Kiểm tra thông tin"; "Tạo lớp" disabled; cảnh báo xác nhận khi rời trang đã sửa (`useBlocker`) |
+| T10 cài đặt lớp | `/teacher/courses/:courseId/settings` (tab Cài đặt giờ là liên kết thật) | Thông tin lớp, mã tham gia + sao chép, giảng viên phụ trách; "Đổi mã", "Vô hiệu mã" disabled; không có nút sửa/xóa lớp |
+| Thêm từng sinh viên | Hộp thoại ở trang Sinh viên | Kiểm tra định dạng email, cần email hoặc MSSV; "Thêm vào lớp" disabled; không có ô mật khẩu hay nhóm |
+| T06 import | `/teacher/courses/:courseId/students/import` | 3 bước: chọn file CSV → kiểm tra định dạng và xem trước theo `row_number` → kết quả (chỉ là chú giải); "Xác nhận nhập" disabled |
+
+Chi tiết quyết định:
+
+- **Chỉ CSV.** Repo chưa có thư viện đọc Excel; chọn `.xlsx` hiện thông báo lý do và đề nghị xuất CSV.
+  Không thêm dependency khi chưa có quyết định.
+- **Client chỉ kiểm tra hình dạng file:** có cột `email` hoặc `student_id`, email đúng cú pháp, dòng
+  không rỗng, trùng trong file. Mọi thứ thuộc về danh tính (tài khoản đã có, vai trò, đã thuộc lớp)
+  để backend. Quy ước cột theo Identity spec: `student_id`, `email`, `first_name`, `last_name` (có vài
+  tên thay thế như `mssv`, `ho`, `ten`); `row_number` tính theo dòng trong file, dòng tiêu đề là 1.
+- **Phần "Kết quả" không giả lập.** Chú giải liệt kê các loại kết quả theo dòng mà backend được mô tả
+  sẽ báo (tạo tài khoản mới chờ kích hoạt, dùng tài khoản có sẵn, đã thuộc lớp, cần kiểm tra
+  Teacher/Admin, xung đột danh tính, lỗi từng dòng) và ghi rõ "chưa có kết quả nào: file chưa được gửi".
+  Không có chuỗi "nhập thành công" nào trong luồng.
+- **Giới hạn do giao diện đặt:** tối đa 1 MB và 2.000 dòng để tránh treo trình duyệt, ghi rõ trên màn hình
+  là chưa phải giới hạn của backend.
+- **Không suy ra API sửa/xóa lớp từ API tạo lớp.** T10 chỉ đọc. Khi thao tác đổi/vô hiệu mã được bật, cần
+  hộp thoại xác nhận; hiện chỉ ghi điều này trong lý do của nút vì không có đường tới hộp thoại đó.
+- Sao chép mã dùng chung một hàm cho tiêu đề lớp và T10; thất bại clipboard hiện thông báo lỗi, không báo thành công.
+
+### 16.3 Phase 4 — Phản hồi và điều chỉnh nhóm (UI, chưa tích hợp)
+
+Hợp đồng chưa có nên chỉ làm phần được phép khi thiếu hợp đồng:
+
+- **Soạn phản hồi (nháp):** ô soạn trên trang nhóm (T08) và trong chi tiết issue khi xem với tư cách giảng
+  viên. Kiểm tra độ dài (2.000 ký tự, giới hạn của giao diện), đếm ký tự, "Xóa nháp". "Gửi phản hồi" disabled,
+  lý do ghi rõ: chưa gửi cho ai, nhóm không nhận thông báo. Có dòng nhắc phản hồi không tự đổi task, hạn chót
+  hay người được giao.
+- **Nháp được giữ** trong `sessionStorage`, khóa theo tài khoản và theo nơi soạn, nên đóng/mở lại trang hoặc
+  refresh trong tab vẫn còn nháp; tài khoản khác không thấy; đăng xuất chủ động xóa mọi nháp. Hết phiên đăng nhập
+  (401) **không** xóa nháp.
+- **Lịch sử phản hồi:** hiện "Chưa có phản hồi nào để hiển thị: chưa có API phản hồi nên lịch sử chưa có nguồn dữ liệu"
+  thay vì danh sách rỗng giả. Bình luận sẵn có của issue vẫn đọc được.
+- **Điều chỉnh nhóm (T07):** hộp thoại "Điều chỉnh nhóm" với ba việc: chuyển/phân thành viên, chỉ định Leader,
+  tạo nhóm mới. Kiểm tra và hiển thị hệ quả, nhưng "Xác nhận thay đổi" disabled. Các kiểm tra (logic thuần ở
+  `features/teacher/lib/teamAdjustment.ts`, có test):
+  - nhóm đích đã đủ sĩ số tối đa: **chặn**, kèm ghi chú rằng ngoại lệ không thuộc màn này (cảnh báo không phải
+    cho phép vượt);
+  - Leader duy nhất của nhóm nguồn rời đi: bắt buộc chọn Leader mới trong số thành viên còn lại, để nhóm không mất Leader;
+  - nhóm nguồn sau khi chuyển ít hơn mức tối thiểu hoặc trống: cảnh báo, không xóa nhóm tự động;
+  - luôn ghi chú: lịch sử thành viên và đóng góp cũ được giữ nguyên, task đã làm không tự chuyển sang nhóm mới;
+  - chỉ định Leader chỉ trong số thành viên và không trùng người đang là Leader; tạo nhóm cần tên duy nhất trong
+    lớp và một Leader đầu tiên là sinh viên chưa có nhóm.
+  Đây là kiểm tra tham khảo: backend vẫn là nơi quyết định (sinh viên cùng lớp, sĩ số, Leader hợp lệ).
+- **Chưa làm vì chưa có hợp đồng và chính sách:** gửi comment/phản hồi, thông báo cho nhóm, áp dụng thay đổi nhóm,
+  invalidate cache sau mutation, xử lý xung đột/mất quyền khi ghi. Cách xử lý Leader hiện tại khi chỉ định Leader
+  mới (giữ hay chuyển thành thành viên) cũng chưa chốt và được ghi trong hộp thoại.
+
+### 16.4 Phase 5 — Rủi ro và hoàn thiện (demo, rule-based)
+
+- Mỗi tín hiệu (`TeacherSignal`) nay có: nguyên nhân, **loại** (`Thiếu dữ liệu`, `Dữ liệu cũ`, `Kết nối GitHub`,
+  `Chưa ánh xạ`, `Cơ cấu nhóm`), **thời điểm bằng chứng** (hoặc "Nguồn không cho biết thời điểm") và **liên kết tới dữ liệu
+  gốc** (trang nhóm, Backlog, Bảng công việc hoặc Mã nguồn của project). Mốc tính (`asOf`) hiện cạnh phần giải thích.
+- Hai tín hiệu mới: `github-unmapped` (project chưa gắn repository: chưa ánh xạ GitHub) và `github-sync-problem`
+  (chưa kết nối, webhook lỗi, token hết hạn, thiếu quyền đọc repository, đang chờ webhook: mất kết nối, dữ liệu có thể cũ).
+  "Chưa ánh xạ", "mất kết nối", "dữ liệu cũ" và "không có dữ liệu" là bốn trạng thái khác nhau, không gộp.
+- **Danh sách "Cần chú ý" ở Home:** tổng hợp các nhóm có tín hiệu qua mọi lớp (mỗi lớp một yêu cầu, lỗi từng lớp độc lập),
+  tối đa 6 nhóm kèm số nhóm còn lại, kèm câu "không dùng AI, không quy ra điểm, không có tín hiệu không có nghĩa là tốt".
+- **Không** suy năng lực từ commit hoặc task, **không** chuyển cảnh báo thành điểm, **không** có nút chạy AI mới.
+  Xem tổng hợp không kích hoạt AI tính phí.
+- Scenario mới `teacher-github-error` (webhook GitHub lỗi) để xem tín hiệu kết nối; `student-github-disconnected` có sẵn cho
+  trạng thái chưa kết nối. DELI (CS402, `teacher2@`) hiển thị "chưa ánh xạ GitHub" theo fixture.
+- Hoàn thiện đã làm: nhãn và mô tả truy cập cho nút disabled (`aria-describedby`), `role="alert"`/`status` cho kiểm tra
+  và lỗi, hộp thoại Radix (khóa focus, Esc), bố cục mobile đã duyệt thử. **Chưa** kiểm tra bằng bàn phím/trình đọc màn hình thật.
+
+### 16.5 Thay đổi API demo (MSW, không phải contract)
+
+- `TeacherSignal` thêm `category`, `at`, `source`; `GET …/oversight` trả thêm `asOf`.
+- `signalsFor(facts, memberCount, minMembers, context)` nhận ngữ cảnh (`courseId`, `teamId`, `projectId`, trạng thái đồng bộ GitHub).
+- Các builder Teacher nhận `scenario` để số liệu ở danh sách lớp, Giám sát và T08 luôn khớp nhau trong cùng một scenario.
+- Không có endpoint ghi nào, không có thay đổi ở client `ApiClient` (JSON vẫn như cũ).
+
+### 16.6 Kết quả kiểm tra
+
+Chạy trong `apps/web`:
+
+- `pnpm lint` (`tsc --noEmit`): đạt. `pnpm build`: đạt. Repo không có formatter nên không chạy.
+- `pnpm test`: 328 test / 13 file đạt (trước đợt này: 258). Mới: 28 test logic thuần (đọc CSV, schema form lớp,
+  kiểm tra điều chỉnh nhóm, nháp) và 39 test giao diện qua bảng route thật cho form tạo lớp (rời trang), cài đặt lớp,
+  hộp thoại thêm sinh viên, xem trước import (số dòng, trùng, Excel, không gửi gì), xem trước điều chỉnh nhóm, nháp phản hồi
+  (giữ khi tải lại, tách theo tài khoản, đăng xuất xóa nháp) và danh sách "Cần chú ý"; 3 test tín hiệu mới ở `graphConsistency`.
+  Test nào thay đổi hành vi (nút "Tạo lớp", tab Cài đặt, nút Thêm/Nhập, ô bình luận) được cập nhật theo hành vi mới chứ không nới lỏng.
+- Một kiểm tra lặp lại trong mọi test ghi: không có yêu cầu nào ngoài `GET` được gửi.
+- Kiểm tra đột biến, mỗi lần có test đỏ rồi khôi phục: bỏ phát hiện trùng (2), bỏ chặn vượt sĩ số (2), cho phép mất Leader (2),
+  bỏ `userId` khỏi khóa nháp (2), bỏ xác nhận khi rời form (1), cho phép đọc file Excel (2).
+- Duyệt thử trên Edge headless (1280×800 và 390×844): Home (danh sách "Cần chú ý"), tạo lớp, cài đặt, import, nhóm (phản hồi),
+  Giám sát, chi tiết issue, và Board của sinh viên: không tràn ngang, không lỗi console.
+- **Chưa kiểm tra:** tải lên file thật qua trình duyệt thật (chỉ test bằng jsdom), bàn phím và trình đọc màn hình thật,
+  Safari/Firefox, thiết bị thật, hộp thoại với nhiều lớp/nhóm lớn (lớp 100 sinh viên chỉ xem thủ công ở các màn đã có),
+  từng commit riêng lẻ.
+
+### 16.7 Cần backend/nghiệp vụ chốt
+
+| Việc | Cần để làm gì |
+| --- | --- |
+| Hợp đồng REST của Classroom: tạo lớp, đổi/vô hiệu mã, sửa lớp, thêm sinh viên | Bật T03, T10, hộp thoại thêm sinh viên |
+| Xác nhận endpoint import của Classroom (multipart, `Idempotency-Key`, shape báo cáo) và có đọc Excel ở client hay để backend đọc | Bật T06 bước xác nhận và kết quả; khi đó mới cần mở rộng `ApiClient` cho `FormData` |
+| Giới hạn kích thước file/số dòng và định dạng mã môn, sĩ số tối đa | Thay các giới hạn tạm của giao diện |
+| Hợp đồng comment task/project và thông báo cho nhóm | Bật gửi phản hồi, lịch sử phản hồi |
+| Hợp đồng mutation membership + chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm, cách xử lý Leader cũ khi chỉ định Leader mới | Bật xác nhận điều chỉnh nhóm |
+| Quy tắc/ngưỡng rủi ro chính thức hoặc hợp đồng Progress | Thay `signalsFor`, kể cả ngưỡng 7 ngày |
+| Quyền thấy thông báo cấp project của giảng viên | Hiện giảng viên chỉ thấy thông báo cấp lớp |
+
+### 16.8 Đề xuất commit (chưa thực hiện)
+
+Các thay đổi chưa commit chia thành ba commit theo thứ tự phụ thuộc. Một số file chạm nhiều phase (ghi chú bên dưới); để từng
+commit tự build và test đều xanh nên dùng `git add -p` cho các file đó, hoặc gộp chúng vào commit cuối.
+
+1. `feat(web): add class creation form, class settings, add-student dialog and CSV import preview`
+   - `features/teacher/lib/{courseForm,csvImport}.ts`, `components/{JoinCode,AddStudentDialog}.tsx`
+   - `routes/{TeacherCourseCreateRoute,TeacherCourseSettingsRoute,TeacherStudentImportRoute}.tsx`
+   - `routes/{TeacherCourseLayout,TeacherCourseStudentsRoute,TeacherCoursesRoute}.tsx`, `app/router/router.tsx`
+2. `feat(web): add feedback drafts and team adjustment preview`
+   - `lib/{drafts,teamAdjustment}.ts`, `components/{FeedbackComposer,TeamAdjustDialog}.tsx`
+   - `routes/{TeacherCourseTeamsRoute,TeacherTeamDetailRoute}.tsx`, `features/projects/components/IssuePanel.tsx`
+   - `features/auth/AuthProvider.tsx` (xóa nháp khi đăng xuất)
+3. `feat(web): add risk signals with source, category and GitHub mapping state`
+   - `lib/api/teacherFlow.ts`, `mocks/data/{teacherFlow,studentFlow}.ts`, `mocks/handlers/teacherFlow.ts`, `mocks/scenarios.ts`
+   - `components/{AttentionPanel,shared}.tsx`, `routes/{TeacherHomeRoute,TeacherCourseOversightRoute}.tsx`
+4. `docs(web): document teacher phases 3 to 5` — `docs/web/teacher-flow.md`, `apps/web/README.md`
+
+File nhiều phase: `TeacherFlow.test.tsx`, `TeacherWorkspace.test.tsx`, `TeacherSetup.test.tsx`, `lib/lib.test.ts`,
+`graphConsistency.test.ts`, `TeacherHomeRoute.tsx` (liên kết Tạo lớp thuộc commit 1, danh sách "Cần chú ý" thuộc commit 3).
+
+### 16.9 Tự phản biện
+
+| Câu hỏi | Kết quả |
+| --- | --- |
+| Có thành công giả không? | Không: không có chuỗi báo đã tạo/nhập/gửi; mọi nút ghi disabled có lý do; test khẳng định không có yêu cầu ghi |
+| Có endpoint/schema giả không? | Không thêm endpoint ghi; chỉ mở rộng read model demo hiện có |
+| Có membership giả không? | Không: điều chỉnh nhóm chỉ xem trước, không đổi dữ liệu graph |
+| Quyền vượt mức? | Không có thao tác ghi nào; xem workspace vẫn theo assignment như Phase 2 |
+| Lộ cache/nháp giữa tài khoản? | Khóa nháp theo `userId`, cache theo `userId`; đăng xuất xóa nháp; có test |
+| Link chết? | Test điều hướng thêm `/new`, `/settings`, `/students/import` |
+| Scope creep? | Có hai thứ thêm vào ngoài danh sách: danh sách "Cần chú ý" ở Home (thuộc yêu cầu panel tổng hợp) và scenario `teacher-github-error` (để kiểm thử trạng thái kết nối) |
+| Rủi ro còn lại | Hộp thoại điều chỉnh nhóm dựng trên quy tắc tạm do mình suy ra từ yêu cầu; chính sách thật có thể khác. Ngưỡng và loại tín hiệu cũng là giá trị demo |
+
+### 16.10 Sửa sau review
+
+Sáu điểm tìm thấy khi rà lại flow Teacher, đã sửa và có test:
+
+| # | Vấn đề | Cách sửa |
+| --- | --- | --- |
+| 1 | Workspace, issue và code của project vẫn nằm trong cache (30 giây) sau khi giảng viên mất quyền lớp | Rời workspace với tư cách giảng viên thì xóa mọi truy vấn của project đó; mở lại sẽ hỏi server. Sinh viên giữ cache như cũ |
+| 2 | Import đọc cả file vào bộ nhớ trước khi kiểm tra kích thước và đuôi file | Kiểm tra tên và kích thước (`preflightImportFile`) trước khi đọc; file Excel hoặc quá lớn không bao giờ được đọc |
+| 3 | Ô "Task quá hạn" ở Home ghi cứng "chưa có dữ liệu" trong khi T08 đã có số | Đổi thành "Issue quá hạn", cộng từ cùng công thức với T08 (kèm mẫu số và mốc tính); không issue nào có hạn chót thì vẫn là "Chưa có dữ liệu", không phải 0 |
+| 4 | Đóng tab hoặc refresh không hỏi khi form tạo lớp đã sửa | Thêm `beforeunload` khi form có thay đổi |
+| 5 | Scenario `teacher-empty` thu hồi lớp nhưng project của lớp vẫn mở được | Handler project cũng coi quyền giảng viên là bị thu hồi trong scenario này; thành viên nhóm không bị ảnh hưởng |
+| 6 | Nhiều liên kết nguồn cùng tên ("Trang nhóm") trỏ tới các nhóm khác nhau | Tên truy cập gồm tên nhóm, ví dụ "Trang nhóm (Team VISION, IT3090)" |
+
+Ghi chú kiểm tra: test cache (mục 1) ban đầu vẫn qua khi bỏ bản sửa vì client test không có
+`staleTime` 30 giây như app; đã chỉnh test dùng cấu hình giống app và xác nhận nó đỏ khi bỏ bản sửa.
+
+Lỗi có sẵn, không do thay đổi này: `MyWork.test.tsx` "surfaces overdue tasks…" sai khi chạy trong
+khoảng 00:00–12:00 giờ địa phương, vì `TaskRow.formatDue` làm tròn chênh lệch về 0 ngày cho task
+hạn "hôm qua 17:00" và không hiện "Quá hạn N ngày". Chưa sửa vì thuộc luồng My Work.
+
