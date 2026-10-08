@@ -9,6 +9,7 @@ import {
   buildTeacherTeamDetail,
   buildTeacherTeams,
 } from "@/mocks/data/teacherFlow";
+import { mockAnchorDate } from "@/mocks/data/studentFlow";
 import { coursesTaughtBy } from "@/mocks/data/relationships";
 import type { MockRepository } from "@/mocks/data/storage";
 import type { MockScenario } from "@/mocks/scenarios";
@@ -81,7 +82,7 @@ export function createTeacherFlowHandlers(
     http.get(`${ROOT}/courses`, ({ request }) =>
       guarded(request, null, (userId) => {
         const courses = taughtBy(userId).flatMap((courseId) => {
-          const summary = buildTeacherCourseSummary(courseId);
+          const summary = buildTeacherCourseSummary(courseId, scenario);
           return summary ? [summary] : [];
         });
         return HttpResponse.json({ courses });
@@ -90,7 +91,7 @@ export function createTeacherFlowHandlers(
 
     http.get(`${ROOT}/courses/:courseId`, ({ params, request }) =>
       guarded(request, String(params.courseId), () => {
-        const detail = buildTeacherCourseDetail(String(params.courseId));
+        const detail = buildTeacherCourseDetail(String(params.courseId), scenario);
         return detail
           ? HttpResponse.json(detail)
           : HttpResponse.json({ detail: "Không tìm thấy lớp học." }, { status: 404 });
@@ -120,7 +121,7 @@ export function createTeacherFlowHandlers(
         request,
         String(params.courseId),
         () => {
-          const detail = buildTeacherTeamDetail(String(params.courseId), String(params.teamId));
+          const detail = buildTeacherTeamDetail(String(params.courseId), String(params.teamId), scenario);
           // A team that is not in this (assigned) class answers like one that does not exist.
           return detail
             ? HttpResponse.json(detail)
@@ -136,8 +137,9 @@ export function createTeacherFlowHandlers(
         String(params.courseId),
         () =>
           HttpResponse.json({
-            teams: buildTeacherOversight(String(params.courseId)),
+            teams: buildTeacherOversight(String(params.courseId), scenario),
             staleAfterDays: STALE_AFTER_DAYS,
+            asOf: mockAnchorDate().toISOString(),
           }),
         { failsInPartialError: true },
       ),

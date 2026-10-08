@@ -13,6 +13,7 @@ import {
   TeacherQueryError,
   activityText,
   formatDate,
+  formatDateTime,
 } from "@/features/teacher/components/shared";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
 import type { TeacherOversightRow } from "@/lib/api/teacherFlow";
@@ -111,7 +112,7 @@ export function Component() {
     return <TeacherQueryError error={oversight.error} onRetry={() => void oversight.refetch()} />;
   }
 
-  const { teams, staleAfterDays } = oversight.data;
+  const { teams, staleAfterDays, asOf } = oversight.data;
   if (teams.length === 0) {
     return (
       <EmptyState
@@ -239,7 +240,7 @@ export function Component() {
                     <td className="min-w-56 px-4 py-3"><WorkCell row={row} /></td>
                     <td className="px-4 py-3 text-muted-foreground">{activityText(row.lastActivity)}</td>
                     <td className="min-w-56 px-4 py-3">
-                      <SignalList signals={row.signals} emptyText="Chưa phát hiện tín hiệu" />
+                      <SignalList signals={row.signals} emptyText="Chưa phát hiện tín hiệu" subject={row.name} />
                     </td>
                   </tr>
                 ))}
@@ -253,7 +254,7 @@ export function Component() {
                 <ProjectCell row={row} courseId={course.courseId} />
                 <WorkCell row={row} />
                 <p className="text-xs text-muted-foreground">{activityText(row.lastActivity)}</p>
-                <SignalList signals={row.signals} emptyText="Chưa phát hiện tín hiệu" />
+                <SignalList signals={row.signals} emptyText="Chưa phát hiện tín hiệu" subject={row.name} />
               </li>
             ))}
           </ul>
@@ -273,10 +274,13 @@ export function Component() {
           <li>Nhóm chưa có project, hoặc project chưa có dữ liệu để đo tiến độ.</li>
           <li>Không có cập nhật issue nào trong {staleAfterDays} ngày gần nhất.</li>
           <li>Nhóm có ít thành viên hơn mức tối thiểu của lớp ({course.teamSize.min}).</li>
+          <li>Project chưa gắn repository GitHub, hoặc kết nối đồng bộ GitHub bị mất.</li>
         </ul>
         <p>
           Tiến độ tính theo điểm Sprint đang chạy; nếu không có thì theo tỷ lệ issue hoàn thành.
-          Dữ liệu này là Demo MSW, chưa có commit/PR hay cảnh báo từ AI.
+          Tính tại {formatDateTime(asOf)}. Dữ liệu này là Demo MSW, chưa có cảnh báo từ AI. Mỗi
+          tín hiệu ghi loại vấn đề (thiếu dữ liệu, dữ liệu cũ, kết nối, chưa ánh xạ, cơ cấu nhóm) và
+          dẫn tới trang chứa dữ liệu gốc để bạn tự kiểm tra.
         </p>
         <Badge variant="outline" className="mt-1">
           Chỉ xem

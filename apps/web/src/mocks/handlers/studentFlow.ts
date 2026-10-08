@@ -72,8 +72,14 @@ function projectViewerOf(
   db: MockDatabase,
   userId: string,
   projectId: string,
+  scenario: MockScenario,
 ): MockProjectViewer | null {
   const viewer = projectViewerFor(userId, projectId);
+  // `teacher-empty` revokes every class assignment; project access follows the
+  // same assignments, so it is revoked too.
+  if (viewer?.kind === "course-instructor" && scenario === "teacher-empty") {
+    return null;
+  }
   if (viewer?.kind === "course-instructor" && !db.authUsersById[userId]?.roles?.includes("TEACHER")) {
     return null;
   }
@@ -336,7 +342,7 @@ export function createStudentFlowHandlers(
       const projectId = String(params.projectId);
       // Enforced demo permission: team members and instructors of the owning
       // class open a workspace. Access is checked BEFORE existence (R2).
-      const viewer = projectViewerOf(db, userId, projectId);
+      const viewer = projectViewerOf(db, userId, projectId, scenario);
       if (!viewer) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
@@ -355,7 +361,7 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: status === 403 ? FORBIDDEN_ERROR : SERVER_ERROR }, { status });
       }
       const projectId = String(params.projectId);
-      const viewer = projectViewerOf(db, userId, projectId);
+      const viewer = projectViewerOf(db, userId, projectId, scenario);
       if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
@@ -373,7 +379,7 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
       }
       const projectId = String(params.projectId);
-      const viewer = projectViewerOf(db, userId, projectId);
+      const viewer = projectViewerOf(db, userId, projectId, scenario);
       if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
@@ -519,7 +525,7 @@ export function createStudentFlowHandlers(
       const projectId = String(params.projectId);
       // Whoever can open the project but is not its leader (a member, or an
       // instructor) gets 403: the resource exists for them, the action does not.
-      const viewer = projectViewerOf(db, userId, projectId);
+      const viewer = projectViewerOf(db, userId, projectId, scenario);
       if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
@@ -550,7 +556,7 @@ export function createStudentFlowHandlers(
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       const projectId = String(params.projectId);
-      const viewer = projectViewerOf(db, userId, projectId);
+      const viewer = projectViewerOf(db, userId, projectId, scenario);
       if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
