@@ -117,6 +117,21 @@ Các giá trị sau do GitHub hoặc workflow cung cấp, không cấu hình th�
 
 Không đưa khóa SSH, token registry, khóa Django hoặc `.env` staging vào repository.
 
+`Configure SSH` ghi secret nguyên nội dung bằng `printf '%s\n'` như trước, rồi kiểm tra
+bằng `ssh-keygen -y -P ''` trước khi kết nối. Bước này không đổi CRLF, không chuyển đổi
+định dạng và không tự sửa secret. Public/private key và stderr chứa dữ liệu tùy ý không
+được in ra log. Nếu lỗi, workflow chỉ báo thông báo cố định tương ứng với lỗi OpenSSH
+(`error in libcrypto`, `incorrect passphrase` hoặc lỗi chưa xác định), rồi dừng.
+
+Trong [mã nguồn OpenSSH](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssherr.c),
+`error in libcrypto` là một mã lỗi chung, không xác định nguyên nhân CRLF hay dán thiếu
+khóa. [Tài liệu ssh-keygen](https://man.openbsd.org/ssh-keygen) mô tả kiểm tra private key
+bằng `-y`; `-P ''` thử đọc với passphrase rỗng để tránh prompt trong CI. Test trên khóa
+thử chỉ chứng minh bước kiểm tra hoạt động; nguyên nhân của secret thật phải được xác
+minh trên runner. Khóa có passphrase chưa được workflow hỗ trợ. Đọc được khóa chưa
+chứng minh VPS chấp nhận nó; nếu SSH vẫn trả `Permission denied`, tiếp tục kiểm tra
+user, khóa được cấp và cấu hình SSH phía VPS.
+
 ## Bảo vệ nhánh chính
 
 Trong cài đặt repository, bảo vệ `main` với các quy tắc sau:
