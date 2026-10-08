@@ -14,10 +14,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  # Add a service only when its code, tests, image and runtime dependencies exist.
+  STAGING_SERVICES: '["identity-service"]'
+
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
+      services: ${{ steps.services.outputs.services }}
+      release_matrix: ${{ steps.services.outputs.release_matrix }}
+      release_needed: ${{ steps.services.outputs.release_needed }}
+      web_ready: ${{ steps.services.outputs.web_ready }}
       shared: ${{ steps.filter.outputs.shared }}
       identity: ${{ steps.filter.outputs.identity }}
       work: ${{ steps.filter.outputs.work }}
@@ -36,6 +44,7 @@ jobs:
           filters: |
             shared:
               - '.github/workflows/**'
+              - 'scripts/tests/test_staging_deployment.py'
               - 'docker-compose.yml'
               - 'docker-compose.staging.yml'
               - '.env.example'
@@ -60,6 +69,8 @@ jobs:
             web:
               - 'apps/web/**'
             deployment:
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/release-staging.yml'
               - 'docker-compose.staging.yml'
               - 'infra/env/database.env'
               - 'infra/env/django.env'
@@ -74,13 +85,59 @@ jobs:
               - 'infra/nginx/nginx.conf'
               - 'infra/postgres/init-databases.sh'
               - 'datasets/**'
+      - name: Validate enabled services
+        id: services
+        env:
+          CHANGES: ${{ toJSON(steps.filter.outputs) }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          services = json.loads(os.environ["STAGING_SERVICES"])
+          aliases = {
+              "identity-service": "identity", "work-service": "work",
+              "classroom-service": "classroom", "integration-service": "integration",
+              "notification-service": "notification", "ai-service": "ai_image",
+          }
+          if (not isinstance(services, list) or not services
+                  or any(not isinstance(service, str) or service not in aliases for service in services)
+                  or len(services) != len(set(services)) or "identity-service" not in services):
+              raise SystemExit("STAGING_SERVICES must contain unique supported services, including Identity")
+          if "ai-service" in services and not {"work-service", "integration-service"} <= set(services):
+              raise SystemExit("AI requires enabled Work and Integration services")
+          for service in services:
+              for filename in ("pyproject.toml", "uv.lock", "Dockerfile"):
+                  if not (Path("apps") / service / filename).is_file():
+                      raise SystemExit(f"Enabled service {service} is missing {filename}")
+          web = Path("apps/web")
+          if web.exists() and not all((web / filename).is_file() for filename in ("package.json", "pnpm-lock.yaml")):
+              raise SystemExit("Web exists but is missing its package manifest or lockfile")
+          changes = json.loads(os.environ["CHANGES"])
+          matrix = {"include": [
+              {"service": service, "changed": changes.get(aliases[service]) == "true"
+               or changes.get("deployment") == "true"}
+              for service in services
+          ]}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"services={json.dumps(services)}\n")
+              output.write(f"release_matrix={json.dumps(matrix)}\n")
+              output.write(f"release_needed={str(any(item['changed'] for item in matrix['include'])).lower()}\n")
+              output.write(f"web_ready={str(web.exists()).lower()}\n")
+          PY
 
   compose-config:
     needs: changes
     if: needs.changes.outputs.shared == 'true'
     runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROFILES: ${{ join(fromJSON(needs.changes.outputs.services), ',') }}
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Test deployment configuration and failure handling
+        run: uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - name: Validate staging Compose
@@ -92,18 +149,12 @@ jobs:
       - name: Validate Nginx configuration
         run: |
           docker run --rm \
-            --add-host identity-service:127.0.0.1 \
-            --add-host work-service:127.0.0.1 \
-            --add-host classroom-service:127.0.0.1 \
-            --add-host integration-service:127.0.0.1 \
-            --add-host notification-service:127.0.0.1 \
-            --add-host ai-service:127.0.0.1 \
             -v "$GITHUB_WORKSPACE/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             nginx:1.27-alpine nginx -t
 
   identity-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.identity == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'identity-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.identity == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: identity-service
@@ -118,7 +169,7 @@ jobs:
 
   work-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.work == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'work-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.work == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: work-service
@@ -126,7 +177,7 @@ jobs:
 
   classroom-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.classroom == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'classroom-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.classroom == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: classroom-service
@@ -134,7 +185,7 @@ jobs:
 
   integration-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.integration == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'integration-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.integration == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: integration-service
@@ -142,7 +193,7 @@ jobs:
 
   notification-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.notification == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'notification-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.notification == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: notification-service
@@ -150,7 +201,7 @@ jobs:
 
   ai-service:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.ai == 'true'
+    if: contains(fromJSON(needs.changes.outputs.services), 'ai-service') && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.ai == 'true')
     uses: ./.github/workflows/python-service.yml
     with:
       service: ai-service
@@ -158,7 +209,7 @@ jobs:
 
   web:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web_ready == 'true' && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -197,25 +248,12 @@ jobs:
       needs.changes.result == 'success' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled') &&
-      (
-        needs.changes.outputs.identity == 'true' ||
-        needs.changes.outputs.work == 'true' ||
-        needs.changes.outputs.classroom == 'true' ||
-        needs.changes.outputs.integration == 'true' ||
-        needs.changes.outputs.notification == 'true' ||
-        needs.changes.outputs.ai_image == 'true' ||
-        needs.changes.outputs.deployment == 'true'
-      )
+      needs.changes.outputs.release_needed == 'true'
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/release-staging.yml
     with:
       source_sha: ${{ github.sha }}
-      identity_changed: ${{ needs.changes.outputs.identity == 'true' }}
-      work_changed: ${{ needs.changes.outputs.work == 'true' }}
-      classroom_changed: ${{ needs.changes.outputs.classroom == 'true' }}
-      integration_changed: ${{ needs.changes.outputs.integration == 'true' }}
-      notification_changed: ${{ needs.changes.outputs.notification == 'true' }}
-      ai_changed: ${{ needs.changes.outputs.ai_image == 'true' }}
+      services: ${{ needs.changes.outputs.release_matrix }}
     secrets: inherit

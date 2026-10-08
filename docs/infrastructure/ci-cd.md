@@ -4,7 +4,26 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 
 1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra service bị ảnh hưởng và cả Compose local/staging. Pull Request dựng image để kiểm tra Dockerfile; push lên `main` chỉ gọi phát hành sau khi các kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
-3. `release-staging.yml` dựng/đẩy image của service đổi; service không đổi được gắn thẻ SHA mới từ manifest `main`. Staging dùng riêng `docker-compose.staging.yml`, pull bộ sáu image theo SHA và chạy `up --no-build` qua SSH.
+3. `release-staging.yml` chỉ phát hành các service đang bật: dựng/đẩy image đổi, tái sử dụng manifest `main` cho image không đổi. Staging dùng riêng `docker-compose.staging.yml`, chạy migration rồi `up --no-build` qua SSH.
+
+## Phạm vi service đang triển khai
+
+Danh sách chuẩn nằm tại `env.STAGING_SERVICES` trong `ci.yml`, hiện là
+`["identity-service"]`. CI kiểm tra đủ `pyproject.toml`, `uv.lock`, Dockerfile của từng
+service được bật; thiếu đầu vào là lỗi, không tự bỏ qua để báo xanh. Service chưa bật
+không chạy job test/build, không xuất hiện trong matrix phát hành. Web chưa có source
+thì không chạy; khi có thư mục Web, thiếu manifest/lockfile cũng là lỗi.
+
+Khi thêm service, cập nhật danh sách này sau khi code/test và cấu hình runtime sẵn sàng,
+rồi khai báo dependency kiểm thử tại job tương ứng. AI còn yêu cầu Work và Integration
+cùng được bật. Job có lỗi hoặc bị hủy vẫn chặn release; job không được chọn có thể skipped.
+Chỉ thay đổi service chưa bật không kích hoạt release.
+
+Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
+profile cùng tên service; Kafka có profile `kafka`, chưa bật trong phạm vi hiện tại.
+Workflow cấp profile từ danh sách đang bật, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
+Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy để khởi động;
+backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
 
 `docker-compose.yml` dành cho local, có build context và port hỗ trợ phát triển.
 `docker-compose.staging.yml` là file độc lập dùng image đã phát hành, chỉ publish Nginx.
@@ -14,8 +33,8 @@ file mà không tạo một bộ dữ liệu khác. Không chạy cả hai stack
 
 Thay riêng Compose local chạy CI nhưng không kích hoạt deploy.
 Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datasets
-có thể kích hoạt release trên push `main`. Đổi workflow riêng vẫn chỉ kiểm CI như quy tắc
-phát hành hiện tại.
+có thể kích hoạt release trên push `main`. Đổi `ci.yml` hoặc `release-staging.yml` cũng
+kích hoạt release để áp dụng phạm vi/cách deploy mới và dựng image đang bật cho lần đầu.
 
 Workflow dùng chung nhận ba input tùy chọn từ job gọi trong `ci.yml`:
 
@@ -37,9 +56,8 @@ pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một
 Các job khác hiện dùng mặc định, không khởi tạo hai container. Khi service được triển
 khai, khai báo dependency và biến kiểm thử tại job của service đó trong `ci.yml` theo
 code/test thực tế; không cần sao chép workflow hoặc tạo môi trường staging cho test.
-Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` vẫn gọi
-cả sáu job, nên thay đổi file dùng chung có thể khiến các service chưa triển khai thất
-bại do thiếu đầu vào; cấu hình dependency không thay thế việc triển khai service.
+Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` kiểm tra
+các service đang bật; không dùng source thiếu của service chưa bật để chặn Identity.
 
 Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
 Không so với `contracts/api/identity.openapi.json` khi artifact này không được lưu trong
@@ -53,7 +71,18 @@ Chạy từ thư mục gốc repository:
 python scripts/ci_local.py
 ```
 
-Lệnh này kiểm tra Compose, Nginx, script PostgreSQL, lint/format/test của sáu service Python, lint/typecheck/test/build của Web và dựng Docker image. Dùng `python scripts/ci_local.py --skip-images` để bỏ qua bước dựng image khi cần vòng lặp nhanh hơn. GitHub Actions vẫn là bước kiểm tra bắt buộc trên remote; script local không đẩy image hoặc triển khai staging.
+Script này vẫn kiểm tra toàn bộ sáu service Python và Web, nên cần source của chúng;
+không phải lệnh kiểm tra riêng phạm vi staging hiện tại. GitHub Actions lọc theo
+`STAGING_SERVICES` như trên. Script local không đẩy image hoặc triển khai staging.
+
+Kiểm tra regression của cấu hình lựa chọn service và việc dừng deploy khi migration lỗi:
+
+```bash
+uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
+```
+
+Test shell deploy chạy trên Linux (cùng nền tảng runner). Kiểm tra cú pháp workflow bằng
+actionlint; kiểm tra Compose với `.env.example`, image prefix/tag mẫu và các profile đang bật.
 
 Khi chạy tests Identity trên máy local, chuẩn bị PostgreSQL có quyền tạo test database
 và Redis dành kiểm thử, rồi cấp các biến kết nối tương ứng. Script local không tự tạo
@@ -91,14 +120,14 @@ Trong cài đặt repository, bảo vệ `main` với các quy tắc sau:
 
 Máy staging cần Docker Engine/Compose plugin, `.env` tại `STAGING_WORKDIR` và khóa RSA
 riêng cho Identity. Dùng [.env.example](../../.env.example) làm mẫu rồi thay toàn bộ
-giá trị local bằng cấu hình staging, gồm secrets, domain, Kafka cluster ID và đường dẫn
+giá trị local của service đang bật bằng cấu hình staging, gồm secrets, domain và đường dẫn
 PEM. Workflow không upload/ghi đè `.env` hoặc file PEM.
 
-Workflow upload `docker-compose.staging.yml`, bộ ánh xạ dùng chung `infra/env/*.env`,
-Nginx, init PostgreSQL và datasets. Các biến Google/GitHub/R2/caller keys nếu dùng
+Workflow upload `docker-compose.staging.yml`, `.env.example`, bộ ánh xạ dùng chung `infra/env/*.env`,
+Nginx và init PostgreSQL; datasets chỉ upload khi AI được bật. Các biến Google/GitHub/R2/caller keys nếu dùng
 được cung cấp trong `.env` server, không đặt giá trị bí mật vào file ánh xạ tracked.
 
-Các biến runtime bắt buộc trong `.env` staging:
+Các biến runtime trong `.env` staging khi chỉ bật Identity:
 
 ```dotenv
 POSTGRES_USER=utask
@@ -110,19 +139,19 @@ POSTGRES_PORT=5432
 IDENTITY_DB_NAME=identity_db
 IDENTITY_DJANGO_SECRET_KEY=<secret>
 WORK_DB_NAME=work_db
-WORK_DJANGO_SECRET_KEY=<secret>
 CLASSROOM_DB_NAME=classroom_db
-CLASSROOM_DJANGO_SECRET_KEY=<secret>
 INTEGRATION_DB_NAME=integration_db
-INTEGRATION_DJANGO_SECRET_KEY=<secret>
 NOTIFICATION_DB_NAME=notification_db
-NOTIFICATION_DJANGO_SECRET_KEY=<secret>
 
 DJANGO_DEBUG=false
-DJANGO_ALLOWED_HOSTS=<staging-domain>,nginx,identity-service,work-service,classroom-service,integration-service,notification-service
-KAFKA_CLUSTER_ID=<kraft-cluster-id>
+DJANGO_ALLOWED_HOSTS=<staging-domain>,localhost,127.0.0.1,nginx,identity-service
 IDENTITY_JWT_PRIVATE_KEY_HOST_PATH=/etc/utask/secrets/identity-jwt-private.pem
 ```
+
+Tên database của app chưa bật vẫn được script PostgreSQL dùng để tạo database rỗng;
+không chạy Django migration hoặc truyền secret của app đó. Khi bật app Django khác,
+điền `<SERVICE>_DJANGO_SECRET_KEY` tương ứng trong cùng `.env`. Kafka cluster ID cần
+khi chủ động bật profile Kafka; việc đó không triển khai publisher/consumer của app.
 
 File PEM phải tồn tại và user trong container Identity (UID10001) đọc được; bind mount
 read-only không tự tạo đường dẫn còn thiếu. Không sinh khóa mặc định trên server khi deploy.
@@ -135,7 +164,9 @@ Compose staging không có fallback `utask:*:local`. Ví dụ lệnh trên serve
 ```bash
 docker compose -f docker-compose.staging.yml config --quiet
 docker compose -f docker-compose.staging.yml pull
-docker compose -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 120
+docker compose -f docker-compose.staging.yml up -d --no-build --wait postgres redis
+docker compose -f docker-compose.staging.yml run --rm --no-deps identity-service /app/.venv/bin/python manage.py migrate --noinput
+docker compose -f docker-compose.staging.yml up -d --no-build --wait --wait-timeout 120
 ```
 
 Không dùng `docker compose down -v` khi chuyển file. File Compose local cũ trên server
@@ -150,10 +181,25 @@ Pull Request → CI theo đường dẫn → merge vào main
                                   ↓
                     Environment staging gate (nếu cấu hình)
                                   ↓
-       SSH → staging Compose pull → up --no-build --wait
+       SSH → pull → PostgreSQL/Redis healthy → migrate → up --no-build --wait
+                                                     ↓
+                              migrate --check + healthz qua Nginx
 ```
 
-Mỗi service vẫn có image độc lập. Image thay đổi được gắn hai thẻ: `main` và `sha-<commit>`. Image không đổi giữ nguyên manifest và chỉ nhận thêm thẻ `sha-<commit>`, nhờ đó Compose vẫn triển khai một bộ sáu image đồng nhất theo cùng SHA mà không dựng lại service không liên quan. Thẻ `main` là nguồn hiện hành để tái sử dụng; nếu image này chưa tồn tại, phát hành dừng thay vì tạo kết quả giả.
+Mỗi service đang bật vẫn có image độc lập. Image thay đổi được gắn hai thẻ: `main` và
+`sha-<commit>`. Image không đổi giữ nguyên manifest và nhận thêm thẻ SHA. Thay cấu hình
+deploy sẽ dựng lại các image đang bật, nên lần triển khai đầu không cần image của app
+chưa làm. Nếu một image cần tái sử dụng chưa tồn tại, phát hành dừng.
+
+Workflow chạy `manage.py migrate --noinput` cho app Django đang bật (AI được bỏ qua),
+bằng `/app/.venv/bin/python`. Migration lỗi dừng trước bước khởi động app mới. Khi thêm
+service dùng framework hoặc lệnh khác, cập nhật bước chuẩn bị runtime tương ứng.
+Đây không phải bảo đảm zero downtime hay rollback database tự động. Bước cuối kiểm tra
+migration Identity và health qua gateway, không thay thế nghiệm thu mọi API.
+
+Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của
+service nằm ngoài phạm vi. Nếu thu hẹp danh sách, các container đã chạy trước đó phải
+được dừng riêng có chủ đích; bỏ profile không tự dừng chúng.
 
 Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ dừng với thông báo thiếu cấu hình; không có triển khai giả hoặc tự động bỏ qua lỗi.
 

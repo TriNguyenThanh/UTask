@@ -7,24 +7,10 @@ on:
         description: Commit SHA that passed continuous integration
         required: true
         type: string
-      identity_changed:
+      services:
+        description: Validated JSON matrix of enabled services and change flags.
         required: true
-        type: boolean
-      work_changed:
-        required: true
-        type: boolean
-      classroom_changed:
-        required: true
-        type: boolean
-      integration_changed:
-        required: true
-        type: boolean
-      notification_changed:
-        required: true
-        type: boolean
-      ai_changed:
-        required: true
-        type: boolean
+        type: string
 
 permissions:
   contents: read
@@ -42,20 +28,7 @@ jobs:
       packages: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - service: identity-service
-            changed: ${{ inputs.identity_changed }}
-          - service: work-service
-            changed: ${{ inputs.work_changed }}
-          - service: classroom-service
-            changed: ${{ inputs.classroom_changed }}
-          - service: integration-service
-            changed: ${{ inputs.integration_changed }}
-          - service: notification-service
-            changed: ${{ inputs.notification_changed }}
-          - service: ai-service
-            changed: ${{ inputs.ai_changed }}
+      matrix: ${{ fromJSON(inputs.services) }}
     steps:
       - name: Check out tested commit
         if: matrix.changed == true
@@ -123,6 +96,7 @@ jobs:
       # Deploy the exact release assembled from the tested commit. Changed
       # images are built; unchanged images reuse their existing manifests.
       STAGING_IMAGE_TAG: sha-${{ inputs.source_sha }}
+      STAGING_SERVICES: ${{ join(fromJSON(inputs.services).include.*.service, ' ') }}
     steps:
       - name: Check out tested deployment files
         uses: actions/checkout@v4
@@ -160,10 +134,13 @@ jobs:
             mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets"
           '
           scp docker-compose.staging.yml "$target:${STAGING_WORKDIR}/docker-compose.staging.yml"
+          scp .env.example "$target:${STAGING_WORKDIR}/.env.example"
           scp infra/env/database.env infra/env/django.env infra/env/postgres.env infra/env/kafka.env infra/env/identity-service.env infra/env/work-service.env infra/env/classroom-service.env infra/env/integration-service.env infra/env/notification-service.env infra/env/ai-service.env "$target:${STAGING_WORKDIR}/infra/env/"
           scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
           scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.conf"
-          scp -r datasets/* "$target:${STAGING_WORKDIR}/datasets/"
+          if [[ " $STAGING_SERVICES " == *" ai-service "* ]]; then
+            scp -r datasets/. "$target:${STAGING_WORKDIR}/datasets/"
+          fi
 
       - name: Pull images and restart staging
         shell: bash
@@ -177,6 +154,7 @@ jobs:
             printf '%s\n' "$STAGING_REGISTRY_USERNAME"
             printf '%s\n' "$STAGING_IMAGE_PREFIX"
             printf '%s\n' "$STAGING_IMAGE_TAG"
+            printf '%s\n' "$STAGING_SERVICES"
             cat <<'REMOTE_SCRIPT'
           set -euo pipefail
           printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
@@ -184,10 +162,30 @@ jobs:
           cd "$workdir"
           test -s .env || { echo "Missing staging .env on server" >&2; exit 1; }
           export UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag"
-          docker compose -f docker-compose.staging.yml config --quiet
-          docker compose -f docker-compose.staging.yml pull --quiet
-          docker compose -f docker-compose.staging.yml up -d --no-build --remove-orphans --wait --wait-timeout 120
-          docker compose -f docker-compose.staging.yml ps
+          read -r -a services <<< "$service_names"
+          export COMPOSE_PROFILES="${service_names// /,}"
+          profiles=()
+          for service in "${services[@]}"; do
+            case "$service" in
+              identity-service|work-service|classroom-service|integration-service|notification-service|ai-service) ;;
+              *) echo "Unsupported deploy service" >&2; exit 1 ;;
+            esac
+            profiles+=(--profile "$service")
+          done
+          compose=(docker compose --env-file .env -f docker-compose.staging.yml "${profiles[@]}")
+          "${compose[@]}" config --quiet
+          "${compose[@]}" pull --quiet
+          "${compose[@]}" up -d --no-build --wait --wait-timeout 120 postgres redis
+          for service in "${services[@]}"; do
+            case "$service" in
+              ai-service) continue ;;
+              *) "${compose[@]}" run --rm --no-deps "$service" /app/.venv/bin/python manage.py migrate --noinput ;;
+            esac
+          done
+          "${compose[@]}" up -d --no-build --wait --wait-timeout 120
+          "${compose[@]}" exec -T identity-service /app/.venv/bin/python manage.py migrate --check
+          "${compose[@]}" exec -T nginx wget -q -O /dev/null --header='Host: identity-service' http://localhost/api/auth/healthz
+          "${compose[@]}" ps
           REMOTE_SCRIPT
           } | ssh "$target" '
             IFS= read -r registry_token
@@ -196,6 +194,7 @@ jobs:
             IFS= read -r registry_user
             IFS= read -r image_prefix
             IFS= read -r image_tag
-            export registry_token workdir registry registry_user image_prefix image_tag
+            IFS= read -r service_names
+            export registry_token workdir registry registry_user image_prefix image_tag service_names
             bash -s
           '
