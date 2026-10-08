@@ -211,12 +211,12 @@ jobs:
           "${compose[@]}" up -d --no-build --wait --wait-timeout 120 postgres redis
           for service in "${services[@]}"; do
             if [[ " $migration_names " == *" $service "* ]]; then
-              "${compose[@]}" run --rm --no-deps "$service" /app/.venv/bin/python manage.py migrate --noinput
+              "${compose[@]}" run --rm --no-deps --interactive=false "$service" /app/.venv/bin/python manage.py migrate --noinput < /dev/null
             fi
           done
           "${compose[@]}" up -d --no-build --wait --wait-timeout 120
-          "${compose[@]}" exec -T identity-service /app/.venv/bin/python manage.py migrate --check
-          "${compose[@]}" exec -T nginx wget -q -O /dev/null --header='Host: identity-service' http://localhost/api/auth/healthz
+          "${compose[@]}" exec -T --interactive=false identity-service /app/.venv/bin/python manage.py migrate --check < /dev/null
+          "${compose[@]}" exec -T --interactive=false nginx wget -q -O /dev/null --header='Host: identity-service' http://localhost/api/auth/healthz < /dev/null
           "${compose[@]}" ps
           REMOTE_SCRIPT
           } | ssh "$target" '
