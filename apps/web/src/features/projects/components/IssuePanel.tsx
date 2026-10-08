@@ -1,3 +1,4 @@
+import { FeedbackComposer } from "@/features/teacher/components/FeedbackComposer";
 import {
   GitBranch,
   GitCommitHorizontal,
@@ -444,10 +445,7 @@ export function IssuePanel({
                     Bình luận (Comments)
                   </h3>
                   {readOnly ? (
-                    <p className="text-xs text-muted-foreground">
-                      Bạn đang xem bình luận. Gửi bình luận sẽ khả dụng khi có hợp đồng API cho phản hồi
-                      của giảng viên.
-                    </p>
+                    <FeedbackComposer scope={`task.${projectId}.${issueKey}`} label="Soạn bình luận cho task (nháp)" />
                   ) : null}
                   {detail.comments.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Chưa có bình luận nào.</p>

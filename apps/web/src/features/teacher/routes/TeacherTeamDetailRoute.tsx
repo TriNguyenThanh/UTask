@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackComposer } from "@/features/teacher/components/FeedbackComposer";
 import {
   PersonAvatar,
   ProgressMeter,
@@ -129,6 +130,33 @@ function GitHubSection({ projectId }: { projectId: string }) {
   );
 }
 
+/**
+ * Feedback to the team. Reading history needs a source that does not exist
+ * yet, so it says so; writing is a draft only. Nothing here changes tasks,
+ * deadlines or assignees.
+ */
+function FeedbackSection({ detail }: { detail: TeacherTeamDetail }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Phản hồi cho nhóm</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Lịch sử phản hồi</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Chưa có phản hồi nào để hiển thị: chưa có API phản hồi nên lịch sử chưa có nguồn dữ liệu.
+          </p>
+        </div>
+        <FeedbackComposer
+          scope={`team.${detail.team.courseId}.${detail.team.teamId}`}
+          label="Soạn phản hồi cho nhóm (nháp)"
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 function TeamBody({ detail }: { detail: TeacherTeamDetail }) {
   const { project } = detail;
   const overdue = detail.overdue;
@@ -138,7 +166,7 @@ function TeamBody({ detail }: { detail: TeacherTeamDetail }) {
       {detail.signals.length > 0 ? (
         <section aria-label="Tín hiệu cần chú ý" className="space-y-2">
           <h2 className="text-sm font-semibold">Tín hiệu cần chú ý</h2>
-          <SignalList signals={detail.signals} />
+          <SignalList signals={detail.signals} subject={detail.team.name} />
         </section>
       ) : null}
 
@@ -214,6 +242,8 @@ function TeamBody({ detail }: { detail: TeacherTeamDetail }) {
         </Card>
       </div>
 
+      {project ? null : <FeedbackSection detail={detail} />}
+
       {project ? (
         <>
           <Card>
@@ -252,6 +282,8 @@ function TeamBody({ detail }: { detail: TeacherTeamDetail }) {
           </Card>
 
           <GitHubSection projectId={project.projectId} />
+
+          <FeedbackSection detail={detail} />
 
           <Card>
             <CardHeader>

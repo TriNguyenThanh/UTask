@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { TeamAdjustDialog } from "@/features/teacher/components/TeamAdjustDialog";
 import {
-  DisabledAction,
   PersonAvatar,
   ProgressMeter,
   StatCard,
@@ -220,9 +220,7 @@ function TeamsPanel({ courseId }: { courseId: string }) {
             />
           </div>
         </div>
-        <DisabledAction reason="Tạo nhóm thủ công sẽ khả dụng sau khi có quy định điều chỉnh nhóm.">
-          Tạo nhóm thủ công
-        </DisabledAction>
+        <TeamAdjustDialog />
       </div>
 
       <div role="group" aria-label="Lọc nhóm" className="flex flex-wrap gap-1.5">
@@ -285,8 +283,8 @@ export function Component() {
       <TeamsPanel courseId={course.courseId} />
 
       <p className="text-xs text-muted-foreground">
-        Chuyển thành viên, phân nhóm và chỉ định Leader sẽ khả dụng ở giai đoạn sau; bạn chỉ xem
-        nhóm và workspace của nhóm.
+        Điều chỉnh nhóm hiện chỉ kiểm tra và xem trước; việc áp dụng sẽ khả dụng khi có hợp đồng API
+        và chính sách về sĩ số, Leader thay thế và quyền xem lịch sử.
       </p>
     </div>
   );
