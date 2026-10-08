@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .common import Intent, StrictModel
 
@@ -44,6 +44,12 @@ class AnalysisWindow(StrictModel):
     from_: datetime = Field(alias="from")
     to: datetime
 
+    @model_validator(mode="after")
+    def valid_range(self):
+        if self.from_.tzinfo is None or self.to.tzinfo is None or self.from_ > self.to:
+            raise ValueError("analysis_window phải có múi giờ và from <= to")
+        return self
+
 
 class RiskAnalysisInput(StrictModel):
     analysis_window: AnalysisWindow | None = None
@@ -56,21 +62,39 @@ class BacklogGenerationRequest(StrictModel):
     intent: Literal[Intent.BACKLOG_GENERATION]
     target: ProjectTarget | None = None
     input: BacklogInput
-    output_schema_version: str = "backlog_generation.v1"
+    output_schema_version: Literal["backlog_generation.v1", "current"] = "backlog_generation.v1"
+
+    @model_validator(mode="after")
+    def normalize_version(self):
+        if self.output_schema_version == "current":
+            self.output_schema_version = f"{self.intent}.v1"
+        return self
 
 
 class TaskDecompositionRequest(StrictModel):
     intent: Literal[Intent.TASK_DECOMPOSITION]
     target: TaskTarget
     input: TaskDecompositionInput
-    output_schema_version: str = "task_decomposition.v1"
+    output_schema_version: Literal["task_decomposition.v1", "current"] = "task_decomposition.v1"
+
+    @model_validator(mode="after")
+    def normalize_version(self):
+        if self.output_schema_version == "current":
+            self.output_schema_version = f"{self.intent}.v1"
+        return self
 
 
 class RiskAnalysisRequest(StrictModel):
     intent: Literal[Intent.RISK_ANALYSIS]
     target: ProjectTarget | SprintTarget
     input: RiskAnalysisInput
-    output_schema_version: str = "risk_analysis.v1"
+    output_schema_version: Literal["risk_analysis.v1", "current"] = "risk_analysis.v1"
+
+    @model_validator(mode="after")
+    def normalize_version(self):
+        if self.output_schema_version == "current":
+            self.output_schema_version = f"{self.intent}.v1"
+        return self
 
 
 CreateAiRequest = Annotated[

@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   description: |
     Hợp đồng API mục tiêu cho AI Service giai đoạn 1. Hợp đồng đã chốt thiết kế
-    nhưng AI Service chưa có implementation runtime.
-  x-utask-status: designed-not-implemented
+    với API, PostgreSQL, Redis/Celery và ADK runtime; integration domain cần cấu hình.
+  x-utask-status: partially-implemented
   x-utask-owner: ai-service
 servers:
   - url: /
@@ -238,6 +238,7 @@ components:
           description: Chỉ nhận phiên bản được service hỗ trợ.
 
     BacklogGenerationRequest:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/RequestCommon'
         - type: object
@@ -251,6 +252,7 @@ components:
           required: [intent, input]
 
     TaskDecompositionRequest:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/RequestCommon'
         - type: object
@@ -264,6 +266,7 @@ components:
           required: [intent, target, input]
 
     RiskAnalysisRequest:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/RequestCommon'
         - type: object
@@ -573,7 +576,6 @@ components:
 
     AiResponseBase:
       type: object
-      additionalProperties: false
       required: [request_id, intent, status, output_schema_version, created_at]
       properties:
         request_id:
@@ -593,6 +595,7 @@ components:
           format: date-time
 
     SucceededAiResponse:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/AiResponseBase'
         - type: object
@@ -609,6 +612,7 @@ components:
               format: date-time
 
     QueuedAiResponse:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/AiResponseBase'
         - type: object
@@ -628,6 +632,7 @@ components:
         - $ref: '#/components/schemas/FailedAiResponse'
 
     RunningAiResponse:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/AiResponseBase'
         - type: object
@@ -639,6 +644,7 @@ components:
               $ref: '#/components/schemas/ContextMetadata'
 
     FailedAiResponse:
+      unevaluatedProperties: false
       allOf:
         - $ref: '#/components/schemas/AiResponseBase'
         - type: object
