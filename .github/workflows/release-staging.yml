@@ -11,21 +11,40 @@ on:
         description: Validated JSON matrix of enabled services and change flags.
         required: true
         type: string
+      migration_services:
+        description: Space-separated Django services discovered from project dependencies.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ghcr.io/${{ github.repository_owner }}/utask
 
 jobs:
+  image-config:
+    runs-on: ubuntu-latest
+    outputs:
+      namespace: ${{ steps.namespace.outputs.namespace }}
+    steps:
+      - name: Normalize image namespace
+        id: namespace
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          printf 'namespace=ghcr.io/%s/utask\n' "${REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
   publish-images:
+    needs: image-config
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAMESPACE: ${{ needs.image-config.outputs.namespace }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.services) }}
@@ -72,7 +91,7 @@ jobs:
             "${IMAGE}:main"
 
   deploy-staging:
-    needs: publish-images
+    needs: [image-config, publish-images]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -92,11 +111,12 @@ jobs:
       STAGING_REGISTRY_USERNAME: ${{ secrets.STAGING_REGISTRY_USERNAME }}
       STAGING_REGISTRY_TOKEN: ${{ secrets.STAGING_REGISTRY_TOKEN }}
       STAGING_REGISTRY: ghcr.io
-      STAGING_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/utask
+      STAGING_IMAGE_PREFIX: ${{ needs.image-config.outputs.namespace }}
       # Deploy the exact release assembled from the tested commit. Changed
       # images are built; unchanged images reuse their existing manifests.
       STAGING_IMAGE_TAG: sha-${{ inputs.source_sha }}
       STAGING_SERVICES: ${{ join(fromJSON(inputs.services).include.*.service, ' ') }}
+      STAGING_MIGRATION_SERVICES: ${{ inputs.migration_services }}
     steps:
       - name: Check out tested deployment files
         uses: actions/checkout@v4
@@ -135,7 +155,7 @@ jobs:
           '
           scp docker-compose.staging.yml "$target:${STAGING_WORKDIR}/docker-compose.staging.yml"
           scp .env.example "$target:${STAGING_WORKDIR}/.env.example"
-          scp infra/env/database.env infra/env/django.env infra/env/postgres.env infra/env/kafka.env infra/env/identity-service.env infra/env/work-service.env infra/env/classroom-service.env infra/env/integration-service.env infra/env/notification-service.env infra/env/ai-service.env "$target:${STAGING_WORKDIR}/infra/env/"
+          scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"
           scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
           scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.conf"
           if [[ " $STAGING_SERVICES " == *" ai-service "* ]]; then
@@ -155,6 +175,7 @@ jobs:
             printf '%s\n' "$STAGING_IMAGE_PREFIX"
             printf '%s\n' "$STAGING_IMAGE_TAG"
             printf '%s\n' "$STAGING_SERVICES"
+            printf '%s\n' "$STAGING_MIGRATION_SERVICES"
             cat <<'REMOTE_SCRIPT'
           set -euo pipefail
           printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
@@ -166,10 +187,7 @@ jobs:
           export COMPOSE_PROFILES="${service_names// /,}"
           profiles=()
           for service in "${services[@]}"; do
-            case "$service" in
-              identity-service|work-service|classroom-service|integration-service|notification-service|ai-service) ;;
-              *) echo "Unsupported deploy service" >&2; exit 1 ;;
-            esac
+            [[ "$service" =~ ^[a-z][a-z0-9-]*-service$ ]] || { echo "Invalid deploy service name" >&2; exit 1; }
             profiles+=(--profile "$service")
           done
           compose=(docker compose --env-file .env -f docker-compose.staging.yml "${profiles[@]}")
@@ -177,10 +195,9 @@ jobs:
           "${compose[@]}" pull --quiet
           "${compose[@]}" up -d --no-build --wait --wait-timeout 120 postgres redis
           for service in "${services[@]}"; do
-            case "$service" in
-              ai-service) continue ;;
-              *) "${compose[@]}" run --rm --no-deps "$service" /app/.venv/bin/python manage.py migrate --noinput ;;
-            esac
+            if [[ " $migration_names " == *" $service "* ]]; then
+              "${compose[@]}" run --rm --no-deps "$service" /app/.venv/bin/python manage.py migrate --noinput
+            fi
           done
           "${compose[@]}" up -d --no-build --wait --wait-timeout 120
           "${compose[@]}" exec -T identity-service /app/.venv/bin/python manage.py migrate --check
@@ -195,6 +212,7 @@ jobs:
             IFS= read -r image_prefix
             IFS= read -r image_tag
             IFS= read -r service_names
-            export registry_token workdir registry registry_user image_prefix image_tag service_names
+            IFS= read -r migration_names
+            export registry_token workdir registry registry_user image_prefix image_tag service_names migration_names
             bash -s
           '

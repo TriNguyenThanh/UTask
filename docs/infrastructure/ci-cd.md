@@ -8,20 +8,29 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 
 ## Phạm vi service đang triển khai
 
-Danh sách chuẩn nằm tại `env.STAGING_SERVICES` trong `ci.yml`, hiện là
-`["identity-service"]`. CI kiểm tra đủ `pyproject.toml`, `uv.lock`, Dockerfile của từng
-service được bật; thiếu đầu vào là lỗi, không tự bỏ qua để báo xanh. Service chưa bật
-không chạy job test/build, không xuất hiện trong matrix phát hành. Web chưa có source
-thì không chạy; khi có thư mục Web, thiếu manifest/lockfile cũng là lỗi.
+CI và script local dùng `scripts/discover_services.py` để tự nhận diện thư mục trực
+tiếp trong `apps/` có đủ `pyproject.toml`, `uv.lock` và Dockerfile. Hiện nhận diện
+Identity; không còn danh sách `STAGING_SERVICES` phải sửa tay trong workflow. Thư mục
+chỉ có README được bỏ qua. Có một phần đầu vào thì báo lỗi thiếu file, không bỏ qua để
+báo xanh. Kết quả nhận diện là đầu vào build/test, chưa phải xác nhận tính năng hoàn thiện.
 
-Khi thêm service, cập nhật danh sách này sau khi code/test và cấu hình runtime sẵn sàng,
-rồi khai báo dependency kiểm thử tại job tương ứng. AI còn yêu cầu Work và Integration
-cùng được bật. Job có lỗi hoặc bị hủy vẫn chặn release; job không được chọn có thể skipped.
-Chỉ thay đổi service chưa bật không kích hoạt release.
+Mỗi service phải có cấu hình trong Compose staging; app ngoài Identity dùng profile
+cùng tên service. Dependency `depends_on` phải tồn tại; nếu phụ thuộc app chưa có code
+thì CI dừng. Đây là cấu hình runtime vốn phải khai báo khi thêm service, không phải danh
+sách bật CI thứ hai. Web chưa có source thì không chạy; khi có thư mục Web, thiếu
+manifest/lockfile cũng là lỗi.
+
+Workflow tự tạo matrix cho service bị thay đổi hoặc bị ảnh hưởng bởi cấu hình chung,
+không cần thêm job/path filter cho từng service. PostgreSQL/Redis dành test được chọn
+từ dependency Compose; biến test riêng đặt tại `x-ci.test_env` của service trong Compose
+(chỉ chứa giá trị kiểm thử, không chứa secret thật). Các dependency khác cần hỗ trợ
+kiểm thử thực tế; nhận diện thư mục không tự dựng broker/provider hoặc service bên ngoài.
+Job lỗi hoặc bị hủy vẫn chặn release. Thay đổi scaffolding chưa triển khai không kích
+hoạt release. Django được nhận diện từ dependency trong `pyproject.toml` để chọn migration.
 
 Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
 profile cùng tên service; Kafka có profile `kafka`, chưa bật trong phạm vi hiện tại.
-Workflow cấp profile từ danh sách đang bật, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
+Workflow cấp profile từ kết quả nhận diện, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
 Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy để khởi động;
 backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
 
@@ -53,9 +62,9 @@ Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME
 pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một bước
 `uv run pytest`, không rẽ nhánh theo tên service.
 
-Các job khác hiện dùng mặc định, không khởi tạo hai container. Khi service được triển
-khai, khai báo dependency và biến kiểm thử tại job của service đó trong `ci.yml` theo
-code/test thực tế; không cần sao chép workflow hoặc tạo môi trường staging cho test.
+Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Nếu cần biến test
+khác với quy ước chung, khai báo `x-ci.test_env` cạnh service, không cần sao chép workflow
+hoặc tạo môi trường staging cho test.
 Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` kiểm tra
 các service đang bật; không dùng source thiếu của service chưa bật để chặn Identity.
 
@@ -71,9 +80,10 @@ Chạy từ thư mục gốc repository:
 python scripts/ci_local.py
 ```
 
-Script này vẫn kiểm tra toàn bộ sáu service Python và Web, nên cần source của chúng;
-không phải lệnh kiểm tra riêng phạm vi staging hiện tại. GitHub Actions lọc theo
-`STAGING_SERVICES` như trên. Script local không đẩy image hoặc triển khai staging.
+Script tự nhận diện service bằng cùng hàm với GitHub Actions, kiểm tra tất cả service
+đã có đầu vào trên máy và chỉ kiểm tra Web nếu có source. Kết nối PostgreSQL/Redis local
+được cấp qua biến môi trường của người chạy; các giá trị này ưu tiên hơn mẫu kết nối CI.
+Script không đẩy image hoặc triển khai staging. `--skip-images` bỏ bước build image.
 
 Kiểm tra regression của cấu hình lựa chọn service và việc dừng deploy khi migration lỗi:
 
@@ -191,15 +201,27 @@ Mỗi service đang bật vẫn có image độc lập. Image thay đổi đư�
 deploy sẽ dựng lại các image đang bật, nên lần triển khai đầu không cần image của app
 chưa làm. Nếu một image cần tái sử dụng chưa tồn tại, phát hành dừng.
 
-Workflow chạy `manage.py migrate --noinput` cho app Django đang bật (AI được bỏ qua),
-bằng `/app/.venv/bin/python`. Migration lỗi dừng trước bước khởi động app mới. Khi thêm
+Namespace GHCR luôn chuyển owner repository về chữ thường, ví dụ
+`TriNguyenThanh` → `ghcr.io/tringuyenthanh/utask`. Workflow phát hành tính namespace
+một lần, dùng chung khi publish, tái sử dụng image và deploy. Bước kiểm tra Compose
+cũng chuẩn hóa cùng quy tắc; tên hiển thị tài khoản GitHub không cần đổi.
+
+Workflow chạy `manage.py migrate --noinput` cho app có dependency Django được nhận diện,
+bằng `/app/.venv/bin/python`. App không có Django không bị ép chạy lệnh Django.
+Migration lỗi dừng trước bước khởi động app mới. Khi thêm
 service dùng framework hoặc lệnh khác, cập nhật bước chuẩn bị runtime tương ứng.
 Đây không phải bảo đảm zero downtime hay rollback database tự động. Bước cuối kiểm tra
 migration Identity và health qua gateway, không thay thế nghiệm thu mọi API.
 
 Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của
 service nằm ngoài phạm vi. Nếu thu hẹp danh sách, các container đã chạy trước đó phải
-được dừng riêng có chủ đích; bỏ profile không tự dừng chúng.
+được dừng riêng có chủ đích; bỏ profile hoặc source không tự dừng chúng.
+
+Job kiểm tra Python dùng matrix `Check <service>`. Check tổng hợp có tên cố định
+`CI result`, thất bại nếu nhận diện hoặc bất kỳ job được chọn nào lỗi/bị hủy; release
+phải chờ check này thành công. Khi đổi từ cấu hình cũ, quản trị repository chọn
+`CI result` làm required check một lần trên GitHub, không phải thêm tên check mỗi khi
+có service mới. Thay file workflow không tự đổi branch protection.
 
 Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ dừng với thông báo thiếu cấu hình; không có triển khai giả hoặc tự động bỏ qua lỗi.
 

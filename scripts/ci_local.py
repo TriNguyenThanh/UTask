@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -10,14 +11,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COREPACK = "corepack.cmd" if os.name == "nt" else "corepack"
-PYTHON_SERVICES = (
-    "identity-service",
-    "work-service",
-    "classroom-service",
-    "integration-service",
-    "notification-service",
-    "ai-service",
-)
 
 
 def run(
@@ -59,7 +52,28 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    require_commands(["docker", "uv", COREPACK, "sh"])
+    require_commands(["docker", "uv", "sh"])
+    discovery = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            "apps/identity-service",
+            "--locked",
+            "python",
+            "scripts/discover_services.py",
+        ],
+        cwd=ROOT,
+        env={**os.environ, "SHARED_CHANGED": "true"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if discovery.returncode:
+        raise SystemExit(discovery.stderr)
+    detected = json.loads(discovery.stdout)
+    if detected["web_ready"]:
+        require_commands([COREPACK])
 
     ci_env = os.environ.copy()
     ci_env.update(
@@ -90,6 +104,7 @@ def main() -> None:
             **os.environ,
             "UTASK_IMAGE_PREFIX": "ghcr.io/utask-ci/utask",
             "UTASK_IMAGE_TAG": "sha-" + "0" * 40,
+            "COMPOSE_PROFILES": ",".join(detected["services"]),
         },
     )
     run(
@@ -103,18 +118,6 @@ def main() -> None:
             "docker",
             "run",
             "--rm",
-            "--add-host",
-            "identity-service:127.0.0.1",
-            "--add-host",
-            "work-service:127.0.0.1",
-            "--add-host",
-            "classroom-service:127.0.0.1",
-            "--add-host",
-            "integration-service:127.0.0.1",
-            "--add-host",
-            "notification-service:127.0.0.1",
-            "--add-host",
-            "ai-service:127.0.0.1",
             "--mount",
             f"type=bind,source={nginx_config},target=/etc/nginx/nginx.conf,readonly",
             "nginx:1.27-alpine",
@@ -123,48 +126,51 @@ def main() -> None:
         ],
     )
 
-    for service in PYTHON_SERVICES:
+    for check in detected["checks"]["include"]:
+        service = check["service"]
+        service_env = {**json.loads(check["test_env"]), **ci_env}
         service_dir = ROOT / "apps" / service
         run(
             f"Install locked dependencies for {service}",
             ["uv", "sync", "--all-groups", "--locked"],
             cwd=service_dir,
-            env=ci_env,
+            env=service_env,
         )
         run(
             f"Ruff lint for {service}",
             ["uv", "run", "ruff", "check", "."],
             cwd=service_dir,
-            env=ci_env,
+            env=service_env,
         )
         run(
             f"Ruff format check for {service}",
             ["uv", "run", "ruff", "format", "--check", "."],
             cwd=service_dir,
-            env=ci_env,
+            env=service_env,
         )
         run(
             f"Pytest for {service}",
             ["uv", "run", "pytest"],
             cwd=service_dir,
-            env=ci_env,
+            env=service_env,
         )
 
-    web_dir = ROOT / "apps" / "web"
-    run(
-        "Install locked Web dependencies",
-        [COREPACK, "pnpm", "install", "--frozen-lockfile"],
-        cwd=web_dir,
-    )
-    run("Web lint", [COREPACK, "pnpm", "lint"], cwd=web_dir)
-    run("Web typecheck", [COREPACK, "pnpm", "typecheck"], cwd=web_dir)
-    run("Web tests", [COREPACK, "pnpm", "test"], cwd=web_dir)
-    run("Web production build", [COREPACK, "pnpm", "build"], cwd=web_dir)
+    if detected["web_ready"]:
+        web_dir = ROOT / "apps" / "web"
+        run(
+            "Install locked Web dependencies",
+            [COREPACK, "pnpm", "install", "--frozen-lockfile"],
+            cwd=web_dir,
+        )
+        run("Web lint", [COREPACK, "pnpm", "lint"], cwd=web_dir)
+        run("Web typecheck", [COREPACK, "pnpm", "typecheck"], cwd=web_dir)
+        run("Web tests", [COREPACK, "pnpm", "test"], cwd=web_dir)
+        run("Web production build", [COREPACK, "pnpm", "build"], cwd=web_dir)
 
     if args.skip_images:
         print("\n[local-ci] Docker image builds skipped.", flush=True)
     else:
-        for service in PYTHON_SERVICES:
+        for service in detected["services"]:
             run(
                 f"Build Docker image for {service}",
                 [

@@ -46,6 +46,10 @@ services:
       start_period: 15s
 
   identity-service:
+    x-ci:
+      test_env:
+        IDENTITY_TEST_DB_NAME: test_identity_ci
+        IDENTITY_TEST_REDIS_URL: redis://127.0.0.1:6379/15
     image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/identity-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
     restart: unless-stopped
     env_file:
