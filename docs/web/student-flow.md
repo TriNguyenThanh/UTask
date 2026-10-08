@@ -50,6 +50,17 @@ backend), **Chưa triển khai** (nút bị vô hiệu hóa hoặc chưa có).
   user: hồ sơ, nhóm đã tạo, thông báo đã đọc, trạng thái ngắt GitHub, cấu
   hình AI key. Tạo nhóm validate thành viên, hạn chót, tên, sĩ số; lần hai
   trả 409. AI key chỉ lưu provider + keyHint (không lưu key gốc).
+- **Demo MSW**: Graph này nay còn ghi giảng viên phụ trách từng lớp, nhóm thuộc
+  lớp nào và thành viên từng nhóm; tên, MSSV, email, sĩ số tối đa và mã tham gia
+  nằm ở `mocks/data/directory.ts`. Roster nhóm, `classSize`, tên nhóm, tên giảng
+  viên và danh sách "chưa có nhóm" của IT3090 được dẫn xuất từ đó, cùng nguồn với
+  màn của giảng viên ([teacher-flow.md](teacher-flow.md#13-kết-quả-phase-1)).
+- **Demo MSW**: Chính sách lỗi của mock: môn, project, issue, code, settings,
+  tạo nhóm hoặc thông báo **ngoài quyền** trả 404 giống hệt "không tồn tại"; 403
+  chỉ dành cho người đã mở được tài nguyên nhưng thiếu quyền hành động (Member
+  mở settings project). Role giảng viên không mở được các endpoint Student.
+  Thông báo cấp lớp chỉ hiện cho sinh viên ghi danh hoặc giảng viên phụ trách lớp
+  đó; danh sách, đánh dấu đã đọc và đánh dấu tất cả dùng cùng một phạm vi.
 - Mock không thay thế backend: service thật vẫn phải tự enforce quyền.
 - Giản lược mock (cần biết khi so sánh với backend): NEXUS có 2 leader
   (tài khoản leader và SV01) để cả hai tài khoản đều demo được luồng

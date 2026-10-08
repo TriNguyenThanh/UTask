@@ -168,7 +168,7 @@ describe("mock layer permission enforcement", () => {
           "Bearer mock-access:00000000-0000-4000-8000-000000000099:test",
       },
     });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
   });
 
   it("returns 403 when a member reads or writes project AI settings", async () => {

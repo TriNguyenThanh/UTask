@@ -4,6 +4,9 @@ import type { MockScenario } from "@/mocks/scenarios";
 export const LEADER_ID = "00000000-0000-4000-8000-000000000001";
 export const MEMBER_ID = "00000000-0000-4000-8000-000000000002";
 export const STUDENT_ID = "00000000-0000-4000-8000-000000000003";
+/** Teacher accounts use the 0xf* range, disjoint from every fixture student id. */
+export const TEACHER_ID = "00000000-0000-4000-8000-0000000000f1";
+export const TEACHER2_ID = "00000000-0000-4000-8000-0000000000f2";
 
 export const DEMO_PASSWORD = "demo1234";
 
@@ -14,6 +17,7 @@ export const MOCK_USERS: AuthUser[] = [
     display_name: "Nguyễn Hoàng Nam",
     global_role: "USER",
     capabilities: ["project:create"],
+    roles: ["STUDENT"],
   },
   {
     id: MEMBER_ID,
@@ -21,6 +25,7 @@ export const MOCK_USERS: AuthUser[] = [
     display_name: "Đặng Thảo Linh",
     global_role: "USER",
     capabilities: [],
+    roles: ["STUDENT"],
   },
   {
     id: STUDENT_ID,
@@ -28,6 +33,23 @@ export const MOCK_USERS: AuthUser[] = [
     display_name: "Lê Minh Khoa",
     global_role: "USER",
     capabilities: [],
+    roles: ["STUDENT"],
+  },
+  {
+    id: TEACHER_ID,
+    email: "teacher@utask.test",
+    display_name: "TS. Trần Minh Đức",
+    global_role: "USER",
+    capabilities: [],
+    roles: ["TEACHER"],
+  },
+  {
+    id: TEACHER2_ID,
+    email: "teacher2@utask.test",
+    display_name: "ThS. Lê Thị Mai",
+    global_role: "USER",
+    capabilities: [],
+    roles: ["TEACHER"],
   },
 ];
 
@@ -49,6 +71,7 @@ function profile(
   display_name: string,
   email: string,
   student_id: string,
+  faculty: string = "Khoa Công nghệ Phần mềm • Trường ĐH CNTT",
 ): MockProfileRecord {
   return {
     user_id,
@@ -57,7 +80,7 @@ function profile(
     student_id,
     full_name: display_name,
     cohort_class: "K21-CNPM-02",
-    faculty: "Khoa Công nghệ Phần mềm • Trường ĐH CNTT",
+    faculty,
     phone: "0987 654 321",
     updated_at: new Date().toISOString(),
   };
@@ -105,6 +128,8 @@ export function createInitialDatabase(_scenario: MockScenario): MockDatabase {
       [LEADER_ID]: profile(LEADER_ID, "Nguyễn Hoàng Nam", "leader@utask.test", "21120015"),
       [MEMBER_ID]: profile(MEMBER_ID, "Đặng Thảo Linh", "member@utask.test", "21020872"),
       [STUDENT_ID]: profile(STUDENT_ID, "Lê Minh Khoa", "student@utask.test", "21020999"),
+      [TEACHER_ID]: profile(TEACHER_ID, "TS. Trần Minh Đức", "teacher@utask.test", "GV01", "Khoa Công nghệ Phần mềm • Trường ĐH CNTT"),
+      [TEACHER2_ID]: profile(TEACHER2_ID, "ThS. Lê Thị Mai", "teacher2@utask.test", "GV02", "Khoa Khoa học Máy tính • Trường ĐH CNTT"),
     },
     authUsersById: Object.fromEntries(MOCK_USERS.map((user) => [user.id, user])),
     createdTeams: {},

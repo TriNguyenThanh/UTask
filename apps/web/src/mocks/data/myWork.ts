@@ -5,13 +5,25 @@ import type {
   MyTask,
   MyWorkOverview,
 } from "@/features/my-work/types";
+import { MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
 import {
   MOCK_TEAM_PROJECTS,
   assignmentFor,
   enrolledCoursesFor,
+  ownerInstructorId,
   pendingRequestFor,
   projectRoleForUser,
 } from "@/mocks/data/relationships";
+
+/** Lecturer shown on Home sprint cards: the class owner from the graph. */
+function lecturerOf(courseId: string): string {
+  const ownerId = ownerInstructorId(courseId);
+  return (ownerId && MOCK_PEOPLE[ownerId]?.displayName) || "Chưa phân công";
+}
+
+function teamLabel(teamId: string): string {
+  return MOCK_TEAM_META[teamId]?.name ?? teamId;
+}
 
 /**
  * Fixture clock anchor. All fixture dates derive from this timestamp so
@@ -218,7 +230,7 @@ export function buildMixedOverview(now = new Date(ANCHOR_DATE)): MyWorkOverview 
       totalPoints: 40,
       deadline: daysFrom(now, 4),
       health: "on-track",
-      instructorName: "TS. Đặng Văn Cường",
+      instructorName: lecturerOf("course-se330"),
     },
     {
       courseId: "course-cs402",
@@ -235,7 +247,7 @@ export function buildMixedOverview(now = new Date(ANCHOR_DATE)): MyWorkOverview 
       totalPoints: 40,
       deadline: daysFrom(now, 9),
       health: "at-risk",
-      instructorName: "ThS. Trần Mai Linh",
+      instructorName: lecturerOf("course-cs402"),
     },
   ];
 
@@ -314,7 +326,7 @@ const SPRINT_BY_PROJECT: Record<string, Omit<CourseSprint, "role">> = {
     totalPoints: 40,
     deadline: daysFrom(new Date(ANCHOR_DATE), 4),
     health: "on-track",
-    instructorName: "TS. Đặng Văn Cường",
+    instructorName: lecturerOf("course-se330"),
   },
   "project-deli": {
     courseId: "course-cs402",
@@ -330,7 +342,7 @@ const SPRINT_BY_PROJECT: Record<string, Omit<CourseSprint, "role">> = {
     totalPoints: 40,
     deadline: daysFrom(new Date(ANCHOR_DATE), 9),
     health: "at-risk",
-    instructorName: "ThS. Trần Mai Linh",
+    instructorName: lecturerOf("course-cs402"),
   },
 };
 
@@ -370,15 +382,14 @@ export function buildOverviewForUser(
             ? {
                 status: "assigned",
                 teamId: assignment.teamId,
-                teamName:
-                  assignment.teamId === "team-nexus" ? "Team NEXUS" : "Team DELI",
+                teamName: teamLabel(assignment.teamId),
                 role: assignment.role,
               }
             : pending
               ? {
                   status: "pending",
                   teamId: pending.teamId,
-                  teamName: "Team PHOENIX",
+                  teamName: teamLabel(pending.teamId),
                   requestedAt: daysFrom(now, -3, 9, 15),
                 }
               : { status: "none" },
