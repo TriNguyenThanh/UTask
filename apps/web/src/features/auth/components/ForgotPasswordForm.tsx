@@ -40,9 +40,6 @@ export function ForgotPasswordForm() {
         <h1 id="forgot-password-title" className="mb-2 text-2xl font-semibold tracking-tight">
           Quên mật khẩu?
         </h1>
-        <p className="text-sm leading-relaxed text-[#787586]">
-          Nhập địa chỉ email trường học đã liên kết với tài khoản UTask. Hướng dẫn khôi phục sẽ được gửi đến hòm thư của bạn khi dịch vụ Identity được kết nối.
-        </p>
       </div>
 
       {showIntegrationNotice ? (
@@ -96,26 +93,6 @@ export function ForgotPasswordForm() {
       </Form>
 
       <div className="mb-6 border-t border-[#ede9e4]" />
-
-      <div id="academic-support" className="text-center">
-        <p className="text-xs leading-relaxed text-[#787586]">
-          Nếu không còn quyền truy cập email trường hoặc tài khoản chưa kích hoạt, vui lòng liên hệ
-          <strong className="font-medium text-[#1a1c1c]"> Giảng viên bộ môn </strong>
-          hoặc
-          <strong className="font-medium text-[#1a1c1c]"> Phòng Đào tạo</strong>.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] text-[#9c97a8]">
-          <span className="flex items-center gap-1">
-            <LockKeyhole className="size-3.5" aria-hidden="true" />
-            Mã hóa SSL 256-bit
-          </span>
-          <span aria-hidden="true">•</span>
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="size-3.5" aria-hidden="true" />
-            Đồng bộ Cổng Đào tạo
-          </span>
-        </div>
-      </div>
     </section>
   );
 }

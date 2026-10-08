@@ -28,7 +28,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function mocksEnabled() {
-  return import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === "true";
+  // Mirror mocks/enableMocking.ts: run in any build when explicitly
+  // enabled, so a deployed mock demo also restores its session.
+  return import.meta.env.VITE_ENABLE_MOCKS === "true";
 }
 
 function readRefreshToken(): string | null {

@@ -108,7 +108,7 @@ function DeadlineBanner({ course }: { course: CourseDetail }) {
             : `Hạn chót tự lập nhóm: ${remainingTime(deadline)} (${formatDateTime(deadline)}).`}
         </span>
         <span className={passed ? "text-red-800/90 text-[13px]" : "text-amber-800/90 text-[13px]"}>
-          Sau thời hạn này, Giảng viên sẽ kích hoạt phân nhóm ngẫu nhiên cho sinh viên chưa có nhóm.
+          Sau thời hạn này, giảng viên sẽ xem xét phương án phân nhóm cho sinh viên chưa có nhóm.
         </span>
       </p>
     </div>
@@ -696,13 +696,20 @@ function TopicSection({
             </Button>
           ) : null}
           {topic.status === "approved" ? (
-            <Button asChild>
-              <Link to="/projects">
-                <KanbanSquare className="size-4" aria-hidden />
-                Mở Project Workspace
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </Button>
+            course.team?.projectId ? (
+              <Button asChild>
+                <Link to={`/projects/${encodeURIComponent(course.team.projectId)}/backlog`}>
+                  <KanbanSquare className="size-4" aria-hidden />
+                  Mở Project Workspace
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground" role="status">
+                Đề tài đã được duyệt. Workspace của nhóm chưa sẵn sàng — vui lòng chờ giảng viên
+                khởi tạo.
+              </p>
+            )
           ) : null}
         </div>
       </div>

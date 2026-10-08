@@ -1,4 +1,5 @@
 import { TriangleAlert } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import type { CourseEnrollment, CourseSprint, MyTask, TeamMembership } from "@/features/my-work/types";
 import { isOverdue } from "@/features/my-work/taskFilters";
@@ -37,7 +38,8 @@ export function derivePriorityAlert(
     return {
       id: `pending:${pending.courseId}`,
       message: `${pending.courseCode}: Yêu cầu tham gia ${pending.membership.teamName} đang chờ Leader duyệt.`,
-      href: null,
+      href: `/courses/${encodeURIComponent(pending.courseId)}/team`,
+      hrefLabel: "Theo dõi yêu cầu",
       tone: "warning",
     };
   }
@@ -52,8 +54,8 @@ export function derivePriorityAlert(
     const days = daysUntil(closingSoon.teamFormation.registrationDeadline, now);
     return {
       id: `closing:${closingSoon.courseId}`,
-      message: `Môn ${closingSoon.courseName}: Còn ${days} ngày để hoàn thành lập nhóm trước khi hệ thống phân ngẫu nhiên.`,
-      href: null,
+      message: `Môn ${closingSoon.courseName}: Còn ${days} ngày để hoàn thành lập nhóm. Sau hạn, giảng viên sẽ xem xét phương án phân nhóm.`,
+      href: `/courses/${encodeURIComponent(closingSoon.courseId)}/team`,
       hrefLabel: "Xem môn học",
       tone: "warning",
     };
@@ -64,7 +66,10 @@ export function derivePriorityAlert(
     return {
       id: `sprint:${riskySprint.courseId}`,
       message: `Sprint ${riskySprint.sprintName} của ${riskySprint.courseCode} ${riskySprint.health === "late" ? "đang trễ tiến độ" : "có rủi ro trễ"} (${riskySprint.completedPoints}/${riskySprint.totalPoints} SP).`,
-      href: null,
+      // Workspace not provisioned → no board to open yet.
+      href: riskySprint.projectId
+        ? `/projects/${encodeURIComponent(riskySprint.projectId)}/board`
+        : null,
       hrefLabel: "Vào Board",
       tone: riskySprint.health === "late" ? "danger" : "warning",
     };
@@ -75,7 +80,7 @@ export function derivePriorityAlert(
     return {
       id: "overdue-tasks",
       message: `Bạn có ${overdueCount} nhiệm vụ quá hạn cần xử lý ngay.`,
-      href: null,
+      href: "/my-work#my-tasks",
       hrefLabel: "Xem nhiệm vụ quá hạn",
       tone: "danger",
     };
@@ -101,10 +106,13 @@ export function PriorityBanner({ alert }: { alert: PriorityAlert }) {
         />
         <p className="font-medium">{alert.message}</p>
       </div>
-      {alert.hrefLabel ? (
-        <span className="ml-4 shrink-0 font-semibold text-primary underline-offset-2">
+      {alert.href && alert.hrefLabel ? (
+        <Link
+          to={alert.href}
+          className="ml-4 shrink-0 font-semibold text-primary underline-offset-2 hover:underline"
+        >
           {alert.hrefLabel}
-        </span>
+        </Link>
       ) : null}
     </div>
   );

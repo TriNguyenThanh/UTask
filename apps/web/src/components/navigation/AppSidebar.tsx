@@ -223,10 +223,12 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           Tiện ích nhanh
         </p>
         <nav aria-label="Tiện ích nhanh" className="space-y-0.5">
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
+          <span
+            className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70"
+            title="GitHub Sync sẽ khả dụng ở slice sau"
+          >
             <Users className="size-4" aria-hidden />
             GitHub Sync
-            <span className="ml-auto size-1.5 rounded-full bg-emerald-500" aria-hidden />
           </span>
           <span className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
             <QrCode className="size-4" aria-hidden />
