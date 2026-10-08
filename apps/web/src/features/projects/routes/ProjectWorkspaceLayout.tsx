@@ -1,14 +1,19 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { ForbiddenPage } from "@/components/feedback/ForbiddenPage";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
+import { useRequestTeacherChrome } from "@/app/layouts/TeacherChromeContext";
+import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import { ApiError } from "@/lib/api/errors";
 import { useProjectWorkspace } from "@/lib/query/studentFlowHooks";
-import type { ProjectWorkspace } from "@/features/projects/types";
+import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types";
+import { isReadOnlyViewer } from "@/lib/permissions";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
 
 /** Module heading per tab, shown under the project breadcrumb. */
@@ -24,6 +29,9 @@ export type ProjectModule = keyof typeof projectModuleTitles;
 interface ProjectWorkspaceContextValue {
   projectId: string;
   workspace: ProjectWorkspace;
+  viewer: ProjectViewer;
+  /** Instructors read the workspace and never change it. */
+  readOnly: boolean;
   activeModule: ProjectModule;
 }
 
@@ -55,7 +63,19 @@ function moduleFromPathname(pathname: string): ProjectModule {
 export default function ProjectWorkspaceLayout() {
   const { projectId = "" } = useParams();
   const { pathname } = useLocation();
+  const { user } = useAuth();
   const workspaceQuery = useProjectWorkspace(projectId);
+  const requestTeacherChrome = useRequestTeacherChrome();
+  const instructorView = workspaceQuery.data?.viewer.kind === "course-instructor";
+
+  useEffect(() => {
+    if (!instructorView) return;
+    requestTeacherChrome(true);
+    return () => requestTeacherChrome(false);
+  }, [instructorView, requestTeacherChrome]);
+
+  // A teacher-only account has no Student project list to go back to.
+  const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
 
   if (workspaceQuery.isPending) {
     return <PageSkeleton label="Đang tải không gian dự án" />;
@@ -72,9 +92,15 @@ export default function ProjectWorkspaceLayout() {
           title="Không tìm thấy dự án"
           description="Dự án này không tồn tại hoặc đã bị xóa. Hãy quay lại danh sách dự án để chọn dự án khác."
           action={
-            <Button asChild size="sm" variant="outline">
-              <Link to="/projects">Về danh sách dự án</Link>
-            </Button>
+            teacherOnly ? (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/teacher/courses">Về danh sách lớp phụ trách</Link>
+              </Button>
+            ) : (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/projects">Về danh sách dự án</Link>
+              </Button>
+            )
           }
         />
       </div>
@@ -98,6 +124,8 @@ export default function ProjectWorkspaceLayout() {
       value={{
         projectId,
         workspace,
+        viewer: workspace.viewer,
+        readOnly: isReadOnlyViewer(workspace.viewer),
         activeModule: moduleFromPathname(pathname),
       }}
     >
@@ -108,22 +136,36 @@ export default function ProjectWorkspaceLayout() {
 }
 
 function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) {
-  const { activeModule, projectId } = useProjectWorkspaceContext();
+  const { activeModule, projectId, readOnly } = useProjectWorkspaceContext();
+  const teacherBase = `/teacher/courses/${workspace.courseId}`;
 
   return (
     <header className="border-b px-4 pt-4 md:px-6">
-      <nav
-        aria-label="Breadcrumb dự án"
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-      >
-        <Link to="/projects" className="hover:text-foreground">
-          Dự án
-        </Link>
-        <span aria-hidden>/</span>
-        <span className="font-semibold text-foreground">
-          {workspace.courseCode} — {workspace.name}
-        </span>
-      </nav>
+      {readOnly ? (
+        // Built from the workspace payload, so it is right on deep link and refresh.
+        <Breadcrumbs
+          items={[
+            { label: "Trang chủ", to: "/teacher" },
+            { label: "Lớp phụ trách", to: "/teacher/courses" },
+            { label: workspace.courseName, to: teacherBase },
+            { label: workspace.teamName, to: `${teacherBase}/teams/${workspace.teamId}` },
+            { label: workspace.projectKey },
+          ]}
+        />
+      ) : (
+        <nav
+          aria-label="Breadcrumb dự án"
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+        >
+          <Link to="/projects" className="hover:text-foreground">
+            Dự án
+          </Link>
+          <span aria-hidden>/</span>
+          <span className="font-semibold text-foreground">
+            {workspace.courseCode} — {workspace.name}
+          </span>
+        </nav>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3 pt-2">
         <div>
           <h1 className="text-lg font-bold tracking-tight">
@@ -137,9 +179,16 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
             <span>GVHD: {workspace.instructorName}</span>
           </p>
         </div>
-        <span className="rounded bg-primary px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-primary-foreground">
-          {workspace.projectKey}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {readOnly ? (
+            <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              Chế độ chỉ xem
+            </span>
+          ) : null}
+          <span className="rounded bg-primary px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-primary-foreground">
+            {workspace.projectKey}
+          </span>
+        </div>
       </div>
       <ProjectNavigation
         projectId={projectId}

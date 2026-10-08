@@ -22,6 +22,7 @@ import type {
   ContributorStatus,
   ProjectCode,
 } from "@/features/projects/types";
+import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import { useProjectCode } from "@/lib/query/studentFlowHooks";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
@@ -309,7 +310,13 @@ function MetricsRow({ code }: { code: ProjectCode }) {
 /* Contributors table                                                  */
 /* ------------------------------------------------------------------ */
 
-function ContributorRow({ contributor }: { contributor: CodeContributor }) {
+function ContributorRow({
+  contributor,
+  showStatus,
+}: {
+  contributor: CodeContributor;
+  showStatus: boolean;
+}) {
   const status = contributorStatusConfig[contributor.status];
   const githubUrl =
     contributor.githubUsername !== null
@@ -395,22 +402,35 @@ function ContributorRow({ contributor }: { contributor: CodeContributor }) {
         </span>
         <div className="text-[11px] text-muted-foreground">commits gắn Issue</div>
       </td>
-      <td className="px-4 py-3 text-right">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold",
-            status.badge,
-          )}
-        >
-          <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden />
-          {status.label}
-        </span>
-      </td>
+      {showStatus ? (
+        <td className="px-4 py-3 text-right">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold",
+              status.badge,
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden />
+            {status.label}
+          </span>
+        </td>
+      ) : null}
     </tr>
   );
 }
 
-function ContributorsTable({ contributors }: { contributors: CodeContributor[] }) {
+/**
+ * `showStatus` is off for instructors: the status label judges a student's
+ * contribution from commit counts, which an instructor view must not do
+ * (US-5.3, scope §8.5). The raw numbers stay.
+ */
+function ContributorsTable({
+  contributors,
+  showStatus,
+}: {
+  contributors: CodeContributor[];
+  showStatus: boolean;
+}) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="border-b border-border p-4">
@@ -433,7 +453,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
                 <th className="px-3 py-2.5 font-mono">Dòng Code (+ / -)</th>
                 <th className="px-3 py-2.5">Pull Requests</th>
                 <th className="px-3 py-2.5">Gắn Issue Key</th>
-                <th className="px-4 py-2.5 text-right">Trạng thái</th>
+                {showStatus ? <th className="px-4 py-2.5 text-right">Trạng thái</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -441,6 +461,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
                 <ContributorRow
                   key={contributor.userId}
                   contributor={contributor}
+                  showStatus={showStatus}
                 />
               ))}
             </tbody>
@@ -704,6 +725,7 @@ export default function ProjectCodeRoute() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useProjectCode(projectId);
+  const { readOnly } = useProjectWorkspaceContext();
 
   const openIssueKey = (pid: string, key: string) => {
     navigate(`/projects/${pid}/board?issue=${key}`);
@@ -759,9 +781,11 @@ export default function ProjectCodeRoute() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/settings/integrations">Kết nối lại GitHub</Link>
-          </Button>
+          {readOnly ? null : (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/settings/integrations">Kết nối lại GitHub</Link>
+            </Button>
+          )}
           <ResyncButton />
         </div>
       </div>
@@ -780,11 +804,17 @@ export default function ProjectCodeRoute() {
       <div className="p-6">
         <EmptyState
           title="Chưa kết nối GitHub"
-          description="Kết nối tài khoản GitHub để theo dõi commits, pull requests và đóng góp của từng thành viên trong dự án."
+          description={
+            readOnly
+              ? "Nhóm chưa kết nối GitHub nên chưa có commit hay pull request để xem."
+              : "Kết nối tài khoản GitHub để theo dõi commits, pull requests và đóng góp của từng thành viên trong dự án."
+          }
           action={
-            <Button asChild size="sm">
-              <Link to="/settings/integrations">Kết nối GitHub</Link>
-            </Button>
+            readOnly ? undefined : (
+              <Button asChild size="sm">
+                <Link to="/settings/integrations">Kết nối GitHub</Link>
+              </Button>
+            )
           }
         />
       </div>
@@ -796,7 +826,11 @@ export default function ProjectCodeRoute() {
       <div className="p-6">
         <EmptyState
           title="Dự án chưa có repository"
-          description="Nhóm chưa gắn repository GitHub cho dự án này. Trưởng nhóm có thể gắn repository trong cài đặt tích hợp GitHub."
+          description={
+            readOnly
+              ? "Nhóm chưa gắn repository GitHub cho dự án này, nên chưa có dữ liệu mã nguồn để xem."
+              : "Nhóm chưa gắn repository GitHub cho dự án này. Trưởng nhóm có thể gắn repository trong cài đặt tích hợp GitHub."
+          }
         />
       </div>
     );
@@ -826,7 +860,7 @@ export default function ProjectCodeRoute() {
         <>
           <RepoStrip code={data} />
           <MetricsRow code={data} />
-          <ContributorsTable contributors={data.contributors} />
+          <ContributorsTable contributors={data.contributors} showStatus={!readOnly} />
           <PullRequestsSection
             projectId={projectId}
             pullRequests={data.pullRequests}

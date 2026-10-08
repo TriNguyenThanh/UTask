@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { LEADER_ID, MEMBER_ID, MOCK_USERS, STUDENT_ID, TEACHER2_ID, TEACHER_ID } from "@/mocks/data/database";
+import { LEADER_ID, MEMBER_ID, MOCK_USERS, STUDENT_ID, TEACHER2_ID, TEACHER3_ID, TEACHER_ID } from "@/mocks/data/database";
+import { LARGE_COURSE_ID } from "@/mocks/data/largeClass";
 import { MOCK_COURSE_META, MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
 import { buildOverviewForUser } from "@/mocks/data/myWork";
 import {
@@ -16,7 +17,7 @@ import {
   enrolledCoursesFor,
   teamsOfCourse,
 } from "@/mocks/data/relationships";
-import { courseDetailForScenario, projectWorkspaceFor } from "@/mocks/data/studentFlow";
+import { courseDetailForScenario, projectDataFor } from "@/mocks/data/studentFlow";
 import {
   STALE_AFTER_DAYS,
   buildTeacherCourseDetail,
@@ -75,8 +76,8 @@ describe("graph integrity", () => {
     const loginIds = new Set(MOCK_USERS.map((user) => user.id));
     const directoryOnly = Object.keys(MOCK_PEOPLE).filter((id) => !loginIds.has(id));
     expect(directoryOnly.length).toBeGreaterThan(0);
-    // Login ids are exactly the five demo accounts.
-    expect(loginIds.size).toBe(5);
+    // Login ids are exactly the six demo accounts; the 100 roster students have none.
+    expect(loginIds.size).toBe(6);
   });
 
   it("only seats enrolled students in a team of the same class", () => {
@@ -296,7 +297,7 @@ describe("Teacher metrics never invent data", () => {
 
   it("derives NEXUS progress from the Sprint points in the project fixture", () => {
     const nexus = buildTeacherTeams("course-se330").find((team) => team.teamId === "team-nexus")!;
-    const workspace = projectWorkspaceFor("project-nexus", "default", "", new Date("2026-10-20T08:30:00Z"))!;
+    const workspace = projectDataFor("project-nexus", new Date("2026-10-20T08:30:00Z"))!;
     const sprint = workspace.sprints.find((candidate) => candidate.state === "active")!;
     expect(nexus.progress).toEqual({
       percent: Math.round((sprint.completedPoints / sprint.totalPoints) * 100),
@@ -376,5 +377,53 @@ describe("Teacher team members and oversight signals", () => {
       expect(signal.code).toBe("below-min-size");
       expect(signal.label).toContain("2/3");
     });
+  });
+});
+
+describe("The 100-student demo class", () => {
+  const stats = () => buildTeacherCourseSummary(LARGE_COURSE_ID)!;
+
+  it("has exactly 100 distinct students with distinct codes, names and ids", () => {
+    const roster = buildTeacherStudents(LARGE_COURSE_ID);
+    expect(roster).toHaveLength(100);
+    for (const key of ["userId", "studentCode", "name", "email"] as const) {
+      expect(new Set(roster.map((student) => student[key])).size, key).toBe(100);
+    }
+  });
+
+  it("seats 93 students in 19 teams within the size limits, and leaves 7 without a team", () => {
+    const teams = buildTeacherTeams(LARGE_COURSE_ID);
+    expect(teams).toHaveLength(19);
+    for (const team of teams) {
+      expect(team.memberCount).toBeGreaterThanOrEqual(4);
+      expect(team.memberCount).toBeLessThanOrEqual(team.maxMembers);
+      expect(team.leaders).toHaveLength(1);
+    }
+    expect(stats().studentsWithoutTeam).toBe(7);
+    expect(teams.reduce((total, team) => total + team.memberCount, 0)).toBe(93);
+  });
+
+  it("puts nobody in two teams and gives two unteamed students a pending request", () => {
+    const seated = Object.keys(MOCK_TEAM_MEMBERS)
+      .filter((teamId) => MOCK_TEAM_COURSES[teamId] === LARGE_COURSE_ID)
+      .flatMap((teamId) => MOCK_TEAM_MEMBERS[teamId].map((member) => member.userId));
+    expect(new Set(seated).size).toBe(seated.length);
+    const pending = buildTeacherStudents(LARGE_COURSE_ID).filter((student) => student.pendingTeam);
+    expect(pending).toHaveLength(2);
+    for (const student of pending) expect(student.team).toBeNull();
+  });
+
+  it("is taught by teacher3 alone, and does not change what the other teachers see", () => {
+    expect(coursesTaughtBy(TEACHER3_ID)).toEqual([LARGE_COURSE_ID]);
+    expect(coursesTaughtBy(TEACHER_ID)).not.toContain(LARGE_COURSE_ID);
+    expect(coursesTaughtBy(TEACHER2_ID)).not.toContain(LARGE_COURSE_ID);
+  });
+
+  it("shows every team as 'no project' rather than inventing progress", () => {
+    for (const row of buildTeacherOversight(LARGE_COURSE_ID)) {
+      expect(row.project).toBeNull();
+      expect(row.progress).toBeNull();
+      expect(row.signals.map((signal) => signal.code)).toContain("no-project");
+    }
   });
 });

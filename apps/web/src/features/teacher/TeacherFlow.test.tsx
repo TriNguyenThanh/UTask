@@ -540,13 +540,14 @@ describe("Teams (T07)", () => {
     expect(vision).toHaveTextContent("Phạm Quốc Huy");
   });
 
-  it("leaves detail and workspace access to a later phase", async () => {
+  it("links each team to its dashboard instead of a disabled button", async () => {
     setup("/teacher/courses/course-se330/teams");
     await screen.findByText("Team NEXUS");
-    const open = screen.getByRole("button", { name: "Xem chi tiết nhóm" });
-    expect(open).toBeDisabled();
-    expect(open).toHaveAccessibleDescription(/giai đoạn sau/);
-    expect(screen.queryByRole("link", { name: /workspace|chi tiết nhóm/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Xem chi tiết/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Xem chi tiết Team NEXUS" })).toHaveAttribute(
+      "href",
+      "/teacher/courses/course-se330/teams/team-nexus",
+    );
     expect(screen.getByText(/Chuyển thành viên, phân nhóm và chỉ định Leader sẽ khả dụng/)).toBeInTheDocument();
   });
 
@@ -830,6 +831,8 @@ describe("Navigation quality", () => {
     /^\/teacher$/,
     /^\/teacher\/courses$/,
     /^\/teacher\/courses\/[^/]+(\/(students|teams|oversight))?$/,
+    /^\/teacher\/courses\/[^/]+\/teams\/[^/]+$/,
+    /^\/projects\/[^/]+\/(backlog|board|code)$/,
     /^\/notifications$/,
     /^\/settings\/profile$/,
     /^\/my-work$/,

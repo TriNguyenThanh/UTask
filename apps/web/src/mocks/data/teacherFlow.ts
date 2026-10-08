@@ -3,9 +3,11 @@ import type {
   TeacherCourseDetail,
   TeacherCourseSummary,
   TeacherOversightRow,
+  TeacherIssueStatus,
   TeacherSignal,
   TeacherStudent,
   TeacherTeam,
+  TeacherTeamDetail,
   TeacherTeamProgress,
 } from "@/lib/api/teacherFlow";
 import { MOCK_COURSE_META, MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
@@ -18,7 +20,7 @@ import {
   studentsOfCourse,
   teamsOfCourse,
 } from "@/mocks/data/relationships";
-import { mockAnchorDate, projectWorkspaceFor } from "@/mocks/data/studentFlow";
+import { mockAnchorDate, projectDataFor } from "@/mocks/data/studentFlow";
 
 /**
  * Teacher read models. Every number and name is derived from the shared
@@ -55,7 +57,7 @@ export interface ProjectFacts {
  * points to measure, otherwise done/total issues, otherwise unknown.
  */
 function projectFacts(projectId: string): ProjectFacts | null {
-  const workspace = projectWorkspaceFor(projectId, "default", "", mockAnchorDate());
+  const workspace = projectDataFor(projectId, mockAnchorDate());
   if (!workspace) {
     return null;
   }
@@ -180,6 +182,67 @@ export function buildTeacherOversight(courseId: string): TeacherOversightRow[] {
       signals: signalsFor(facts, memberCount, minMembers),
     };
   });
+}
+
+/**
+ * Team dashboard. Reads the same viewer-independent project facts as the
+ * class views, at the fixed demo clock, so numbers agree across screens.
+ * Returns null when the team is not part of `courseId`.
+ */
+export function buildTeacherTeamDetail(courseId: string, teamId: string): TeacherTeamDetail | null {
+  if (!teamsOfCourse(courseId).includes(teamId)) {
+    return null;
+  }
+  const meta = MOCK_COURSE_META[courseId];
+  const now = mockAnchorDate();
+  const team = buildTeacherTeams(courseId).find((candidate) => candidate.teamId === teamId);
+  const oversight = buildTeacherOversight(courseId).find((row) => row.teamId === teamId);
+  if (!meta || !team || !oversight) {
+    return null;
+  }
+  const projectId = MOCK_TEAM_PROJECTS[teamId];
+  const data = projectId ? projectDataFor(projectId, now) : null;
+
+  const byStatus: Record<TeacherIssueStatus, number> = {
+    todo: 0,
+    "in-progress": 0,
+    review: 0,
+    done: 0,
+  };
+  for (const issue of data?.issues ?? []) {
+    byStatus[issue.status] += 1;
+  }
+  const withDueDate = (data?.issues ?? []).filter((issue) => issue.dueAt);
+  const activeSprint = data?.sprints.find((sprint) => sprint.state === "active");
+
+  return {
+    team: { teamId, name: team.name, courseId },
+    members: team.members,
+    maxMembers: meta.teamSize.max,
+    project: team.project,
+    progress: team.progress,
+    issues: data && data.issues.length > 0 ? { total: data.issues.length, byStatus } : null,
+    sprint: activeSprint
+      ? {
+          name: activeSprint.name,
+          endsAt: activeSprint.endDate,
+          completedPoints: activeSprint.completedPoints,
+          totalPoints: activeSprint.totalPoints,
+        }
+      : null,
+    overdue:
+      withDueDate.length > 0
+        ? {
+            overdue: withDueDate.filter(
+              (issue) => issue.status !== "done" && Date.parse(issue.dueAt as string) < now.getTime(),
+            ).length,
+            withDueDate: withDueDate.length,
+          }
+        : null,
+    asOf: now.toISOString(),
+    lastActivity: team.lastActivity,
+    signals: oversight.signals,
+  };
 }
 
 export function buildTeacherStudents(courseId: string): TeacherStudent[] {

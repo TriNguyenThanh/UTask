@@ -7,6 +7,7 @@ import {
   teacherCoursesRequest,
   teacherOversightRequest,
   teacherStudentsRequest,
+  teacherTeamRequest,
   teacherTeamsRequest,
 } from "@/lib/api/teacherFlow";
 
@@ -25,6 +26,8 @@ export const teacherKeys = {
     [...teacherKeys.course(userId, courseId), "students"] as const,
   teams: (userId: string, courseId: string) =>
     [...teacherKeys.course(userId, courseId), "teams"] as const,
+  team: (userId: string, courseId: string, teamId: string) =>
+    [...teacherKeys.course(userId, courseId), "teams", teamId] as const,
   oversight: (userId: string, courseId: string) =>
     [...teacherKeys.course(userId, courseId), "oversight"] as const,
 };
@@ -79,6 +82,16 @@ export function useTeacherOversight(courseId: string) {
   return useQuery({
     queryKey: teacherKeys.oversight(userId ?? "anonymous", courseId),
     queryFn: () => teacherOversightRequest(client, courseId),
+    enabled: userId !== null,
+  });
+}
+
+export function useTeacherTeam(courseId: string, teamId: string) {
+  const client = useApiClient();
+  const userId = useTeacherUserId();
+  return useQuery({
+    queryKey: teacherKeys.team(userId ?? "anonymous", courseId, teamId),
+    queryFn: () => teacherTeamRequest(client, courseId, teamId),
     enabled: userId !== null,
   });
 }

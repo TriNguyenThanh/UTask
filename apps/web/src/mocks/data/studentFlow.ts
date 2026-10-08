@@ -11,9 +11,12 @@ import {
   classSizeFor,
   membersOfTeam,
   ownerInstructorId,
+  MOCK_TEAM_COURSES,
   pendingRequestFor,
   projectRoleForUser,
+  projectViewerFor,
   studentsOfCourse,
+  teamOfProject,
   teamsOfCourse,
 } from "@/mocks/data/relationships";
 
@@ -446,12 +449,16 @@ function buildCourseSe330WithTopic(
 /* ------------------------------------------------------------------ */
 
 import type {
+  CodeContributor,
   Issue,
   IssueDetail,
   ProjectCode,
   ProjectSummary,
   ProjectWorkspace,
 } from "@/features/projects/types";
+
+/** Project facts without any viewer: who is looking is decided separately. */
+type WorkspaceData = Omit<ProjectWorkspace, "viewer" | "myRole" | "courseId" | "teamId">;
 
 const NEXUS_MEMBERS = [
   { userId: "00000000-0000-4000-8000-000000000001", displayName: "Nguyễn Hoàng Nam", initials: "HN" },
@@ -496,7 +503,7 @@ function buildProjectSummaries(now: Date, userId: string): ProjectSummary[] {
         completedPoints: 8,
         totalPoints: 21,
       },
-      repository: "deli-team/health-app",
+      repository: null,
     },
     {
       projectId: "project-legacy",
@@ -524,12 +531,12 @@ function buildProjectSummaries(now: Date, userId: string): ProjectSummary[] {
 
 function buildNexusIssues(now: Date): Issue[] {
   return [
-    { id: "i1", key: "NEXUS-101", type: "story", title: "Thiết kế schema CSDL Giỏ hàng", status: "todo", priority: "medium", storyPoints: 5, epicId: "epic-cart", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[1], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -2) },
-    { id: "i2", key: "NEXUS-102", type: "task", title: "Cập nhật tài liệu API Swagger", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: "sprint-2", assignee: NEXUS_MEMBERS[3], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -1) },
-    { id: "i3", key: "NEXUS-104", type: "story", title: "Tích hợp cổng thanh toán VNPay Sandbox và IPN", status: "in-progress", priority: "high", storyPoints: 5, epicId: "epic-payment", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[0], hasPullRequest: true, isMine: true, updatedAt: daysFrom(now, 0, 10) },
+    { id: "i1", key: "NEXUS-101", dueAt: daysFrom(now, 3), type: "story", title: "Thiết kế schema CSDL Giỏ hàng", status: "todo", priority: "medium", storyPoints: 5, epicId: "epic-cart", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[1], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -2) },
+    { id: "i2", key: "NEXUS-102", dueAt: daysFrom(now, -1), type: "task", title: "Cập nhật tài liệu API Swagger", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: "sprint-2", assignee: NEXUS_MEMBERS[3], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -1) },
+    { id: "i3", key: "NEXUS-104", dueAt: daysFrom(now, 2), type: "story", title: "Tích hợp cổng thanh toán VNPay Sandbox và IPN", status: "in-progress", priority: "high", storyPoints: 5, epicId: "epic-payment", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[0], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, 0, 10) },
     { id: "i4", key: "NEXUS-105", type: "story", title: "Giao diện responsive Giỏ hàng", status: "in-progress", priority: "medium", storyPoints: 3, epicId: "epic-cart", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[1], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, 0, 9) },
-    { id: "i5", key: "NEXUS-98", type: "task", title: "Refactor Auth JWT Middleware", status: "review", priority: "high", storyPoints: 5, epicId: "epic-auth", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[2], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, 0, 8) },
-    { id: "i6", key: "NEXUS-95", type: "task", title: "Khởi tạo boilerplate dự án React + Vite", status: "done", priority: "medium", storyPoints: 2, epicId: null, sprintId: "sprint-1", assignee: NEXUS_MEMBERS[0], hasPullRequest: true, isMine: true, updatedAt: daysFrom(now, -9) },
+    { id: "i5", key: "NEXUS-98", dueAt: daysFrom(now, -2), type: "task", title: "Refactor Auth JWT Middleware", status: "review", priority: "high", storyPoints: 5, epicId: "epic-auth", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[2], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, 0, 8) },
+    { id: "i6", key: "NEXUS-95", type: "task", title: "Khởi tạo boilerplate dự án React + Vite", status: "done", priority: "medium", storyPoints: 2, epicId: null, sprintId: "sprint-1", assignee: NEXUS_MEMBERS[0], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, -9) },
     { id: "i7", key: "NEXUS-110", type: "story", title: "Module Giỏ hàng: thêm/sửa/xóa sản phẩm", status: "todo", priority: "high", storyPoints: 8, epicId: "epic-cart", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -5) },
     { id: "i8", key: "NEXUS-111", type: "bug", title: "Lỗi 500 khi thanh toán COD > 10 triệu", status: "todo", priority: "high", storyPoints: 3, epicId: "epic-payment", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -4) },
     { id: "i9", key: "NEXUS-112", type: "story", title: "Đăng nhập Google OAuth2 cho portal", status: "todo", priority: "medium", storyPoints: 5, epicId: "epic-auth", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -6) },
@@ -537,7 +544,7 @@ function buildNexusIssues(now: Date): Issue[] {
   ];
 }
 
-function buildNexusWorkspace(now: Date, userId: string): ProjectWorkspace {
+function buildNexusWorkspace(now: Date): WorkspaceData {
   return {
     projectId: "project-nexus",
     projectKey: "NEXUS",
@@ -546,7 +553,6 @@ function buildNexusWorkspace(now: Date, userId: string): ProjectWorkspace {
     courseName: "Đồ án Chuyên ngành Công nghệ Phần mềm",
     instructorName: "TS. Trần Minh Đức",
     teamName: "Team NEXUS",
-    myRole: projectRoleForUser(userId, "project-nexus") ?? "member",
     repository: "nexus-team/smart-supply-chain",
     epics: [
       { id: "epic-auth", name: "Module Xác thực & Phân quyền", color: "#7c3aed", issueCount: 4 },
@@ -563,7 +569,7 @@ function buildNexusWorkspace(now: Date, userId: string): ProjectWorkspace {
   };
 }
 
-function buildDeliWorkspace(now: Date, userId: string): ProjectWorkspace {
+function buildDeliWorkspace(now: Date): WorkspaceData {
   return {
     projectId: "project-deli",
     projectKey: "DELI",
@@ -572,15 +578,14 @@ function buildDeliWorkspace(now: Date, userId: string): ProjectWorkspace {
     courseName: "Phát triển Ứng dụng Di động Nâng cao",
     instructorName: "ThS. Lê Thị Mai",
     teamName: "Team DELI",
-    myRole: projectRoleForUser(userId, "project-deli") ?? "member",
-    repository: "deli-team/health-app",
+    repository: null,
     epics: [{ id: "epic-deli-onboard", name: "Onboarding & Auth", color: "#7c3aed", issueCount: 3 }],
     sprints: [
       { id: "sprint-deli-1", name: "Sprint 1: Onboarding & Auth", state: "active", startDate: daysFrom(now, -7), endDate: daysFrom(now, 7), goal: "Onboarding flow và đăng nhập.", completedPoints: 8, totalPoints: 21 },
     ],
     issues: [
-      { id: "d1", key: "DELI-01", type: "story", title: "Màn hình onboarding 3 bước", status: "done", priority: "medium", storyPoints: 5, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: true, isMine: true, updatedAt: daysFrom(now, -2) },
-      { id: "d2", key: "DELI-02", type: "story", title: "Đăng nhập email + password", status: "in-progress", priority: "high", storyPoints: 8, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: false, isMine: true, updatedAt: daysFrom(now, 0, 11) },
+      { id: "d1", key: "DELI-01", type: "story", title: "Màn hình onboarding 3 bước", status: "done", priority: "medium", storyPoints: 5, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, -2) },
+      { id: "d2", key: "DELI-02", type: "story", title: "Đăng nhập email + password", status: "in-progress", priority: "high", storyPoints: 8, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, 0, 11) },
       { id: "d3", key: "DELI-03", type: "task", title: "Cài đặt CI Flutter analyze + test", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -3) },
     ],
   };
@@ -601,24 +606,63 @@ export function projectSummariesForScenario(
   return buildProjectSummaries(now, userId);
 }
 
+function buildWorkspaceData(projectId: string, now: Date): WorkspaceData | null {
+  if (projectId === "project-nexus") return buildNexusWorkspace(now);
+  if (projectId === "project-deli") return buildDeliWorkspace(now);
+  return null;
+}
+
+/** `isMine` follows the signed-in user; with no user nothing is "mine". */
+function markMine(data: WorkspaceData, userId: string | null): WorkspaceData {
+  return {
+    ...data,
+    issues: data.issues.map((issue) => ({
+      ...issue,
+      isMine: userId !== null && issue.assignee?.userId === userId,
+    })),
+  };
+}
+
+/**
+ * Viewer-independent project facts for read models (Teacher dashboards).
+ * Nothing in it belongs to a particular user, so no issue is "mine".
+ */
+export function projectDataFor(projectId: string, now: Date): WorkspaceData | null {
+  const data = buildWorkspaceData(projectId, now);
+  return data ? markMine(data, null) : null;
+}
+
+/**
+ * Workspace as seen by `userId`. Without a viewer relationship (team member,
+ * or instructor of the owning class) there is no workspace: the caller gets
+ * null, never a default role.
+ */
 export function projectWorkspaceFor(
   projectId: string,
   scenario: string,
   userId: string,
   now: Date = new Date(),
 ): ProjectWorkspace | null {
-  if (projectId === "project-nexus") return buildNexusWorkspace(now, userId);
-  if (projectId === "project-deli") return buildDeliWorkspace(now, userId);
-  return null;
+  const viewer = projectViewerFor(userId, projectId);
+  const data = buildWorkspaceData(projectId, now);
+  const teamId = teamOfProject(projectId);
+  if (!viewer || !data || !teamId) return null;
+  return {
+    ...markMine(data, userId),
+    courseId: MOCK_TEAM_COURSES[teamId],
+    teamId,
+    viewer,
+    ...(viewer.kind === "team-member" ? { myRole: viewer.role } : {}),
+  };
 }
 
 export function issueDetailFor(
   projectId: string,
   issueKey: string,
   userId: string,
+  now: Date = new Date(),
 ): IssueDetail | null {
-  const now = new Date();
-  const workspace = projectWorkspaceFor(projectId, "default", userId);
+  const workspace = projectWorkspaceFor(projectId, "default", userId, now);
   if (!workspace) return null;
   const issue = workspace.issues.find((candidate) => candidate.key === issueKey);
   if (!issue) return null;
@@ -679,8 +723,38 @@ export function issueDetailFor(
   };
 }
 
-export function projectCodeFor(projectId: string, scenario: string): ProjectCode | null {
-  const now = new Date();
+const NO_REPOSITORY_STATS: ProjectCode["stats"] = {
+  commits: 0,
+  commitsWeekDelta: 0,
+  pullRequests: { total: 0, merged: 0, open: 0, review: 0 },
+  branches: 0,
+  linesChanged: { added: 0, removed: 0 },
+};
+
+/**
+ * Code view for a project. A project that exists but has no repository is
+ * answered with the `no-repository` state, not with "not found": the two
+ * mean different things to the person looking. `isMe` follows `userId`.
+ */
+export function projectCodeFor(
+  projectId: string,
+  scenario: string,
+  userId: string,
+  now: Date = new Date(),
+): ProjectCode | null {
+  if (projectId === "project-deli") {
+    return {
+      repository: null,
+      defaultBranch: null,
+      latestCommitSha: null,
+      syncState: "no-repository",
+      stats: NO_REPOSITORY_STATS,
+      contributors: [],
+      pullRequests: [],
+      commits: [],
+      branches: [],
+    };
+  }
   if (projectId !== "project-nexus") {
     return null;
   }
@@ -704,12 +778,13 @@ export function projectCodeFor(projectId: string, scenario: string): ProjectCode
       branches: 6,
       linesChanged: { added: 14250, removed: 3120 },
     },
-    contributors: [
-      { userId: "00000000-0000-4000-8000-000000000001", displayName: "Nguyễn Hoàng Nam", studentId: "21120015", githubUsername: "hoangnam21", roleTitle: "Trưởng nhóm / Fullstack", commits: 54, commitPercent: 38, additions: 6840, deletions: 1420, pullRequestCount: 12, mergedCount: 11, linkedIssuePercent: 96, status: "key", isMe: true },
-      { userId: "00000000-0000-4000-8000-000000000002", displayName: "Đặng Thảo Linh", studentId: "21020872", githubUsername: "thaolinh_dev", roleTitle: "Frontend Developer", commits: 42, commitPercent: 30, additions: 4210, deletions: 850, pullRequestCount: 9, mergedCount: 8, linkedIssuePercent: 88, status: "active", isMe: false },
-      { userId: "00000000-0000-4000-8000-000000000004", displayName: "Bùi Quang Thắng", studentId: "21020215", githubUsername: "thangbq_ai", roleTitle: "AI & Data", commits: 26, commitPercent: 18, additions: 2100, deletions: 480, pullRequestCount: 5, mergedCount: 5, linkedIssuePercent: 73, status: "active", isMe: false },
-      { userId: "00000000-0000-4000-8000-000000000005", displayName: "Trần Bảo Long", studentId: "21020301", githubUsername: "longtb_qa", roleTitle: "QA & Database", commits: 20, commitPercent: 14, additions: 1100, deletions: 370, pullRequestCount: 2, mergedCount: 0, linkedIssuePercent: 45, status: "watch", isMe: false },
-    ],
+    contributors: ([
+      { userId: "00000000-0000-4000-8000-000000000001", displayName: "Nguyễn Hoàng Nam", studentId: "21120015", githubUsername: "hoangnam21", roleTitle: "Trưởng nhóm / Fullstack", commits: 48, commitPercent: 34, additions: 6000, deletions: 1250, pullRequestCount: 10, mergedCount: 9, linkedIssuePercent: 96, status: "key", isMe: false },
+      { userId: "00000000-0000-4000-8000-000000000003", displayName: "Lê Minh Khoa", studentId: "21020999", githubUsername: "khoalm_fe", roleTitle: "Trưởng nhóm / Frontend", commits: 18, commitPercent: 13, additions: 1840, deletions: 370, pullRequestCount: 3, mergedCount: 3, linkedIssuePercent: 78, status: "active", isMe: false },
+      { userId: "00000000-0000-4000-8000-000000000002", displayName: "Đặng Thảo Linh", studentId: "21020872", githubUsername: "thaolinh_dev", roleTitle: "Frontend Developer", commits: 38, commitPercent: 27, additions: 3710, deletions: 780, pullRequestCount: 8, mergedCount: 7, linkedIssuePercent: 88, status: "active", isMe: false },
+      { userId: "00000000-0000-4000-8000-000000000004", displayName: "Bùi Quang Thắng", studentId: "21020215", githubUsername: "thangbq_ai", roleTitle: "AI & Data", commits: 22, commitPercent: 15, additions: 1800, deletions: 420, pullRequestCount: 5, mergedCount: 5, linkedIssuePercent: 73, status: "active", isMe: false },
+      { userId: "00000000-0000-4000-8000-000000000005", displayName: "Trần Bảo Long", studentId: "21020301", githubUsername: "longtb_qa", roleTitle: "QA & Database", commits: 16, commitPercent: 11, additions: 900, deletions: 300, pullRequestCount: 2, mergedCount: 0, linkedIssuePercent: 45, status: "watch", isMe: false },
+    ] as CodeContributor[]).map((contributor) => ({ ...contributor, isMe: contributor.userId === userId })),
     pullRequests: [
       { id: "pr1", number: 12, title: "feat(payment): VNPay sandbox + IPN handler", author: "Nguyễn Hoàng Nam", branch: "feat/vnpay-ipn", state: "open", linkedIssueKey: "NEXUS-104", updatedAt: daysFrom(now, 0, 10) },
       { id: "pr2", number: 11, title: "refactor(auth): JWT middleware", author: "Bùi Quang Thắng", branch: "refactor/jwt-middleware", state: "merged", linkedIssueKey: "NEXUS-98", updatedAt: daysFrom(now, -1, 16) },

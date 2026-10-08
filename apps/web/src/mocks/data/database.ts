@@ -7,6 +7,8 @@ export const STUDENT_ID = "00000000-0000-4000-8000-000000000003";
 /** Teacher accounts use the 0xf* range, disjoint from every fixture student id. */
 export const TEACHER_ID = "00000000-0000-4000-8000-0000000000f1";
 export const TEACHER2_ID = "00000000-0000-4000-8000-0000000000f2";
+/** Teaches the 100-student demo class (largeClass.ts) and nothing else. */
+export const TEACHER3_ID = "00000000-0000-4000-8000-0000000000f5";
 
 export const DEMO_PASSWORD = "demo1234";
 
@@ -47,6 +49,14 @@ export const MOCK_USERS: AuthUser[] = [
     id: TEACHER2_ID,
     email: "teacher2@utask.test",
     display_name: "ThS. Lê Thị Mai",
+    global_role: "USER",
+    capabilities: [],
+    roles: ["TEACHER"],
+  },
+  {
+    id: TEACHER3_ID,
+    email: "teacher3@utask.test",
+    display_name: "TS. Phạm Quốc Bảo",
     global_role: "USER",
     capabilities: [],
     roles: ["TEACHER"],
@@ -130,6 +140,7 @@ export function createInitialDatabase(_scenario: MockScenario): MockDatabase {
       [STUDENT_ID]: profile(STUDENT_ID, "Lê Minh Khoa", "student@utask.test", "21020999"),
       [TEACHER_ID]: profile(TEACHER_ID, "TS. Trần Minh Đức", "teacher@utask.test", "GV01", "Khoa Công nghệ Phần mềm • Trường ĐH CNTT"),
       [TEACHER2_ID]: profile(TEACHER2_ID, "ThS. Lê Thị Mai", "teacher2@utask.test", "GV02", "Khoa Khoa học Máy tính • Trường ĐH CNTT"),
+      [TEACHER3_ID]: profile(TEACHER3_ID, "TS. Phạm Quốc Bảo", "teacher3@utask.test", "GV03", "Khoa Công nghệ Phần mềm • Trường ĐH CNTT"),
     },
     authUsersById: Object.fromEntries(MOCK_USERS.map((user) => [user.id, user])),
     createdTeams: {},

@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -42,10 +42,17 @@ function compare(sort: SortKey, a: TeacherOversightRow, b: TeacherOversightRow):
   return b.signals.length - a.signals.length || a.name.localeCompare(b.name, "vi");
 }
 
-function ProjectCell({ row }: { row: TeacherOversightRow }) {
+function ProjectCell({ row, courseId }: { row: TeacherOversightRow; courseId: string }) {
   return (
     <div>
-      <p className="font-semibold">{row.name}</p>
+      <p className="font-semibold">
+        <Link
+          to={`/teacher/courses/${courseId}/teams/${row.teamId}`}
+          className="hover:underline focus-visible:underline"
+        >
+          {row.name}
+        </Link>
+      </p>
       {row.project ? (
         <p className="text-xs text-muted-foreground">
           {row.project.key} • {row.project.name}
@@ -228,7 +235,7 @@ export function Component() {
               <tbody className="divide-y">
                 {visible.map((row) => (
                   <tr key={row.teamId} className="align-top">
-                    <td className="px-4 py-3"><ProjectCell row={row} /></td>
+                    <td className="px-4 py-3"><ProjectCell row={row} courseId={course.courseId} /></td>
                     <td className="min-w-56 px-4 py-3"><WorkCell row={row} /></td>
                     <td className="px-4 py-3 text-muted-foreground">{activityText(row.lastActivity)}</td>
                     <td className="min-w-56 px-4 py-3">
@@ -243,7 +250,7 @@ export function Component() {
           <ul className="space-y-3 md:hidden">
             {visible.map((row) => (
               <li key={row.teamId} className="space-y-3 rounded-lg border bg-card p-4 text-sm">
-                <ProjectCell row={row} />
+                <ProjectCell row={row} courseId={course.courseId} />
                 <WorkCell row={row} />
                 <p className="text-xs text-muted-foreground">{activityText(row.lastActivity)}</p>
                 <SignalList signals={row.signals} emptyText="Chưa phát hiện tín hiệu" />

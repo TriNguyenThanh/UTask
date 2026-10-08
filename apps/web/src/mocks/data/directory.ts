@@ -1,4 +1,5 @@
-import { LEADER_ID, MEMBER_ID, STUDENT_ID, TEACHER2_ID, TEACHER_ID } from "@/mocks/data/database";
+import { LEADER_ID, MEMBER_ID, STUDENT_ID, TEACHER2_ID, TEACHER3_ID, TEACHER_ID } from "@/mocks/data/database";
+import { LARGE_COURSE_ID, LARGE_STUDENTS, LARGE_TEAMS } from "@/mocks/data/largeClass";
 
 /**
  * Display directory for the demo mock: who the people, classes and teams in
@@ -70,8 +71,10 @@ export const MOCK_PEOPLE: Record<string, MockPerson> = Object.fromEntries(
     student(MAI_STUDENT_ID, "Võ Thanh Mai", "21021033", "mai.vt21021033@sis.edu.vn", "MQTT & Backend Node.js"),
     instructor(TEACHER_ID, "TS. Trần Minh Đức", "teacher@utask.test"),
     instructor(TEACHER2_ID, "ThS. Lê Thị Mai", "teacher2@utask.test"),
+    instructor(TEACHER3_ID, "TS. Phạm Quốc Bảo", "teacher3@utask.test"),
     instructor(HUONG_ID, "TS. Vũ Thu Hương", "huong.vt@faculty.edu.vn"),
     instructor(CUONG_ID, "TS. Đặng Văn Cường", "cuong.dv@faculty.edu.vn"),
+    ...LARGE_STUDENTS.map((s) => student(s.userId, s.displayName, s.studentCode, s.email, s.skill)),
   ].map((person) => [person.userId, person]),
 );
 
@@ -128,6 +131,15 @@ export const MOCK_COURSE_META: Record<string, MockCourseMeta> = {
     teamSize: { min: 3, max: 5 },
     joinCode: null,
   },
+  [LARGE_COURSE_ID]: {
+    courseId: LARGE_COURSE_ID,
+    courseCode: "SE360",
+    section: null,
+    courseName: "Lập trình Web Nâng cao",
+    term: TERM,
+    teamSize: { min: 3, max: 5 },
+    joinCode: "SE360-WEB",
+  },
   "course-it3090": {
     courseId: "course-it3090",
     courseCode: "IT3090",
@@ -150,4 +162,5 @@ export const MOCK_TEAM_META: Record<string, MockTeamMeta> = {
   "team-phoenix": { name: "Team PHOENIX", neededSkills: [] },
   "team-iot-vision": { name: "Team VISION", neededSkills: ["Embedded C", "Computer Vision"] },
   "team-iot-sense": { name: "Team SENSE", neededSkills: ["MQTT", "Backend Node.js"] },
+  ...Object.fromEntries(LARGE_TEAMS.map((team) => [team.teamId, { name: team.name, neededSkills: [] }])),
 };

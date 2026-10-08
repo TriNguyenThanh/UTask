@@ -6,6 +6,7 @@ import {
   buildTeacherCourseSummary,
   buildTeacherOversight,
   buildTeacherStudents,
+  buildTeacherTeamDetail,
   buildTeacherTeams,
 } from "@/mocks/data/teacherFlow";
 import { coursesTaughtBy } from "@/mocks/data/relationships";
@@ -110,6 +111,21 @@ export function createTeacherFlowHandlers(
         request,
         String(params.courseId),
         () => HttpResponse.json({ teams: buildTeacherTeams(String(params.courseId)) }),
+        { failsInPartialError: true },
+      ),
+    ),
+
+    http.get(`${ROOT}/courses/:courseId/teams/:teamId`, ({ params, request }) =>
+      guarded(
+        request,
+        String(params.courseId),
+        () => {
+          const detail = buildTeacherTeamDetail(String(params.courseId), String(params.teamId));
+          // A team that is not in this (assigned) class answers like one that does not exist.
+          return detail
+            ? HttpResponse.json(detail)
+            : HttpResponse.json({ detail: "Không tìm thấy nhóm." }, { status: 404 });
+        },
         { failsInPartialError: true },
       ),
     ),
