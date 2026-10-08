@@ -10,6 +10,7 @@ import {
   buildTeacherCourseSummary,
   buildTeacherOversight,
   buildTeacherStudents,
+  buildTeacherTeamDetail,
   buildTeacherTeams,
 } from "@/mocks/data/teacherFlow";
 import { createMockHandlers } from "@/mocks/handlers";
@@ -99,9 +100,30 @@ describe("Teacher home (T01)", () => {
     expect(value("Nhóm chưa có project")).toHaveTextContent(
       String(summaries.reduce((n, c) => n + c.teamsWithoutProject, 0)),
     );
-    // No source for task deadlines yet: say so instead of showing 0.
-    expect(value("Task quá hạn")).toHaveTextContent("Chưa có dữ liệu");
-    expect(value("Task quá hạn")).not.toHaveTextContent(/^\s*Task quá hạn\s*0/);
+    // Overdue comes from the same formula as the team dashboard, with its denominator.
+    const overdue = summaries.flatMap((c) => (c.overdue ? [c.overdue] : []));
+    expect(overdue.length).toBeGreaterThan(0);
+    const late = overdue.reduce((n, part) => n + part.overdue, 0);
+    const withDeadline = overdue.reduce((n, part) => n + part.withDueDate, 0);
+    expect(value("Issue quá hạn")).toHaveTextContent(String(late));
+    expect(value("Issue quá hạn")).toHaveTextContent(`Trên ${withDeadline} issue có hạn chót`);
+  });
+
+  it("agrees with the team dashboard on what is overdue", () => {
+    const team = buildTeacherTeamDetail("course-se330", "team-nexus")!;
+    expect(buildTeacherCourseSummary("course-se330")!.overdue).toEqual({
+      ...team.overdue,
+      asOf: team.asOf,
+    });
+  });
+
+  it("says 'no data', not zero, when no issue has a deadline", async () => {
+    // teacher2 teaches only CS402, whose project has no deadlines.
+    setup("/teacher", teacher2TestSession);
+    const stats = await screen.findByRole("region", { name: "Chỉ số tổng quan" });
+    const card = within(stats).getByRole("group", { name: "Issue quá hạn" });
+    expect(card).toHaveTextContent("Chưa có dữ liệu");
+    expect(card).not.toHaveTextContent(/Issue quá hạn\s*0/);
   });
 
   it("lists only assigned classes, with the two SE330 classes told apart", async () => {
@@ -122,12 +144,10 @@ describe("Teacher home (T01)", () => {
     expect(within(list).getAllByText("Chưa ghi nhận hoạt động")).toHaveLength(2);
   });
 
-  it("disables Tạo lớp and explains why, without linking to a missing page", async () => {
+  it("links Tạo lớp to the form page, which exists", async () => {
     setup("/teacher");
     await screen.findByRole("heading", { name: "Bàn làm việc giảng viên" });
-    const create = screen.getByRole("button", { name: "Tạo lớp" });
-    expect(create).toBeDisabled();
-    expect(create).toHaveAccessibleDescription(/Tạo lớp sẽ khả dụng/);
+    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
   });
 
   it("keeps the term filter in the URL and distinguishes it from having no classes", async () => {
@@ -144,7 +164,7 @@ describe("Teacher home (T01)", () => {
   it("shows an empty state for a teacher with no classes", async () => {
     setup("/teacher", teacherTestSession, "teacher-empty");
     expect(await screen.findByText("Chưa phụ trách lớp nào", { selector: "h2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tạo lớp" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
   });
 
   it("shows a loading skeleton while the classes load", async () => {
@@ -389,7 +409,7 @@ describe("Class shell and overview (T04)", () => {
     expect(screen.getByText(/Xem workspace của nhóm .* sẽ khả dụng ở giai đoạn sau/)).toBeInTheDocument();
   });
 
-  it("offers only existing tabs and a disabled Cài đặt placeholder", async () => {
+  it("offers only tabs that lead to existing pages", async () => {
     setup("/teacher/courses/course-se330");
     await screen.findByRole("heading", { level: 1 });
     const tabs = screen.getByRole("navigation", { name: "Các mục của lớp" });
@@ -397,9 +417,11 @@ describe("Class shell and overview (T04)", () => {
       within(tabs)
         .getAllByRole("link")
         .map((l) => l.textContent?.replace(/\s*\d+$/, "")),
-    ).toEqual(["Tổng quan", "Sinh viên", "Nhóm", "Giám sát"]);
-    expect(within(tabs).getByText("Cài đặt")).toHaveAttribute("aria-disabled", "true");
-    expect(within(tabs).queryByRole("link", { name: "Cài đặt" })).not.toBeInTheDocument();
+    ).toEqual(["Tổng quan", "Sinh viên", "Nhóm", "Giám sát", "Cài đặt"]);
+    expect(within(tabs).getByRole("link", { name: "Cài đặt" })).toHaveAttribute(
+      "href",
+      "/teacher/courses/course-se330/settings",
+    );
   });
 
   it("navigates between tabs with real URLs", async () => {
@@ -494,14 +516,14 @@ describe("Students (T05)", () => {
     expect(within(table).getByText("Bùi Quang Thắng")).toBeInTheDocument();
   });
 
-  it("explains an empty class and disables add and import with a reason", async () => {
+  it("explains an empty class and still offers add and import", async () => {
     setup("/teacher/courses/course-se330-n2/students");
     expect(await screen.findByText("Lớp chưa có sinh viên", { selector: "h2" })).toBeInTheDocument();
-    for (const name of ["Thêm sinh viên", "Nhập danh sách"]) {
-      const button = screen.getByRole("button", { name });
-      expect(button).toBeDisabled();
-      expect(button).toHaveAccessibleDescription(/giai đoạn sau/);
-    }
+    expect(screen.getByRole("button", { name: "Thêm sinh viên" })).toBeEnabled();
+    expect(screen.getByRole("link", { name: "Nhập danh sách" })).toHaveAttribute(
+      "href",
+      "/teacher/courses/course-se330-n2/students/import",
+    );
   });
 
   it("falls back to cards on narrow screens with the same data", async () => {
@@ -548,7 +570,7 @@ describe("Teams (T07)", () => {
       "href",
       "/teacher/courses/course-se330/teams/team-nexus",
     );
-    expect(screen.getByText(/Chuyển thành viên, phân nhóm và chỉ định Leader sẽ khả dụng/)).toBeInTheDocument();
+    expect(screen.getByText(/Điều chỉnh nhóm hiện chỉ kiểm tra và xem trước/)).toBeInTheDocument();
   });
 
   it("lists students without a team in their own section", async () => {
@@ -830,7 +852,8 @@ describe("Navigation quality", () => {
   const LIVE_ROUTES = [
     /^\/teacher$/,
     /^\/teacher\/courses$/,
-    /^\/teacher\/courses\/[^/]+(\/(students|teams|oversight))?$/,
+    /^\/teacher\/courses\/(new|[^/]+(\/(students|teams|oversight|settings))?)$/,
+    /^\/teacher\/courses\/[^/]+\/students\/import$/,
     /^\/teacher\/courses\/[^/]+\/teams\/[^/]+$/,
     /^\/projects\/[^/]+\/(backlog|board|code)$/,
     /^\/notifications$/,

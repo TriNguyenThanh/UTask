@@ -221,12 +221,13 @@ describe("Workspace as an instructor (read-only)", () => {
     }
   });
 
-  it("offers no working comment composer and says why", async () => {
+  it("offers a comment draft but no way to send it, and says why", async () => {
     setup("/projects/project-nexus/board?issue=NEXUS-104");
     const dialog = await screen.findByRole("dialog", { name: "Chi tiết issue NEXUS-104" });
     await within(dialog).findByText(/Bình luận \(Comments\)/);
-    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/Gửi bình luận sẽ khả dụng khi có hợp đồng API/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: /Soạn bình luận cho task/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Gửi phản hồi" })).toBeDisabled();
+    expect(within(dialog).getAllByText(/chưa có hợp đồng API bình luận/).length).toBeGreaterThan(0);
     // The existing comments are still readable.
     expect(within(dialog).getByText(/wireframe trang kết quả thanh toán/)).toBeInTheDocument();
   });
@@ -279,6 +280,40 @@ describe("Workspace as an instructor (read-only)", () => {
     expect(screen.queryByText(/liên hệ Trưởng nhóm/)).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("link", { name: "Xem Backlog của nhóm" }));
     await waitFor(() => expect(pathname(view.router)).toBe("/projects/project-nexus/backlog"));
+  });
+});
+
+describe("Access that ends while the app is open", () => {
+  it("does not show a project from the cache after the instructor's access has ended", async () => {
+    const view = setup("/projects/project-nexus/board");
+    // The app keeps data fresh for 30 s; the test client would refetch on every mount and hide the problem.
+    view.queryClient.setDefaultOptions({ queries: { staleTime: 30_000, retry: false, gcTime: Infinity } });
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Bảng công việc Sprint" });
+
+    // The account loses the TEACHER role; the server now answers 404 for this project.
+    view.repository.db.authUsersById[TEACHER_ID] = {
+      ...view.repository.db.authUsersById[TEACHER_ID],
+      roles: ["STUDENT"],
+    };
+    // Leave the workspace, then come straight back well inside the 30 s cache window.
+    await user.click(within(await screen.findByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Trang chủ" }));
+    await waitFor(() => expect(pathname(view.router)).toBe("/teacher"));
+    await view.router.navigate("/projects/project-nexus/board");
+
+    expect(await screen.findByText("Không tìm thấy dự án", {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Bảng công việc Sprint" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a student's workspace cached as before (only the instructor view is dropped on leaving)", async () => {
+    const view = setup("/projects/project-nexus/board", leaderTestSession);
+    await screen.findByRole("heading", { name: "Bảng công việc Sprint" });
+    await view.router.navigate("/my-work");
+    const tracker = trackRequests();
+    await view.router.navigate("/projects/project-nexus/board");
+    await screen.findByRole("heading", { name: "Bảng công việc Sprint" });
+    tracker.stop();
+    expect(tracker.calls.filter((call) => call.endsWith("/projects/project-nexus"))).toEqual([]);
   });
 });
 
