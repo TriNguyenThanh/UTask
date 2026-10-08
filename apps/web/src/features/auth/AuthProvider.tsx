@@ -127,10 +127,13 @@ export function AuthProvider({
     if (mocksEnabled()) {
       writeRefreshToken(response.refresh_token);
     }
+    // A new sign-in starts from an empty cache so nothing fetched for a
+    // previous account (or while anonymous) can be shown to this one.
+    queryClient.clear();
     setSession(nextSession);
     setStatus("authenticated");
     return response.user;
-  }, [unauthenticatedClient]);
+  }, [queryClient, unauthenticatedClient]);
 
   const logout = useCallback(async () => {
     const refreshToken = session?.refreshToken;
