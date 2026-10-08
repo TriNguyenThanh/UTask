@@ -2,8 +2,14 @@ import type {
   AccountSettings,
   StudentNotification,
 } from "@/features/notifications/types";
+import type { CourseDetail, TeamMember } from "@/features/courses/types";
 
 import { MEMBER_ID, STUDENT_ID } from "@/mocks/data/database";
+import {
+  assignmentFor,
+  pendingRequestFor,
+  projectRoleForUser,
+} from "@/mocks/data/relationships";
 
 /**
  * Scenario-controlled fixtures for courses, teams, topics, projects, backlog,
@@ -28,11 +34,109 @@ function minutesBefore(now: Date, minutes: number): string {
 
 /* ------------------------------------------------------------------ */
 /* Courses & teams                                                     */
-/* ------------------------------------------------------------------ */
+/**
+ * Demo rosters are shared between viewers: everyone on a team sees the
+ * same members. Team NEXUS is the mock's co-leader simplification —
+ * both the `leader` and `student` demo accounts lead it.
+ */
+const NEXUS_ROSTER: TeamMember[] = [
+  {
+    userId: "00000000-0000-4000-8000-000000000001",
+    displayName: "Nguyễn Hoàng Nam",
+    studentId: "21120015",
+    email: "nam.nh21120015@sis.edu.vn",
+    skill: "Backend Go & DevOps",
+    responsibility: "Quản lý dự án, Thiết kế kiến trúc Microservices",
+    role: "leader",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000003",
+    displayName: "Lê Minh Khoa",
+    studentId: "21020999",
+    email: "student@utask.test",
+    skill: "Frontend React & TypeScript",
+    responsibility: "Frontend Web Portal & tích hợp VNPay IPN",
+    role: "leader",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000002",
+    displayName: "Đặng Thảo Linh",
+    studentId: "21020872",
+    email: "linh.dt21020872@sis.edu.vn",
+    skill: "Frontend React & Tailwind",
+    responsibility: "Xây dựng giao diện Web & Mobile",
+    role: "member",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000004",
+    displayName: "Bùi Quang Thắng",
+    studentId: "21020215",
+    email: "thang.bq21020215@sis.edu.vn",
+    skill: "AI & Analytics",
+    responsibility: "Huấn luyện mô hình gợi ý & tối ưu hóa",
+    role: "member",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000005",
+    displayName: "Trần Bảo Long",
+    studentId: "21020301",
+    email: "long.tb21020301@sis.edu.vn",
+    skill: "Database & QA",
+    responsibility: "Thiết kế CSDL PostgreSQL, viết kịch bản kiểm thử",
+    role: "member",
+  },
+];
 
-import type { CourseDetail } from "@/features/courses/types";
+const DELI_ROSTER: TeamMember[] = [
+  {
+    userId: "00000000-0000-4000-8000-00000000000c",
+    displayName: "Phạm Quốc Huy",
+    studentId: "21120020",
+    email: "huy.pq21120020@sis.edu.vn",
+    skill: "Backend FastAPI",
+    responsibility: "Kiến trúc API & CSDL",
+    role: "leader",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000003",
+    displayName: "Lê Minh Khoa",
+    studentId: "21020999",
+    email: "student@utask.test",
+    skill: "Frontend React & TypeScript",
+    responsibility: "UI Onboarding & đồng bộ Health Connect",
+    role: "member",
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000002",
+    displayName: "Đặng Thảo Linh",
+    studentId: "21020872",
+    email: "linh.dt21020872@sis.edu.vn",
+    skill: "Frontend React & Tailwind",
+    responsibility: "UI Cart, Checkout, Catalog",
+    role: "member",
+  },
+  {
+    userId: "00000000-0000-4000-8000-00000000000d",
+    displayName: "Ngô Diệu Anh",
+    studentId: "21021058",
+    email: "anh.nd21021058@sis.edu.vn",
+    skill: "UI/UX & Figma",
+    responsibility: "Thiết kế trải nghiệm người dùng",
+    role: "member",
+  },
+  {
+    userId: "00000000-0000-4000-8000-00000000000e",
+    displayName: "Lý Bảo Châu",
+    studentId: "21021090",
+    email: "chau.lb21021090@sis.edu.vn",
+    skill: "QA Automation",
+    responsibility: "Kiểm thử tự động",
+    role: "member",
+  },
+];
 
-function buildCourseSe330(now: Date): CourseDetail {
+function buildCourseSe330(now: Date, userId: string): CourseDetail {
+  const assignment = assignmentFor(userId, "course-se330");
   return {
     courseId: "course-se330",
     courseCode: "SE330",
@@ -41,81 +145,49 @@ function buildCourseSe330(now: Date): CourseDetail {
     instructorName: "TS. Trần Minh Đức",
     teamSize: { min: 3, max: 5 },
     classSize: { total: 45, teamed: 38 },
-    membership: {
-      status: "assigned",
-      teamId: "team-nexus",
-      teamName: "Team NEXUS",
-      role: "leader",
-    },
+    membership: assignment
+      ? {
+          status: "assigned",
+          teamId: "team-nexus",
+          teamName: "Team NEXUS",
+          role: assignment.role,
+        }
+      : { status: "none" },
     teamFormation: {
       mode: "self-select",
       registrationDeadline: daysFrom(now, 12),
       selfCreateAllowed: false,
     },
-    team: {
-      teamId: "team-nexus",
-      teamName: "Team NEXUS",
-      isLeader: true,
-      memberCount: 4,
-      maxMembers: 5,
-      members: [
-        {
-          userId: "00000000-0000-4000-8000-000000000001",
-          displayName: "Nguyễn Hoàng Nam",
-          studentId: "21120015",
-          email: "nam.nh21120015@sis.edu.vn",
-          skill: "Backend Go & DevOps",
-          responsibility: "Quản lý dự án, Thiết kế kiến trúc Microservices",
-          role: "leader",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000002",
-          displayName: "Đặng Thảo Linh",
-          studentId: "21020872",
-          email: "linh.dt21020872@sis.edu.vn",
-          skill: "Frontend React & Tailwind",
-          responsibility: "Xây dựng giao diện Web & Mobile",
-          role: "member",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000004",
-          displayName: "Bùi Quang Thắng",
-          studentId: "21020215",
-          email: "thang.bq21020215@sis.edu.vn",
-          skill: "AI & Analytics",
-          responsibility: "Huấn luyện mô hình gợi ý & tối ưu hóa",
-          role: "member",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000005",
-          displayName: "Trần Bảo Long",
-          studentId: "21020301",
-          email: "long.tb21020301@sis.edu.vn",
-          skill: "Database & QA",
-          responsibility: "Thiết kế CSDL PostgreSQL, viết kịch bản kiểm thử",
-          role: "member",
-        },
-      ],
-      topic: {
-        status: "approved",
-        title:
-          "Hệ thống Quản lý Chuỗi cung ứng Thông minh & Truy xuất Nguồn gốc",
-        description:
-          "Hệ thống hướng tới ứng dụng kiến trúc Microservices hiệu năng cao kết hợp Smart Contracts và IoT sensors nhằm giám sát điều kiện bảo quản nhiệt độ thời gian thực của container hàng hóa, tự động xác thực chứng từ xuất xứ CO/CQ và cảnh báo sớm rủi ro vận chuyển.",
-        objectives: [
-          "Xây dựng kiến trúc Microservices với gRPC giao tiếp nội bộ và API Gateway.",
-          "Tích hợp Smart Contract lưu trữ bất biến nhật ký kiểm định và chứng từ CO/CQ.",
-          "Module kết nối cảm biến IoT (MQTT Broker) cập nhật biểu đồ nhiệt độ & độ ẩm real-time.",
-          "Web Portal quản trị cho doanh nghiệp logistics và mobile app cho tài xế giao nhận.",
-        ],
-        reviewedBy: "TS. Trần Minh Đức",
-        reviewedAt: daysFrom(now, 0, 9, 30),
-        feedback:
-          "Đề tài có tính thực tiễn cao, phạm vi phù hợp nhóm 4 sinh viên. Nhóm chú ý hoàn thiện sơ đồ ERD và chuẩn bị Backlog cho Sprint 1.",
-      },
-      repository: "nexus-team/smart-supply-chain",
-      projectKey: "NEXUS",
-    },
+    team: assignment
+      ? {
+          teamId: "team-nexus",
+          teamName: "Team NEXUS",
+          isLeader: assignment.role === "leader",
+          memberCount: 5,
+          maxMembers: 5,
+          members: NEXUS_ROSTER,
+          topic: {
+            status: "approved",
+            title:
+              "Hệ thống Quản lý Chuỗi cung ứng Thông minh & Truy xuất Nguồn gốc",
+            description:
+              "Hệ thống hướng tới ứng dụng kiến trúc Microservices hiệu năng cao kết hợp Smart Contracts và IoT sensors nhằm giám sát điều kiện bảo quản nhiệt độ thời gian thực của container hàng hóa, tự động xác thực chứng từ xuất xứ CO/CQ và cảnh báo sớm rủi ro vận chuyển.",
+            objectives: [
+              "Xây dựng kiến trúc Microservices với gRPC giao tiếp nội bộ và API Gateway.",
+              "Tích hợp Smart Contract lưu trữ bất biến nhật ký kiểm định và chứng từ CO/CQ.",
+              "Module kết nối cảm biến IoT (MQTT Broker) cập nhật biểu đồ nhiệt độ & độ ẩm real-time.",
+              "Web Portal quản trị cho doanh nghiệp logistics và mobile app cho tài xế giao nhận.",
+            ],
+            reviewedBy: "TS. Trần Minh Đức",
+            reviewedAt: daysFrom(now, 0, 9, 30),
+            feedback:
+              "Đề tài có tính thực tiễn cao, phạm vi phù hợp nhóm 4 sinh viên. Nhóm chú ý hoàn thiện sơ đồ ERD và chuẩn bị Backlog cho Sprint 1.",
+          },
+          repository: "nexus-team/smart-supply-chain",
+          projectKey: "NEXUS",
+          projectId: "project-nexus",
+        }
+      : null,
     formation: null,
   };
 }
@@ -219,7 +291,8 @@ function buildFormationSe330(now: Date): CourseDetail {
   };
 }
 
-function buildCourseCs402(now: Date): CourseDetail {
+function buildCourseCs402(now: Date, userId: string): CourseDetail {
+  const assignment = assignmentFor(userId, "course-cs402");
   return {
     courseId: "course-cs402",
     courseCode: "CS402",
@@ -228,79 +301,47 @@ function buildCourseCs402(now: Date): CourseDetail {
     instructorName: "ThS. Lê Thị Mai",
     teamSize: { min: 3, max: 5 },
     classSize: { total: 40, teamed: 37 },
-    membership: {
-      status: "assigned",
-      teamId: "team-deli",
-      teamName: "Team DELI",
-      role: "member",
-    },
+    membership: assignment
+      ? {
+          status: "assigned",
+          teamId: "team-deli",
+          teamName: "Team DELI",
+          role: assignment.role,
+        }
+      : { status: "none" },
     teamFormation: {
       mode: "join-code",
       registrationDeadline: null,
       selfCreateAllowed: false,
     },
-    team: {
-      teamId: "team-deli",
-      teamName: "Team DELI",
-      isLeader: false,
-      memberCount: 4,
-      maxMembers: 5,
-      members: [
-        {
-          userId: "00000000-0000-4000-8000-00000000000c",
-          displayName: "Phạm Quốc Huy",
-          studentId: "21120020",
-          email: "huy.pq21120020@sis.edu.vn",
-          skill: "Backend FastAPI",
-          responsibility: "Kiến trúc API & CSDL",
-          role: "leader",
-        },
-        {
-          userId: "00000000-0000-4000-8000-000000000002",
-          displayName: "Đặng Thảo Linh",
-          studentId: "21020872",
-          email: "linh.dt21020872@sis.edu.vn",
-          skill: "Frontend React & Tailwind",
-          responsibility: "UI Cart, Checkout, Catalog",
-          role: "member",
-        },
-        {
-          userId: "00000000-0000-4000-8000-00000000000d",
-          displayName: "Ngô Diệu Anh",
-          studentId: "21021058",
-          email: "anh.nd21021058@sis.edu.vn",
-          skill: "UI/UX & Figma",
-          responsibility: "Thiết kế trải nghiệm người dùng",
-          role: "member",
-        },
-        {
-          userId: "00000000-0000-4000-8000-00000000000e",
-          displayName: "Lý Bảo Châu",
-          studentId: "21021090",
-          email: "chau.lb21021090@sis.edu.vn",
-          skill: "QA Automation",
-          responsibility: "Kiểm thử tự động",
-          role: "member",
-        },
-      ],
-      topic: {
-        status: "under_review",
-        title:
-          "Ứng dụng Theo dõi Sức khỏe & Dinh dưỡng Cá nhân hóa (Flutter & FastAPI)",
-        description:
-          "Ứng dụng di động theo dõi sức khỏe và dinh dưỡng cá nhân, gợi ý thực đơn theo mục tiêu calo, đồng bộ dữ liệu wearable qua Health Connect.",
-        objectives: [
-          "Onboarding đánh giá mục tiêu sức khỏe cá nhân.",
-          "Gợi ý thực đơn theo calo và dị ứng.",
-          "Đồng bộ wearable qua Health Connect API.",
-        ],
-        reviewedBy: null,
-        reviewedAt: null,
-        feedback: null,
-      },
-      repository: null,
-      projectKey: "DELI",
-    },
+    team: assignment
+      ? {
+          teamId: "team-deli",
+          teamName: "Team DELI",
+          isLeader: assignment.role === "leader",
+          memberCount: DELI_ROSTER.length,
+          maxMembers: 5,
+          members: DELI_ROSTER,
+          topic: {
+            status: "under_review",
+            title:
+              "Ứng dụng Theo dõi Sức khỏe & Dinh dưỡng Cá nhân hóa (Flutter & FastAPI)",
+            description:
+              "Ứng dụng di động theo dõi sức khỏe và dinh dưỡng cá nhân, gợi ý thực đơn theo mục tiêu calo, đồng bộ dữ liệu wearable qua Health Connect.",
+            objectives: [
+              "Onboarding đánh giá mục tiêu sức khỏe cá nhân.",
+              "Gợi ý thực đơn theo calo và dị ứng.",
+              "Đồng bộ wearable qua Health Connect API.",
+            ],
+            reviewedBy: null,
+            reviewedAt: null,
+            feedback: null,
+          },
+          repository: null,
+          projectKey: "DELI",
+          projectId: "project-deli",
+        }
+      : null,
     formation: null,
   };
 }
@@ -330,6 +371,87 @@ function buildPendingCourseSe331(now: Date): CourseDetail {
   };
 }
 
+/** SE331 as seen by an enrolled student without a team or pending request. */
+function buildUnTeamedCourseSe331(): CourseDetail {
+  return {
+    courseId: "course-se331",
+    courseCode: "SE331",
+    courseName: "Kiểm thử Phần mềm",
+    semester: "HK1 2026–2027",
+    instructorName: "TS. Vũ Thu Hương",
+    teamSize: { min: 3, max: 5 },
+    classSize: { total: 42, teamed: 39 },
+    membership: { status: "none" },
+    teamFormation: {
+      mode: "instructor-assigned",
+      registrationDeadline: null,
+      selfCreateAllowed: false,
+    },
+    team: null,
+    formation: null,
+  };
+}
+
+/** Class A fixture: the enrolled student has no team here. */
+function buildCourseIt3090(now: Date): CourseDetail {
+  return {
+    courseId: "course-it3090",
+    courseCode: "IT3090",
+    courseName: "Đồ án IoT",
+    semester: "HK1 2026–2027",
+    instructorName: "TS. Đặng Văn Cường",
+    teamSize: { min: 3, max: 5 },
+    classSize: { total: 38, teamed: 30 },
+    membership: { status: "none" },
+    teamFormation: {
+      mode: "self-select",
+      registrationDeadline: daysFrom(now, 2, 23, 59),
+      selfCreateAllowed: true,
+    },
+    team: null,
+    formation: {
+      openTeams: [
+        {
+          teamId: "team-iot-vision",
+          teamName: "Team VISION",
+          leaderName: "Phạm Quốc Huy",
+          memberCount: 3,
+          maxMembers: 5,
+          neededSkills: ["Embedded C", "Computer Vision"],
+        },
+        {
+          teamId: "team-iot-sense",
+          teamName: "Team SENSE",
+          leaderName: "Võ Thanh Mai",
+          memberCount: 4,
+          maxMembers: 5,
+          neededSkills: ["MQTT", "Backend Node.js"],
+        },
+      ],
+      unassignedClassmates: [
+        {
+          userId: STUDENT_ID,
+          displayName: "Lê Minh Khoa",
+          studentId: "21020999",
+          skill: "Frontend React & TypeScript",
+        },
+        {
+          userId: "00000000-0000-4000-8000-000000000006",
+          displayName: "Hoàng Trọng Khang",
+          studentId: "21021004",
+          skill: "Backend FastAPI",
+        },
+        {
+          userId: "00000000-0000-4000-8000-000000000008",
+          displayName: "Trần Đăng Khoa",
+          studentId: "21021061",
+          skill: "Embedded & IoT",
+        },
+      ],
+    },
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Topic lifecycle variants                                            */
 /* ------------------------------------------------------------------ */
@@ -337,6 +459,7 @@ function buildPendingCourseSe331(now: Date): CourseDetail {
 export function courseDetailForScenario(
   courseId: string,
   scenario: string,
+  userId: string,
   now = new Date(ANCHOR_DATE),
 ): CourseDetail | null {
   switch (courseId) {
@@ -345,19 +468,24 @@ export function courseDetailForScenario(
         return buildFormationSe330(now);
       }
       if (scenario === "student-team-leader-topic-draft") {
-        return buildCourseSe330WithTopic(now, "draft");
+        return buildCourseSe330WithTopic(now, userId, "draft");
       }
       if (scenario === "student-topic-revision-required") {
-        return buildCourseSe330WithTopic(now, "revision_required");
+        return buildCourseSe330WithTopic(now, userId, "revision_required");
       }
       if (scenario === "student-team-member-topic-pending") {
-        return buildCourseSe330WithTopic(now, "submitted");
+        return buildCourseSe330WithTopic(now, userId, "submitted");
       }
-      return buildCourseSe330(now);
+      return buildCourseSe330(now, userId);
     case "course-cs402":
-      return buildCourseCs402(now);
+      return buildCourseCs402(now, userId);
     case "course-se331":
-      return buildPendingCourseSe331(now);
+      if (pendingRequestFor(userId, "course-se331")) {
+        return buildPendingCourseSe331(now);
+      }
+      return buildUnTeamedCourseSe331();
+    case "course-it3090":
+      return buildCourseIt3090(now);
     default:
       return null;
   }
@@ -365,9 +493,10 @@ export function courseDetailForScenario(
 
 function buildCourseSe330WithTopic(
   now: Date,
+  userId: string,
   status: "draft" | "submitted" | "revision_required",
 ): CourseDetail {
-  const base = buildCourseSe330(now);
+  const base = buildCourseSe330(now, userId);
   if (!base.team) throw new Error("SE330 base must have a team");
   const titleByStatus: Record<string, string | null> = {
     draft: null,
@@ -427,8 +556,8 @@ const NEXUS_MEMBERS = [
   { userId: "00000000-0000-4000-8000-000000000005", displayName: "Trần Bảo Long", initials: "BL" },
 ];
 
-function buildProjectSummaries(now: Date): ProjectSummary[] {
-  return [
+function buildProjectSummaries(now: Date, userId: string): ProjectSummary[] {
+  const summaries: ProjectSummary[] = [
     {
       projectId: "project-nexus",
       projectKey: "NEXUS",
@@ -437,7 +566,7 @@ function buildProjectSummaries(now: Date): ProjectSummary[] {
       courseName: "Đồ án Chuyên ngành Công nghệ Phần mềm",
       instructorName: "TS. Trần Minh Đức",
       teamName: "Team NEXUS",
-      role: "leader",
+      role: "member",
       archived: false,
       sprint: {
         name: "Sprint 2: Thiết kế ERD & API Gateway",
@@ -479,6 +608,14 @@ function buildProjectSummaries(now: Date): ProjectSummary[] {
       repository: "legacy-team/classifieds",
     },
   ];
+  // Role per user+project from the relationship graph, not per account.
+  for (const summary of summaries) {
+    const role = projectRoleForUser(userId, summary.projectId);
+    if (role !== null) {
+      summary.role = role;
+    }
+  }
+  return summaries;
 }
 
 function buildNexusIssues(now: Date): Issue[] {
@@ -496,7 +633,7 @@ function buildNexusIssues(now: Date): Issue[] {
   ];
 }
 
-function buildNexusWorkspace(now: Date): ProjectWorkspace {
+function buildNexusWorkspace(now: Date, userId: string): ProjectWorkspace {
   return {
     projectId: "project-nexus",
     projectKey: "NEXUS",
@@ -505,7 +642,7 @@ function buildNexusWorkspace(now: Date): ProjectWorkspace {
     courseName: "Đồ án Chuyên ngành Công nghệ Phần mềm",
     instructorName: "TS. Trần Minh Đức",
     teamName: "Team NEXUS",
-    myRole: "leader",
+    myRole: projectRoleForUser(userId, "project-nexus") ?? "member",
     repository: "nexus-team/smart-supply-chain",
     epics: [
       { id: "epic-auth", name: "Module Xác thực & Phân quyền", color: "#7c3aed", issueCount: 4 },
@@ -522,7 +659,7 @@ function buildNexusWorkspace(now: Date): ProjectWorkspace {
   };
 }
 
-function buildDeliWorkspace(now: Date): ProjectWorkspace {
+function buildDeliWorkspace(now: Date, userId: string): ProjectWorkspace {
   return {
     projectId: "project-deli",
     projectKey: "DELI",
@@ -531,7 +668,7 @@ function buildDeliWorkspace(now: Date): ProjectWorkspace {
     courseName: "Phát triển Ứng dụng Di động Nâng cao",
     instructorName: "ThS. Lê Thị Mai",
     teamName: "Team DELI",
-    myRole: "member",
+    myRole: projectRoleForUser(userId, "project-deli") ?? "member",
     repository: "deli-team/health-app",
     epics: [{ id: "epic-deli-onboard", name: "Onboarding & Auth", color: "#7c3aed", issueCount: 3 }],
     sprints: [
@@ -544,34 +681,40 @@ function buildDeliWorkspace(now: Date): ProjectWorkspace {
     ],
   };
 }
-export function projectSummariesForScenario(scenario: string): ProjectSummary[] {
+
+export function projectSummariesForScenario(
+  scenario: string,
+  userId: string,
+): ProjectSummary[] {
   const now = new Date();
   if (scenario === "student-empty") return [];
   if (scenario === "student-project-leader") {
-    return buildProjectSummaries(now).filter((project) => project.role === "leader");
+    return buildProjectSummaries(now, userId).filter((project) => project.role === "leader");
   }
   if (scenario === "student-project-member") {
-    return buildProjectSummaries(now).filter((project) => project.role === "member" && !project.archived);
+    return buildProjectSummaries(now, userId).filter((project) => project.role === "member" && !project.archived);
   }
-  return buildProjectSummaries(now);
+  return buildProjectSummaries(now, userId);
 }
 
 export function projectWorkspaceFor(
   projectId: string,
   scenario: string,
+  userId: string,
 ): ProjectWorkspace | null {
   const now = new Date();
-  if (projectId === "project-nexus") return buildNexusWorkspace(now);
-  if (projectId === "project-deli") return buildDeliWorkspace(now);
+  if (projectId === "project-nexus") return buildNexusWorkspace(now, userId);
+  if (projectId === "project-deli") return buildDeliWorkspace(now, userId);
   return null;
 }
 
 export function issueDetailFor(
   projectId: string,
   issueKey: string,
+  userId: string,
 ): IssueDetail | null {
   const now = new Date();
-  const workspace = projectWorkspaceFor(projectId, "default");
+  const workspace = projectWorkspaceFor(projectId, "default", userId);
   if (!workspace) return null;
   const issue = workspace.issues.find((candidate) => candidate.key === issueKey);
   if (!issue) return null;
