@@ -1,12 +1,13 @@
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
-import { CourseCard, DisabledAction, courseLabel } from "@/features/teacher/components/shared";
+import { CourseCard, courseLabel } from "@/features/teacher/components/shared";
 import { useTeacherCourses } from "@/lib/query/teacherFlowHooks";
 
 export function Component() {
@@ -51,12 +52,9 @@ export function Component() {
         title="Lớp phụ trách"
         description="Các lớp bạn được phân công hoặc đã tạo."
       >
-        <DisabledAction
-          reason="Tạo lớp sẽ khả dụng sau khi quy trình tạo lớp được hoàn thiện."
-          variant="default"
-        >
-          Tạo lớp
-        </DisabledAction>
+        <Button asChild>
+          <Link to="/teacher/courses/new">Tạo lớp</Link>
+        </Button>
       </PageHeader>
 
       {all.length === 0 ? (
