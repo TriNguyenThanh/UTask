@@ -27,9 +27,72 @@ REMOTE = (
     .split("cat <<'REMOTE_SCRIPT'\n", 1)[1]
     .split("\nREMOTE_SCRIPT", 1)[0]
 )
+DEPLOY = next(
+    step["run"]
+    for step in RELEASE["jobs"]["deploy-staging"]["steps"]
+    if step.get("name") == "Pull images and restart staging"
+)
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    def test_remote_deploy_continues_after_compose_run_consumes_stdin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env").write_text("TEST_ONLY=true\n")
+            calls = root / "docker-calls"
+            docker = root / "docker"
+            docker.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "with open(os.environ['CALLS'], 'a') as output:\n"
+                "    output.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                "if 'run' in sys.argv: sys.stdin.read()\n"
+            )
+            docker.chmod(0o755)
+            ssh = root / "ssh"
+            ssh.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, subprocess, sys\n"
+                "names=('registry_token','workdir','registry','registry_user','image_prefix','image_tag','service_names','migration_names')\n"
+                "env=os.environ.copy()\n"
+                "for name in names: env[name]=sys.stdin.buffer.readline().rstrip(b'\\n').decode()\n"
+                "result=subprocess.run(['bash','-s'],input=sys.stdin.buffer.read(),env=env,check=False)\n"
+                "raise SystemExit(result.returncode)\n"
+            )
+            ssh.chmod(0o755)
+            result = subprocess.run(
+                ["bash", "-c", DEPLOY],
+                cwd=root,
+                env={
+                    **os.environ,
+                    "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                    "CALLS": str(calls),
+                    "STAGING_HOST": "test-host",
+                    "STAGING_USER": "test-user",
+                    "STAGING_WORKDIR": str(root),
+                    "STAGING_REGISTRY": "ghcr.io",
+                    "STAGING_REGISTRY_USERNAME": "test-user",
+                    "STAGING_REGISTRY_TOKEN": "test-token",
+                    "STAGING_IMAGE_PREFIX": "ghcr.io/test/utask",
+                    "STAGING_IMAGE_TAG": "sha-test",
+                    "STAGING_SERVICES": "identity-service",
+                    "STAGING_MIGRATION_SERVICES": "identity-service",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            commands = [json.loads(line) for line in calls.read_text().splitlines()]
+            migration = next(
+                index for index, command in enumerate(commands) if "run" in command
+            )
+            self.assertIn("--interactive=false", commands[migration])
+            self.assertTrue(
+                any("up" in command for command in commands[migration + 1 :])
+            )
+            self.assertEqual(sum("exec" in command for command in commands), 2)
+
     def test_ssh_key_validation_with_real_openssh_keys_and_sanitized_errors(self):
         step = next(
             step
