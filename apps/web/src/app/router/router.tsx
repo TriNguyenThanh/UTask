@@ -85,6 +85,7 @@ export const appRoutes: RouteObject[] = [
         children: [
           { index: true, lazy: () => import("@/features/teacher/routes/TeacherHomeRoute") },
           { path: "courses", lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute") },
+          { path: "courses/new", lazy: () => import("@/features/teacher/routes/TeacherCourseCreateRoute") },
           {
             path: "courses/:courseId",
             lazy: () => import("@/features/teacher/routes/TeacherCourseLayout"),
@@ -96,6 +97,14 @@ export const appRoutes: RouteObject[] = [
               {
                 path: "students",
                 lazy: () => import("@/features/teacher/routes/TeacherCourseStudentsRoute"),
+              },
+              {
+                path: "students/import",
+                lazy: () => import("@/features/teacher/routes/TeacherStudentImportRoute"),
+              },
+              {
+                path: "settings",
+                lazy: () => import("@/features/teacher/routes/TeacherCourseSettingsRoute"),
               },
               {
                 path: "teams",

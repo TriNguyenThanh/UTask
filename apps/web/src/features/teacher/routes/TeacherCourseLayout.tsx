@@ -1,14 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
 import { useEffect } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
-import { toast } from "sonner";
 
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { CopyJoinCodeButton } from "@/features/teacher/components/JoinCode";
 import {
   TeacherQueryError,
   courseLabel,
@@ -24,19 +22,8 @@ const tabs: { label: string; to: string; end: boolean; count?: TabCount }[] = [
   { label: "Sinh viên", to: "students", end: false, count: "studentCount" },
   { label: "Nhóm", to: "teams", end: false, count: "teamCount" },
   { label: "Giám sát", to: "oversight", end: false },
+  { label: "Cài đặt", to: "settings", end: false },
 ];
-
-async function copyJoinCode(code: string) {
-  try {
-    if (!navigator.clipboard?.writeText) {
-      throw new Error("Clipboard không khả dụng");
-    }
-    await navigator.clipboard.writeText(code);
-    toast.success("Đã sao chép mã tham gia.");
-  } catch {
-    toast.error("Không sao chép được mã. Hãy chọn mã và sao chép thủ công.");
-  }
-}
 
 /**
  * Shell for one class: loads the class once, authorizes the whole subtree
@@ -105,16 +92,7 @@ export function Component() {
             <div className="flex shrink-0 items-center gap-2 rounded-md border bg-muted/50 px-3 py-1.5">
               <span className="text-xs text-muted-foreground">Mã tham gia</span>
               <span className="font-mono text-sm font-semibold">{detail.joinCode}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                aria-label="Sao chép mã tham gia"
-                onClick={() => void copyJoinCode(detail.joinCode as string)}
-              >
-                <Copy className="size-3.5" aria-hidden />
-              </Button>
+              <CopyJoinCodeButton code={detail.joinCode} />
             </div>
           ) : null}
         </div>
@@ -143,13 +121,6 @@ export function Component() {
               ) : null}
             </NavLink>
           ))}
-          <span
-            aria-disabled="true"
-            title="Cài đặt lớp sẽ khả dụng ở giai đoạn sau."
-            className="cursor-not-allowed whitespace-nowrap border-b-2 border-transparent pb-2 text-sm font-medium text-muted-foreground/60"
-          >
-            Cài đặt
-          </span>
         </nav>
       </div>
 
