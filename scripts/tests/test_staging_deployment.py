@@ -30,6 +30,66 @@ REMOTE = (
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    def test_ssh_key_validation_with_real_openssh_keys_and_sanitized_errors(self):
+        step = next(
+            step
+            for step in RELEASE["jobs"]["deploy-staging"]["steps"]
+            if step.get("name") == "Configure SSH"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            keys = {}
+            for name, options in (
+                ("openssh", ["-t", "ed25519", "-N", ""]),
+                ("pem", ["-t", "rsa", "-b", "2048", "-m", "PEM", "-N", ""]),
+                ("encrypted", ["-t", "ed25519", "-N", "test-only-passphrase"]),
+            ):
+                path = root / name
+                subprocess.run(
+                    ["ssh-keygen", "-q", *options, "-f", str(path)],
+                    check=True,
+                    capture_output=True,
+                )
+                keys[name] = path.read_text()
+            cases = (
+                (keys["openssh"], 0, "readable without"),
+                (keys["pem"], 0, "readable without"),
+                (keys["openssh"].replace("\n", "\r\n"), 1, "validation failed"),
+                (keys["encrypted"], 1, "incorrect passphrase"),
+                ((root / "openssh.pub").read_text(), 1, "validation failed"),
+                (keys["openssh"].replace("\n", "\\n"), 1, "validation failed"),
+                ("invalid-test-key", 1, "Root cause is not established"),
+            )
+            for index, (key, expected, message) in enumerate(cases):
+                with self.subTest(index=index):
+                    home = root / f"home-{index}"
+                    home.mkdir()
+                    completed = subprocess.run(
+                        ["bash", "-c", step["run"]],
+                        env={
+                            **os.environ,
+                            "HOME": str(home),
+                            "STAGING_SSH_PRIVATE_KEY": key,
+                            "STAGING_KNOWN_HOSTS": "test-only-known-hosts",
+                        },
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    self.assertEqual(completed.returncode, expected, completed.stderr)
+                    self.assertIn(message, completed.stdout)
+                    self.assertNotIn(key.strip(), completed.stdout + completed.stderr)
+                    self.assertEqual(
+                        (home / ".ssh/id_ed25519").read_bytes(), (key + "\n").encode()
+                    )
+                    self.assertEqual(
+                        (home / ".ssh/known_hosts").exists(), expected == 0
+                    )
+                    self.assertEqual(
+                        (home / ".ssh/id_ed25519").stat().st_mode & 0o777, 0o600
+                    )
+
     def test_mixed_case_owner_produces_shared_lowercase_release_namespace(self):
         job = RELEASE["jobs"]["image-config"]
         step = next(step for step in job["steps"] if step.get("id") == "namespace")

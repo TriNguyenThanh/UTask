@@ -141,6 +141,21 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
+          key_file="$HOME/.ssh/id_ed25519"
+          key_error=$(mktemp)
+          trap 'rm -f "$key_error"' EXIT
+          if ! LC_ALL=C ssh-keygen -y -P '' -f "$key_file" > /dev/null 2> "$key_error"; then
+            if grep -Fq 'error in libcrypto' "$key_error"; then
+              echo '::error::OpenSSH key validation failed: error in libcrypto. Root cause is not established.'
+            elif grep -Fq 'incorrect passphrase' "$key_error"; then
+              echo '::error::OpenSSH key validation failed: incorrect passphrase with an empty passphrase. This workflow has no passphrase support.'
+            else
+              echo '::error::OpenSSH key validation failed. Root cause is not established; key content was not modified.'
+            fi
+            exit 1
+          else
+            echo 'SSH private key is readable without a passphrase.'
+          fi
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 644 "$HOME/.ssh/known_hosts"
 
