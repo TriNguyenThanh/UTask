@@ -1,6 +1,6 @@
 # UTask Web
 
-React 18 + Vite frontend for UTask, rebuilt one vertical slice at a time from the `.stitch-assets` reference HTML. Current slices: auth, My Work (Bàn làm việc), student flow (lớp/nhóm, thông báo, hồ sơ), project workspace.
+React 18 + Vite frontend for UTask, rebuilt one vertical slice at a time from the `.stitch-assets` reference HTML. Current slices: auth, My Work (Bàn làm việc), student flow (lớp/nhóm, thông báo, hồ sơ), project workspace, teacher class views (read-only).
 
 Architecture and per-feature status live in the canonical docs: [`docs/web/README.md`](../../docs/web/README.md) and [`docs/web/student-flow.md`](../../docs/web/student-flow.md). This README only covers how to run the app.
 
@@ -31,10 +31,15 @@ All accounts use password `demo1234`.
 | Leader | `leader@utask.test` |
 | Member | `member@utask.test` |
 | Student (no group) | `student@utask.test` |
+| Teacher (SE330 ×2, IT3090) | `teacher@utask.test` |
+| Teacher (CS402) | `teacher2@utask.test` |
+
+Teacher accounts open `/teacher`. Which classes each account sees, and the demo
+data behind them, are described in [`docs/web/teacher-flow.md`](../../docs/web/teacher-flow.md).
 
 ## Mock scenarios
 
-Set `VITE_MOCK_SCENARIO` to any of the 27 scenarios defined in `src/mocks/scenarios.ts` — auth (`default`, `slow-network`, `server-error`), My Work states, and student-flow states (no team, join pending, leader/member topic, AI key missing, …).
+Set `VITE_MOCK_SCENARIO` to any of the 29 scenarios defined in `src/mocks/scenarios.ts` — auth (`default`, `slow-network`, `server-error`), My Work states, student-flow states (no team, join pending, leader/member topic, AI key missing, …) and teacher states (`teacher-empty`, `teacher-partial-error`).
 
 ## Verification
 

@@ -3,6 +3,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { TeacherSidebar } from "@/components/navigation/TeacherSidebar";
+import { TeacherTopNavigation } from "@/components/navigation/TeacherTopNavigation";
 import { TopNavigation } from "@/components/navigation/TopNavigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +16,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { canUseTeacherSpace } from "@/features/auth/utils";
 
 function UserSummary({ onLogout }: { onLogout: () => void }) {
   const { user } = useAuth();
@@ -37,11 +40,11 @@ function UserSummary({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function SidebarShell({ children }: { children: ReactNode }) {
+function SidebarShell({ children, home }: { children: ReactNode; home: string }) {
   return (
     <>
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
-        <NavLink className="flex items-center gap-2.5" to="/my-work" aria-label="UTask — Trang chủ">
+        <NavLink className="flex items-center gap-2.5" to={home} aria-label="UTask — Trang chủ">
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             UT
           </span>
@@ -63,6 +66,13 @@ export function AuthenticatedLayout() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  // The Teacher chrome (sidebar, top bar) is used only inside /teacher by an
+  // account that may use it, so a blocked account never triggers Teacher
+  // queries and Student pages never show Teacher navigation.
+  const inTeacherSpace =
+    (location.pathname === "/teacher" || location.pathname.startsWith("/teacher/")) &&
+    canUseTeacherSpace(auth.user);
+  const sidebar = inTeacherSpace ? <TeacherSidebar /> : <AppSidebar />;
 
   // Any navigation (including search-param deep links from task rows or
   // notifications) must close the mobile drawer so the page is visible.
@@ -85,8 +95,8 @@ export function AuthenticatedLayout() {
 
       {/* Desktop sidebar */}
       <aside className="hidden min-h-screen flex-col border-r border-sidebar-border bg-sidebar lg:flex">
-        <SidebarShell>
-          <AppSidebar />
+        <SidebarShell home={inTeacherSpace ? "/teacher" : "/my-work"}>
+          {sidebar}
         </SidebarShell>
         <div className="border-t border-sidebar-border bg-secondary/70 p-3">
           <UserSummary onLogout={logout} />
@@ -94,7 +104,11 @@ export function AuthenticatedLayout() {
       </aside>
 
       <div className="min-w-0">
-        <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        {inTeacherSpace ? (
+          <TeacherTopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        ) : (
+          <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        )}
         <main className="min-w-0 pb-16" id="main-content">
           <Outlet />
         </main>
@@ -111,9 +125,7 @@ export function AuthenticatedLayout() {
               Academic Portal
             </SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <AppSidebar />
-          </div>
+          <div className="flex min-h-0 flex-1 flex-col">{sidebar}</div>
           <div className="border-t border-sidebar-border p-3">
             <UserSummary onLogout={logout} />
           </div>
