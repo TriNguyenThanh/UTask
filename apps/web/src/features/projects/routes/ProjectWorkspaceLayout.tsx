@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import { ApiError } from "@/lib/api/errors";
-import { useProjectWorkspace } from "@/lib/query/studentFlowHooks";
+import { studentFlowKeys, useProjectWorkspace } from "@/lib/query/studentFlowHooks";
 import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types";
 import { isReadOnlyViewer } from "@/lib/permissions";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
@@ -73,6 +74,16 @@ export default function ProjectWorkspaceLayout() {
     requestTeacherChrome(true);
     return () => requestTeacherChrome(false);
   }, [instructorView, requestTeacherChrome]);
+
+  // An instructor's access follows the class assignment, which can end at any
+  // time. So nothing of this project (workspace, issues, code) outlives the
+  // visit: coming back asks the server again instead of showing a stale copy
+  // of a project the instructor may no longer be allowed to see.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!instructorView) return;
+    return () => queryClient.removeQueries({ queryKey: studentFlowKeys.project(projectId) });
+  }, [instructorView, projectId, queryClient]);
 
   // A teacher-only account has no Student project list to go back to.
   const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
