@@ -1,22 +1,24 @@
-"""Các dependency được FastAPI cấp cho route handler."""
+"""HTTP dependencies chỉ cung cấp use case và identity đã xác minh."""
 
 from typing import Annotated
 
-from fastapi import Header, Request
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from application import AiApplicationService
-from errors import AuthenticationRequiredError
+from errors import failure
+from models.security import Principal
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_application(request: Request) -> AiApplicationService:
+def get_application(request: Request):
     return request.app.state.application
 
 
-def get_requester_user_id(
-    authenticated_user_id: Annotated[str | None, Header(alias="X-Authenticated-User-ID")] = None,
-) -> str:
-    """Đọc identity header của bootstrap; chưa triển khai xác minh gateway/token."""
-
-    if not authenticated_user_id:
-        raise AuthenticationRequiredError()
-    return authenticated_user_id
+async def get_principal(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> Principal:
+    if credentials is None:
+        raise failure("AUTHENTICATION_REQUIRED", 401)
+    return await request.app.state.authenticator.authenticate(credentials.credentials)

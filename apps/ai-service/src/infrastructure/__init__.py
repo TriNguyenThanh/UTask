@@ -1,1 +1,1 @@
-"""Adapter cụ thể được app factory lắp ghép vào các hợp đồng phía trong."""
+"""Adapter cho persistence, context, identity và runtime ADK."""

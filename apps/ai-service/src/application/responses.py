@@ -1,61 +1,32 @@
-"""Dựng envelope kết quả bootstrap; không điều phối workflow hay persistence."""
+"""Envelope API chỉ được dựng từ trạng thái đã lưu của request."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID
 
-from errors import ServiceError
-from models import (
-    AiResult,
-    ContextMetadata,
-    CreateAiRequest,
-    ErrorPayload,
-    FailedAiResponse,
-    Intent,
-    SucceededAiResponse,
-)
+from errors import ServiceError, public_error
+from models import CreateAiRequest, ErrorPayload, FailedAiResponse
 
 
-def _build_succeeded_response(
-    request: CreateAiRequest,
+def failed_response(
+    payload: CreateAiRequest,
     request_id: UUID,
     created_at: datetime,
-    result: AiResult,
-) -> SucceededAiResponse:
-    return SucceededAiResponse(
-        request_id=request_id,
-        intent=Intent(request.intent),
-        status="succeeded",
-        output_schema_version=request.output_schema_version,
-        created_at=created_at,
-        updated_at=datetime.now(UTC),
-        result=result,
-        context=ContextMetadata(
-            as_of=created_at,
-            sources=[],
-            fingerprint="bootstrap-no-context",
-        ),
-        completed_at=datetime.now(UTC),
-    )
-
-
-def _build_failed_response(
-    request: CreateAiRequest,
-    request_id: UUID,
-    created_at: datetime,
+    now: datetime,
     error: ServiceError,
 ) -> FailedAiResponse:
+    error = public_error(error)
     return FailedAiResponse(
         request_id=request_id,
-        intent=Intent(request.intent),
+        intent=payload.intent,
         status="failed",
-        output_schema_version=request.output_schema_version,
+        output_schema_version=payload.output_schema_version,
         created_at=created_at,
-        updated_at=datetime.now(UTC),
+        updated_at=now,
         error=ErrorPayload(
             code=error.code,
             message=error.message,
             details=error.details,
-            request_id=request_id,
             retryable=error.retryable,
+            request_id=request_id,
         ),
     )

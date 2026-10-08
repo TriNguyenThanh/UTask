@@ -14,7 +14,17 @@ ALLOWED_INTERNAL_IMPORTS = {
     "api": {"api", "application", "errors", "models"},
     "application": {"application", "errors", "models"},
     "workflow": {"workflow", "errors", "models"},
-    "infrastructure": {"infrastructure", "application", "workflow", "errors", "models"},
+    "context": {"context", "workflow", "errors", "models"},
+    "jobs": {"jobs", "config", "infrastructure", "application", "errors", "models"},
+    "infrastructure": {
+        "infrastructure",
+        "application",
+        "workflow",
+        "context",
+        "config",
+        "errors",
+        "models",
+    },
     "models": {"models"},
 }
 INTERNAL_MODULES = {*ALLOWED_INTERNAL_IMPORTS, "main", "config", "errors"}
@@ -53,7 +63,7 @@ def test_layer_imports_follow_dependency_direction(layer: str) -> None:
 @pytest.mark.parametrize(
     "statement",
     [
-        "from infrastructure.providers import UnconfiguredProvider",
+        "from infrastructure.providers import AdkRuntime",
         "import infrastructure.repositories",
         "from api import router",
         "from fastapi import FastAPI",

@@ -1,10 +1,14 @@
-"""Hợp đồng gọi mô hình mà bounded workflow sử dụng."""
+"""Hợp đồng context và model dùng bởi bounded workflow."""
 
 from typing import Protocol
 
-from models import AiResult, CreateAiRequest
+from models import CreateAiRequest
+from models.budget import Charge as Charge
+from models.context import ContextDocument
+from models.security import Principal
 
 
-class ModelProvider(Protocol):
-    async def generate(self, request: CreateAiRequest) -> AiResult:
-        """Generate a typed proposal for one phase-1 intent."""
+class ContextGateway(Protocol):
+    async def fetch(
+        self, domain: str, principal: Principal, request: CreateAiRequest
+    ) -> ContextDocument: ...

@@ -1,5 +1,3 @@
-"""Runtime workflow bootstrap; ADK và agent chưa triển khai."""
+from .bounded import ProposalWorkflow
 
-from .bounded import BoundedWorkflow
-
-__all__ = ["BoundedWorkflow"]
+__all__ = ["ProposalWorkflow"]
