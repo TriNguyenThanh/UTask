@@ -1,0 +1,73 @@
+# Stack local của riêng AI Service; không thay thế Compose/gateway toàn hệ thống.
+x-ai: &ai
+  build: .
+  image: utask/ai-service:local
+  env_file: ${AI_ENV_FILE:-.env}
+  environment:
+    AI_DATABASE_URL: postgresql+psycopg://ai_service:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}@database:5432/ai_context_db
+    AI_BROKER_URL: redis://broker:6379/0
+  init: true
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ai_service
+      POSTGRES_DB: ai_context_db
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}
+    volumes:
+      - ai-database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ai_service -d ai_context_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  broker:
+    image: redis:7-alpine
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *ai
+    command: [alembic, upgrade, head]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  api:
+    <<: *ai
+    ports:
+      - "127.0.0.1:${AI_HTTP_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    <<: *ai
+    command: [celery, -A, jobs.celery_app:celery_app, worker, --loglevel=INFO, --concurrency=2]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      broker:
+        condition: service_healthy
+
+  dispatcher:
+    <<: *ai
+    command: [python, -m, jobs.dispatcher]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      broker:
+        condition: service_healthy
+
+volumes:
+  ai-database:
