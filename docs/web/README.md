@@ -1,6 +1,7 @@
 # Web Application
 
-**Trạng thái tài liệu: Thiết kế mục tiêu; hiện trạng triển khai chưa xác minh.**
+**Trạng thái tài liệu: Một phần đã triển khai; xem [student-flow.md](student-flow.md)
+cho hiện trạng chi tiết của luồng sinh viên.**
 
 Web Application là giao diện cho người học, giảng viên và các vai trò được hệ
 thống cho phép. Ứng dụng gọi API qua API Gateway; không truy cập database hoặc
@@ -12,3 +13,9 @@ task, kết nối GitHub, xem tiến độ, duyệt gợi ý AI và notification
 
 API client, cấu trúc feature và thư viện giao diện cần được đối chiếu với hợp
 đồng và ứng dụng trước khi mô tả là đã triển khai.
+
+Xem thêm:
+
+- [Luồng sinh viên (Student Flow)](student-flow.md) — hiện trạng từng màn
+  hình, phần demo MSW so với phần chưa có backend.
+- Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.
