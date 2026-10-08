@@ -64,8 +64,10 @@ backend), **Chưa triển khai** (nút bị vô hiệu hóa hoặc chưa có).
 - Mock không thay thế backend: service thật vẫn phải tự enforce quyền.
 - Giản lược mock (cần biết khi so sánh với backend): NEXUS có 2 leader
   (tài khoản leader và SV01) để cả hai tài khoản đều demo được luồng
-  leader; cờ `isMine`/`isMe` trên issue và contributor là fixture tĩnh,
-  không suy ra theo người xem.
+  leader; cờ `isMine`/`isMe` trên issue và contributor suy ra theo tài khoản
+  đang đăng nhập (không còn là giá trị cứng). Giảng viên của lớp chứa nhóm cũng
+  đọc được workspace ở chế độ chỉ xem (xem `teacher-flow.md` §15). Project DELI
+  không có repository, nên trang Code hiện "Dự án chưa có repository".
 
 ## Trạng thái hiển thị
 

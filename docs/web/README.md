@@ -22,7 +22,7 @@ Xem thêm:
   API readiness, kế hoạch và kết quả Phase 1: các màn đọc lớp (Home, danh sách
   lớp, tổng quan, sinh viên, nhóm) chạy trên dữ liệu Demo MSW; chưa có thao tác
   ghi, workspace Teacher hay backend. Giao diện theo thiết kế Stitch và màn Giám sát
-  (tín hiệu theo quy tắc cố định): xem mục 14 của tài liệu này.
+  (tín hiệu theo quy tắc cố định): xem mục 14 của tài liệu này; dashboard nhóm và workspace chỉ xem cho giảng viên: mục 15.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,
   ma trận quyền và user story.
 - Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.
