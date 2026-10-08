@@ -1,6 +1,6 @@
 # Luồng giảng viên (Teacher Flow) — hiện trạng, phạm vi và kế hoạch
 
-**Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch). Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
+**Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch); Phase 2 (dashboard nhóm T08, workspace chỉ xem cho giảng viên) ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem). Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
 
 Căn cứ: nhánh `fix/frontend-student-flow`, HEAD `c9df96b` (08/10/2026); phần
 Phase 1 nằm trong working tree, chưa commit. Mọi kết
@@ -181,9 +181,9 @@ trách" (analysis §2.2) chưa có đặc tả hành động: mặc định ch�
 | `/teacher/courses/:courseId/students/import` | T06 Nhập danh sách | P0 (ghi chờ contract) |
 | `/teacher/courses/:courseId/teams` | T07 Nhóm + sinh viên chưa có nhóm | P0 xem, P1 điều chỉnh |
 | `/teacher/courses/:courseId/oversight` | Giám sát tiến độ nhóm (xem §14; thêm sau Phase 1) | Đã triển khai (Demo MSW, chỉ đọc) |
-| `/teacher/courses/:courseId/teams/:teamId` | T08 Dashboard nhóm | P0 |
+| `/teacher/courses/:courseId/teams/:teamId` | T08 Dashboard nhóm | Đã triển khai (Demo MSW, chỉ đọc; §15) |
 | `/teacher/courses/:courseId/settings` | T10 Cài đặt lớp | P0 xem |
-| `/projects/:projectId/{backlog,board,code}` | T09 Workspace dùng chung | P0 |
+| `/projects/:projectId/{backlog,board,code}` | T09 Workspace dùng chung | Đã triển khai chế độ chỉ xem cho giảng viên (Demo MSW; §15) |
 | `/notifications`, `/settings/*` | Màn dùng chung | Sau khi sửa R3 |
 
 Dùng `courseId` thay vì `classId` (lý do ở §7). Filter (học kỳ, tìm kiếm, có/chưa
@@ -447,7 +447,7 @@ Commit đề xuất (theo thứ tự phụ thuộc):
 
 Danh sách file của từng commit nằm trong báo cáo cuối của Phase 1.
 
-### Phase 2 — Nhóm đến workspace
+### Phase 2 — Nhóm đến workspace (Đã triển khai, Demo MSW; kết quả ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem))
 
 Phạm vi: `ProjectViewer`, `courseId`/`teamId` trong workspace, bỏ fallback R1,
 `isMine`/`isMe` theo người xem (R5), roster thống nhất (R6, R7), T08, breadcrumb
@@ -663,18 +663,18 @@ Các thay đổi này làm **dữ liệu Student đổi**, đã chạy lại to�
 
 | Mục | Tình trạng |
 | --- | --- |
-| R1 `myRole ?? "member"` | **Còn** trong mock workspace, nhưng Teacher không tới được (project chặn 404). Xử lý ở Phase 2 cùng `ProjectViewer` |
+| R1 `myRole ?? "member"` | **Còn** trong mock workspace, nhưng Teacher không tới được (project chặn 404). Xử lý ở Phase 2 cùng `ProjectViewer`. **Đã sửa ở Phase 2 (§15)** |
 | R2 404 trước 403 | Đã sửa cho môn, project, issue, code, settings, ai-key, tạo nhóm, đánh dấu thông báo |
 | R3 thông báo cấp lớp | Đã sửa (§13.3) |
 | R4 GitHub Home dùng chung | Không dùng cho Teacher |
-| R5 `isMine`/`isMe` tĩnh | **Còn** — Phase 2 |
-| R6 roster lệch | Đã sửa cho roster lớp/nhóm; **còn** danh sách assignee (4 người) và contributor (4 người) trong workspace/Code, không có Lê Minh Khoa — Phase 2 |
+| R5 `isMine`/`isMe` tĩnh | **Còn** — Phase 2. **Đã sửa ở Phase 2 (§15)** |
+| R6 roster lệch | Đã sửa cho roster lớp/nhóm; **còn** danh sách assignee (4 người) và contributor (4 người) trong workspace/Code, không có Lê Minh Khoa — Phase 2. **Đã sửa ở Phase 2: đóng góp NEXUS có đủ 5 người (§15.5)**; danh sách assignee của issue vẫn 4 người vì chưa issue nào giao cho Khoa |
 | R7 roster DELI thiếu `leader@` | Đã sửa |
 | R8 `classSize` | Đã sửa |
 | R9 tên nhóm | Đã sửa |
-| R10 DELI Code trả 404 | **Còn** — Phase 2 |
-| R11 thời gian `new Date()` | Read model Teacher dùng đồng hồ cố định; workspace Student vẫn `new Date()` — Phase 2 |
-| R12 checkbox subtask | **Còn** — Phase 2 |
+| R10 DELI Code trả 404 | **Còn** — Phase 2. **Đã sửa ở Phase 2 (§15)** |
+| R11 thời gian `new Date()` | Read model Teacher dùng đồng hồ cố định; workspace Student vẫn `new Date()` — Phase 2. **Phase 2: giảng viên đọc workspace theo đồng hồ cố định, sinh viên giữ đồng hồ thật (§15.2)** |
+| R12 checkbox subtask | **Còn** — Phase 2. **Đã sửa ở Phase 2: disabled với giảng viên (§15)** |
 
 ### 13.7 Kết quả kiểm tra
 
@@ -819,5 +819,139 @@ ngưỡng khác hoặc có tín hiệu từ Progress Service, thay thế `signal
 - Số liệu "Tiến độ" và "issue đã hoàn thành" có thể khác nhau (NEXUS: 65% theo điểm
   Sprint nhưng 1/10 issue xong); hai con số có nhãn căn cứ riêng, nhưng người dùng
   vẫn có thể thắc mắc. Cần nghiệp vụ chốt đâu là số chính.
-- Phase 2 (T08 dashboard nhóm, workspace chỉ đọc, R1/R5/R6/R10/R12) vẫn chưa bắt
-  đầu; nút "Xem chi tiết nhóm" vẫn disabled.
+- Phase 2 (T08 dashboard nhóm, workspace chỉ đọc, R1/R5/R6/R10/R12) đã làm sau đó;
+  xem [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem).
+
+## 15. Kết quả Phase 2 — từ nhóm đến workspace (chỉ xem)
+
+Dữ liệu vẫn là Demo MSW; không có backend, hợp đồng hay thao tác ghi của Teacher.
+Trên nhánh `feat/frontend-teacher-flow`, chưa commit phần Phase 2.
+
+### 15.1 Đã làm gì
+
+| Yêu cầu | Trạng thái | Cách làm / bằng chứng |
+| --- | --- | --- |
+| T08 dashboard nhóm | Đã triển khai (Demo MSW) | `/teacher/courses/:courseId/teams/:teamId` ([TeacherTeamDetailRoute.tsx](../../apps/web/src/features/teacher/routes/TeacherTeamDetailRoute.tsx)); mở từ thẻ nhóm và từ bảng Giám sát; thành viên, project, tiến độ + căn cứ, issue theo trạng thái, quá hạn, GitHub, tín hiệu, lối vào workspace |
+| `ProjectViewer` | Đã triển khai | `ProjectViewer = team-member{role} \| course-instructor{courseId}` trong `features/projects/types.ts`; `viewerRole`, `projectPermissionContext`, `canViewProject`, `isReadOnlyViewer` trong `lib/permissions.ts`; mọi helper ghi vẫn khóa theo `role === "leader"` nên giảng viên (role `null`) không qua được |
+| `courseId`/`teamId` trong workspace | Đã triển khai | `ProjectWorkspace` thêm `courseId`, `teamId`, `viewer`; breadcrumb Teacher dựng từ chính payload nên đúng khi mở thẳng URL hoặc refresh |
+| Bỏ fallback Teacher → Member (R1) | Đã sửa | `projectWorkspaceFor` trả `null` khi không có quan hệ viewer; `myRole` chỉ có với thành viên, vắng mặt với giảng viên |
+| Mở đọc workspace/issue/code qua assignment | Đã triển khai (mock) | `projectViewerFor` trong graph: thành viên nhóm, hoặc giảng viên của lớp chứa nhóm đó **và** tài khoản có role `TEACHER`; thiếu một trong hai → 404 |
+| Settings và thao tác Leader vẫn chặn | Đã triển khai | Settings và `PUT ai-key`: giảng viên nhận 403 (mở được project nhưng không có quyền), người ngoài nhận 404; route settings trên UI vào Forbidden; tab Cài đặt ẩn |
+| Dùng lại Backlog, Board, Code, IssuePanel | Đã triển khai | Không có bản sao Teacher; hành vi đổi theo `viewer` qua `readOnly` trong context của `ProjectWorkspaceLayout` |
+| Ẩn/vô hiệu đúng quyền | Đã triển khai | Ẩn Tạo Epic, Tạo Issue, thanh AI, AI sinh sub-task, Hoàn thành Sprint, tab Cài đặt, bộ lọc "Chỉ việc của tôi"; checkbox subtask disabled (R12); trạng thái đã disabled sẵn |
+| Không có composer comment | Đã triển khai | Không có ô nhập; ghi chú "Gửi bình luận sẽ khả dụng khi có hợp đồng API"; bình luận hiện có vẫn đọc được |
+| `isMine`/`isMe` theo người xem (R5) | Đã sửa | `isMine = assignee.userId === userId` mỗi request; `isMe` tương tự; không giá trị cứng |
+| Board không có Sprint | Đã triển khai | Giảng viên thấy "Nhóm chưa có Sprint đang chạy" kèm liên kết sang Backlog; sinh viên giữ thông điệp cũ |
+| GitHub chưa kết nối ≠ project không tồn tại (R10) | Đã sửa | Project không có repository trả `syncState: "no-repository"`; project không tồn tại hoặc ngoài quyền vẫn 404 |
+| Quá hạn, tiến độ, sync có nguồn và công thức | Đã triển khai | Xem 15.3; thiếu dữ liệu hiển thị "Chưa có dữ liệu", không phải 0 |
+| Mỗi section lỗi độc lập | Đã triển khai | T08 gồm một truy vấn nhóm và một truy vấn GitHub riêng; GitHub lỗi chỉ hiện lỗi + "Thử lại" trong khối đó |
+
+Việc kèm theo, cần biết:
+
+- Giao diện Teacher được giữ khi giảng viên mở `/projects/*`: tài khoản chỉ có role
+  Teacher dùng ngay thanh bên Teacher; tài khoản vừa là sinh viên đổi sang thanh bên
+  Teacher khi workspace báo viewer là giảng viên (`TeacherChromeContext`).
+- Trang 404 của workspace dẫn tài khoản chỉ-Teacher về "Về danh sách lớp phụ trách"
+  thay vì danh sách dự án của sinh viên.
+- Cột "Trạng thái" (Key Contributor / Active / Watch) trong bảng đóng góp bị ẩn với
+  giảng viên: nhãn đó đánh giá sinh viên từ số commit, trái US-5.3 và §8.5. Các số
+  liệu thô (commit, dòng code, PR) vẫn hiển thị. Sinh viên vẫn thấy cột này như trước.
+
+### 15.2 Khác biệt với kế hoạch Phase 0 và lý do
+
+| Phase 0 | Thực tế | Lý do |
+| --- | --- | --- |
+| `ProjectWorkspace` giữ `myRole` trong giai đoạn chuyển tiếp | `myRole` đã thành tùy chọn và chỉ có với thành viên | Teacher không được nhận giá trị mặc định (R1); các chỗ dùng `myRole` được chuyển sang `viewer` |
+| `canCommentOnTask(viewer)` | Không thêm | Chưa có contract và không có composer; một hàm không ai gọi chỉ là mã chết mang ngữ nghĩa quyền |
+| Dùng `ProjectWorkspace` cho read model Teacher | Thêm `projectDataFor` (dữ liệu không gắn viewer) | Read model lớp/nhóm không có "người xem"; tránh truyền `userId` rỗng |
+| Thời gian workspace dùng chung `new Date()` | Giảng viên đọc theo đồng hồ cố định `2026-10-20T08:30:00Z`, sinh viên giữ đồng hồ thật | Giữ con số của T08, danh sách lớp và workspace khớp nhau và test ổn định (R11 chỉ đóng với Teacher) |
+| `dueAt` tùy chọn | Thêm `Issue.dueAt?` và 4 issue NEXUS có hạn chót | Cần nguồn thật cho "quá hạn"; các issue còn lại không có hạn chót |
+| Roster thống nhất (R6) | Bảng đóng góp NEXUS thêm Lê Minh Khoa và cân lại số liệu | Tổng commit/dòng code/PR vẫn khớp `stats` (có test); là thay đổi nhìn thấy được với sinh viên |
+| Project settings kiểm tra bằng `projectRoleForUser` | Kiểm tra bằng viewer | Phân biệt "mở được nhưng thiếu quyền" (403) với "không mở được" (404) cho giảng viên |
+
+### 15.3 Công thức và nguồn số liệu
+
+| Số liệu | Công thức / nguồn | Khi thiếu |
+| --- | --- | --- |
+| Tiến độ nhóm | Điểm đã xong / tổng điểm của Sprint đang chạy; nếu không có Sprint hoặc tổng điểm 0 thì issue `done` / tổng issue | "Chưa có dữ liệu tiến độ" |
+| Issue theo trạng thái | Đếm `status` của issue project | "Project chưa có issue nào" |
+| Quá hạn | Issue có `dueAt`, chưa `done`, `dueAt` trước mốc tính; mẫu số là số issue có `dueAt`; mốc tính hiển thị cạnh số | "Chưa có dữ liệu (không issue nào có hạn chót)" |
+| GitHub | Trạng thái đồng bộ, repository, commit gần nhất, số commit/PR mở/đã merge từ `/projects/:id/code` | Thời điểm đồng bộ gần nhất luôn là "Chưa có dữ liệu" (API không trả) |
+| Hoạt động gần nhất, tín hiệu | Như §14.3 | Như §14.3 |
+
+Hai ghi chú: số "Tiến độ" (65%) và "issue hoàn thành" (1/10) của NEXUS lệch nhau và cả
+hai được giữ kèm căn cứ; bộ đếm "Còn N ngày" trên Board dùng ngày thật của trình
+duyệt nên khác với mốc cố định của giảng viên (Còn 17 ngày theo ngày thật, trong khi Sprint kết thúc 25/10 theo mốc cố định).
+
+### 15.4 Chính sách quyền của mock (bổ sung §13.3)
+
+| Tình huống | Phản hồi |
+| --- | --- |
+| Không có phiên | 401 |
+| Giảng viên của lớp chứa nhóm, tài khoản có role `TEACHER` | 200 cho workspace, issue, code |
+| Giảng viên của lớp chứa nhóm nhưng tài khoản mất role `TEACHER` | 404 |
+| Giảng viên lớp khác, hoặc role `TEACHER` không có assignment | 404, cùng thân phản hồi với project không tồn tại |
+| Giảng viên mở settings hoặc `PUT ai-key` của project mình xem được | 403 |
+| Nhóm không thuộc lớp trong `GET /teacher/courses/:id/teams/:teamId` | 404 "Không tìm thấy nhóm.", cùng với nhóm không tồn tại |
+| Danh sách `/projects` của giảng viên | Rỗng (chỉ là danh sách dự án của sinh viên) |
+| Thông báo cấp project | Vẫn chỉ cho thành viên project; giảng viên chỉ thấy thông báo cấp lớp |
+
+### 15.5 Thay đổi mà sinh viên nhìn thấy
+
+- "Chỉ việc của tôi" và huy hiệu "Bạn" trong bảng đóng góp giờ theo tài khoản đang
+  đăng nhập (trước đây luôn là Nguyễn Hoàng Nam). Lê Minh Khoa (SV01) nay xuất hiện
+  trong bảng đóng góp NEXUS và là người được đánh dấu "Bạn" khi SV01 đăng nhập.
+- Project DELI không còn repository (`null`) ở danh sách và workspace; trang Code của
+  DELI hiện "Dự án chưa có repository" thay vì "Không tìm thấy dự án".
+- Thành viên không phải Leader không còn gọi `GET …/settings` khi mở Backlog/Board
+  (trước đây nhận 403 rồi bỏ qua).
+- Số liệu đóng góp NEXUS được chia lại cho 5 người, tổng không đổi (142 commit,
+  14.250 dòng thêm, 3.120 dòng xóa, 28 PR).
+
+### 15.6 Kết quả kiểm tra
+
+Chạy trong `apps/web`:
+
+- `pnpm lint` (`tsc --noEmit`): đạt. `pnpm build`: đạt.
+- `pnpm test`: 253 test / 11 file đạt, chạy lặp 3 lần liên tiếp (trước Phase 2: 212).
+  Mới: 14 test handler cho đọc project qua assignment (viewer, 403 so với 404, đồng hồ
+  cố định, `no-repository`, role `TEACHER` đơn lẻ, mất role, đóng góp khớp roster và
+  tổng) và endpoint nhóm; 26 test UI mới (`TeacherWorkspace.test.tsx`) cho T08 (kể cả GitHub lỗi độc lập, nhóm không project),
+  workspace chỉ xem (breadcrumb khi mở thẳng URL, không có yêu cầu ghi hay settings,
+  subtask không tick được, không có ô comment, Forbidden cho settings, Board không Sprint),
+  quyền (giảng viên ngoài lớp, teacher2), và hồi quy Student (Leader, "mine" theo tài
+  khoản, "Bạn" theo tài khoản).
+- Kiểm tra đột biến, mỗi lần có test đỏ rồi khôi phục: bỏ kiểm tra role `TEACHER` (1),
+  cho giảng viên đọc settings (3), mở lại checkbox subtask (1), tắt `readOnly` (10),
+  gán cứng `isMine` (3).
+- Duyệt thử trên Edge headless (1280×800 và 390×844): T08 (có và không có project), Backlog,
+  Board, issue mở thẳng bằng URL, Code, Settings, project ngoài lớp; không tràn ngang trang,
+  chỉ có log 404 đã biết ở project ngoài quyền.
+- Chưa kiểm tra: bàn phím và trình đọc màn hình thật, Safari/Firefox, thiết bị thật, kéo
+  thả/focus trap của IssuePanel với giảng viên, tài khoản vừa là sinh viên vừa là giảng
+  viên của cùng một lớp (fixture không có), từng commit riêng lẻ.
+
+### 15.7 Giới hạn và rủi ro còn lại
+
+- Hợp đồng Project Service cho tư cách giảng viên (viewer context) chưa có (§12); toàn
+  bộ ở trên chỉ là Demo MSW.
+- Thông báo cấp project không đến giảng viên: có thể cần đổi khi có nghiệp vụ.
+- Workspace của giảng viên và sinh viên dùng hai đồng hồ khác nhau trong mock; trên backend
+  thật chỉ có một đồng hồ.
+- Cùng một URL `/projects/:id/*` phục vụ hai loại người xem nên giao diện chỉ biết viewer
+  sau khi tải xong workspace; tài khoản vừa là sinh viên có thể thấy thanh bên Student
+  trong thoáng chốc trước khi đổi.
+- Ngưỡng "7 ngày" và các quy tắc tín hiệu vẫn là giá trị demo (§14.3).
+- Chưa có dashboard tiến độ theo thời gian, cảnh báo AI, comment, chấm điểm; nằm ngoài
+  phạm vi (§4).
+
+### 15.8 Lớp 100 sinh viên để thử quy mô
+
+Đăng nhập `teacher3@utask.test` (mật khẩu demo như các tài khoản khác) để thấy lớp
+`course-se360-large` (SE360, "Lập trình Web Nâng cao"): 100 sinh viên, 19 nhóm (17 nhóm
+5 người, 2 nhóm 4 người), 7 sinh viên chưa có nhóm, trong đó 2 người đang chờ duyệt vào
+nhóm. Dữ liệu sinh tự động và cố định trong `apps/web/src/mocks/data/largeClass.ts`, nhập
+vào graph dùng chung; sinh viên chỉ là danh sách, không có tài khoản đăng nhập. Không
+nhóm nào có project (chưa có fixture project cho chúng), nên màn Giám sát hiện cả 19 nhóm
+với tín hiệu "Chưa có project". `teacher3@` chỉ dạy lớp này; các tài khoản khác không
+thấy lớp.

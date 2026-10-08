@@ -33,6 +33,7 @@ All accounts use password `demo1234`.
 | Student (no group) | `student@utask.test` |
 | Teacher (SE330 ×2, IT3090) | `teacher@utask.test` |
 | Teacher (CS402) | `teacher2@utask.test` |
+| Teacher (SE360, 100 sinh viên) | `teacher3@utask.test` |
 
 Teacher accounts open `/teacher`. Which classes each account sees, and the demo
 data behind them, are described in [`docs/web/teacher-flow.md`](../../docs/web/teacher-flow.md).
