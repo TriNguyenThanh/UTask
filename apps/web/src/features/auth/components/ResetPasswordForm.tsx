@@ -204,17 +204,6 @@ export function ResetPasswordForm() {
           hoặc
           <strong className="font-medium text-[#1a1c1c]"> Phòng Đào tạo</strong>.
         </p>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[11px] text-[#938f9f]">
-          <span className="flex items-center gap-1">
-            <LockKeyhole className="size-3.5" aria-hidden="true" />
-            Mã hóa chuẩn AES-256
-          </span>
-          <span aria-hidden="true">•</span>
-          <span className="flex items-center gap-1">
-            <ShieldCheck className="size-3.5" aria-hidden="true" />
-            Cổng SSO Đại học Quốc gia
-          </span>
-        </div>
       </div>
     </section>
   );

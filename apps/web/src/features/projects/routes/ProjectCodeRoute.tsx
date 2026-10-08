@@ -418,10 +418,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
           <Users className="size-4 text-primary" aria-hidden />
           Thống kê Đóng góp của Thành viên (Contributors Breakdown)
         </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Theo dõi lượng commit, dòng code và tỷ lệ liên kết Issue tự động để
-          phục vụ đánh giá điểm công bằng, tránh tình trạng gánh team / ỷ lại.
-        </p>
+
       </div>
       {contributors.length === 0 ? (
         <EmptyState description="Chưa có dữ liệu đóng góp nào được ghi nhận." />

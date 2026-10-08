@@ -1,3 +1,4 @@
+import { myWorkKeys } from "@/features/my-work/queries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
@@ -50,9 +51,14 @@ export function useCreateTeam(courseId: string) {
       maxMembers: number;
     }) => createTeamRequest(client, courseId, input),
     onSuccess: () => {
+      // Course detail, Home overview and the projects list all embed team
+      // membership; refetch them together so the UI reflects the new team
+      // without a reload.
       queryClient.invalidateQueries({
         queryKey: studentFlowKeys.course(courseId),
       });
+      queryClient.invalidateQueries({ queryKey: myWorkKeys.overview });
+      queryClient.invalidateQueries({ queryKey: studentFlowKeys.projects });
     },
   });
 }
@@ -196,6 +202,8 @@ export function useDisconnectGitHub() {
     mutationFn: () => disconnectGitHubRequest(client),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studentFlowKeys.settings });
+      // Home reads GitHub sync state from /my-work/github — refresh it too.
+      queryClient.invalidateQueries({ queryKey: myWorkKeys.github });
     },
   });
 }

@@ -1,6 +1,6 @@
 import { CheckSquare2, LogOut, Menu } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { AppSidebar } from "@/components/navigation/AppSidebar";
 import { TopNavigation } from "@/components/navigation/TopNavigation";
@@ -62,7 +62,13 @@ export function AuthenticatedLayout() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
+  // Any navigation (including search-param deep links from task rows or
+  // notifications) must close the mobile drawer so the page is visible.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search]);
   function logout() {
     void auth.logout();
     navigate("/login", { replace: true });
