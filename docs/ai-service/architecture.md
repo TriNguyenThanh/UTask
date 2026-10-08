@@ -1,234 +1,205 @@
 # Kiến trúc AI Service
 
-**Trạng thái hiện trạng: Một phần.** Source bootstrap có FastAPI, healthcheck,
-request/result schema, application, provider protocol, timeout và repository
-in-memory. Provider thật, ADK, Celery worker, Kafka, internal API adapter và
-PostgreSQL persistence **chưa triển khai**. Xem [code map](code-map.md).
+**Trạng thái: Một phần.** Pipeline API → PostgreSQL → dispatcher → Redis/Celery
+→ ADK workflow đã triển khai trong source. JWT, domain tools và adapter REST
+đã có; integration với Identity/Work/Integration và LLM production **chưa xác
+minh**, cần cấu hình và hợp đồng domain. Kafka, specialist và retention job
+**chưa triển khai**, không phải dependency của pipeline MVP.
 
-Thiết kế bên dưới theo [baseline](../architecture/README.md), mục 4.6, 9–11,
-18 và 24; quyết định chuyển từ kiến trúc cũ nằm trong
-[ADR-001](../adr/001-adopt-architecture-baseline.md).
-Pipeline API/worker được chốt trong
-[ADR-002](../adr/002-ai-request-pipeline.md); phần dưới là nguồn chuẩn cho
-luồng xử lý và trách nhiệm từng thành phần, chưa xác nhận runtime đã có.
+Thiết kế theo [baseline](../architecture/README.md),
+[ADR-001](../adr/001-adopt-architecture-baseline.md) và
+[ADR-002](../adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
+source/test ngày 2026-10-08. Xem [code map](code-map.md), [API v1](api.md),
+[workflow](workflow.md), [ERD](erd.md) và [hướng dẫn chạy](README.md).
 
 ## Responsibilities — thiết kế mục tiêu
 
-AI Service là capability nội bộ nhận ý định và phạm vi đối tượng, chạy workflow/
-agent, validate structured output (kết quả theo schema), lưu và trả proposal.
-Baseline định hướng sinh/phân rã task, gợi ý priority/mô tả task, phân tích
-workload, tiến độ/rủi ro deadline và gợi ý phân bổ lại công việc.
+AI nhận ý định, kiểm tra quyền, lấy context tối thiểu qua domain tools, chạy
+bounded agent (agent có giới hạn), kiểm tra output theo schema và lưu proposal.
+API v1 chỉ hỗ trợ `backlog_generation`, `task_decomposition`, `risk_analysis`.
+Các intent khác cần contract và implementation riêng.
 
-API v1 hiện chỉ đặc tả `backlog_generation`, `task_decomposition` và
-`risk_analysis`. Đây là phạm vi contract AI, không đồng nghĩa với thứ tự
-Phase 1–4 của roadmap toàn hệ thống trong baseline. Các khả năng khác cần
-contract/version và triển khai riêng, không mở rộng intent chỉ bằng tài liệu.
-
-Giữ bounded agent: ADK Workflow kiểm soát luồng lớn (macro-flow); `LlmAgent`
-suy luận và chọn domain tool trong giới hạn. Specialist chỉ thêm khi có bài
-toán thật, ưu tiên agent-as-tool. Provider/model đặt sau adapter/router.
+ADK Workflow kiểm soát luồng bắt buộc, retry/revise và validation. `LlmAgent`
+tự chọn domain tool trong phạm vi được cấp. Application sở hữu tiếp nhận,
+trạng thái và lưu kết quả; adapter lắp ghép framework/provider bên ngoài.
 
 ## Non-responsibilities — boundary
 
-- Identity sở hữu user, vai trò toàn hệ thống và token; service kiểm tra quyền
-  tài nguyên ở backend, không xem header bootstrap là xác thực production.
-- Classroom sở hữu lớp, Group/GroupMember; Work sở hữu Project/ProjectMember,
-  Sprint, Task, Comment và tiến độ theo quy tắc.
-- Integration là service duy nhất gọi GitHub API. AI lấy dữ liệu GitHub đã
-  chuẩn hóa qua API/event được công bố.
-- AI không đọc database service khác, tạo foreign key xuyên service hoặc tự
-  ghi Project/Task. User xác nhận; Work kiểm tra quyền và business rule rồi áp dụng.
-- Dashboard và luồng nghiệp vụ chính không phụ thuộc AI/LLM.
+- Identity sở hữu user/token; AI xác minh JWT ký bất đối xứng với issuer,
+  audience và public key/JWKS được cấu hình. Không tin identity header client.
+- Work sở hữu Project/ProjectMember, Sprint, Task, Comment và tiến độ theo quy
+  tắc; Classroom sở hữu Group/GroupMember. ID xuyên service chỉ là tham chiếu.
+- Integration là service duy nhất gọi GitHub API. AI lấy dữ liệu đã chuẩn hóa.
+- AI không đọc database service khác, tạo FK xuyên service hoặc áp dụng
+  proposal. User xác nhận; service sở hữu kiểm tra quyền/business rule và áp dụng.
+- Auth, dashboard và nghiệp vụ chính không phụ thuộc AI/LLM.
 
 ## Request flow
 
 ### Implementation hiện tại
 
 ```text
-FastAPI → AiApplicationService → BoundedWorkflow → provider.generate
-           └── InMemoryRequestRepository
+POST /api/ai/v1/requests
+  → JWT + input validation → Application → REST kiểm tra quyền target
+  → transaction AI PostgreSQL: request queued + delivery job
+  → API chờ persistence tối đa 10 giây → 200 hoặc 202 + Location
+
+Dispatcher → claim delivery có lease → Redis → Celery task(request_id)
+  → Application worker claim queued → running + execution token + deadline
+  → giải mã credential → xác minh lại JWT/quyền
+  → ADK ProposalWorkflow → LlmAgent → domain tool pool → REST adapter
+  → kiểm tra output đúng intent/version → revise/retry trong budget
+  → Application lưu succeeded/result hoặc failed/error; xóa credential
+
+GET /api/ai/v1/requests/{request_id}
+  → JWT → ownership AI request → đọc cùng PostgreSQL → response hiện tại
 ```
 
-Provider mặc định trả `502 PROVIDER_UNAVAILABLE`; test thành công dùng fake
-provider. Timeout hiện là giới hạn một lời gọi provider, chưa phải ADK budget.
+**Đã triển khai:**
 
-**Đã triển khai:** các module nằm trực tiếp dưới `apps/ai-service/src/`, gồm
-`main.py`, `config.py`, `errors.py` và các layer `api/`, `application/`,
-`workflow/`, `infrastructure/`, `models/`. Application dùng protocol `RequestWorkflow` và
-`RequestRepository`; bounded workflow dùng protocol `ModelProvider`. Adapter
-provider/repository nằm trong infrastructure và được `main.py` lắp ghép.
-Application/workflow không import FastAPI hoặc adapter cụ thể. Vị trí file và
-pipeline chi tiết nằm trong [code map](code-map.md).
+1. `main.create_app` lắp repository PostgreSQL, JWT verifier, credential vault,
+   REST authorizer và application. API không import/chạy ADK hoặc worker.
+2. Application kiểm tra quyền trước khi enqueue. Backlog chưa có target vẫn
+   cần identity hợp lệ. Endpoint quyền chưa cấu hình hoặc kết quả không có
+   `allowed: true` thì từ chối; không dùng projection làm bằng chứng quyền.
+3. Repository chuẩn hóa payload, tính SHA-256 và dùng unique `(user_id,
+   idempotency_key)` cùng `INSERT ... ON CONFLICT`. Request và delivery được
+   lưu trong cùng transaction. POST đồng thời cùng key dùng một request/job;
+   payload khác trả `409`; request đã kết thúc không chạy model lại.
+4. Dispatcher dùng `FOR UPDATE SKIP LOCKED` nhận quyền giao delivery. Lease
+   hết hạn cho phép dispatcher khác tiếp tục. Broker lỗi được retry có backoff,
+   jitter và giới hạn. Sau publish, delivery còn bền vững và được giao lại nếu
+   worker chưa claim, kể cả Redis mất task; worker claim thì xóa delivery.
+5. Celery task chỉ nhận UUID và gọi application. Claim khóa request; chỉ
+   `queued` được chuyển sang `running`. Job trùng/terminal không gọi LLM.
+   Deadline bắt đầu từ lần claim, không được đặt lại khi task giao lại.
+6. Worker giải mã Bearer bằng Fernet và xác minh lại JWT/quyền trước chạy.
+   Credential không xuất hiện trong task/prompt/log, được xóa ở mọi trạng thái
+   cuối. Token hết hạn trong queue làm request thất bại; không giữ quyền cũ.
+7. Model/tool budget được trừ trong PostgreSQL trước lời gọi. Output token
+   được tính theo usage; lần model tiếp theo chỉ được cấp phần cap còn lại.
+   SDK thiếu usage thì trừ toàn bộ cap đã cấp. Retry provider tạm lỗi và revise
+   output dùng chung số vòng, budget và deadline; SDK retry ẩn bị tắt.
+8. Chỉ worker có execution token hiện hành, request còn `running` và chưa hết
+   deadline được ghi kết quả. Dispatcher kết thúc request quá hạn, lưu
+   dead-letter và xóa credential; worker đến muộn không ghi đè terminal result.
+
+API/dispatcher/worker là process của cùng AI Service, cùng code và AI DB;
+không bắt buộc singleton. ADK session chỉ ở memory trong một job, không phải
+request repository. Nguồn schema là [migration](../../apps/ai-service/migrations/versions/0001_request_pipeline.py),
+không tạo bảng khi API startup.
 
 ### Thiết kế mục tiêu
 
-```text
-Client POST → AI API / Application
-    → xác thực identity, validate input, kiểm tra quyền qua internal REST API
-    → kiểm tra Idempotency-Key
-    → transaction AI DB: lưu request queued + bản ghi chờ giao job
-    → dispatcher → Redis broker → Celery worker thuộc AI Service
-    → Application: nhận quyền xử lý job, chống chạy trùng, cập nhật running
-    → ADK Workflow → LlmAgent → proposal theo schema → validate output
-                       ↕
-                 Context Tool Pool → Context Layer/adapters
-                       → internal REST API của service sở hữu
-    → Application/Repository: lưu succeeded + result hoặc failed + error
-
-Client GET → AI API: kiểm tra ownership → đọc trạng thái/kết quả từ AI DB
-```
-
-1. API xác thực user và kiểm tra input. Application dùng adapter internal REST
-   để service sở hữu target xác nhận quyền; không phát Kafka event để hỏi quyền.
-   Nếu không xác minh được quyền thì không giao job. Backlog nháp không có
-   target vẫn phải xác thực user theo contract.
-2. Idempotency được xét theo user và key, kèm fingerprint của payload. Request
-   lặp hợp lệ dùng lại request ID và trạng thái/kết quả đã lưu, không tạo job mới;
-   cùng key nhưng khác payload trả `409`. Persistence phải bảo vệ cả trường hợp
-   nhiều POST đồng thời, không chỉ kiểm tra trước khi ghi.
-3. Application lưu request `queued` cùng ý định giao job trong một transaction
-   PostgreSQL của AI. Dispatcher là thành phần gửi các job đang chờ qua Redis,
-   retry việc gửi khi broker lỗi. Chỉ xác nhận đã nhận job sau khi lưu bền vững;
-   việc ghi database và gửi Redis không phải một transaction chung.
-4. Celery task chỉ là entry point gọi application/workflow. Application phải
-   kiểm soát quyền xử lý một job để tránh hai worker chạy trùng, đọc input từ
-   persistence và cập nhật `running`. Trước khi lấy context, service sở hữu vẫn
-   kiểm tra quyền hiện hành; quyền lúc nhận POST không có hiệu lực vô thời hạn.
-5. ADK Workflow kiểm soát các bước bắt buộc, budget, timeout và validation/revise.
-   Agent tự chọn domain tool bên trong giới hạn. Context Layer lọc/tổng hợp dữ
-   liệu; provider/model nằm sau adapter riêng, không buộc mọi lời gọi LLM phải
-   có một bước lấy context mới.
-6. Kết quả theo schema được lưu qua application/repository vào AI DB. API và
-   worker cùng thuộc AI Service và dùng chung persistence; worker không cần
-   callback HTTP hoặc Kafka event về API process để cập nhật database.
-7. API đọc persistence để trả kết quả theo [API v1](api.md). Sau `202`, client
-   dùng GET mới để polling; không giữ request POST chờ event Kafka.
+Đường chạy trên triển khai pipeline ADR-002. Phần **Chưa xác minh** là token
+production, contract REST của service sở hữu, quota/evaluation LLM và tích
+hợp gateway. Kafka projection/event kết quả, specialist, SSE/WebSocket và
+retention tự động là phần mở rộng; chỉ thêm khi có nhu cầu/contract.
 
 ### Request semantics
 
-Request mang intent, target, input, idempotency key và output schema version
-theo [API v1](api.md). User lấy từ ngữ cảnh xác thực, không lấy từ body.
-ID Project/Task/Sprint/User là tham chiếu logic. Quyền trên target phải được
-service sở hữu xác nhận; dữ liệu context hoặc snapshot không tự cấp quyền.
-Kafka event thay đổi quyền có thể làm mất hiệu lực cache khi có contract,
-nhưng không thay thế kiểm tra quyền qua service sở hữu trong pipeline này.
+Wire contract giữ URL, ba intent và bốn trạng thái v1. `output_schema_version`
+nhận version đúng intent hoặc `current`, được chuẩn hóa thành version cụ thể.
+Output được kiểm tra theo schema của intent, không chấp nhận result thuộc
+intent khác chỉ vì cùng union `AiResult`. Lỗi nội bộ được ánh xạ vào enum lỗi
+v1; `error.details.reason` cho biết lỗi context, queue, broker hoặc budget.
 
-Kết quả là proposal có cấu trúc, không tạo side effect nghiệp vụ. Work thực
-hiện tạo task/subtask hoặc thay đổi khác sau xác nhận và kiểm tra quyền.
-`risk_analysis` cần phân biệt thiếu/cũ dữ liệu, thiếu mapping GitHub và không
-có hoạt động; không suy diễn năng lực người dùng từ dữ liệu thiếu.
+Idempotency có phạm vi user/key/payload. POST lặp kiểm tra quyền hiện hành rồi
+trả kết quả đã lưu hoặc lỗi đã lưu. GET khác owner và ID không tồn tại cùng
+trả `404`. GET không áp dụng proposal hoặc xác nhận quyền nghiệp vụ thay Work.
 
 ### Job nền và cách trả kết quả
 
-Thiết kế đã chọn Celery + Redis cho job nội bộ, PostgreSQL của AI cho trạng
-thái/kết quả và polling cho MVP. Các thành phần vận hành gồm:
+POST chờ persistence tối đa 10 giây. Nếu chưa kết thúc, trả queued envelope
+`202` với `Location`; GET có thể đã thấy `running`. Hết thời gian chờ POST
+không hủy worker. Workflow có deadline tối đa 30 giây, bao gồm xác minh lại
+quyền, context, retry và revise. Thời gian queue riêng, mặc định 300 giây.
 
-| Thành phần                                      | Trách nhiệm                                                         |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| API process                                     | Nhận POST/GET, gọi application, trả response từ persistence         |
-| Celery worker                                   | Nhận task qua Redis và gọi application/workflow xử lý AI            |
-| Dispatcher                                      | Giao các job đã lưu bền vững; phục hồi việc gửi khi Redis lỗi       |
-| Kafka consumer, khi có use case/contract        | Nhận domain event, chống trùng, cập nhật projection hoặc tạo job    |
-| Outbox publisher, khi có contract event kết quả | Phát event sau khi lưu kết quả; retry gửi event độc lập với chạy AI |
-
-API và worker thuộc cùng service, có thể chung package/image và tách process/
-container. Không bắt buộc singleton; số worker/concurrency cần giới hạn theo
-quota LLM, database và yêu cầu vận hành. Task chỉ gọi application/workflow,
-không chứa lặp lại logic nghiệp vụ hay có quyền vượt Context Tool Pool.
-
-Dispatcher/publisher có thể chạy bằng job hoặc process riêng; topology và
-concurrency chưa chốt. **Chưa triển khai:** worker, dispatcher, database và
-consumer; Redis trong Compose không chứng minh pipeline này đã chạy.
-
-Baseline không quy định mọi POST trả `202` ngay. Contract v1 hiện chờ tối đa
-10 giây, trả `200` nếu xong hoặc `202` để client GET polling; workflow có
-hard timeout 30 giây. SSE/WebSocket hoặc mô hình luôn trả `202` là thay đổi
-cần chốt riêng, không tự thêm từ baseline.
+| Thành phần | Trách nhiệm |
+| --- | --- |
+| API | Xác thực, nhận request, chờ/đọc trạng thái cho client |
+| PostgreSQL của AI | Request/input/result, idempotency, delivery lease, budget, dead-letter |
+| Dispatcher | Giao lại delivery và kết thúc queue/worker quá hạn |
+| Redis | Broker Celery, không là nguồn result/trạng thái |
+| Celery worker | Entry point gọi application xử lý request |
+| ADK workflow / agent | Validation/retry có giới hạn và suy luận/chọn domain tool |
 
 ### Retry, phục hồi và dead-letter
 
-- Lỗi provider/context tạm thời có thể retry với backoff tăng dần và jitter
-  (độ lệch ngẫu nhiên), giới hạn theo budget. Input sai hoặc bị từ chối quyền
-  phải kết thúc; không retry như lỗi mạng.
-- Workflow revise output sai schema trong giới hạn. Retry ở workflow và
-  Celery phải được phối hợp, không nhân số lần gọi LLM ngoài budget. Hard timeout
-  30 giây bao gồm các lần revise/retry thực thi; giao lại job không tự cấp lại
-  budget/thời hạn đã dùng. Thời hạn chờ queue và phát hiện job bị kẹt cần chốt
-  riêng trong cấu hình vận hành, không suy ra từ ngưỡng POST 10 giây.
-- Job giao lại phải an toàn: request đã kết thúc không chạy LLM lần nữa; worker
-  cũ không được ghi đè kết quả sau khi job được phục hồi bởi worker khác. Cần
-  thiết kế cơ chế nhận quyền xử lý và thu hồi quyền đó khi worker chết.
-- Dead-letter là nơi lưu thông điệp không xử lý được để điều tra/replay. Event
-  sai schema hoặc hết giới hạn xử lý được cách ly; job AI hết retry phải lưu
-  `failed` để client không polling vô hạn. Nơi lưu, retention và thao tác replay
-  cần thiết kế trước triển khai; không giả định Redis/Celery tự tạo DLQ.
-- Gửi Kafka event kết quả thất bại chỉ retry publisher; không chạy lại LLM.
-  Lưu kết quả và outbox trong cùng transaction khi đã có contract event.
-
-Yêu cầu kiểm thử phục hồi nằm trong [job nền](../infrastructure/background-jobs.md).
+- Giao broker lỗi dùng backoff/jitter; giới hạn bởi số lần giao và queue TTL.
+- Provider HTTP 429/5xx được retry trong số vòng và budget chung. Input/quyền
+  sai không được retry như lỗi mạng; output sai được revise hữu hạn.
+- Worker chết: request `running` được kết thúc `failed` khi deadline hết bởi
+  dispatcher. MVP không tiếp tục một phiên suy luận đã mất; không cấp lại
+  budget hoặc tự chạy lại LLM. Task trùng chỉ đọc trạng thái rồi bỏ qua.
+- Dead-letter giữ request ID, mã lỗi và thời điểm; không có credential/raw
+  provider output. Replay tự động chưa có; request failed được giữ cho polling.
+- Kafka publisher chưa có. Khi thêm event kết quả, transaction result/outbox
+  và retry publisher phải độc lập với thực thi model.
 
 ## Context flow
 
 ### Implementation hiện tại
 
-**Chưa triển khai:** chưa có domain tool, HTTP context adapter, projection,
-consumer, database connection hoặc cache. Metadata bootstrap dùng nguồn rỗng
-và fingerprint `bootstrap-no-context`.
+`ContextToolPool` gắn với target của request đã xác thực. Tool không nhận URL,
+credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_context`,
+`get_team_context`, `get_progress_context`, `get_development_context`.
+
+REST adapter dùng URL template từ cấu hình, kiểm tra lại quyền, không theo
+redirect, có timeout và giới hạn byte. Adapter kiểm tra domain/thời điểm,
+từ chối context thiếu/cũ/sai schema; lọc allowlist trường và giới hạn độ sâu,
+số phần tử và độ dài trước khi đưa cho agent. Metadata lưu nguồn/status,
+thời điểm và fingerprint của context đã lọc. Workflow kiểm tra context thiết
+yếu trước khi chấp nhận proposal: backlog có target cần project context,
+task decomposition cần task context, risk cần progress context. Chỉ gọi team
+hoặc development tool không thay thế dữ liệu thiết yếu. Agent vẫn tự chọn thứ
+tự lấy context và tool bổ sung.
+
+**Một phần:** adapter và unit test đã có; response domain thực tế chưa công bố.
+`ContextDocument` là hợp đồng nội bộ adapter, không tuyên bố Work đã cung cấp
+endpoint/schema này. Cần ánh xạ REST domain vào hợp đồng đó trước tích hợp;
+xem [cấu hình](README.md). Risk thiếu/cũ context kết thúc failed, không dùng
+context rỗng như dữ liệu đầy đủ. Backlog nháp có thể thành công không context.
 
 ### Thiết kế theo baseline
 
-AI lấy Project/Task context qua internal API của Work. Context Layer bọc
-adapter, truyền identity/quyền theo hợp đồng, giới hạn target, timeout, số
-lời gọi và kích thước dữ liệu. Agent chỉ chọn domain tool như:
-
-- `get_task_context`, `get_project_context`;
-- `get_team_context`, `get_progress_context`;
-- `get_development_context`.
-
-Agent không có HTTP tool tùy ý, credential, SQL, Kafka offset hoặc consumer
-group. Internal API của Work/Integration/Classroom cần được công bố và kiểm
-tra quyền; chưa có endpoint context nào được xác minh. Tool trả dữ liệu đã
-lọc/tổng hợp và metadata nguồn/thời điểm/thiếu hoặc cũ dữ liệu.
-
-Projection qua Kafka hoặc snapshot tại AI là tối ưu có thể thêm khi cần.
-Nếu dùng event: consumer xác định (deterministic) cập nhật bản sao ngoài agent
-loop, kiểm tra schema/version và chống lặp. Không dùng Kafka hỏi–đáp để lấy
-context đồng bộ. Xem [ERD](erd.md) và [event contract cũ](../system/kafka-events.md).
+Work cung cấp task/project/team/progress trong quyền sở hữu của mình;
+Integration cung cấp development context đã chuẩn hóa. Projection qua Kafka
+chỉ thêm khi cần; consumer xác định chạy ngoài agent loop, chống lặp và kiểm
+tra schema/version. Không dùng Kafka hỏi–đáp để lấy quyền/context.
 
 ## Dependency direction
 
 ```text
-API / task entry point → Application → ADK Workflow → LlmAgent
-                                                        ↓
-                                                Context Tool Pool
-                                                        ↓
-                                                Context Layer/adapters
+API / Celery task → Application → executor protocol → ADK Workflow → LlmAgent
+                                                                → domain tools
+                                                                → context gateway
+Infrastructure triển khai các protocol; main/task lắp ghép adapter cụ thể.
 ```
 
-Infrastructure adapter phục vụ HTTP API nội bộ, persistence, cache hoặc
-provider; Kafka consumer/outbox publisher chạy ngoài vòng suy luận. Không để
-agent điều phối hạ tầng hoặc đưa business rule vào HTTP handler/Celery task.
+Application không import HTTP, SQLAlchemy, ADK hoặc infrastructure. Workflow
+không import adapter concrete/API; context tools chỉ biết gateway protocol.
+`models/` giữ schema, `infrastructure/` giữ JWT/HTTP/provider/persistence;
+`jobs/` là entry point. [Architecture test](../../apps/ai-service/tests/test_architecture.py)
+kiểm tra hướng import; [code map](code-map.md) giữ vị trí file.
 
 ## Failure isolation
 
-Lỗi context/provider/worker phải trả trạng thái rõ ràng, không tạo proposal
-giả. Giới hạn model call, context tool call, specialist call, output token,
-retry và thời gian. Không lưu raw provider response hoặc log secret.
-
-AI outage không chặn Work/Classroom/Identity/Integration/Notification; Work
-vẫn tính tiến độ. Context thiếu/cũ có thể giảm phạm vi phân tích hoặc làm job
-failed theo rule của intent; không âm thầm coi context thiếu là dữ liệu rỗng đúng.
+Lỗi auth/context/provider/broker/worker có trạng thái và error envelope rõ
+ràng. Output sai không được lưu thành succeeded. Deadline và budget chống
+loop/retry vô hạn; không log secret/raw provider response. Work vẫn tính tiến
+độ và cung cấp nghiệp vụ khi AI lỗi.
 
 ## Contract và khoảng trống triển khai
 
-API v1 và context event v1 được giữ nguyên schema trong lần cập nhật này:
-
-- API v1 có quy tắc gateway-auth; baseline yêu cầu các service xác thực token.
-  Cần thống nhất hợp đồng xác thực trước khi triển khai, không tin header client.
-- Context event v1 dùng Project/Progress producer và envelope cũ; cần version/
-  mapping nếu dùng cùng Work theo baseline. Không áp dụng nguyên trạng để tạo
-  Progress Service riêng.
-- Baseline nêu `ai.analysis.completed` và `ai.project.risk.detected`; chưa có
-  schema/topic/consumer được chốt, API v1 chưa phát event kết quả.
-- Nginx rewrite prefix chưa khớp route bootstrap. Env có URL Work/Integration
-  nhưng chưa có adapter dùng URL đó; không coi cấu hình là runtime đã tích hợp.
+- OpenAPI v1 sửa cách ghép `allOf` với `unevaluatedProperties`; giữ các trường
+  v1, không phát minh schema event. Test kiểm tra payload bằng JSON Schema.
+- Auth source production và REST quyền/context cần service sở hữu công bố;
+  credential key phải giống giữa API/worker và được quản lý ngoài source.
+- Nginx root hiện bỏ `/api/ai/` trước proxy, khác route canonical của app;
+  cần cấu hình gateway riêng. Local gọi API trực tiếp, chưa kiểm chứng gateway.
+- Compose root chưa thêm DB/worker/dispatcher AI. Service có Compose local
+  riêng và hướng dẫn tại [README](README.md); không coi đó là integration
+  toàn hệ thống đã chạy.
+- Event context v1 cũ có producer Project/Progress; không dùng nguyên trạng
+  với Work. Không tạo Progress Service riêng hoặc Kafka runtime không có contract.

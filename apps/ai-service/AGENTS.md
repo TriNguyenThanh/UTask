@@ -1,8 +1,9 @@
 # Quy tắc phát triển AI Service
 
-**Trạng thái hiện tại: Một phần.** Source bootstrap, test, package manifest và
-Dockerfile đã có. Provider thật, ADK, Celery, Kafka, context adapter và persistence chưa triển khai;
-xem code map để kiểm tra entry point trước khi sửa.
+**Trạng thái hiện tại: Một phần.** Pipeline API/PostgreSQL/dispatcher/Redis/
+Celery/ADK, JWT và REST context adapter đã có, kèm unit/integration tests.
+Integration domain/LLM production **Chưa xác minh**; Kafka, specialist và
+retention tự động **Chưa triển khai**. Xem code map trước khi sửa.
 
 ## Vai trò
 
@@ -14,9 +15,10 @@ progress hoặc notification.
 
 ## Công nghệ đã xác minh
 
-- Bootstrap dùng Python 3.12, FastAPI/Uvicorn, Pydantic v2, `pydantic-settings`,
+- Service dùng Python 3.12, FastAPI/Uvicorn, Pydantic v2, `pydantic-settings`,
   `uv`, Ruff và Pytest; có Dockerfile.
-- Chưa có LLM SDK, ADK implementation, Kafka client hoặc database client.
+- Đã có Google ADK/GenAI, Celery, HTTPX, PyJWT, Fernet, SQLAlchemy/Psycopg và
+  Alembic. Chưa có Kafka client/projection consumer.
 - Không ghi thêm công nghệ chỉ vì README hay thiết kế mục tiêu có nhắc tới nó.
 
 ## Phạm vi và đường dẫn

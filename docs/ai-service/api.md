@@ -1,10 +1,9 @@
 # API AI Service — giai đoạn 1
 
-**Trạng thái: Contract v1 đã chốt; bootstrap implementation đã triển khai một
-phần.** Schema máy đọc được nằm tại
+**Trạng thái: Một phần.** API, persistence và pipeline worker đã triển khai;
+integration domain/LLM production và gateway **Chưa xác minh**.
+Schema máy đọc được nằm tại
 [`contracts/api/ai-service-v1.yaml`](../../contracts/api/ai-service-v1.yaml).
-Healthcheck và request boundary đã có; provider thật, xử lý bất đồng bộ và
-persistence chưa có.
 
 Tài liệu này mô tả API mà client dùng để yêu cầu AI xử lý một ý định cụ thể.
 API chỉ nhận yêu cầu và trả bản phân tích hoặc proposal có cấu trúc. Theo
@@ -50,8 +49,8 @@ Worker lưu kết quả vào AI DB; API đọc AI DB để trả POST/GET respon
 
 - API nhận ý định, phạm vi đối tượng và các chỉ dẫn bổ sung cần thiết.
 - `requester_user_id` lấy từ ngữ cảnh xác thực của request, không lấy từ body
-  do client tự khai báo. Cơ chế header/token cụ thể cần chốt trong hợp đồng
-  xác thực chung.
+  do client tự khai báo. Source xác minh Bearer JWT; cấu hình issuer/key và
+  integration Identity production cần kiểm chứng.
 - Quyền trên target được service sở hữu xác nhận qua internal REST API trước
   khi giao job. Context adapter tiếp tục kiểm tra quyền khi lấy dữ liệu; không
   dùng Kafka hỏi–đáp hoặc projection để cấp quyền.
@@ -73,8 +72,8 @@ Nginx hiện có route `/api/ai/`. Prefix đã được contract v1 đặc tả 
 /api/ai/v1
 ```
 
-Các chi tiết gateway, port nội bộ và xác thực hiện chưa được xác minh trong
-source implementation.
+Source dùng route canonical trên và xác minh JWT. Integration gateway root
+chưa xác minh; Nginx hiện rewrite prefix khác route app, cần cấu hình deployment.
 
 Quy ước dữ liệu:
 
@@ -126,8 +125,8 @@ Tạo một yêu cầu xử lý cho một trong ba intent giai đoạn 1.
 | `output_schema_version` | Không           | Phiên bản schema client mong muốn; mặc định là phiên bản hiện hành nếu API cho phép bỏ qua.              |
 | `Idempotency-Key`       | Có ở header     | Khóa chống tạo cùng một yêu cầu nhiều lần; không đặt trong body.                                         |
 
-`requester_user_id` không xuất hiện trong request body. API lấy user từ identity
-context đã được gateway hoặc cơ chế xác thực nội bộ kiểm tra.
+`requester_user_id` không xuất hiện trong request body. API lấy user từ JWT
+đã xác minh chữ ký, issuer, audience và thời hạn.
 
 ### Input theo intent
 
@@ -464,10 +463,11 @@ hoặc event schema mới vào contract v1.
 
 Các quyết định dưới đây đã được ghi vào schema máy đọc được:
 
-1. API dùng Bearer token; gateway chịu trách nhiệm xác thực và truyền identity
-   đã xác minh vào request context. AI Service vẫn kiểm tra quyền truy cập
-   target trước khi chạy workflow.
-2. `POST` chạy đồng bộ tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
+1. API dùng Bearer token; AI Service xác minh chữ ký JWT, issuer, audience và
+   thời hạn bằng public key/JWKS cấu hình. Không tin header identity từ client.
+   AI kiểm tra quyền target qua REST của service sở hữu trước khi enqueue,
+   worker xác minh lại JWT/quyền trước khi chạy workflow.
+2. `POST` chờ persistence tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
    `GET` để polling. Hard timeout của workflow là 30 giây.
 3. V1 chỉ hỗ trợ các status `queued`, `running`, `succeeded`, `failed`; không
    có endpoint liệt kê lịch sử.
@@ -488,15 +488,15 @@ Contract không xác nhận endpoint hoặc event producer/consumer đã chạy.
 
 ## 12. Đối chiếu baseline và công việc chuyển đổi
 
-Các quyết định contract v1 ở mục 11 được giữ nguyên YAML trong lần cập nhật
-này. Baseline là chuẩn kiến trúc mới, không tự đổi wire contract (cấu trúc
-truyền qua API/event). Các khoảng trống cần giải quyết trước implementation:
+Giữ URL, intent, status và envelope v1. Baseline là chuẩn kiến trúc, không
+tự đổi wire contract (cấu trúc truyền qua API/event). Đối chiếu source và các
+giới hạn tích hợp:
 
 | Chủ đề        | Baseline / thiết kế mới                                            | Hợp đồng hoặc hiện trạng còn lại                                                            |
 | ------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền     | YAML v1 mô tả gateway xác thực; bootstrap chỉ đọc header user. Cần hợp đồng auth thống nhất |
-| Context       | Internal API của Work qua adapter/domain tool                      | Chưa có contract endpoint context hoặc adapter; projection v1 dùng producer cũ              |
-| Job nội bộ    | Request + ý định giao job bền vững; dispatcher → Redis → worker AI | Chưa có task/worker/dispatcher/persistence; giữ ngưỡng chờ/polling v1                       |
+| Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền     | Đã có JWT verifier và REST authorizer; integration Identity/domain chưa xác minh |
+| Context       | Internal API của Work qua adapter/domain tool                      | Đã có adapter/tool pool; endpoint/schema domain cần công bố; projection v1 dùng producer cũ |
+| Job nội bộ    | Request + ý định giao job bền vững; dispatcher → Redis → worker AI | Đã có PostgreSQL/Celery/dispatcher, giữ ngưỡng chờ/polling v1 |
 | Event kết quả | Baseline nêu `ai.analysis.completed`, `ai.project.risk.detected`   | Chưa có event schema/topic/consumer; v1 chưa phát event                                     |
 | URL/version   | Nginx reverse proxy và API có version                              | Giữ `/api/ai/v1/requests`; ví dụ URL trong baseline không tự đổi route                      |
 

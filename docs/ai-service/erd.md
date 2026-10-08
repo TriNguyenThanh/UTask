@@ -1,241 +1,93 @@
 # ERD AI Service — MVP
 
-**Trạng thái: Thiết kế mục tiêu; chưa triển khai và chưa có migration để kiểm chứng.**
-
-ERD dưới đây là phương án persistence của thiết kế AI trước; baseline mục
-4.6 cho lấy context qua internal API. `AI_REQUEST` phục vụ yêu cầu/kết quả;
-các bảng `CONTEXT_*` chỉ triển khai khi chọn lưu snapshot/projection qua event.
-Không bắt buộc tạo toàn bộ bảng chỉ để chạy internal-context API. Xem
-[kiến trúc AI](architecture.md) và [baseline](../architecture/README.md).
-
-Request/kết quả và ý định giao job bền vững là bắt buộc cho
-[pipeline API/worker đã chốt](architecture.md). Projection context vẫn tùy
-use case. ERD hiện chưa đặc tả đủ cơ chế giao job/phục hồi; các yêu cầu dưới
-đây phải được chuyển thành schema/migration có kiểm thử khi triển khai.
-
-Phạm vi dữ liệu mục tiêu:
-
-1. yêu cầu và kết quả AI;
-2. projection (bản sao đọc tối thiểu) của project/task/sprint;
-3. một vài chỉ số tiến độ và hoạt động GitHub đã chuẩn hóa;
-4. event đã nhận để chống xử lý trùng.
-5. ý định giao job và metadata phục hồi; outbox event kết quả chỉ khi có contract.
-
-Các bảng nguồn vẫn thuộc service nghiệp vụ tương ứng. Những ID như `user_id`,
-`project_id` và `scope_id` trỏ sang service khác là logical reference, không
-phải foreign key xuyên database.
+**Trạng thái: Đã triển khai schema và repository PostgreSQL; production chưa
+xác minh.** Nguồn thực thi là
+[migration 0001](../../apps/ai-service/migrations/versions/0001_request_pipeline.py)
+và [ORM metadata](../../apps/ai-service/src/infrastructure/db/tables.py).
+Không giữ các bảng projection cũ như schema bắt buộc khi pipeline dùng REST.
 
 ## ERD MVP
 
 ```mermaid
 erDiagram
-    CONTEXT_PROJECT ||--o{ CONTEXT_TASK : "co"
-    CONTEXT_PROJECT ||--o{ CONTEXT_SPRINT : "co"
-    CONTEXT_SPRINT ||--o{ CONTEXT_TASK : "contains"
-    CONTEXT_PROJECT ||--o{ CONTEXT_GITHUB_ACTIVITY : "has"
-
+    AI_REQUEST ||--o| AI_DELIVERY : "chờ giao job"
+    AI_REQUEST ||--o| AI_DEAD_LETTER : "thất bại"
     AI_REQUEST {
         uuid id PK
-        uuid requester_user_id "logical ref Identity"
-        varchar intent_type
-        jsonb target_scope "logical refs: project/task/user"
-        varchar status
-        varchar idempotency_key "giá trị từ header Idempotency-Key"
-        jsonb input_payload
-        jsonb result_payload
-        varchar output_schema_version
-        varchar provider
-        varchar model
-        varchar prompt_version
-        timestamptz context_as_of
-        varchar context_fingerprint
-        int attempt_count
-        varchar error_code
-        text error_message
-        timestamptz requested_at
-        timestamptz completed_at
-        timestamptz updated_at
-    }
-
-    CONTEXT_EVENT {
-        uuid event_id PK
-        varchar event_type
-        varchar event_version
-        varchar producer
-        timestamptz occurred_at
-        timestamptz received_at
+        text user_id "tham chiếu logic"
+        text idempotency_key
+        text fingerprint
         jsonb payload
-        varchar processing_status
-        int failure_count
-        timestamptz processed_at
-        text last_error
+        jsonb response
+        text status
+        text credential "Fernet ciphertext; xóa khi terminal"
+        timestamptz created_at
+        timestamptz queue_expires_at
+        timestamptz execution_deadline
+        uuid execution_token
+        integer model_calls
+        integer tool_calls
+        integer output_tokens
     }
-
-    CONTEXT_PROJECT {
-        uuid id PK
-        uuid class_id "logical ref Classroom"
-        uuid group_id "logical ref Classroom"
-        varchar name
-        varchar status
-        varchar source_version
-        timestamptz source_updated_at
-        timestamptz synced_at
+    AI_DELIVERY {
+        uuid request_id PK,FK
+        integer attempts
+        timestamptz next_attempt_at
+        uuid lease_token
     }
-
-    CONTEXT_TASK {
-        uuid id PK
-        uuid project_id FK
-        uuid sprint_id FK
-        uuid assignee_user_id "logical ref Identity"
-        varchar title
-        varchar status
-        varchar priority
-        numeric estimate_points
-        timestamptz due_at
-        varchar source_version
-        timestamptz source_updated_at
-        timestamptz synced_at
-    }
-
-    CONTEXT_SPRINT {
-        uuid id PK
-        uuid project_id FK
-        varchar name
-        varchar status
-        date start_at
-        date end_at
-        text goal
-        varchar source_version
-        timestamptz source_updated_at
-        timestamptz synced_at
-    }
-
-    CONTEXT_GITHUB_ACTIVITY {
-        uuid id PK
-        uuid project_id FK
-        uuid task_id "logical ref Project"
-        uuid actor_user_id "logical ref Identity"
-        varchar repository_key
-        varchar activity_type
-        varchar external_id
-        varchar activity_status
-        timestamptz occurred_at
-        varchar source_version
-        timestamptz source_updated_at
-        timestamptz synced_at
-    }
-
-    CONTEXT_PROGRESS_METRIC {
-        uuid id PK
-        varchar scope_type
-        uuid scope_id "logical ref Work scope"
-        varchar metric_key
-        numeric metric_value
-        timestamptz measured_at
-        varchar calculation_version
-        varchar source_version
-        timestamptz source_updated_at
-        timestamptz synced_at
+    AI_DEAD_LETTER {
+        uuid request_id PK,FK
+        text code
+        timestamptz created_at
     }
 ```
 
 ## Vai trò của các bảng đề xuất
 
-- `ai_request` chứa cả trạng thái, metadata lần gọi và kết quả JSON đã validate.
-  Với MVP, chỉ lưu lần xử lý hiện tại; chưa cần tách `ai_run`, `ai_result` và
-  `ai_suggestion`.
-- `target_scope` ghi rõ request áp dụng cho project, task hoặc user nào. Các ID
-  trong đó là logical reference; không phải foreign key sang database khác.
-- `context_project` và `context_task` đủ cho các use case tạo backlog và phân rã
-  task; `context_sprint`, `context_progress_metric` và
-  `context_github_activity` bổ sung dữ liệu cho `risk_analysis`.
-- `context_progress_metric` cho phép AI diễn giải chỉ số do Work Service
-  tính; AI không tự tính lại chỉ số nguồn.
-- `context_event` giữ `event_id` và trạng thái xử lý để consumer Kafka
-  idempotent. Đây là bảng vận hành, không thay thế event contract.
+Tên bảng SQL là `ai_request`, `ai_delivery`, `ai_dead_letter`; chúng là schema
+đã triển khai, không còn là placeholder. `user_id` và ID trong payload không
+có FK xuyên service. Hai FK trên chỉ nằm trong AI database.
 
-Context được lưu như **trạng thái mới nhất**, không phải lịch sử đầy đủ. Các
-cột `source_version`, `source_updated_at`, `synced_at` và `context_as_of` cho
-biết kết quả AI đã dùng dữ liệu đến thời điểm nào.
+- Request giữ input đã chuẩn hóa, response hiện tại, ownership/idempotency và
+  metadata thực thi. Response JSONB chứa result/error/context metadata v1.
+- Delivery giữ ý định giao job cùng transaction request, lease/attempts/thời
+  điểm giao lại. Publish thành công không xóa ý định; worker claim mới xóa,
+  tránh mất job nếu Redis làm mất thông điệp trước khi worker nhận.
+- Dead-letter giữ mã lỗi terminal và thời điểm, không chứa token/raw output.
 
 ## Ràng buộc và index đề xuất khi chọn persistence này
 
-Các ràng buộc dưới đây cần xác minh theo schema/API thực tế trước migration.
-Với job `queued` chưa được chạy, cần chốt cách đếm attempt trước khi dùng
-`attempt_count >= 1`; không áp dụng CHECK này như schema production đã chốt.
+**Đã triển khai:** UUID PK, JSONB cho payload/response, timestamptz UTC,
+unique `(user_id, idempotency_key)`, check status/budget không âm, index delivery
+đến hạn và request expiry. Repository dùng connection pool, transaction ngắn;
+không giữ transaction/lock trong lúc gọi broker, REST hoặc LLM.
 
-- Khóa chính dùng `uuid`; thời gian dùng `timestamptz`.
-- `UNIQUE (requester_user_id, idempotency_key)` trên `ai_request` khi key khác
-  `NULL`.
-- `CHECK` cho `status`; ràng buộc `attempt_count` cần chốt cách đếm job chưa
-  bắt đầu và retry trước migration.
-- `CHECK (jsonb_typeof(input_payload) = 'object')` nếu API luôn nhận object.
-- Index `ai_request (requester_user_id, requested_at DESC)` và
-  `ai_request (status, requested_at DESC)`.
-- Index `context_task (project_id, status, due_at)` và
-  `context_task (assignee_user_id, status, due_at)`.
-- Index `context_github_activity (project_id, occurred_at DESC)` và
-  `context_github_activity (task_id, occurred_at DESC)`.
-- Index `context_progress_metric (scope_type, scope_id, metric_key,
-measured_at DESC)`.
-- Primary key trên `context_event.event_id`; index retry theo
-  `(processing_status, received_at)`.
+`INSERT ... ON CONFLICT` bảo vệ POST đồng thời. Claim request khóa hàng;
+claim delivery dùng `FOR UPDATE SKIP LOCKED`. Finish kiểm tra execution token,
+status và deadline. Budget trừ trước model/tool, tính usage output và cấp cap
+còn lại cho lần model tiếp theo. Xem [pipeline](architecture.md).
 
 ## Khi nào cần mở rộng?
 
-Chỉ thêm bảng khi có yêu cầu thật:
-
-- Tách `ai_execution` nếu cần lưu lịch sử retry, token usage hoặc nhiều kết
-  quả cho một request.
-- Tách `ai_suggestion` nếu UI cần truy vấn/chấp nhận từng gợi ý độc lập thay vì
-  đọc một `result_payload`.
-- Thêm context project member hoặc group member khi use case AI tương ứng được
-  chốt.
-- Thêm bảng lineage chi tiết nếu cần audit chính xác từng bản ghi context đã
-  được dùng.
-
-Không đưa vào MVP: user/project/task nguồn, vector database, conversation dài
-hạn, raw provider response và trạng thái “đã áp dụng” của suggestion. Việc áp
-dụng thay đổi vẫn do service sở hữu domain thực hiện sau khi người dùng xác
-nhận.
+Context snapshot/projection, execution history, Kafka outbox và specialist
+chỉ thêm khi có use case/contract. Không lưu raw LLM output hoặc dùng projection
+để cấp quyền. Retention/ẩn danh tự động và replay dead-letter chưa triển khai.
 
 ## Persistence phục vụ pipeline API/worker
 
-**Thiết kế mục tiêu; chưa có schema/migration được xác minh.** API và Celery
-worker dùng chung database của AI qua application/repository. Redis chuyển
-task; trạng thái và kết quả bền vững nằm trong PostgreSQL của AI.
+API, dispatcher và worker dùng chung PostgreSQL của AI; Redis chỉ là broker.
+Bearer cần cho reauthorization tại worker được mã hóa bằng khóa Fernet ngoài
+source, cùng khóa ở API/worker. JWT còn được kiểm tra issuer/audience/expiry
+sau giải mã. Ciphertext bị xóa khi succeeded/failed, kể cả queue timeout,
+worker timeout và dispatch hết retry. Payload/result cần policy retention riêng.
 
-- Request `queued` và bản ghi chờ giao job phải lưu trong cùng transaction
-  trước khi xác nhận nhận job. Dispatcher đọc bản ghi đó để gửi hoặc giao lại
-  qua Redis; cần phân biệt đã gửi task với đã hoàn tất xử lý.
-- Idempotency cần fingerprint payload, phạm vi user/key và bảo vệ nhiều POST
-  đồng thời. Worker cũng phải chống xử lý trùng khi task được giao lại.
-- Cần metadata để worker nhận quyền xử lý, phục hồi sau khi worker chết và
-  ngăn worker cũ ghi đè kết quả mới. Request đã kết thúc không chạy lại LLM.
-- Lưu trạng thái cuối `succeeded`/`failed`, result/error và context metadata
-  để API đọc sau kiểm tra ownership. Không cần consumer event kết quả để API
-  cập nhật database.
-- Khi đã có contract Kafka event kết quả, lưu kết quả và outbox trong cùng
-  transaction. Dead-letter cần thông tin thông điệp, nguồn, lỗi và số lần xử
-  lý phù hợp để điều tra/replay; không tự tạo topic hoặc schema chưa chốt.
-
-Tên bảng, cột, cơ chế nhận quyền xử lý, retention và index cho các yêu cầu này
-chưa được chốt. Không coi ERD `AI_REQUEST` hiện tại là đủ để bảo đảm giao job,
-retry hay phục hồi. Quy tắc thực thi nằm trong [kiến trúc AI](architecture.md).
+Worker chết không được chạy lại model trên request đang running; dispatcher
+lưu failed khi deadline hết. Không đặt lại budget hoặc cho worker cũ ghi đè.
+Không chạy migration tự động trong process API/worker; Alembic là bước deploy.
 
 ## Quyết định cần chốt trước migration
 
-1. Output schema cụ thể cho `backlog_generation`, `task_decomposition` và
-   `risk_analysis`.
-2. Quyền gọi `task_decomposition` của Member hay chỉ Leader.
-3. Có cần projection Kafka hay chỉ snapshot context từ internal API. Nếu dùng
-   Kafka, version/mapping contract cũ với Work và retention của `context_event`.
-4. Retention/ẩn danh cho `input_payload`, `result_payload` và event payload.
-5. Có cần tách lịch sử execution ngay từ v1 hay chấp nhận lưu lần xử lý hiện
-   tại trong `ai_request`.
-
-Baseline không ấn định ORM hoặc tên database AI; `ai_context_db` là tên trong
-thiết kế AI trước, chưa có trong Compose/init script. Job scheduling/outbox,
-claim job (nhận quyền xử lý), phục hồi retry/dead-letter và credential riêng
-cần được đặc tả schema trước migration theo các yêu cầu pipeline đã chốt;
-không tự thêm bảng/index giả trong lần cập nhật tài liệu này.
+Migration local đã có và được kiểm thử upgrade/downgrade/schema drift.
+Trước production cần chốt credential/role AI DB riêng, secret rotation,
+retention, quota/concurrency, contract quyền/context và integration JWT.
+Tên database mặc định `ai_context_db` không chứng minh Compose root đã tạo nó.

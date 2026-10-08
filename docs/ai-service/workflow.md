@@ -1,6 +1,9 @@
 # UTask AI Service Workflow
 
-**Trạng thái: Thiết kế mục tiêu; ADK, agent, tool và worker chưa triển khai.**
+**Trạng thái: Một phần.** ADK workflow/LlmAgent, domain tools, budget,
+validation/revise và Celery worker đã triển khai, kiểm thử bằng fake model.
+Integration LLM/domain production **Chưa xác minh**; specialist và Kafka
+**Chưa triển khai**.
 
 Tài liệu này là nguồn mô tả workflow bounded agent của AI Service. API v1 chỉ
 đặc tả `backlog_generation`, `task_decomposition` và `risk_analysis`.
@@ -28,7 +31,7 @@ Nguyên tắc cốt lõi:
 ## 2. Kiến trúc tổng thể
 
 Thiết kế theo [baseline](../architecture/README.md), mục 4.6, 9–11 và 18.
-Các layer dưới đây là thiết kế, chưa phải ADK/Celery/context runtime.
+Source hiện theo các layer dưới đây; vị trí và kiểm thử ở [code map](code-map.md).
 
 ```text
 AI API / task entry point
@@ -55,7 +58,8 @@ tạo job qua cùng application/dispatcher. Xem nguồn chi tiết tại
 
 API/worker có thể tách process/container, không bắt buộc singleton. MVP dùng
 polling và giữ ngưỡng chờ 10 giây của [API v1](api.md); luôn trả `202` hoặc
-SSE/WebSocket cần contract riêng. Các thành phần này **chưa triển khai**.
+SSE/WebSocket cần contract riêng và **Chưa triển khai**. Pipeline polling
+API/dispatcher/worker đã có trong source, dùng chung persistence của AI.
 
 ---
 
@@ -136,6 +140,13 @@ Workflow không thay thế agent.
 
 Workflow kiểm soát **macro-flow**.  
 LlmAgent tự quyết định **micro-flow**.
+
+**Đã triển khai:** `ProposalWorkflow` kiểm tra schema theo intent, revise và
+retry provider trong giới hạn chung. Trước khi chấp nhận output, workflow
+kiểm tra context thiết yếu: backlog có target cần project, phân rã cần task,
+risk cần progress. Agent chọn thứ tự và tool bổ sung. Prompt nghiệp vụ nằm
+trong `workflow/instructions.py`, SDK/provider nằm trong infrastructure;
+application worker lưu result qua executor/repository protocol.
 
 ### 3.3. Kết hợp Workflow + LlmAgent
 
@@ -708,7 +719,7 @@ PostgreSQL cluster/server
 ├── work_db
 ├── integration_db
 ├── notification_db
-└── ai_context_db (tên thiết kế AI, chưa có trong Compose)
+└── ai_context_db (đã có trong Compose AI riêng; chưa có trong Compose root)
 
 Redis instance/cluster
 └── namespace theo service

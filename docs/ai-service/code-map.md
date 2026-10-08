@@ -1,184 +1,129 @@
 # AI Service Code Map
 
-**Trạng thái: Một phần.** Bootstrap ngày 2026-10-05 đã tạo source, test và
-cấu hình chạy được dưới `apps/ai-service/`; ngày 2026-10-07 đã tách source theo
-layer application/workflow/infrastructure. File này ghi implementation đã xác
-minh và khoảng trống hiện tại. Thiết kế mục tiêu đã cập nhật theo
-[baseline](../architecture/README.md); thay đổi tài liệu không tạo runtime mới.
+**Trạng thái: Một phần.** Runtime request/dispatcher/worker/ADK và PostgreSQL
+đã triển khai; kiểm tra ngày 2026-10-08. Integration domain/LLM production và
+gateway chưa xác minh. Nguồn pipeline chuẩn: [architecture](architecture.md).
 
 ## Service root
 
-- Source trực tiếp dưới `apps/ai-service/src/`; test và cấu hình nằm ở
-  `apps/ai-service/`. Không có package bao ngoài các layer.
-- Instruction mặc định: `apps/ai-service/AGENTS.md`.
-- Plan cho thay đổi lớn: `apps/ai-service/.agent/PLANS.md`.
-
-## API
-
-- API entry points: `src/api/routes.py` — `/healthz`,
-  `POST /api/ai/v1/requests` và `GET /api/ai/v1/requests/{request_id}`.
-- Schemas: `src/models/` — `requests.py` cho input/target,
-  `results.py` cho đề xuất và `responses.py` cho envelope/context metadata/lỗi.
-  `common.py` giữ kiểu dùng chung; `__init__.py` giữ public imports ổn định.
-- Root Nginx có route `/api/ai/` tới container `ai-service:8000`; đây là routing
-  hạ tầng, không phải bằng chứng endpoint nội bộ đã tồn tại.
-
-## Cách đọc source và pipeline hiện tại
-
-Đọc theo thứ tự `main.py` → `api/routes.py` → `application/service.py` →
-`workflow/bounded.py` → `infrastructure/providers.py`; đọc
-`application/ports.py` và `infrastructure/repositories.py` khi cần biết cách
-lưu/truy vấn request.
-Các file trên đều nằm trực tiếp trong `apps/ai-service/src/`.
+Source trực tiếp dưới `apps/ai-service/src/`. Model/schema nghiệp vụ v1 được
+reuse; bootstrap synchronous và repository in-memory đã được thay thế.
 
 ```text
 src/
-├── main.py
-├── config.py
-├── errors.py
+├── main.py, config.py, errors.py
 ├── api/
-├── application/
-├── workflow/
-├── infrastructure/
+├── application/       # nhận, dispatch, execute request
+├── workflow/          # ADK custom workflow + gateway protocol
+├── context/           # domain tools gắn với request target
+├── infrastructure/    # PostgreSQL, JWT, HTTP, ADK runtime/provider
+├── jobs/              # Celery task và dispatcher process
 └── models/
 ```
 
-| File                             | Trách nhiệm                                                                               |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `main.py`                        | `create_app` lắp ghép settings, repository, provider, workflow và HTTP transport          |
-| `api/routes.py`                  | Nhận HTTP, gọi application, trả JSON                                                      |
-| `api/dependencies.py`            | Lấy application từ app state và đọc identity header bootstrap                             |
-| `api/middleware.py`              | `request_id_middleware` gắn trace ID cho request/response                                 |
-| `api/exception_handlers.py`      | `handle_service_error` chuyển `ServiceError` sang HTTP error envelope                     |
-| `application/service.py`         | Kiểm tra idempotency, gọi workflow qua protocol, lưu response, kiểm tra ownership khi GET |
-| `application/responses.py`       | Dựng envelope thành công/thất bại và metadata bootstrap                                   |
-| `application/ports.py`           | `RequestWorkflow`, `RequestRepository` và record `StoredRequest`                          |
-| `workflow/bounded.py`            | `BoundedWorkflow.run` gọi provider dưới timeout                                           |
-| `workflow/ports.py`              | Protocol `ModelProvider` mà workflow cần                                                  |
-| `infrastructure/providers.py`    | Adapter `UnconfiguredProvider` trả lỗi 502 khi chưa có provider thật                      |
-| `infrastructure/repositories.py` | Adapter `InMemoryRequestRepository` lưu request trong memory                              |
-| `models/`                        | Request, result và response model bằng Pydantic                                           |
+## API
 
-**Đã triển khai:** application phụ thuộc vào protocol workflow/repository,
-workflow phụ thuộc vào protocol provider; cả hai không import HTTP hoặc
-adapter infrastructure. `main.py` lắp ghép implementation cụ thể. Import từ
-source root dùng `application.AiApplicationService`, `workflow.BoundedWorkflow`
-và `models`; adapter nằm trong `infrastructure/`. Import giữa layer dùng đường
-dẫn tuyệt đối, import bên trong mỗi package có thể dùng đường dẫn tương đối.
-Uvicorn chạy `main:app --app-dir src`; Pytest và Docker cũng cấu hình source
-root là `src/`. API/schema và logic nghiệp vụ giữ nguyên sau khi di chuyển.
-
-Chưa tạo thư mục agent/tool/context/worker vì các thành phần đó chưa có
-implementation. Không dùng cấu trúc thư mục để suy ra ADK/Celery đã chạy.
-
-Pipeline POST hiện tại:
-
-```text
-request_id_middleware
-  → FastAPI dependencies + Pydantic validation
-  → api.routes.create_request
-  → AiApplicationService.create_request
-      → _fingerprint + repository.find_by_idempotency
-      → BoundedWorkflow.run → provider.generate
-      → _build_succeeded_response / _build_failed_response
-      → repository.save
-  → JSONResponse / handle_service_error
-```
-
-**Một phần:** bootstrap đọc `X-Authenticated-User-ID`; chưa xác minh token hay
-nguồn gửi header, chưa kiểm tra quyền trên project/task/sprint. GET mới kiểm
-tra user sở hữu AI request. Nginx hiện rewrite `/api/ai/` thành `/`; route
-bootstrap giữ đủ prefix nên tích hợp qua gateway còn cần task cấu hình riêng.
-Các test API hiện gọi trực tiếp ASGI app. Request validation vẫn dùng envelope
-`detail` mặc định của FastAPI, chưa dùng error envelope contract.
+- `main.py`: composition root API, cleanup HTTP client/DB pool qua lifespan.
+- `api/routes.py`: `/healthz`, POST/GET `/api/ai/v1/requests`; POST 200/202,
+  GET ownership; chỉ gọi application, không gọi workflow.
+- `api/dependencies.py`: Bearer → authenticator protocol; bỏ header identity.
+- `api/middleware.py`, `exception_handlers.py`: UUID trace, error envelope
+  v1, không đưa raw validation input/exception vào response/log.
+- `models/requests.py`: intent/target/input/version; kiểm tra analysis window.
+- `models/validation.py`: output schema riêng theo intent.
 
 ## AI workflows và agents
 
-- Giai đoạn 1 gồm `backlog_generation`, `task_decomposition` và
-  `risk_analysis`; request boundary đã có, xử lý AI thật: **Chưa có**.
-- `BoundedWorkflow` trong `src/workflow/bounded.py` mới là seam timeout
-  và provider injection; ADK Workflow điều phối macro-flow: **Chưa có**.
-- `LlmAgent` điều phối micro-flow/reasoning: **Chưa có**.
-- Specialist agent/agent-as-tool: **Chưa có; chỉ thêm khi use case cần**.
-- Agent budget và self-review giới hạn: **Chưa có**.
-- Structured output models: **Đã triển khai** trong `models/results.py` và
-  response construction. Validation/revise/retry theo intent trong workflow:
-  **Chưa triển khai**.
-
-Các intent ngoài giai đoạn 1 như `deadline_check` độc lập, priority suggestion,
-task description generation và tự động phân bổ lại workload: **Chưa có trong
-phạm vi hiện tại**.
+- `application/service.py`: authorize → enqueue → chờ/đọc repository.
+- `application/execution.py`: claim → reauthenticate/authorize → executor →
+  kiểm tra đúng request/intent/schema → finish; exception/timeout thành failed
+  và xóa credential. Executor/budget có protocol rõ ràng, application không
+  import SDK hoặc adapter concrete.
+- `workflow/bounded.py`: ADK `ProposalWorkflow(BaseAgent)` chạy LlmAgent,
+  validation, bounded revise/retry; result qua state-delta event.
+- `infrastructure/providers.py`: `AdkRuntime`, `AdkRequestExecutor`; chọn model
+  qua config/adapter, Runner/session cục bộ, budget callback và hard deadline.
+- Ba intent v1 đã có request/result/schema/runtime chung; chất lượng LLM thật
+  **Chưa xác minh**. Không có specialist hoặc endpoint apply.
 
 ## Tools và prompts
 
-- Context Tool Pool: **Chưa có**.
-- Domain tools mục tiêu: task, project, team, progress và development context.
-- Agent tools hạ tầng Kafka/database/cache: **Không được tạo**.
-- Prompt management: **Chưa có**.
-- Khi thêm implementation, search toàn bộ `apps/ai-service/` trước khi tạo mới.
+- `context/tools.py`: năm domain tools, scope target cố định, metadata/fingerprint.
+- Context thiết yếu được workflow kiểm tra trước khi chấp nhận proposal:
+  backlog có target cần project, phân rã cần task, risk cần progress. Agent
+  vẫn chọn thứ tự và context bổ sung; không có chuỗi fetch cứng mọi domain.
+- `workflow/ports.py`: context gateway protocol; tools không thấy HTTP/SQL/Kafka.
+- `infrastructure/context_http.py`: URL cấu hình, quyền, timeout, size/freshness,
+  allowlist fields, không redirect. Contract domain thật **Chưa xác minh**.
+- `workflow/instructions.py`: instruction riêng theo intent và JSON schema;
+  input/context được đánh dấu untrusted. Provider adapter chỉ lắp ghép SDK.
 
 ## Worker và job nội bộ
 
-- Celery/Redis dependency, cấu hình app, task và worker entry point: **Chưa có**.
-- Compose mới có Redis; chưa khai báo worker/scheduler/outbox publisher.
-- Baseline chọn Celery + Redis cho job nội bộ. Khi triển khai, source worker
-  nằm trong package AI, gọi application/workflow; API/worker có thể dùng chung
-  image và tách process/container. Không ghi file hoặc lệnh chưa tồn tại như
-  entry point đã xác minh; xem [job nền](../infrastructure/background-jobs.md).
-- Pipeline mục tiêu đã chốt tại [kiến trúc AI](architecture.md) và
-  [ADR-002](../adr/002-ai-request-pipeline.md): lưu queued + ý định giao job,
-  dispatcher gửi task qua Redis, worker chạy workflow và lưu kết quả để API
-  đọc. Dispatcher, persistence bền vững, chống chạy trùng/phục hồi worker,
-  retry/dead-letter và polling bất đồng bộ: **Chưa triển khai**. Pipeline POST
-  ở trên vẫn là lời gọi workflow trực tiếp trong bootstrap.
+- `application/dispatch.py`: một vòng giao delivery, retry broker, expiry.
+- `jobs/celery_app.py`: Redis broker, JSON serializer, late ack, worker lost,
+  prefetch 1, không result backend, không task autoretry model.
+- `jobs/tasks.py`: `utask_ai.execute_request(request_id)` gọi application.
+- `jobs/dispatcher.py`: process giao delivery bằng Celery publisher.
+- Execution token + terminal state chống chạy trùng/ghi đè; worker chết được
+  dispatcher kết thúc failed khi deadline hết. Không tiếp tục phiên ADK đã mất.
 
 ## Context và events
 
-- Kafka consumers: **Chưa có**.
-- Event transform/idempotency: **Chưa có**.
-- Internal API adapter/Context Layer: **Chưa có**.
-- Context storage/repository: **Chưa có**.
-- Context mục tiêu giai đoạn 1: project, task, sprint, progress metric và
-  GitHub activity đã chuẩn hóa.
-- Agent không biết Kafka; deterministic consumer và Context Layer che giấu
-  topic, offset, replay, consumer group và database phía dưới.
-- Baseline lấy Project/Task context qua internal API của Work; projection qua
-  Kafka chỉ bổ sung khi có nhu cầu. Chưa có endpoint/adapter được xác minh.
-- `contracts/events/ai-context-v1.yaml` là schema thiết kế cũ, có producer
-  Project/Progress và envelope khác baseline; cần version/mapping trước khi
-  dùng với Work. Producer/consumer runtime chưa có. Event kết quả AI chưa có
-  schema; xem [danh mục sự kiện](../system/kafka-events.md).
+Context lấy qua REST adapter/domain tools, không đọc DB service khác hoặc gọi
+GitHub trực tiếp. Kafka consumer/projection/outbox event **Chưa triển khai**;
+chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
+
+## Persistence
+
+- `application/ports.py`: repository/auth/authorizer/vault/publisher protocols.
+- `models/budget.py`: budget callback protocol, trả số còn lại sau khi trừ.
+- `infrastructure/repositories.py`: transaction enqueue + delivery,
+  unique user/key, claim, budget, fencing, retry/redelivery/expiry/dead-letter.
+- `infrastructure/db/tables.py`: ORM metadata của ba bảng AI.
+- `migrations/versions/0001_request_pipeline.py`: Alembic migration độc lập;
+  không tạo schema khi startup. Test so sánh migration với ORM trên PostgreSQL.
+- `infrastructure/security.py`: JWT và Fernet credential vault; xóa ciphertext
+  khi terminal. `infrastructure/bootstrap.py`: SQLAlchemy connection pool.
 
 ## LLM providers
 
-- Google ADK 2.0 là framework workflow/agent mục tiêu: **Chưa có dependency**.
-- `ModelProvider` protocol trong `workflow/ports.py` và `UnconfiguredProvider`
-  trong `infrastructure/providers.py` đã có;
-  provider/model adapter thật hoặc router: **Chưa có**.
-- Provider SDK/configuration: **Chưa có**.
-- `infra/env/ai-service.env` hiện chỉ có `DATASETS_DIR`,
-  `WORK_SERVICE_URL`, `INTEGRATION_SERVICE_URL`; không có credential hay
-  provider setting nào được xác minh cho AI implementation.
+Lock hiện dùng Google ADK 2.11, Google GenAI, Celery 5.6, SQLAlchemy 2.1,
+Psycopg 3 và Alembic; phiên bản cụ thể nằm trong `uv.lock`. Model mặc định
+`gemini-flash-latest`, cấu hình `AI_MODEL`. Cần `GOOGLE_API_KEY` hoặc cơ chế
+credential Google tương ứng trước khi gọi model thật; chưa chạy evaluation.
 
 ## Tests và tooling
 
-- Unit/API/workflow bootstrap tests: `tests/` — **Đã triển khai một phần**.
-- Unit test repository, response builders, fingerprint/replay helper và kiểm
-  tra hướng import giữa layer: **Đã triển khai**. Wiring HTTP được kiểm tra qua
-  API test và container smoke; protocol/re-export không có logic riêng.
-- Test Context Tool Pool, agent budget, structured output và proposal boundary:
-  **Chưa có**.
-- Package manifest/lock: `pyproject.toml`, `uv.lock` — **Đã có**.
-- Dockerfile: **Đã có**; image local và healthcheck đã kiểm tra.
-- CI khai báo `uv`, Ruff, Pytest và Docker build; xem `AGENTS.md` để biết đúng
-  command đã được repository cấu hình.
+- `test_models.py`, `test_contract.py`: request/version/range và wire schema v1.
+- `test_security.py`: JWT ký thật, issuer/audience/expiry, vault và config.
+- `test_context.py`: quyền, thiếu/cũ context, HTTP lỗi/redirect/size, filter/tool budget.
+- `test_workflow.py`: Runner/ADK thật với BaseLlm fake; success, tools, schema
+  sai, retry provider, budget và timeout.
+- `test_repository.py`: PostgreSQL thật, enqueue đồng thời, rollback, claim,
+  budget, fencing, redelivery, expiry và dead-letter.
+- `test_application.py`, `test_api_transport.py`: 200/202, ownership/replay,
+  conflict, worker failed, permission và error envelope.
+- `test_jobs.py`: task/dispatcher wiring, migration và Redis/Celery thật khi
+  có `TEST_REDIS_URL`. Protocol và composition không có business rule riêng;
+  kiểm tra qua API/integration thay mock từng dòng wiring.
+- `test_architecture.py`: import boundaries.
+- `test_layer_frameworks.py`: SDK/I/O chỉ nằm trong layer cho phép.
+- `test_application_unit.py`, `test_execution_unit.py`, `test_instructions.py`,
+  `test_lifecycle.py`: polling/replay, worker boundary, prompt/schema và cleanup
+  lỗi bằng doubles, không cần DB. `test_workflow_intents.py` kiểm tra context
+  thiết yếu và wire schema thành công/lỗi cho cả ba intent qua ADK thật.
+
+Chạy lệnh tại [README](README.md). Không đặt `TEST_DATABASE_URL`/`TEST_REDIS_URL`
+thì test hạ tầng được skip; báo rõ khi chỉ chạy unit tests.
 
 ## Hạ tầng liên quan (read-only)
 
-- Compose service: `docker-compose.yml` (`ai-service`).
-- Service environment: `infra/env/ai-service.env`.
-- Gateway route: `infra/nginx/nginx.conf` (`/api/ai/`).
-- CI workflow: `.github/workflows/python-service.yml` và `.github/workflows/ci.yml`.
+Compose/env/Nginx/CI root chưa được cập nhật cùng deployment AI. Trạng thái
+runtime service và deployment toàn hệ thống là hai phạm vi khác nhau; xem
+[architecture](architecture.md) để biết requirement gateway/domain còn lại.
 
-Các file hạ tầng trên nằm ngoài writable scope của task setup; chỉ đọc để định
-vị integration context, không sửa từ công việc AI Service này.
+[`compose.yaml`](../../apps/ai-service/compose.yaml) của riêng AI lắp API,
+dispatcher, worker, PostgreSQL, Redis và migration; cấu hình mẫu ở
+[`.env.example`](../../apps/ai-service/.env.example). Đây là stack local,
+không là integration test Identity/Work/Integration hoặc gateway root.
