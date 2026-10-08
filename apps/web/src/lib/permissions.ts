@@ -8,6 +8,7 @@
 
 import type { TeamRole } from "@/features/my-work/types";
 import type { TopicStatus } from "@/features/courses/types";
+import type { ProjectViewer } from "@/features/projects/types";
 
 export interface CoursePermissionContext {
   membershipStatus: "none" | "pending" | "assigned";
@@ -47,8 +48,27 @@ export function canSubmitTopic(
   return topicStatus === "draft" || topicStatus === "revision_required";
 }
 
-export function canViewProject(ctx: ProjectPermissionContext): boolean {
-  return ctx.role !== null;
+/** Team role of a member viewer; an instructor has none. */
+export function viewerRole(viewer: ProjectViewer): TeamRole | null {
+  return viewer.kind === "team-member" ? viewer.role : null;
+}
+
+/** Permission context for a viewer; every write helper below keys on the team role. */
+export function projectPermissionContext(
+  viewer: ProjectViewer,
+  aiEnabled: boolean,
+): ProjectPermissionContext {
+  return { role: viewerRole(viewer), aiEnabled };
+}
+
+/** Members and instructors of the owning class may read; nobody else. */
+export function canViewProject(viewer: ProjectViewer | null): boolean {
+  return viewer !== null;
+}
+
+/** Instructors read the workspace; they never work in it. */
+export function isReadOnlyViewer(viewer: ProjectViewer): boolean {
+  return viewer.kind === "course-instructor";
 }
 
 export function canCreateTask(ctx: ProjectPermissionContext): boolean {

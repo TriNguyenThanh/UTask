@@ -102,6 +102,10 @@ export const appRoutes: RouteObject[] = [
                 lazy: () => import("@/features/teacher/routes/TeacherCourseTeamsRoute"),
               },
               {
+                path: "teams/:teamId",
+                lazy: () => import("@/features/teacher/routes/TeacherTeamDetailRoute"),
+              },
+              {
                 path: "oversight",
                 lazy: () => import("@/features/teacher/routes/TeacherCourseOversightRoute"),
               },

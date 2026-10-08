@@ -7,6 +7,7 @@ import {
   issueDetailFor,
   notificationsForScenario,
   projectCodeFor,
+  mockAnchorDate,
   projectSummariesForScenario,
   projectWorkspaceFor,
 } from "@/mocks/data/studentFlow";
@@ -15,7 +16,8 @@ import {
   accessibleProjectsForUser,
   classesVisibleForNotifications,
   enrolledCoursesFor,
-  projectRoleForUser,
+  projectViewerFor,
+  type MockProjectViewer,
 } from "@/mocks/data/relationships";
 import type { MockRepository } from "@/mocks/data/storage";
 
@@ -58,6 +60,32 @@ function unauthorized() {
  */
 function accessibleProjectsFor(userId: string): readonly string[] {
   return accessibleProjectsForUser(userId);
+}
+
+/**
+ * How the caller may see a project: as a team member, or as an instructor of
+ * the owning class. An instructor needs BOTH the TEACHER role on the account
+ * and the per-class assignment; the role alone opens nothing. Null = no
+ * access, answered like a project that does not exist.
+ */
+function projectViewerOf(
+  db: MockDatabase,
+  userId: string,
+  projectId: string,
+): MockProjectViewer | null {
+  const viewer = projectViewerFor(userId, projectId);
+  if (viewer?.kind === "course-instructor" && !db.authUsersById[userId]?.roles?.includes("TEACHER")) {
+    return null;
+  }
+  return viewer;
+}
+
+/**
+ * Instructors read through the fixed demo clock so what they see does not
+ * drift with the real time; students keep the live clock they always had.
+ */
+function clockFor(viewer: MockProjectViewer): Date {
+  return viewer.kind === "course-instructor" ? mockAnchorDate() : new Date();
 }
 
 /**
@@ -306,12 +334,13 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: status === 403 ? FORBIDDEN_ERROR : SERVER_ERROR }, { status });
       }
       const projectId = String(params.projectId);
-      // Enforced demo permission: only project members open a workspace.
-      // Check access BEFORE existence to avoid leaking existence (R2).
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
+      // Enforced demo permission: team members and instructors of the owning
+      // class open a workspace. Access is checked BEFORE existence (R2).
+      const viewer = projectViewerOf(db, userId, projectId);
+      if (!viewer) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
-      const workspace = projectWorkspaceFor(projectId, scenario, userId);
+      const workspace = projectWorkspaceFor(projectId, scenario, userId, clockFor(viewer));
       if (!workspace) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
@@ -326,10 +355,11 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: status === 403 ? FORBIDDEN_ERROR : SERVER_ERROR }, { status });
       }
       const projectId = String(params.projectId);
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
+      const viewer = projectViewerOf(db, userId, projectId);
+      if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
-      const detail = issueDetailFor(projectId, String(params.issueKey), userId);
+      const detail = issueDetailFor(projectId, String(params.issueKey), userId, clockFor(viewer));
       if (!detail) {
         return HttpResponse.json({ detail: "Không tìm thấy issue." }, { status: 404 });
       }
@@ -343,10 +373,11 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
       }
       const projectId = String(params.projectId);
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
+      const viewer = projectViewerOf(db, userId, projectId);
+      if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
-      const code = projectCodeFor(projectId, scenario);
+      const code = projectCodeFor(projectId, scenario, userId, clockFor(viewer));
       if (!code) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
@@ -486,21 +517,23 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
       }
       const projectId = String(params.projectId);
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
+      // Whoever can open the project but is not its leader (a member, or an
+      // instructor) gets 403: the resource exists for them, the action does not.
+      const viewer = projectViewerOf(db, userId, projectId);
+      if (!viewer) {
         return notFound("Không tìm thấy dự án.");
+      }
+      if (viewer.kind !== "team-member" || viewer.role !== "leader") {
+        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
       }
       const workspace = projectWorkspaceFor(projectId, scenario, userId);
       if (!workspace) {
         return notFound("Không tìm thấy dự án.");
       }
-      // Demo permission: project settings are leader-only.
-      if (projectRoleForUser(userId, projectId) !== "leader") {
-        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
-      }
       const saved = db.aiConfigByProject[projectId];
       return HttpResponse.json({
         projectId: workspace.projectId,
-        myRole: workspace.myRole,
+        myRole: viewer.role,
         ai: saved ?? {
           provider: "openai",
           keyConfigured: scenario !== "student-ai-key-missing",
@@ -517,15 +550,12 @@ export function createStudentFlowHandlers(
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       const projectId = String(params.projectId);
-      if (!accessibleProjectsFor(userId).includes(projectId)) {
+      const viewer = projectViewerOf(db, userId, projectId);
+      if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
-      const workspace = projectWorkspaceFor(projectId, scenario, userId);
-      if (!workspace) {
-        return notFound("Không tìm thấy dự án.");
-      }
-      // Demo permission: only the team leader may configure the AI key.
-      if (projectRoleForUser(userId, projectId) !== "leader") {
+      // Only the team leader may configure the AI key; an instructor never can.
+      if (viewer.kind !== "team-member" || viewer.role !== "leader") {
         return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
       }
       let payload: Record<string, unknown>;

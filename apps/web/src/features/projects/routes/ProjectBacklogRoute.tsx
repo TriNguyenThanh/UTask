@@ -31,6 +31,7 @@ import {
   aiRequiresKey,
   canCreateTask,
   canManageSprint,
+  projectPermissionContext,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
@@ -349,8 +350,12 @@ function BacklogSkeleton() {
 
 export default function ProjectBacklogRoute() {
   const navigate = useNavigate();
-  const { projectId, workspace: data } = useProjectWorkspaceContext();
-  const { data: aiSettings } = useProjectAiSettings(projectId);
+  const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
+  // Only the leader can read project settings; nobody else asks for them.
+  const { data: aiSettings } = useProjectAiSettings(
+    projectId,
+    viewer.kind === "team-member" && viewer.role === "leader",
+  );
 
   const [epicFilter, setEpicFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -392,11 +397,11 @@ export default function ProjectBacklogRoute() {
   }, [data, epicFilter, search, chips]);
 
   const workspace = data;
-  const permCtx: ProjectPermissionContext = {
-    role: workspace.myRole,
-    aiEnabled: aiSettings?.ai.keyConfigured ?? false,
-  };
-  const isLeader = workspace.myRole === "leader";
+  const permCtx: ProjectPermissionContext = projectPermissionContext(
+    viewer,
+    aiSettings?.ai.keyConfigured ?? false,
+  );
+  const isLeader = permCtx.role === "leader";
   const needsAiKey = aiRequiresKey(permCtx);
   const canCompleteSprint = canManageSprint(permCtx);
   const showCreateEpic = canCreateTask(permCtx);
@@ -550,7 +555,9 @@ export default function ProjectBacklogRoute() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {filterChips.map((chip) => {
+              {filterChips
+                .filter((chip) => !(readOnly && chip.id === "mine"))
+                .map((chip) => {
                 const active = chips.includes(chip.id);
                 return (
                   <button
@@ -601,7 +608,9 @@ export default function ProjectBacklogRoute() {
               description={
                 hasActiveFilters
                   ? "Không issue nào khớp epic, từ khóa hoặc bộ lọc đang chọn. Thử xóa bộ lọc để xem toàn bộ."
-                  : "Dự án này chưa có issue nào. Trưởng nhóm sẽ thêm issue khi bắt đầu lập kế hoạch Sprint."
+                  : readOnly
+                    ? "Nhóm này chưa có issue nào trong dự án."
+                    : "Dự án này chưa có issue nào. Trưởng nhóm sẽ thêm issue khi bắt đầu lập kế hoạch Sprint."
               }
               action={
                 hasActiveFilters ? (

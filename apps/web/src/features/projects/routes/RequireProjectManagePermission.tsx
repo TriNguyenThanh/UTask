@@ -9,8 +9,9 @@ import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWo
  * direct URL access must land on Forbidden.
  */
 export function RequireProjectManagePermission() {
-  const { workspace } = useProjectWorkspaceContext();
-  if (workspace.myRole !== "leader") {
+  const { viewer } = useProjectWorkspaceContext();
+  // Leader only: members and instructors both land on Forbidden.
+  if (viewer.kind !== "team-member" || viewer.role !== "leader") {
     return <ForbiddenPage />;
   }
   return <Outlet />;

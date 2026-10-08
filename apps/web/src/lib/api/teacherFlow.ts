@@ -99,6 +99,39 @@ export interface TeacherOversightRow {
   signals: TeacherSignal[];
 }
 
+export type TeacherIssueStatus = "todo" | "in-progress" | "review" | "done";
+
+/**
+ * Team dashboard (T08). Every field says where it comes from; a field with no
+ * source is null, never zero.
+ */
+export interface TeacherTeamDetail {
+  team: { teamId: string; name: string; courseId: string };
+  members: TeacherTeamMember[];
+  maxMembers: number;
+  project: { projectId: string; key: string; name: string } | null;
+  progress: TeacherTeamProgress | null;
+  /** Issues of the project by status; null when the project has no issues. */
+  issues: { total: number; byStatus: Record<TeacherIssueStatus, number> } | null;
+  /** Active Sprint with the points its progress is computed from. */
+  sprint: {
+    name: string;
+    endsAt: string;
+    completedPoints: number;
+    totalPoints: number;
+  } | null;
+  /**
+   * Overdue = has a deadline, is not done and the deadline is before the
+   * reference time. `withDueDate` is the denominator. Null when no issue has
+   * a deadline: "no data", not "none overdue".
+   */
+  overdue: { overdue: number; withDueDate: number } | null;
+  /** Reference time the overdue count was computed at (fixed demo clock). */
+  asOf: string;
+  lastActivity: TeacherActivity | null;
+  signals: TeacherSignal[];
+}
+
 export function teacherCoursesRequest(client: ApiClient) {
   return client.request<{ courses: TeacherCourseSummary[] }>(`${TEACHER_ROOT}/courses`);
 }
@@ -124,5 +157,11 @@ export function teacherTeamsRequest(client: ApiClient, courseId: string) {
 export function teacherOversightRequest(client: ApiClient, courseId: string) {
   return client.request<{ teams: TeacherOversightRow[]; staleAfterDays: number }>(
     `${TEACHER_ROOT}/courses/${encodeURIComponent(courseId)}/oversight`,
+  );
+}
+
+export function teacherTeamRequest(client: ApiClient, courseId: string, teamId: string) {
+  return client.request<TeacherTeamDetail>(
+    `${TEACHER_ROOT}/courses/${encodeURIComponent(courseId)}/teams/${encodeURIComponent(teamId)}`,
   );
 }

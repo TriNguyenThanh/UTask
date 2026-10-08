@@ -16,7 +16,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { canUseTeacherSpace } from "@/features/auth/utils";
+import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
+import { TeacherChromeContext } from "@/app/layouts/TeacherChromeContext";
 
 function UserSummary({ onLogout }: { onLogout: () => void }) {
   const { user } = useAuth();
@@ -66,12 +67,20 @@ export function AuthenticatedLayout() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const [instructorProjectView, setInstructorProjectView] = useState(false);
   // The Teacher chrome (sidebar, top bar) is used only inside /teacher by an
   // account that may use it, so a blocked account never triggers Teacher
   // queries and Student pages never show Teacher navigation.
-  const inTeacherSpace =
-    (location.pathname === "/teacher" || location.pathname.startsWith("/teacher/")) &&
-    canUseTeacherSpace(auth.user);
+  const inTeacherArea = location.pathname === "/teacher" || location.pathname.startsWith("/teacher/");
+  // A project opened by its class's instructor shows Teacher navigation. A
+  // teacher-only account gets it at once (it has no Student navigation to
+  // load); an account that is also a student gets it once the workspace says
+  // the viewer is an instructor.
+  const inInstructorProject =
+    location.pathname.startsWith("/projects/") &&
+    canUseTeacherSpace(auth.user) &&
+    (!isStudentAccount(auth.user) || instructorProjectView);
+  const inTeacherSpace = (inTeacherArea && canUseTeacherSpace(auth.user)) || inInstructorProject;
   const sidebar = inTeacherSpace ? <TeacherSidebar /> : <AppSidebar />;
 
   // Any navigation (including search-param deep links from task rows or
@@ -110,7 +119,9 @@ export function AuthenticatedLayout() {
           <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
         )}
         <main className="min-w-0 pb-16" id="main-content">
-          <Outlet />
+          <TeacherChromeContext.Provider value={setInstructorProjectView}>
+            <Outlet />
+          </TeacherChromeContext.Provider>
         </main>
       </div>
 

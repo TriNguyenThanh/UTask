@@ -111,11 +111,13 @@ export function useProjectCode(projectId: string) {
   });
 }
 
-export function useProjectAiSettings(projectId: string) {
+/** `enabled` is false for viewers who can never read project settings (not the leader). */
+export function useProjectAiSettings(projectId: string, enabled = true) {
   const client = useApiClient();
   return useQuery({
     queryKey: studentFlowKeys.aiSettings(projectId),
     queryFn: () => projectAiSettingsRequest(client, projectId),
+    enabled,
     retry: (failureCount, error) => {
       if ((error as { status?: number }).status === 403) return false;
       return failureCount < 1;

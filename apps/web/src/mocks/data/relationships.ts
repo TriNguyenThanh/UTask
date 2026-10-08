@@ -1,5 +1,11 @@
 import type { TeamRole } from "@/features/my-work/types";
-import { LEADER_ID, MEMBER_ID, STUDENT_ID, TEACHER2_ID, TEACHER_ID } from "@/mocks/data/database";
+import { LEADER_ID, MEMBER_ID, STUDENT_ID, TEACHER2_ID, TEACHER3_ID, TEACHER_ID } from "@/mocks/data/database";
+import {
+  LARGE_COURSE_ID,
+  LARGE_PENDING_REQUESTS,
+  LARGE_STUDENTS,
+  LARGE_TEAMS,
+} from "@/mocks/data/largeClass";
 import {
   CHAU_ID,
   CUONG_ID,
@@ -63,6 +69,7 @@ export const MOCK_COURSE_INSTRUCTORS: Record<string, { userId: string; isOwner: 
   ],
   "course-cs402": [{ userId: TEACHER2_ID, isOwner: true }],
   "course-se331": [{ userId: HUONG_ID, isOwner: true }],
+  [LARGE_COURSE_ID]: [{ userId: TEACHER3_ID, isOwner: true }],
 };
 
 /** courseId → enrolled students. Enrollment of any user is derived from this. */
@@ -72,6 +79,7 @@ export const MOCK_COURSE_STUDENTS: Record<string, readonly string[]> = {
   "course-it3090": [STUDENT_ID, LEADER_ID, MEMBER_ID, KHANG_ID, DANG_KHOA_ID, HUY_ID, DIEP_ID, MAI_STUDENT_ID, KHANH_ID],
   "course-cs402": [LEADER_ID, STUDENT_ID, MEMBER_ID, HUY_ID, DIEU_ANH_ID, CHAU_ID],
   "course-se331": [LEADER_ID, STUDENT_ID, MAI_STUDENT_ID],
+  [LARGE_COURSE_ID]: LARGE_STUDENTS.map((student) => student.userId),
 };
 
 /**
@@ -92,6 +100,7 @@ export const MOCK_TEAM_COURSES: Record<string, string> = {
   "team-phoenix": "course-se331",
   "team-iot-vision": "course-it3090",
   "team-iot-sense": "course-it3090",
+  ...Object.fromEntries(LARGE_TEAMS.map((team) => [team.teamId, LARGE_COURSE_ID])),
 };
 
 /** teamId → members, in roster display order. */
@@ -120,11 +129,21 @@ export const MOCK_TEAM_MEMBERS: Record<string, readonly MockTeamMember[]> = {
     { userId: MAI_STUDENT_ID, role: "leader" },
     { userId: KHANH_ID, role: "member" },
   ],
+  ...Object.fromEntries(
+    LARGE_TEAMS.map((team) => [
+      team.teamId,
+      team.memberIds.map((userId, index) => ({
+        userId,
+        role: index === 0 ? ("leader" as const) : ("member" as const),
+      })),
+    ]),
+  ),
 };
 
 /** `userId:courseId` → pending join request. Absent = no pending request. */
 export const MOCK_PENDING_REQUESTS: Record<string, MockPendingRequest> = {
   [`${STUDENT_ID}:course-se331`]: { teamId: "team-phoenix" },
+  ...LARGE_PENDING_REQUESTS,
 };
 
 /** teamId → project workspace id. Absent = no provisioned workspace. */
@@ -221,9 +240,41 @@ export function projectRoleForUser(userId: string, projectId: string): MockTeamR
   return null;
 }
 
+/** Team that owns `projectId`, or null. */
+export function teamOfProject(projectId: string): string | null {
+  return (
+    Object.entries(MOCK_TEAM_PROJECTS).find(([, ownedProjectId]) => ownedProjectId === projectId)?.[0] ??
+    null
+  );
+}
+
+export type MockProjectViewer =
+  | { kind: "team-member"; role: MockTeamRole }
+  | { kind: "course-instructor"; courseId: string };
+
 /**
- * Project workspace ids the user may open. Phase 1 grants this only through
- * team membership; instructors get no project access yet.
+ * How `userId` may see `projectId`: as a member of the owning team, or as an
+ * instructor of the class that team belongs to. Null means no access at all —
+ * the role TEACHER alone grants nothing; the per-class assignment does.
+ * Membership wins when someone is both (never expected in the fixtures).
+ */
+export function projectViewerFor(userId: string, projectId: string): MockProjectViewer | null {
+  const role = projectRoleForUser(userId, projectId);
+  if (role !== null) {
+    return { kind: "team-member", role };
+  }
+  const teamId = teamOfProject(projectId);
+  const courseId = teamId ? MOCK_TEAM_COURSES[teamId] : undefined;
+  if (courseId && isInstructorOf(userId, courseId)) {
+    return { kind: "course-instructor", courseId };
+  }
+  return null;
+}
+
+/**
+ * Project workspace ids the user may open as a team member. Instructors reach
+ * projects through `projectViewerFor`, not through this list (it also feeds
+ * the Student project list and notification scope).
  */
 export function accessibleProjectsForUser(userId: string): readonly string[] {
   const projects: string[] = [];

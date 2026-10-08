@@ -181,8 +181,8 @@ describe("Teacher scenarios", () => {
   });
 });
 
-describe("Student endpoints stay closed to a Teacher in Phase 1", () => {
-  it("does not open Student course, team-creation or project endpoints", async () => {
+describe("Student endpoints stay closed to a Teacher", () => {
+  it("does not open Student course or team-creation endpoints", async () => {
     useRepo();
     expect((await call("/courses/course-se330", TEACHER_ID)).status).toBe(404);
     const create = await call("/courses/course-it3090/teams", TEACHER_ID, {
@@ -191,15 +191,184 @@ describe("Student endpoints stay closed to a Teacher in Phase 1", () => {
       body: JSON.stringify({ teamName: "Nhom giang vien", maxMembers: 4 }),
     });
     expect(create.status).toBe(404);
-    for (const path of [
-      "/projects/project-nexus",
-      "/projects/project-nexus/issues/NEXUS-104",
-      "/projects/project-nexus/code",
-      "/projects/project-nexus/settings",
-    ]) {
-      expect((await call(path, TEACHER_ID)).status, path).toBe(404);
-    }
     expect((await call("/projects", TEACHER_ID)).json).toEqual([]);
+  });
+});
+
+describe("Teacher reads a project through the class assignment", () => {
+  const OPEN = ["", "/issues/NEXUS-104", "/code"];
+
+  it("opens the workspace, an issue and the code of a project in a class they teach", async () => {
+    useRepo();
+    for (const path of OPEN) {
+      expect((await call(`/projects/project-nexus${path}`, TEACHER_ID)).status, path).toBe(200);
+    }
+  });
+
+  it("describes the viewer as an instructor of the class and never invents a team role", async () => {
+    useRepo();
+    const { json } = await call("/projects/project-nexus", TEACHER_ID);
+    expect(json.viewer).toEqual({ kind: "course-instructor", courseId: "course-se330" });
+    expect(json.courseId).toBe("course-se330");
+    expect(json.teamId).toBe("team-nexus");
+    expect("myRole" in json).toBe(false);
+    // Nothing is "mine" for someone with no tasks.
+    expect(json.issues.some((issue: { isMine: boolean }) => issue.isMine)).toBe(false);
+  });
+
+  it("keeps a member's viewer and role, with mine derived from the real user", async () => {
+    useRepo();
+    const nam = (await call("/projects/project-nexus", LEADER_ID)).json;
+    expect(nam.viewer).toEqual({ kind: "team-member", role: "leader" });
+    expect(nam.myRole).toBe("leader");
+    const mine = (list: { key: string; isMine: boolean }[]) => list.filter((i) => i.isMine).map((i) => i.key);
+    expect(mine(nam.issues)).toEqual(["NEXUS-104", "NEXUS-95"]);
+    const linh = (await call("/projects/project-nexus", MEMBER_ID)).json;
+    expect(linh.viewer).toEqual({ kind: "team-member", role: "member" });
+    expect(mine(linh.issues)).toEqual(["NEXUS-101", "NEXUS-105"]);
+  });
+
+  it("marks contributors as 'me' only for the signed-in user", async () => {
+    useRepo();
+    const isMe = async (userId: string) =>
+      ((await call("/projects/project-nexus/code", userId)).json.contributors as { displayName: string; isMe: boolean }[])
+        .filter((c) => c.isMe)
+        .map((c) => c.displayName);
+    expect(await isMe(LEADER_ID)).toEqual(["Nguyễn Hoàng Nam"]);
+    expect(await isMe(STUDENT_ID)).toEqual(["Lê Minh Khoa"]);
+    expect(await isMe(TEACHER_ID)).toEqual([]);
+  });
+
+  it("lists the same five people in the code view as the team roster", async () => {
+    useRepo();
+    const code = (await call("/projects/project-nexus/code", TEACHER_ID)).json;
+    const members = (await call("/teacher/courses/course-se330/teams/team-nexus", TEACHER_ID)).json.members;
+    expect(code.contributors.map((c: { userId: string }) => c.userId).sort()).toEqual(
+      members.map((m: { userId: string }) => m.userId).sort(),
+    );
+    const sum = (key: string) => code.contributors.reduce((n: number, c: Record<string, number>) => n + c[key], 0);
+    expect(sum("commits")).toBe(code.stats.commits);
+    expect(sum("additions")).toBe(code.stats.linesChanged.added);
+    expect(sum("deletions")).toBe(code.stats.linesChanged.removed);
+    expect(sum("pullRequestCount")).toBe(code.stats.pullRequests.total);
+    expect(sum("commitPercent")).toBe(100);
+  });
+
+  it("refuses project settings and the AI key to an instructor with 403, not 404", async () => {
+    useRepo();
+    expect((await call("/projects/project-nexus/settings", TEACHER_ID)).status).toBe(403);
+    const put = await call("/projects/project-nexus/settings/ai-key", TEACHER_ID, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer mock-access:${TEACHER_ID}:test` },
+      body: JSON.stringify({ provider: "openai", apiKey: "sk-test-1234" }),
+    });
+    expect(put.status).toBe(403);
+  });
+
+  it("does not let an instructor of another class open the project, existing or not", async () => {
+    useRepo();
+    for (const path of [...OPEN, "/settings"]) {
+      const outside = await call(`/projects/project-nexus${path}`, TEACHER2_ID);
+      const missing = await call(`/projects/project-nope${path}`, TEACHER2_ID);
+      expect(outside.status, path).toBe(404);
+      expect(outside.text.replace("project-nexus", "")).toBe(missing.text.replace("project-nope", ""));
+    }
+    expect((await call("/projects/project-deli", TEACHER_ID)).status).toBe(404);
+    expect((await call("/projects/project-deli", TEACHER2_ID)).status).toBe(200);
+  });
+
+  it("does not let the TEACHER role alone open any project", async () => {
+    const repository = useRepo();
+    repository.db.authUsersById[STUDENT_ID] = {
+      ...repository.db.authUsersById[STUDENT_ID],
+      roles: ["STUDENT", "TEACHER"],
+    };
+    // SV01 teaches nothing, so a project outside their teams stays closed.
+    expect((await call("/projects/project-legacy", STUDENT_ID)).status).toBe(404);
+    // And SV01 on NEXUS is still a member (leader), not an instructor.
+    expect((await call("/projects/project-nexus", STUDENT_ID)).json.viewer).toEqual({
+      kind: "team-member",
+      role: "leader",
+    });
+  });
+
+  it("does not honour an instructor assignment for an account without the TEACHER role", async () => {
+    const repository = useRepo();
+    repository.db.authUsersById[TEACHER_ID] = {
+      ...repository.db.authUsersById[TEACHER_ID],
+      roles: ["STUDENT"],
+    };
+    expect((await call("/projects/project-nexus", TEACHER_ID)).status).toBe(404);
+  });
+
+  it("answers an instructor at a fixed clock, and a student at the live one", async () => {
+    useRepo();
+    const stamp = async (userId: string) =>
+      ((await call("/projects/project-nexus", userId)).json.issues as { key: string; updatedAt: string }[]).find(
+        (issue) => issue.key === "NEXUS-104",
+      )!.updatedAt;
+    expect(await stamp(TEACHER_ID)).toBe(await stamp(TEACHER_ID));
+    expect(await stamp(TEACHER_ID)).toMatch(/^2026-10-20T/);
+  });
+
+  it("says 'no repository' for a project that exists without one, not 'not found'", async () => {
+    useRepo();
+    for (const userId of [MEMBER_ID, TEACHER2_ID]) {
+      const code = await call("/projects/project-deli/code", userId);
+      expect(code.status).toBe(200);
+      expect(code.json.syncState).toBe("no-repository");
+      expect(code.json.repository).toBeNull();
+      expect(code.json.contributors).toEqual([]);
+    }
+    expect((await call("/projects/project-nope/code", TEACHER_ID)).status).toBe(404);
+  });
+});
+
+describe("Teacher team dashboard endpoint", () => {
+  it("returns members, measured progress, issue counts and the overdue formula inputs", async () => {
+    useRepo();
+    const { status, json } = await call("/teacher/courses/course-se330/teams/team-nexus", TEACHER_ID);
+    expect(status).toBe(200);
+    expect(json.team).toEqual({ teamId: "team-nexus", name: "Team NEXUS", courseId: "course-se330" });
+    expect(json.members).toHaveLength(5);
+    expect(json.project.projectId).toBe("project-nexus");
+    expect(json.progress.basis).toBe("sprint-points");
+    const counts = Object.values(json.issues.byStatus as Record<string, number>);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(json.issues.total);
+    // Four issues carry a deadline; two are open and past it at the fixed clock.
+    expect(json.overdue).toEqual({ overdue: 2, withDueDate: 4 });
+    expect(json.asOf).toBe("2026-10-20T08:30:00.000Z");
+  });
+
+  it("reports no data, not zero, for a team without a project", async () => {
+    useRepo();
+    const { json } = await call("/teacher/courses/course-it3090/teams/team-iot-vision", TEACHER_ID);
+    expect(json.project).toBeNull();
+    expect(json.progress).toBeNull();
+    expect(json.issues).toBeNull();
+    expect(json.sprint).toBeNull();
+    expect(json.overdue).toBeNull();
+    expect(json.signals.map((s: { code: string }) => s.code)).toContain("no-project");
+  });
+
+  it("answers 404 for a team outside the class like a team that does not exist", async () => {
+    useRepo();
+    const outside = await call("/teacher/courses/course-se330/teams/team-deli", TEACHER_ID);
+    const missing = await call("/teacher/courses/course-se330/teams/team-nope", TEACHER_ID);
+    expect(outside.status).toBe(404);
+    expect(outside.text).toBe(missing.text);
+    // A class the caller does not teach hides its teams the same way as one that is absent.
+    const otherClass = await call("/teacher/courses/course-se330/teams/team-nexus", TEACHER2_ID);
+    const absentClass = await call("/teacher/courses/course-nope/teams/team-nexus", TEACHER2_ID);
+    expect(otherClass.status).toBe(404);
+    expect(otherClass.text).toBe(absentClass.text);
+  });
+
+  it("is closed to students and fails with the partial-error scenario", async () => {
+    useRepo();
+    expect((await call("/teacher/courses/course-se330/teams/team-nexus", STUDENT_ID)).status).toBe(403);
+    useRepo("teacher-partial-error");
+    expect((await call("/teacher/courses/course-se330/teams/team-nexus", TEACHER_ID)).status).toBe(500);
   });
 });
 

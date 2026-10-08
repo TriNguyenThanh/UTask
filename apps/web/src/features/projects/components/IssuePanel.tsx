@@ -105,9 +105,12 @@ function PanelSkeleton() {
 function SubtaskList({
   subtasks,
   onToggle,
+  readOnly,
 }: {
   subtasks: { id: string; title: string; done: boolean }[];
   onToggle: (id: string) => void;
+  /** Instructors see the checklist but cannot change it, not even locally. */
+  readOnly: boolean;
 }) {
   const doneCount = subtasks.filter((subtask) => subtask.done).length;
   const percent = subtasks.length > 0 ? Math.round((doneCount / subtasks.length) * 100) : 0;
@@ -127,8 +130,9 @@ function SubtaskList({
               <input
                 type="checkbox"
                 checked={subtask.done}
+                disabled={readOnly}
                 onChange={() => onToggle(subtask.id)}
-                className="size-4 shrink-0 cursor-pointer rounded accent-primary"
+                className="size-4 shrink-0 cursor-pointer rounded accent-primary disabled:cursor-not-allowed"
               />
               <span className={cn("truncate", subtask.done && "text-muted-foreground line-through")}>
                 {subtask.title}
@@ -148,7 +152,9 @@ function SubtaskList({
         ))}
       </ul>
       <p className="text-[11px] text-muted-foreground">
-        Đánh dấu chỉ áp dụng cho phiên xem hiện tại.
+        {readOnly
+          ? "Bạn chỉ có quyền xem nhiệm vụ con."
+          : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
       </p>
     </div>
   );
@@ -169,6 +175,7 @@ export function IssuePanel({
   error,
   canBreakdownWithAI,
   aiKeyMissing,
+  readOnly = false,
   onClose,
 }: {
   projectId: string;
@@ -183,6 +190,8 @@ export function IssuePanel({
   canBreakdownWithAI: boolean;
   /** Leader but AI key missing → link to Project Settings. */
   aiKeyMissing: boolean;
+  /** Instructor view: no subtask toggling, and a note that comments are view-only. */
+  readOnly?: boolean;
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -422,7 +431,7 @@ export function IssuePanel({
                     ) : null}
                   </div>
                   {subtasks.length > 0 ? (
-                    <SubtaskList subtasks={subtasks} onToggle={toggleSubtask} />
+                    <SubtaskList subtasks={subtasks} onToggle={toggleSubtask} readOnly={readOnly} />
                   ) : (
                     <p className="text-xs text-muted-foreground">Chưa có nhiệm vụ con nào.</p>
                   )}
@@ -434,6 +443,12 @@ export function IssuePanel({
                     <MessageSquare className="size-4" aria-hidden />
                     Bình luận (Comments)
                   </h3>
+                  {readOnly ? (
+                    <p className="text-xs text-muted-foreground">
+                      Bạn đang xem bình luận. Gửi bình luận sẽ khả dụng khi có hợp đồng API cho phản hồi
+                      của giảng viên.
+                    </p>
+                  ) : null}
                   {detail.comments.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Chưa có bình luận nào.</p>
                   ) : (

@@ -1,9 +1,10 @@
 import { Search } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,7 +26,7 @@ function parseFilter(value: string | null): TeamFilter {
   return value === "open-slots" || value === "no-project" ? value : "all";
 }
 
-function TeamCard({ team }: { team: TeacherTeam }) {
+function TeamCard({ team, courseId }: { team: TeacherTeam; courseId: string }) {
   const openSlots = Math.max(team.maxMembers - team.memberCount, 0);
   return (
     <Card className="flex flex-col gap-4 py-5">
@@ -91,12 +92,11 @@ function TeamCard({ team }: { team: TeacherTeam }) {
         />
         <p className="text-xs text-muted-foreground">{activityText(team.lastActivity)}</p>
         <div className="mt-auto pt-1">
-          <DisabledAction
-            reason="Xem chi tiết và workspace của nhóm sẽ khả dụng ở giai đoạn sau."
-            className="w-full"
-          >
-            Xem chi tiết nhóm
-          </DisabledAction>
+          <Button asChild variant="outline" className="w-full">
+            <Link to={`/teacher/courses/${courseId}/teams/${team.teamId}`}>
+              Xem chi tiết {team.name}
+            </Link>
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -252,7 +252,7 @@ function TeamsPanel({ courseId }: { courseId: string }) {
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {visible.map((team) => (
-            <TeamCard key={team.teamId} team={team} />
+            <TeamCard key={team.teamId} team={team} courseId={courseId} />
           ))}
         </div>
       )}
@@ -285,8 +285,8 @@ export function Component() {
       <TeamsPanel courseId={course.courseId} />
 
       <p className="text-xs text-muted-foreground">
-        Chuyển thành viên, phân nhóm và chỉ định Leader sẽ khả dụng ở giai đoạn sau; màn này chỉ
-        xem.
+        Chuyển thành viên, phân nhóm và chỉ định Leader sẽ khả dụng ở giai đoạn sau; bạn chỉ xem
+        nhóm và workspace của nhóm.
       </p>
     </div>
   );

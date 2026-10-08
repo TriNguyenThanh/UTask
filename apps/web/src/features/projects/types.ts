@@ -4,6 +4,16 @@
 
 import type { TeamRole } from "@/features/my-work/types";
 
+/**
+ * Who is looking at a project. A viewer is either a member of the owning team
+ * (with a per-team role) or an instructor of the class the team belongs to.
+ * An instructor never has a team role: no "teacher" TeamRole, no fake
+ * membership.
+ */
+export type ProjectViewer =
+  | { kind: "team-member"; role: TeamRole }
+  | { kind: "course-instructor"; courseId: string };
+
 export interface ProjectSummary {
   projectId: string;
   projectKey: string;
@@ -53,8 +63,10 @@ export interface Issue {
   sprintId: string | null;
   assignee: { userId: string; displayName: string; initials: string } | null;
   hasPullRequest: boolean;
-  /** For the "my work only" board filter. */
+  /** True only when the signed-in user is the assignee (derived per request). */
   isMine: boolean;
+  /** Optional deadline; absent when the source has none (never treated as "not overdue"). */
+  dueAt?: string | null;
   updatedAt: string;
 }
 
@@ -77,7 +89,12 @@ export interface ProjectWorkspace {
   courseName: string;
   instructorName: string;
   teamName: string;
-  myRole: TeamRole;
+  /** Class and team that own this project, for breadcrumbs on deep link/refresh. */
+  courseId: string;
+  teamId: string;
+  viewer: ProjectViewer;
+  /** Team role of a member viewer; absent for an instructor (no default role). */
+  myRole?: TeamRole;
   repository: string | null;
   epics: Epic[];
   sprints: Sprint[];
