@@ -1,17 +1,44 @@
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { AttentionPanel } from "@/features/teacher/components/AttentionPanel";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
 import {
   CourseCard,
-  DisabledAction,
   NoData,
   StatCard,
+  formatDateTime,
 } from "@/features/teacher/components/shared";
+import type { TeacherCourseSummary } from "@/lib/api/teacherFlow";
 import { useTeacherCourses } from "@/lib/query/teacherFlowHooks";
+
+/**
+ * Overdue issues across the listed classes, from the same formula as the team
+ * dashboard. With no deadline anywhere the card says "no data": zero would
+ * claim that nothing is late.
+ */
+function OverdueStat({ classes }: { classes: TeacherCourseSummary[] }) {
+  const parts = classes.flatMap((course) => (course.overdue ? [course.overdue] : []));
+  if (parts.length === 0) {
+    return (
+      <StatCard label="Issue quá hạn" value={<NoData />} hint="Chưa có issue nào có hạn chót trong các lớp này" />
+    );
+  }
+  const overdue = parts.reduce((total, part) => total + part.overdue, 0);
+  const withDueDate = parts.reduce((total, part) => total + part.withDueDate, 0);
+  return (
+    <StatCard
+      label="Issue quá hạn"
+      value={overdue}
+      tone={overdue > 0 ? "attention" : "default"}
+      hint={`Trên ${withDueDate} issue có hạn chót (chưa xong và quá hạn tính đến ${formatDateTime(parts[0].asOf)})`}
+    />
+  );
+}
 
 export function Component() {
   const courses = useTeacherCourses();
@@ -49,12 +76,9 @@ export function Component() {
         title="Bàn làm việc giảng viên"
         description="Các lớp và nhóm bạn phụ trách."
       >
-        <DisabledAction
-          reason="Tạo lớp sẽ khả dụng sau khi quy trình tạo lớp được hoàn thiện."
-          variant="default"
-        >
-          Tạo lớp
-        </DisabledAction>
+        <Button asChild>
+          <Link to="/teacher/courses/new">Tạo lớp</Link>
+        </Button>
       </PageHeader>
 
       {all.length === 0 ? (
@@ -100,12 +124,10 @@ export function Component() {
                   hint="Theo quy tắc cố định, xem ở mục Giám sát của từng lớp"
                   tone="attention"
                 />
-                <StatCard
-                  label="Task quá hạn"
-                  value={<NoData />}
-                  hint="Chưa có dữ liệu hạn chót của task"
-                />
+                <OverdueStat classes={visible} />
               </section>
+
+              <AttentionPanel courses={visible} />
 
               <section aria-label="Danh sách lớp" className="space-y-3">
                 <h2 className="text-lg font-semibold">Lớp phụ trách ({visible.length})</h2>
