@@ -1,15 +1,13 @@
 import { Search } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AddStudentDialog } from "@/features/teacher/components/AddStudentDialog";
 import { Input } from "@/components/ui/input";
-import {
-  DisabledAction,
-  PersonAvatar,
-  TeacherQueryError,
-} from "@/features/teacher/components/shared";
+import { PersonAvatar, TeacherQueryError } from "@/features/teacher/components/shared";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
 import type { TeacherStudent } from "@/lib/api/teacherFlow";
 import { useTeacherStudents } from "@/lib/query/teacherFlowHooks";
@@ -106,15 +104,10 @@ export function Component() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <DisabledAction reason="Thêm sinh viên sẽ khả dụng ở giai đoạn sau.">
-            Thêm sinh viên
-          </DisabledAction>
-          <DisabledAction
-            reason="Nhập danh sách sinh viên sẽ khả dụng ở giai đoạn sau."
-            variant="default"
-          >
-            Nhập danh sách
-          </DisabledAction>
+          <AddStudentDialog courseName={course.name} />
+          <Button asChild>
+            <Link to={`/teacher/courses/${course.courseId}/students/import`}>Nhập danh sách</Link>
+          </Button>
         </div>
       </div>
 
