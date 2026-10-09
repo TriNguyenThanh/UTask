@@ -14,10 +14,7 @@ def test_me_is_read_only_and_returns_owner():
     response = client.get("/users/me")
     assert response.json()["data"]["id"] != str(other.pk)
     assert response.json()["data"]["first_name"] == "An"
-    assert (
-        client.patch("/users/me", {"roles": ["SYSTEM_ADMIN"]}, format="json").status_code
-        == 400
-    )
+    assert client.patch("/users/me", {"roles": ["SYSTEM_ADMIN"]}, format="json").status_code == 400
 
 
 def test_me_requires_bearer():
