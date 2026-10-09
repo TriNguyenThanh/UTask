@@ -30,8 +30,8 @@ function migrate(old: unknown): MockDatabase {
   const migrated: MockDatabase = {
     ...fresh,
     ...record,
-    profilesByUser: { ...fresh.profilesByUser, ...(record.profilesByUser ?? {}) },
-    authUsersById: { ...fresh.authUsersById, ...(record.authUsersById ?? {}) },
+    profilesByUser: { ...fresh.profilesByUser, ...record.profilesByUser },
+    authUsersById: { ...fresh.authUsersById, ...record.authUsersById },
     createdTeams: record.createdTeams ?? fresh.createdTeams,
     notificationReadByUser: record.notificationReadByUser ?? fresh.notificationReadByUser,
     githubDisconnectedByUser:

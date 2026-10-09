@@ -4,6 +4,7 @@ import type {
   GitHubActivity,
   MyTask,
   MyWorkOverview,
+  TeamMembership,
 } from "@/features/my-work/types";
 import {
   MOCK_TEAM_PROJECTS,
@@ -340,6 +341,30 @@ const SPRINT_BY_PROJECT: Record<string, Omit<CourseSprint, "role">> = {
  * with the real role / pending / none), tasks and sprint cards only for
  * teams the user actually belongs to.
  */
+function membershipFor(
+  assignment: ReturnType<typeof assignmentFor>,
+  pending: ReturnType<typeof pendingRequestFor>,
+  now: Date,
+): TeamMembership {
+  if (assignment) {
+    return {
+      status: "assigned",
+      teamId: assignment.teamId,
+      teamName: assignment.teamId === "team-nexus" ? "Team NEXUS" : "Team DELI",
+      role: assignment.role,
+    };
+  }
+  if (pending) {
+    return {
+      status: "pending",
+      teamId: pending.teamId,
+      teamName: "Team PHOENIX",
+      requestedAt: daysFrom(now, -3, 9, 15),
+    };
+  }
+  return { status: "none" };
+}
+
 export function buildOverviewForUser(
   userId: string,
   now = new Date(ANCHOR_DATE),
@@ -366,22 +391,7 @@ export function buildOverviewForUser(
             registrationDeadline: meta.deadline(now),
           },
           projectId,
-          membership: assignment
-            ? {
-                status: "assigned",
-                teamId: assignment.teamId,
-                teamName:
-                  assignment.teamId === "team-nexus" ? "Team NEXUS" : "Team DELI",
-                role: assignment.role,
-              }
-            : pending
-              ? {
-                  status: "pending",
-                  teamId: pending.teamId,
-                  teamName: "Team PHOENIX",
-                  requestedAt: daysFrom(now, -3, 9, 15),
-                }
-              : { status: "none" },
+          membership: membershipFor(assignment, pending, now),
         },
       ];
     },

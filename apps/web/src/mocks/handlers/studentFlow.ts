@@ -64,6 +64,69 @@ function accessibleCoursesFor(userId: string): readonly string[] {
   return enrolledCoursesFor(userId);
 }
 
+type CreateTeamPayload = { teamName?: unknown; maxMembers?: unknown };
+
+/** Applies the demo business rules; returns an error response or the cleaned values. */
+function validateCreateTeam(
+  courseDetail: NonNullable<ReturnType<typeof courseDetailForScenario>>,
+  payload: CreateTeamPayload,
+): Response | { teamName: string; maxMembers: number } {
+  // Demo business rules, mirroring the future backend contract:
+  // only unteamed students may create a team, self-creation must be
+  // allowed, the deadline must not have passed and the roster must
+  // fit the course team size range.
+  if (courseDetail.membership.status !== "none") {
+    return HttpResponse.json(
+      {
+        detail: "Bạn đã thuộc một nhóm hoặc đã gửi yêu cầu tham gia nhóm.",
+      },
+      { status: 409 },
+    );
+  }
+  if (!courseDetail.teamFormation.selfCreateAllowed) {
+    return HttpResponse.json(
+      { detail: "Môn học này không cho phép tự lập nhóm." },
+      { status: 403 },
+    );
+  }
+  const deadline = courseDetail.teamFormation.registrationDeadline;
+  if (deadline && new Date(deadline).getTime() < Date.now()) {
+    return HttpResponse.json(
+      { detail: "Đã quá hạn đăng ký nhóm môn học." },
+      { status: 409 },
+    );
+  }
+  const teamName = String(payload.teamName).trim();
+  if (teamName.length < 3) {
+    return HttpResponse.json(
+      {
+        detail: "Dữ liệu không hợp lệ.",
+        errors: { teamName: ["Tên nhóm cần ít nhất 3 ký tự."] },
+      },
+      { status: 422 },
+    );
+  }
+  const maxMembers = Number(payload.maxMembers);
+  if (
+    !Number.isInteger(maxMembers) ||
+    maxMembers < courseDetail.teamSize.min ||
+    maxMembers > courseDetail.teamSize.max
+  ) {
+    return HttpResponse.json(
+      {
+        detail: "Dữ liệu không hợp lệ.",
+        errors: {
+          maxMembers: [
+            `Sĩ số nhóm phải từ ${courseDetail.teamSize.min} đến ${courseDetail.teamSize.max}.`,
+          ],
+        },
+      },
+      { status: 422 },
+    );
+  }
+  return { teamName, maxMembers };
+}
+
 export function createStudentFlowHandlers(
   scenario: MockScenario,
   repository: MockRepository,
@@ -143,59 +206,9 @@ export function createStudentFlowHandlers(
       if (!courseDetail) {
         return HttpResponse.json({ detail: "Không tìm thấy môn học." }, { status: 404 });
       }
-      // Demo business rules, mirroring the future backend contract:
-      // only unteamed students may create a team, self-creation must be
-      // allowed, the deadline must not have passed and the roster must
-      // fit the course team size range.
-      if (courseDetail.membership.status !== "none") {
-        return HttpResponse.json(
-          {
-            detail: "Bạn đã thuộc một nhóm hoặc đã gửi yêu cầu tham gia nhóm.",
-          },
-          { status: 409 },
-        );
-      }
-      if (!courseDetail.teamFormation.selfCreateAllowed) {
-        return HttpResponse.json(
-          { detail: "Môn học này không cho phép tự lập nhóm." },
-          { status: 403 },
-        );
-      }
-      const deadline = courseDetail.teamFormation.registrationDeadline;
-      if (deadline && new Date(deadline).getTime() < Date.now()) {
-        return HttpResponse.json(
-          { detail: "Đã quá hạn đăng ký nhóm môn học." },
-          { status: 409 },
-        );
-      }
-      const teamName = payload.teamName.trim();
-      if (teamName.length < 3) {
-        return HttpResponse.json(
-          {
-            detail: "Dữ liệu không hợp lệ.",
-            errors: { teamName: ["Tên nhóm cần ít nhất 3 ký tự."] },
-          },
-          { status: 422 },
-        );
-      }
-      const maxMembers = Number(payload.maxMembers);
-      if (
-        !Number.isInteger(maxMembers) ||
-        maxMembers < courseDetail.teamSize.min ||
-        maxMembers > courseDetail.teamSize.max
-      ) {
-        return HttpResponse.json(
-          {
-            detail: "Dữ liệu không hợp lệ.",
-            errors: {
-              maxMembers: [
-                `Sĩ số nhóm phải từ ${courseDetail.teamSize.min} đến ${courseDetail.teamSize.max}.`,
-              ],
-            },
-          },
-          { status: 422 },
-        );
-      }
+      const checked = validateCreateTeam(courseDetail, payload);
+      if (checked instanceof Response) return checked;
+      const { teamName, maxMembers } = checked;
 
       // A team for this user+course already exists in this session → 409.
       if (db.createdTeams[`${userId}:${courseId}`]) {
@@ -349,7 +362,7 @@ export function createStudentFlowHandlers(
         visible.map((notification) => ({ ...notification, read: read.has(notification.id) })),
       );
     }),
-    http.post(`${ROOT}/notifications/:id/read`, async ({ params, request }) => {
+    http.post(`${ROOT}/notifications/:id/read`, ({ params, request }) => {
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       const readIds = db.notificationReadByUser[userId] ?? [];
@@ -359,7 +372,7 @@ export function createStudentFlowHandlers(
       repository.save();
       return new HttpResponse(null, { status: 204 });
     }),
-    http.post(`${ROOT}/notifications/read-all`, async ({ request }) => {
+    http.post(`${ROOT}/notifications/read-all`, ({ request }) => {
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       const visible = notificationsForScenario(scenario).filter((notification) => {
@@ -416,7 +429,7 @@ export function createStudentFlowHandlers(
         },
         sessions: [
           { id: "s1", device: "Chrome — Windows 11", location: "TP.HCM, VN", lastActiveAt: new Date().toISOString(), current: true },
-          { id: "s2", device: "Mobile App — Android", location: "TP.HCM, VN", lastActiveAt: new Date(new Date().getTime() - 90_000_000).toISOString(), current: false },
+          { id: "s2", device: "Mobile App — Android", location: "TP.HCM, VN", lastActiveAt: new Date(Date.now() - 90_000_000).toISOString(), current: false },
         ],
       });
     }),
@@ -443,7 +456,7 @@ export function createStudentFlowHandlers(
         return HttpResponse.json({ detail: "Không tìm thấy người dùng." }, { status: 404 });
       }
       // Only updatable fields are accepted; email/student_id stay fixed.
-      const fields: [keyof MockDatabase["profilesByUser"][string] & string, string][] = [
+      const fields: [keyof MockDatabase["profilesByUser"][string], string][] = [
         ["full_name", "fullName"],
         ["cohort_class", "cohortClass"],
         ["faculty", "faculty"],
@@ -459,7 +472,7 @@ export function createStudentFlowHandlers(
       repository.save();
       return new HttpResponse(null, { status: 204 });
     }),
-    http.post(`${ROOT}/me/github/disconnect`, async ({ request }) => {
+    http.post(`${ROOT}/me/github/disconnect`, ({ request }) => {
       const userId = parseTokenUserId(request);
       if (!userId) return unauthorized();
       db.githubDisconnectedByUser[userId] = true;
