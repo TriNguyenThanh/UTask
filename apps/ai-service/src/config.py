@@ -1,14 +1,28 @@
 """Cấu hình riêng cho API, dispatcher và worker của cùng AI Service."""
 
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ROOT_DIR = (Path(__file__).resolve().parents[1] / "../..").resolve()
+ENV_DIR = ROOT_DIR / "infra" / "env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AI_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="AI_",
+        env_file=(ENV_DIR / "ai-service.env", ROOT_DIR / ".env"),
+        extra="ignore",
+        populate_by_name=True,
+        hide_input_in_errors=True,
+    )
 
+    environment: Literal["development", "test", "staging", "production"] = "development"
+    mock_test: bool = Field(default=False, validation_alias="MOCK_TEST")
+    google_api_key: SecretStr | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
     app_name: str = "utask-ai-service"
     database_url: str = "postgresql+psycopg://localhost/ai_context_db"
     broker_url: str = "redis://localhost:6379/0"
@@ -22,6 +36,7 @@ class Settings(BaseSettings):
     sync_timeout_seconds: float = Field(default=10, gt=0, le=10)
     workflow_timeout_seconds: float = Field(default=30, gt=0, le=30)
     poll_interval_seconds: float = Field(default=0.1, gt=0)
+    completion_reconcile_seconds: float = Field(default=5, gt=0)
     queue_timeout_seconds: float = Field(default=300, gt=0)
     max_model_calls: int = Field(default=4, ge=1)
     max_context_tool_calls: int = Field(default=5, ge=0)
@@ -44,6 +59,8 @@ class Settings(BaseSettings):
             raise ValueError("Chỉ hỗ trợ JWT ký bất đối xứng RS256 hoặc ES256")
         if self.jwt_public_key and self.jwt_jwks_url:
             raise ValueError("Chọn public key hoặc JWKS, không dùng cả hai")
+        if self.mock_test and self.environment not in {"development", "test"}:
+            raise ValueError("MOCK_TEST chỉ được bật trong development/test")
         return self
 
 

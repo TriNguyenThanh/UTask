@@ -13,6 +13,11 @@ nghiệp vụ gốc, không tự áp dụng thay đổi nghiệp vụ và không
 dependency bắt buộc của authentication, classroom/project, task, integration,
 progress hoặc notification.
 
+Khi sửa pipeline kết quả, đọc
+[bàn giao worker → API](../../docs/ai-service/architecture.md#bàn-giao-kết-quả-worker-cho-api).
+Worker bàn giao completion và thông báo; API tiếp nhận để ghi trạng thái/kết
+quả cuối. Giữ inbox bền vững và cơ chế phục hồi, không chỉ dựa vào tín hiệu.
+
 ## Công nghệ đã xác minh
 
 - Service dùng Python 3.12, FastAPI/Uvicorn, Pydantic v2, `pydantic-settings`,
@@ -97,6 +102,9 @@ Lệnh chạy local và pipeline source nằm trong tài liệu chuẩn
    hành theo baseline; không áp dụng quy tắc projection-only cũ từ skill. Adapter
    internal API phải kiểm tra quyền, timeout và giới hạn dữ liệu. Không đọc
    database service khác hoặc biến Kafka thành request-response.
+   Tuân thủ [chính sách context MVP và mở rộng](../../docs/ai-service/architecture.md#chính-sách-context-hiện-tại-và-mở-rộng):
+   lấy context qua REST, giữ nội dung trong bộ nhớ lần chạy; chỉ thêm cache,
+   snapshot hoặc projection theo nhu cầu đã xác định trong tài liệu chuẩn.
 8. Giữ kiến trúc bounded agent: ADK Workflow kiểm soát macro-flow, `LlmAgent`
    kiểm soát micro-flow/reasoning. Agent chỉ được thấy Context Tool Pool, không
    biết Kafka, database, cache, topic, offset hoặc consumer group.

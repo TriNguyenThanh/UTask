@@ -112,6 +112,7 @@ async def test_real_redis_celery_worker_runs_same_postgres_pipeline(
 
     from application import AiApplicationService
     from application.dispatch import RequestDispatcher
+    from infrastructure.completions import CompletionListener
     from infrastructure.providers import AdkRuntime
     from jobs import tasks
 
@@ -141,10 +142,17 @@ async def test_real_redis_celery_worker_runs_same_postgres_pipeline(
             payload, principal=principal, idempotency_key="celery"
         )
         assert RequestDispatcher(repository, CeleryPublisher()).dispatch_once() == 1
-        for _ in range(100):
-            result = await service.get_request(result.request_id, principal=principal)
-            if result.status in {"succeeded", "failed"}:
-                break
-            await asyncio.sleep(0.05)
-        assert result.status == "succeeded"
-        validate("SucceededAiResponse", result.model_dump(mode="json", exclude_none=True))
+        listener = CompletionListener(os.environ["TEST_DATABASE_URL"], service.accept_completions)
+        listening = asyncio.create_task(listener.run())
+        try:
+            for _ in range(100):
+                result = await service.get_request(result.request_id, principal=principal)
+                if result.status in {"succeeded", "failed"}:
+                    break
+                await asyncio.sleep(0.05)
+            assert result.status == "succeeded"
+            validate("SucceededAiResponse", result.model_dump(mode="json", exclude_none=True))
+        finally:
+            listening.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await listening

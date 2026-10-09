@@ -48,6 +48,8 @@ async def test_api_202_get_ownership_replay_conflict_and_worker_success(reposito
         rid = UUID(first.json()["request_id"])
         assert await worker(repository, vault).execute(rid)
         assert not await worker(repository, vault).execute(rid)
+        assert repository.get(rid).response.status == "running"
+        assert await service.accept_completions() == 1
         done = await client.get(first.headers["Location"], headers=headers)
         assert done.json()["status"] == "succeeded"
         replay = await client.post(
@@ -75,6 +77,7 @@ async def test_post_waits_for_worker_result_without_running_model(
         while not (deliveries := repository.deliveries(datetime.now(UTC))):
             await asyncio.sleep(0.001)
         await worker(repository, vault).execute(deliveries[0].request_id)
+        await service.accept_completions()
 
     background = asyncio.create_task(process())
     result = await service.create_request(payload, principal=principal, idempotency_key="key")
@@ -120,6 +123,8 @@ async def test_worker_failure_is_persisted_and_secret_deleted(repository, payloa
         executor=executor,
     )
     await task.execute(stored.request_id)
+    assert repository.get(stored.request_id).response.status == "running"
+    repository.accept_completions()
     record = repository.get(stored.request_id)
     expected = {
         "schema": "OUTPUT_VALIDATION_FAILED",

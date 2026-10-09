@@ -57,3 +57,14 @@ class DeadLetterRow(Base):
     )
     code: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CompletionRow(Base):
+    __tablename__ = "ai_completion"
+    __table_args__ = (Index("ix_ai_completion_created", "created_at", "request_id"),)
+    request_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ai_request.id", ondelete="CASCADE"), primary_key=True
+    )
+    execution_token: Mapped[UUID]
+    response: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -77,6 +77,10 @@ class AiApplicationService:
     async def get_request(self, request_id: UUID, *, principal: Principal) -> AiResponse:
         return (await self._owned(request_id, principal.user_id)).response
 
+    async def accept_completions(self, limit: int = 100) -> int:
+        """API tiếp nhận kết quả worker; không thực thi lại workflow."""
+        return await asyncio.to_thread(self.repository.accept_completions, limit)
+
     async def _owned(self, request_id: UUID, user_id: str):
         stored = await asyncio.to_thread(self.repository.get, request_id)
         if stored is None or stored.user_id != user_id:

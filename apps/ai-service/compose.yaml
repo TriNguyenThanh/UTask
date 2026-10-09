@@ -2,10 +2,13 @@
 x-ai: &ai
   build: .
   image: utask/ai-service:local
-  env_file: ${AI_ENV_FILE:-.env}
+  env_file: ../../infra/env/ai-service.env
   environment:
-    AI_DATABASE_URL: postgresql+psycopg://ai_service:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}@database:5432/ai_context_db
+    AI_DATABASE_URL: postgresql+psycopg://ai_service:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in root .env}@database:5432/ai_context_db
     AI_BROKER_URL: redis://broker:6379/0
+    AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
+    AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
+    GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
   init: true
 
 services:
@@ -14,7 +17,7 @@ services:
     environment:
       POSTGRES_USER: ai_service
       POSTGRES_DB: ai_context_db
-      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in root .env}
     volumes:
       - ai-database:/var/lib/postgresql/data
     healthcheck:

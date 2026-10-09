@@ -91,5 +91,9 @@ class RequestWorker:
                 failure("INTERNAL_ERROR", 500),
             )
         return await asyncio.to_thread(
-            self.repository.finish, request_id, stored.execution_token, response, datetime.now(UTC)
+            self.repository.stage_completion,
+            request_id,
+            stored.execution_token,
+            response,
+            datetime.now(UTC),
         )

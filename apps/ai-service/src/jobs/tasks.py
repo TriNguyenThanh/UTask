@@ -8,7 +8,7 @@ import httpx
 from application.execution import RequestWorker
 from config import get_settings
 from infrastructure.bootstrap import build_repository
-from infrastructure.context_http import InternalContextAdapter
+from infrastructure.context_factory import build_context_adapter
 from infrastructure.providers import AdkRequestExecutor, AdkRuntime
 from infrastructure.security import FernetCredentialVault, JwtAuthenticator
 
@@ -20,7 +20,7 @@ async def execute_request(request_id: UUID):
     repository, engine = build_repository(settings)
     try:
         async with httpx.AsyncClient() as client:
-            adapter = InternalContextAdapter(settings, client)
+            adapter = build_context_adapter(settings, client)
             vault = FernetCredentialVault(
                 settings.credential_key.get_secret_value() if settings.credential_key else None
             )

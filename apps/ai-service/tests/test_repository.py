@@ -65,14 +65,19 @@ def test_claim_once_budget_fencing_and_finish(repository, payload):
         now,
         failure("OUTPUT_VALIDATION_FAILED", 422),
     )
-    assert not repository.finish(stored.request_id, uuid4(), response, now)
-    assert repository.finish(stored.request_id, running.execution_token, response, now)
-    assert not repository.finish(stored.request_id, running.execution_token, response, now)
+    assert not repository.stage_completion(stored.request_id, uuid4(), response, now)
+    assert repository.stage_completion(stored.request_id, running.execution_token, response, now)
+    assert repository.accept_completions() == 1
+    assert not repository.stage_completion(
+        stored.request_id, running.execution_token, response, now
+    )
     assert repository.get(stored.request_id).credential == ""
     with repository.sessions() as session:
         assert session.get(DeadLetterRow, stored.request_id).code == "OUTPUT_VALIDATION_FAILED"
     with pytest.raises(ValueError):
-        repository.finish(stored.request_id, running.execution_token, stored.response, now)
+        repository.stage_completion(
+            stored.request_id, running.execution_token, stored.response, now
+        )
     assert repository.claim(uuid4(), now) is None
 
 
@@ -83,7 +88,9 @@ def test_queue_and_worker_expiry_delete_secret_and_fence_late_result(repository,
     future = now + timedelta(seconds=31)
     assert repository.expire(future) == 1
     response = failed_response(payload, stored.request_id, now, now, failure("INTERNAL_ERROR", 500))
-    assert not repository.finish(stored.request_id, running.execution_token, response, now)
+    assert not repository.stage_completion(
+        stored.request_id, running.execution_token, response, now
+    )
     assert repository.get(stored.request_id).response.error.code == "WORKFLOW_TIMEOUT"
     queued = enqueue(repository, payload, key="other")
     assert repository.claim(queued.request_id, now + timedelta(seconds=301)) is None
@@ -102,7 +109,8 @@ def test_finish_after_deadline_is_timeout(repository, payload):
         future,
         failure("INTERNAL_ERROR", 500),
     )
-    assert not repository.finish(stored.request_id, running.execution_token, response, future)
+    assert repository.stage_completion(stored.request_id, running.execution_token, response, future)
+    assert repository.accept_completions() == 1
     assert repository.get(stored.request_id).response.error.code == "WORKFLOW_TIMEOUT"
 
 

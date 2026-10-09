@@ -44,7 +44,8 @@ Dispatcher -> Redis -> Celery worker -> Application -> ADK Workflow / LlmAgent
                                                                v
                                  Context Tool Pool -> Context Layer / REST adapters
 
-Worker lưu kết quả vào AI DB; API đọc AI DB để trả POST/GET response.
+Worker → AI DB: completion + NOTIFY → API listener → terminal result trong AI DB.
+API đọc AI DB để trả POST/GET response.
 ```
 
 - API nhận ý định, phạm vi đối tượng và các chỉ dẫn bổ sung cần thiết.
@@ -331,7 +332,7 @@ Nếu request vượt ngưỡng xử lý đồng bộ đã cấu hình, API có 
 Kafka không được dùng để client chờ response; client truy vấn status bằng REST.
 Trước khi xác nhận nhận job, request và ý định giao job phải được lưu bền vững
 trong cùng transaction của AI DB. Dispatcher có thể giao lại khi Redis lỗi.
-API chờ kết quả được worker lưu trong persistence theo ngưỡng 10 giây; hết
+API chờ kết quả được listener tiếp nhận từ completion inbox theo ngưỡng 10 giây; hết
 ngưỡng chờ không hủy workflow đang chạy. Chi tiết giao job/phục hồi nằm trong
 [pipeline AI](architecture.md).
 
@@ -344,7 +345,7 @@ Trả về trạng thái của request thuộc user đã xác thực.
 | `status`    | Ý nghĩa                                                  |
 | ----------- | -------------------------------------------------------- |
 | `queued`    | Đã nhận nhưng workflow chưa bắt đầu.                     |
-| `running`   | Workflow hoặc agent đang xử lý.                          |
+| `running`   | Đang xử lý hoặc kết quả worker đang chờ API tiếp nhận.    |
 | `succeeded` | Đã có result hợp lệ.                                     |
 | `failed`    | Không thể tạo result hợp lệ trong budget/retry cho phép. |
 
@@ -353,11 +354,12 @@ Request ở trạng thái `succeeded` trả cùng envelope và `result` như res
 trạng thái, thời gian cập nhật và context nếu đã có. Request `failed` trả
 `error` theo format ở mục kế tiếp.
 
-API và worker dùng chung persistence của AI Service. Worker lưu trạng thái và
-kết quả qua application/repository; GET đọc bản ghi đó sau khi kiểm tra
-ownership. Không có bước nhận Kafka event kết quả để API process cập nhật
-database. SSE/WebSocket là khả năng tương lai cần contract riêng; polling
-hiện dùng HTTP GET mới.
+API và worker dùng chung persistence của AI Service. Worker bàn giao kết quả
+qua completion inbox và PostgreSQL NOTIFY; listener của API tiếp nhận và cập
+nhật trạng thái/kết quả cuối. GET đọc bản ghi đó sau khi kiểm tra ownership.
+Không có Kafka event kết quả trong luồng này. SSE/WebSocket là khả năng tương
+lai cần contract riêng; polling hiện dùng HTTP GET mới. Chi tiết ở
+[bàn giao kết quả](architecture.md#bàn-giao-kết-quả-worker-cho-api).
 
 ## 7. Lỗi
 

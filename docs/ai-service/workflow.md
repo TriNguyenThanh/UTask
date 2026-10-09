@@ -50,8 +50,9 @@ Projection/cache qua Kafka có thể bổ sung khi có nhu cầu, không bắt b
 nguồn context duy nhất theo baseline mới.
 
 Pipeline đã chọn lưu request và ý định giao job trước khi dispatcher gửi
-Celery task qua Redis. Worker thuộc AI gọi Application/Workflow rồi lưu kết
-quả vào persistence chung của AI để API trả cho client. Consumer Kafka chạy
+Celery task qua Redis. Worker thuộc AI gọi Application/Workflow rồi bàn giao
+completion và phát PostgreSQL NOTIFY; listener trong API tiếp nhận và ghi
+kết quả cuối vào persistence chung của AI để trả cho client. Consumer Kafka chạy
 ngoài agent loop; khi có use case/contract, consumer cập nhật projection hoặc
 tạo job qua cùng application/dispatcher. Xem nguồn chi tiết tại
 [pipeline AI](architecture.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
@@ -130,7 +131,7 @@ Validate Structured Output
   +---- invalid ----> retry/revise trong giới hạn
   |
   v
-Persist Result
+Bàn giao validated result cho application
   |
   v
 END
@@ -146,7 +147,9 @@ retry provider trong giới hạn chung. Trước khi chấp nhận output, work
 kiểm tra context thiết yếu: backlog có target cần project, phân rã cần task,
 risk cần progress. Agent chọn thứ tự và tool bổ sung. Prompt nghiệp vụ nằm
 trong `workflow/instructions.py`, SDK/provider nằm trong infrastructure;
-application worker lưu result qua executor/repository protocol.
+application worker bàn giao result qua repository protocol; API listener
+tiếp nhận để cập nhật terminal result. Xem
+[cơ chế bàn giao](architecture.md#bàn-giao-kết-quả-worker-cho-api).
 
 ### 3.3. Kết hợp Workflow + LlmAgent
 
@@ -747,7 +750,7 @@ AI API / Celery task
 
 Kafka consumer / publisher chạy ngoài vòng suy luận.
 Job nội bộ: lưu request + ý định giao job → dispatcher → Redis → Celery worker AI.
-Trạng thái/kết quả: persistence AI → API → client.
+Kết quả: worker → completion inbox + NOTIFY → API listener → persistence AI → client.
 ```
 
 Sơ đồ này là hướng phụ thuộc logic trong lúc thực thi. Pipeline nhận request,

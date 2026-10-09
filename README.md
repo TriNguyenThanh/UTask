@@ -2,154 +2,159 @@
 
 # UTask
 
-### AI-Powered Agile Project Management Platform
+### Agile Project Management for Student Teams
 
-**Quản lý dự án Scrum/Agile kết hợp AI để phân tích workload, rủi ro Sprint và hỗ trợ phân công công việc.**
+**Plan projects, track sprint progress, and review AI suggestions in an academic workspace.**
 
-![Next.js](https://img.shields.io/badge/Next.js-Frontend-black)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688)
+![React](https://img.shields.io/badge/React-Frontend-61DAFB)
+![Django REST Framework](https://img.shields.io/badge/Django_REST_Framework-Domain_APIs-092E20)
+![FastAPI](https://img.shields.io/badge/FastAPI-AI_Service-009688)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791)
 ![Google ADK](https://img.shields.io/badge/Google_ADK-AI_Agent-4285F4)
-![Gemini](https://img.shields.io/badge/Gemini-AI-8E75B2)
-![Docker](https://img.shields.io/badge/Docker-Deployment-2496ED)
+![Docker](https://img.shields.io/badge/Docker-Containers-2496ED)
 
 </div>
 
 ---
 
-## ✨ Tổng quan
+## Overview
 
-**UTask** là nền tảng quản lý dự án CNTT dành cho **sinh viên và giảng viên**, hỗ trợ tổ chức công việc theo mô hình **Scrum/Agile**.
+**UTask** is a project management platform being developed for students and instructors working on software projects. It brings Scrum and Agile workflows into a classroom setting, connecting courses and teams with project planning, task tracking, and progress reporting.
 
-Ngoài các chức năng quản lý Project, Backlog, Sprint và Kanban, hệ thống tích hợp **AI Core** để phân tích dữ liệu dự án và đưa ra các khuyến nghị hỗ trợ nhóm trong quá trình làm việc.
+The AI Service supports planning and analysis by producing suggestions for users to review. The target design keeps progress calculations in the Work Service, using defined rules independently of AI.
 
----
-
-## 🎯 Chức năng chính
-
-| Module                | Chức năng                              |
-| --------------------- | -------------------------------------- |
-| 📁 Project Management | Quản lý Project, thành viên và Task    |
-| 📋 Backlog            | Quản lý Product Backlog và Story Point |
-| 🏃 Sprint             | Lập kế hoạch và theo dõi Sprint        |
-| 🗂 Kanban Board       | Theo dõi trạng thái công việc          |
-| 🐙 GitHub Integration | Thu thập commit và contributor         |
-| 🤖 AI Core            | Phân tích và hỗ trợ ra quyết định      |
+**Repository status: Partial.** The repository contains a React web application with mock API support and an AI Service with a request API, PostgreSQL persistence, a dispatcher, and Celery workers. The domain backends are not yet implemented in this checkout. Integration across services and production LLM behavior remain unverified.
 
 ---
 
-## 🤖 AI Core
+## Planned Capabilities
 
-AI Core tập trung vào **4 bài toán chính**:
+The following areas describe the product scope and target architecture.
 
-### 📊 Workload Analysis
-
-Phân tích khối lượng công việc của từng thành viên dựa trên:
-
-`Story Point` • `Deadline` • `Capacity`
-
-### ⚠️ Sprint Risk Assessment
-
-Phát hiện nguy cơ Sprint bị trễ hoặc không hoàn thành mục tiêu.
-
-### 👤 Task Assignment Recommendation
-
-Đề xuất thành viên phù hợp với Task dựa trên:
-
-`Workload` • `Skill` • `Deadline`
-
-### ❤️ Project Health Assessment
-
-Tổng hợp các chỉ số để đánh giá tình trạng tổng thể của Project và đưa ra khuyến nghị.
-
-> **Human-in-the-loop:** AI chỉ phân tích và đề xuất, quyết định cuối cùng vẫn thuộc về người dùng.
+| Area                | Scope                                                        |
+| ------------------- | ------------------------------------------------------------ |
+| Classroom and Teams | Organize courses, classes, groups, and student participation |
+| Project Management  | Manage projects, members, tasks, comments, and workflows     |
+| Backlog Planning    | Organize epics, user stories, priorities, and story points   |
+| Sprint and Kanban   | Plan sprints and track work through a configurable board     |
+| Progress Tracking   | Calculate task and project progress using defined rules      |
+| GitHub Integration  | Connect repositories and link development activity to tasks  |
+| AI Assistance       | Draft backlogs, break down tasks, and explain delivery risks |
+| Notifications       | Keep users informed about relevant changes and activity      |
 
 ---
 
-## 🛠 Tech Stack
+## AI Assistance
 
-| Layer           | Technology       |
-| --------------- | ---------------- |
-| **Frontend**    | Next.js          |
-| **Backend**     | Python · FastAPI |
-| **Database**    | PostgreSQL       |
-| **AI Agent**    | Google ADK       |
-| **LLM**         | Gemini API       |
-| **Validation**  | Pydantic         |
-| **Integration** | GitHub API       |
-| **Testing**     | pytest           |
-| **Deployment**  | Docker           |
+The first version of the AI API supports three intents:
+
+### Backlog Generation
+
+Draft a backlog from a project or feature description for the team to review and refine.
+
+### Task Decomposition
+
+Break a complex task into smaller subtasks using the available task context.
+
+### Risk Analysis
+
+Identify and explain risks that may affect a sprint or deadline using relevant project context.
+
+AI requests are processed through a bounded workflow with output validation and execution limits. Context is obtained through domain tools backed by internal APIs.
+
+> **User review:** AI produces proposals for users to review. Applying confirmed changes belongs to the service that owns the data, which must check permissions and business rules.
+
+See the [AI Service documentation](docs/ai-service/README.md) for setup and API scope, and the [code map](docs/ai-service/code-map.md) for implementation details and verification limits.
 
 ---
 
-## 🏗 System Architecture
+## Technology Stack
+
+React and the AI Service dependencies are present in the repository. The remaining platform choices follow the [architecture baseline](docs/architecture/README.md).
+
+| Layer               | Technology                              | Scope                          |
+| ------------------- | --------------------------------------- | ------------------------------ |
+| **Frontend**        | React · Vite · TypeScript               | Web application                |
+| **Domain APIs**     | Python · Django · Django REST Framework | Planned business services      |
+| **AI API**          | FastAPI · Pydantic                      | AI requests and validation     |
+| **AI Runtime**      | Google ADK · Gemini                     | Agent workflow and provider    |
+| **Database**        | PostgreSQL                              | Separate database per service  |
+| **Background Jobs** | Celery · Redis                          | Internal service jobs          |
+| **Events**          | Kafka                                   | Planned events across services |
+| **File Storage**    | Cloudflare R2                           | Planned production storage     |
+| **Testing**         | pytest · Vitest · React Testing Library | Backend and frontend tests     |
+| **Infrastructure**  | Docker Compose · Nginx                  | Local stacks and API routing   |
+
+---
+
+## System Architecture
+
+**Target design.** UTask separates services by business responsibility. The diagram shows the intended platform structure.
 
 ```text
-┌──────────────────────────┐
-│        Next.js           │
-│        Frontend          │
-└────────────┬─────────────┘
-             │ REST API
-             ▼
-┌──────────────────────────┐
-│         FastAPI          │
-│     Application API      │
-└────────────┬─────────────┘
-             │
-       ┌─────┴──────────────┐
-       │                    │
-       ▼                    ▼
-┌──────────────┐     ┌──────────────┐
-│ PostgreSQL   │     │   AI Core    │
-│   Database   │     │   FastAPI    │
-└──────────────┘     └──────┬───────┘
-                            │
-                     ┌──────┴───────┐
-                     │              │
-                     ▼              ▼
-               ┌───────────┐  ┌───────────┐
-               │Google ADK │  │Gemini API │
-               └───────────┘  └───────────┘
+React Web Application
+        │ REST
+        ▼
+Nginx / Reverse Proxy
+        ├── Identity Service       Authentication and user profiles
+        ├── Work Service           Projects, tasks, sprints, and progress
+        ├── Classroom Service      Courses, classes, and groups
+        ├── Integration Service    GitHub connection and activity
+        └── Notification Service   Notifications and delivery
+
+Internal AI Service
+        ├── Domain APIs            Authorized project context via REST
+        └── LLM Provider           Google ADK
+
+Infrastructure: PostgreSQL · Redis · Kafka · Cloudflare R2
 ```
 
+Each service owns its data and exposes it through agreed APIs or events. REST handles requests that need a direct response; Kafka carries asynchronous events between services. Celery and Redis handle jobs within a service.
+
+The AI Service provides analysis and proposals without direct access to other services' databases. The Integration Service is the only service that calls the GitHub API.
+
+See [system architecture](docs/system/architecture.md) and [data ownership](docs/system/data-ownership.md) for the service boundaries and current decisions.
+
 ---
 
-## 📁 Project Structure
+## Repository Structure
 
 ```text
-utask/
+UTask/
 │
 ├── apps/
-│   ├── web/                 # Next.js Frontend
-│   └── api/                 # FastAPI Backend
+│   ├── web/                 # React + Vite application
+│   └── ai-service/          # Internal AI Service
 │
-├── services/
-│   └── ai-core/
-│       ├── app/
-│       │   ├── agents/      # AI Agents
-│       │   ├── domain/      # Business logic
-│       │   ├── schemas/     # Pydantic schemas
-│       │   └── tools/       # Agent tools
-│       │
-│       ├── datasets/        # Mock & evaluation data
-│       └── tests/           # AI Core tests
+├── contracts/
+│   ├── api/                 # Machine-readable API contracts
+│   └── events/              # Event contracts; check baseline compatibility
 │
-├── docs/                    # Project documentation
-├── docker-compose.yml
+├── datasets/               # AI evaluation and example data
+├── docs/                   # System, service, and infrastructure documentation
+├── infra/                  # Nginx, PostgreSQL, and environment configuration
+├── scripts/                # Development and CI utilities
+├── docker-compose.yml      # Platform configuration; service sources incomplete
 └── README.md
 ```
 
 ---
 
-## 💡 Ý tưởng chính
+## Development and Documentation
 
-UTask hướng đến việc kết hợp **quản lý dự án Agile truyền thống** với **AI**, giúp nhóm:
+Start with the [documentation overview](docs/system/README.md). Detailed developer documentation is maintained in Vietnamese under `docs/`.
 
-- Theo dõi tiến độ dễ dàng hơn.
-- Phát hiện sớm rủi ro của Sprint.
-- Nhận biết thành viên đang quá tải.
-- Hỗ trợ phân công Task phù hợp.
-- Đánh giá nhanh tình trạng tổng thể của Project.
+| Resource                                             | Purpose                                        |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| [Architecture Baseline](docs/architecture/README.md) | Technology choices and target service design   |
+| [Development Guide](docs/system/development.md)      | Repository conventions and verification        |
+| [Web Application](apps/web/README.md)                | Frontend setup and local commands              |
+| [AI Service](docs/ai-service/README.md)              | Configuration, local stack, and quality checks |
+| [AI Implementation Map](docs/ai-service/code-map.md) | Source locations and integration limits        |
+| [Infrastructure](docs/infrastructure/README.md)      | Environment, storage, messaging, and CI/CD     |
+| [Architecture Decisions](docs/adr/README.md)         | Recorded decisions and changes to the baseline |
+
+The root Docker Compose configuration references domain services whose source directories are not yet present. Use the application-specific setup instructions for the web application and the standalone AI stack.
 
 ---
 
@@ -157,6 +162,6 @@ UTask hướng đến việc kết hợp **quản lý dự án Agile truyền th
 
 ### UTask
 
-**Manage smarter · Detect risks earlier · Build better together**
+**Project planning and progress tracking for student teams.**
 
 </div>
