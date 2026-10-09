@@ -19,7 +19,7 @@ def api_logs(caplog, monkeypatch):
 
 def test_validation_log_has_code_without_request_values_or_traceback(api_logs):
     request = SimpleNamespace(
-        method="POST", path="/api/v1/auth/login", data={"password": "INPUT_SECRET_CANARY"}
+        method="POST", path="/login", data={"password": "INPUT_SECRET_CANARY"}
     )
     response = identity_exception_handler(
         ValidationError({"password": ["INPUT_SECRET_CANARY"]}), {"request": request}

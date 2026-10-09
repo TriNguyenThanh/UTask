@@ -178,6 +178,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "UTask Identity API",
     "VERSION": "1.8",
+    "SERVERS": [{"url": "/api/auth", "description": "Identity API qua gateway"}],
     "COMPONENT_SPLIT_REQUEST": True,
     "SERVE_INCLUDE_SCHEMA": False,
 }
@@ -188,7 +189,7 @@ REST_AUTH = {
     "TOKEN_MODEL": None,
     "JWT_AUTH_COOKIE": None,
     "JWT_AUTH_REFRESH_COOKIE": "refresh_token",
-    "JWT_AUTH_REFRESH_COOKIE_PATH": "/api/v1/auth",
+    "JWT_AUTH_REFRESH_COOKIE_PATH": "/api/auth",
     "JWT_AUTH_SECURE": True,
     "JWT_AUTH_HTTPONLY": True,
     "JWT_AUTH_SAMESITE": "Lax",

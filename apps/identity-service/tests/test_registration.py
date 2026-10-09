@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from accounts.models import AuditLog, OutboxEvent, User, UserProfile, UserSession
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db, pytest.mark.postgres]
-URL = "/api/v1/auth/register"
+URL = "/register"
 
 
 @pytest.mark.parametrize("field", ["email", "username"])

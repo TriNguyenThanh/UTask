@@ -25,16 +25,16 @@ def test_openapi_with_enabled_flags_reads_real_urlconf(settings, tmp_path):
         call_command("export_identity_api", output=str(target))
         schema = json.loads(target.read_text())
         assert sum(len(methods) for methods in schema["paths"].values()) == 33
-        assert schema["paths"]["/api/v1/auth/oauth/google"].keys() == {"post", "delete"}
-        assert schema["paths"]["/api/v1/auth/oauth/github"].keys() == {"post", "delete"}
-        assert schema["paths"]["/api/v1/users/me/avatar/confirm"].keys() == {"post"}
-        for route in ("/api/v1/auth/oauth/google", "/api/v1/auth/oauth/google/start"):
+        assert schema["paths"]["/oauth/google"].keys() == {"post", "delete"}
+        assert schema["paths"]["/oauth/github"].keys() == {"post", "delete"}
+        assert schema["paths"]["/users/me/avatar/confirm"].keys() == {"post"}
+        for route in ("/oauth/google", "/oauth/google/start"):
             assert not any(
                 "jwtAuth" in item for item in schema["paths"][route]["post"].get("security", [])
             )
         for route, method in (
-            ("/api/v1/auth/oauth/google", "delete"),
-            ("/api/v1/auth/oauth/github/start", "post"),
+            ("/oauth/google", "delete"),
+            ("/oauth/github/start", "post"),
         ):
             assert {"jwtAuth": []} in schema["paths"][route][method]["security"]
     finally:

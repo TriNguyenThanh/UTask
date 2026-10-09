@@ -110,7 +110,7 @@ def test_mocked_google_code_flow_uses_allauth_then_simplejwt(oauth_settings):
     assert SocialAccount.objects.filter(user=user, provider="google", uid=claims["sub"]).exists()
     assert not SocialToken.objects.exists()
     browser.credentials(HTTP_AUTHORIZATION="Bearer " + response.json()["data"]["access"])
-    assert browser.get("/api/v1/users/me").status_code == 200
+    assert browser.get("/users/me").status_code == 200
     assert browser.delete("/test/oauth/google").status_code == 400
     assert browser.post("/test/oauth/google", data, format="json").status_code == 400
 

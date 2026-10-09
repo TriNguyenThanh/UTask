@@ -28,7 +28,7 @@ def test_login_then_me_uses_real_library_chain():
     session = UserSession.objects.get(user=user)
     assert session.refresh_token_hash == hashlib.sha256(cookie.value.encode()).hexdigest()
     assert session.expires_at - session.created_at <= timedelta(days=7)
-    me = client.get("/api/v1/users/me")
+    me = client.get("/users/me")
     assert me.status_code == 200
     assert me.json()["data"]["id"] == str(user.pk)
     assert me.json()["data"]["roles"] == ["STUDENT"]
@@ -40,7 +40,7 @@ def test_login_identifier_normalization(field):
     user = create_user()
     client = APIClient()
     response = client.post(
-        "/api/v1/auth/login",
+        "/login",
         {field: " " + getattr(user, field).upper() + " ", "password": PASSWORD},
         format="json",
     )
@@ -66,7 +66,7 @@ def test_unavailable_accounts_never_receive_credentials(state, status, code):
         user.account_status = state
     user.save()
     response = APIClient().post(
-        "/api/v1/auth/login", {"email": user.email, "password": PASSWORD}, format="json"
+        "/login", {"email": user.email, "password": PASSWORD}, format="json"
     )
     assert response.status_code == status
     assert response.json()["error"] == {"code": code, "details": []}
@@ -80,7 +80,7 @@ def test_bad_password_does_not_enumerate_users(identifier):
     user = create_user()
     email = user.email if identifier == "known" else "unknown@example.edu.vn"
     response = APIClient().post(
-        "/api/v1/auth/login", {"email": email, "password": "WrongPassword!"}, format="json"
+        "/login", {"email": email, "password": "WrongPassword!"}, format="json"
     )
     assert response.status_code == 401
     assert response.json()["error"] == {"code": "INVALID_CREDENTIALS", "details": []}
@@ -92,13 +92,13 @@ def test_axes_five_failures_and_fixed_cooldown():
     client = APIClient()
     for i in range(5):
         response = client.post(
-            "/api/v1/auth/login", {"email": user.email, "password": "WrongPassword!"}, format="json"
+            "/login", {"email": user.email, "password": "WrongPassword!"}, format="json"
         )
         assert response.status_code == (429 if i == 4 else 401)
     attempt = AccessAttempt.objects.get(username=str(user.pk))
     timestamp, failures = attempt.attempt_time, attempt.failures_since_start
     response = client.post(
-        "/api/v1/auth/login", {"email": user.email, "password": PASSWORD}, format="json"
+        "/login", {"email": user.email, "password": PASSWORD}, format="json"
     )
     assert response.status_code == 429
     assert response["Retry-After"] == "900"

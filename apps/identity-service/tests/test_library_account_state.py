@@ -24,7 +24,7 @@ def test_axes_username_only_attempt_preserves_remaining_lock_and_expires():
         ip_address=None,
         user_agent="identity-legacy-lockout",
         http_accept="",
-        path_info="/api/v1/auth/login",
+        path_info="/login",
         get_data="",
         post_data="",
         failures_since_start=5,
@@ -35,7 +35,7 @@ def test_axes_username_only_attempt_preserves_remaining_lock_and_expires():
     AccessAttemptExpiration.objects.create(access_attempt=attempt, expires_at=expires_at)
     for field in ("email", "username"):
         response = APIClient().post(
-            "/api/v1/auth/login", {field: getattr(user, field), "password": PASSWORD}, format="json"
+            "/login", {field: getattr(user, field), "password": PASSWORD}, format="json"
         )
         assert response.status_code == 429
         assert response["Retry-After"] == "900"

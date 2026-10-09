@@ -16,8 +16,8 @@ pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.postgres,
 ]
-PRESIGN = "/api/v1/users/me/avatar/presigned-url"
-CONFIRM = "/api/v1/users/me/avatar/confirm"
+PRESIGN = "/users/me/avatar/presigned-url"
+CONFIRM = "/users/me/avatar/confirm"
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@
 **Dịch vụ sở hữu:** `apps/identity-service`<br>
 **Cơ sở dữ liệu:** `identity_db` (PostgreSQL 16)<br>
 **Cổng lắng nghe cục bộ (Local Port):** `8001`<br>
-**Đường dẫn trong service:** `/api/v1/auth`, `/api/v1/users`, `/api/v1/admin/users`; đường nội bộ provisioning không công khai qua gateway.<br>
+**Đường dẫn trong service:** `/login`, `/users`, `/admin/users`; gateway công khai dưới `/api/auth`. Đường nội bộ provisioning không công khai qua gateway.<br>
 **Tài liệu tham chiếu:**
 - [Kiến trúc hiện hành](../system/architecture.md), [ownership](../system/data-ownership.md), [Kafka](../system/kafka-events.md) (nguồn chuẩn sau pull)
 - [UTask - Phân tích thiết kế yêu cầu.md](UTask%20-%20Phân%20tích%20thiết%20kế%20yêu%20cầu.md) (Epic 1: US-1.1 đến US-1.4, Quyền Giảng viên/Sinh viên/Admin)
@@ -76,7 +76,7 @@ bị thu hồi; không có grace window. Token hết hạn bị thư viện từ
 
 Response dùng tên thư viện `access`, `refresh`, `user`. Chế độ web mặc định trả
 `refresh=""` lúc login và không trả raw refresh trong body refresh; cookie
-`refresh_token` HttpOnly/Secure/SameSite=Lax, path `/api/v1/auth`.
+`refresh_token` HttpOnly/Secure/SameSite=Lax, path `/api/auth`.
 API client có thể gửi `{"refresh":"<JWT>"}`. Cookie và body khác nhau trả 400.
 Khi có cookie, refresh/logout/logout-all kiểm CSRF/Origin qua dj-rest-auth/Django.
 Không có route cấp raw refresh riêng cho mobile trong phiên bản này.
@@ -148,7 +148,7 @@ Publisher/maintenance xóa secret hết hạn và Notification delivery chưa đ
 
 ### 1.7. Đường API trong service và qua Gateway
 
-Các endpoint `/api/v1/...` bên dưới là đường trong service. Theo `infra/nginx/nginx.conf`, gateway bỏ tiền tố `/api/auth/` trước khi chuyển vào Identity: ví dụ client gọi `/api/auth/api/v1/auth/login` thì Identity nhận `/api/v1/auth/login`. Classroom tương tự: `/api/classroom/api/v1/classrooms/{classroom_id}/students/import`.
+API công khai của Identity dùng path ngắn, không có tiền tố phiên bản: ví dụ client gọi `/api/auth/login` thì gateway chuyển vào route `/login`. Các API nội bộ giữ tiền tố `/api/v1/internal/`, chỉ gọi trực tiếp giữa backend và bị chặn qua gateway. Các public path cũ `/api/v1/auth/...`, `/api/v1/users/...` và `/api/v1/admin/...` đã bị gỡ, không còn alias tương thích. Classroom có quy ước route riêng: `/api/classroom/api/v1/classrooms/{classroom_id}/students/import`.
 
 API `/api/v1/internal/users/provision-students` và resend nội bộ chỉ được gọi backend trực tiếp, dùng X-Service-Key và actor JWT theo mục 3.5. Cấu hình nginx chặn `/api/auth/api/v1/internal/` và path gốc; đã kiểm syntax, chưa nghiệm thu gateway đang chạy. Các API nội bộ đã được kiểm thử local, không phải endpoint public.
 
@@ -196,7 +196,9 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 OpenAPI xuất bằng drf-spectacular từ config.urls và serializers thật qua
 [export_identity_api](../../apps/identity-service/accounts/management/commands/export_identity_api.py). Schema mặc định không
 tự mở routes gated hoặc chứng minh provider acceptance. Swagger UI và schema JSON có tại
-`/api/schema/swagger/` và `/api/schema/` cho phát triển local; Nginx không route hai đường này.
+`/docs/` và `/openapi/` dùng trực tiếp khi phát triển local. Qua gateway,
+Swagger UI ở `/api/auth/docs/` và OpenAPI JSON ở `/api/auth/openapi/`;
+Nginx bỏ tiền tố `/api/auth/` trước khi chuyển request vào Identity.
 
 Response giữ success/message/data/meta/error. Message là thông điệp hiển thị, client phân
 nhánh bằng HTTP status/error.code. Library validation dùng400 VALIDATION_ERROR cho đăng ký,
@@ -279,7 +281,7 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 
 #### 3.1.1. Lấy Khóa Công khai Xác thực Token (JWKS - JSON Web Key Set)
 * **Phương thức:** `GET`
-* **Đường dẫn:** `/api/v1/auth/.well-known/jwks.json`
+* **Đường dẫn:** `/.well-known/jwks.json`
 * **Xác thực:** Công khai (Anonymous). Cache TTL: 24 giờ.
 * **Ngoại lệ envelope:** JWKS trả đối tượng `{"keys": [...]}` trực tiếp theo chuẩn JWKS, không bọc envelope năm trường. JWT header bắt buộc có `alg=RS256` và `kid`; bên nhận chọn khóa theo `kid`, làm mới JWKS khi gặp kid chưa biết, chỉ chấp nhận kid có trong bộ khóa. Giữ khóa cũ ít nhất 15 phút sau lần cuối phát token bằng khóa đó.
 * **Mô tả:** Cung cấp bộ khóa công khai (RSA Public Keys) theo chuẩn RFC 7517 để API Gateway và các satellite microservices (`work-service`, `classroom-service`, `ai-service`) tự xác thực chữ ký Access Token mà không cần gọi vào `identity_db`.
@@ -304,7 +306,7 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 
 #### 3.1.2. Register Student
 
-POST `/api/v1/auth/register`, Anonymous, dj-rest-auth RegisterView/RegisterSerializer.
+POST `/register`, Anonymous, dj-rest-auth RegisterView/RegisterSerializer.
 Request: `email, username, password1, password2, first_name, last_name`.
 Không nhận role/MSSV/extra field. Password qua validators Django (min 8, không common/numeric,
 độ tương tự user và chữ hoa/chữ thường/số/ký tự đặc biệt).
@@ -314,17 +316,17 @@ trả 400 thay vì giả receipt. Email/username trùng trả 400 VALIDATION_ERR
 
 #### 3.1.3. Login bằng email hoặc username
 
-POST `/api/v1/auth/login`, Anonymous. Request: đúng một trong `email, username`,
+POST `/login`, Anonymous. Request: đúng một trong `email, username`,
 `password`, `device_name` tùy chọn. Normalize lower/trim identifier.
 200: `data={"access":"<JWT>","refresh":"","user":{...}}` và cookie refresh.
 dj-rest-auth LoginView thực thi; Django authenticate/allauth backend kiểm password và
 timing mitigation; Axes giữ lockout. User/session được recheck dưới khóa user trước cấp token.
-Bearer cũ đã revoked không cản login mới. GET `/api/v1/users/me` dùng UserDetailsView; PATCH bổ sung qua profile service,
+Bearer cũ đã revoked không cản login mới. GET `/users/me` dùng UserDetailsView; PATCH bổ sung qua profile service,
 trả profile/roles của chính user, không cấp quyền Project/Classroom từ staff/global role.
 
 #### 3.1.4. Refresh/rotation/replay
 
-POST `/api/v1/auth/refresh`, Anonymous, body `{"refresh":"<JWT>"}` hoặc cookie.
+POST `/refresh`, Anonymous, body `{"refresh":"<JWT>"}` hoặc cookie.
 200: `data={"access":"<JWT>","access_expiration":"..."}`, cookie refresh mới.
 SimpleJWT TokenRefreshSerializer thực hiện rotation/blacklist, adapter khóa user và
 cập nhật hash/jti session ổn định. Hạn session/cookie/token không vượt family 7 ngày.
@@ -333,7 +335,7 @@ Replay còn hạn thu hồi family và audit trước 401; lỗi DB rollback rot
 
 #### 3.1.5. Logout
 
-POST `/api/v1/auth/logout`, Bearer bắt buộc; refresh body/cookie tùy chọn.
+POST `/logout`, Bearer bắt buộc; refresh body/cookie tùy chọn.
 Nếu cung cấp refresh, thư viện xác minh và adapter kiểm cùng user/family.
 Dưới khóa user, dùng refresh hiện tại trong outstanding tokens của SimpleJWT để dj-rest-auth
 blacklist/xóa cookie rồi revoke session. Vì vậy logout vẫn thắng family khi refresh cạnh tranh
@@ -341,19 +343,19 @@ blacklist/xóa cookie rồi revoke session. Vì vậy logout vẫn thắng famil
 
 #### 3.1.6. Logout-all
 
-POST `/api/v1/auth/logout-all`, Bearer. Recheck current session dưới khóa user,
+POST `/logout-all`, Bearer. Recheck current session dưới khóa user,
 blacklist token live bằng model SimpleJWT, revoke mọi device, xóa cookie.
 200 `data={"revoked_sessions_count":N}`. Login mới tạo family mới và hoạt động ngay.
 
 #### 3.1.7. Danh sách phiên/thiết bị
 
-GET `/api/v1/auth/sessions`, Bearer. Chỉ session live/chưa hết hạn của user hiện tại.
+GET `/sessions`, Bearer. Chỉ session live/chưa hết hạn của user hiện tại.
 Mỗi hàng: `id, token_family, device_name, ip_address, is_current, created_at, expires_at`.
 `id` và `token_family` đều ổn định qua rotation; is_current so family.
 
 #### 3.1.8. Thu hồi thiết bị
 
-DELETE `/api/v1/auth/sessions/{session_id}`, Bearer. Lookup trong scope request.user,
+DELETE `/sessions/{session_id}`, Bearer. Lookup trong scope request.user,
 khóa user/recheck current session rồi revoke family. 200 `data=null`,
 404 SESSION_NOT_FOUND nếu không có/không thuộc user. Không hồi sinh phiên đã revoked.
 
@@ -361,13 +363,13 @@ khóa user/recheck current session rồi revoke family. 200 `data=null`,
 
 #### 3.2.1. Forgot password
 
-POST `/api/v1/auth/password-reset/request`, Anonymous, `{"email":"..."}`.
+POST `/password-reset/request`, Anonymous, `{"email":"..."}`.
 dj-rest-auth PasswordResetView + AllAuthPasswordResetForm; chọn user đủ điều kiện dưới khóa user.
 200 trung tính, `data=null`; thư được enqueue mã hóa vào outbox, chưa hứa delivery.
 
 #### 3.2.2. Reset confirm
 
-POST `/api/v1/auth/password-reset/confirm`, Anonymous.
+POST `/password-reset/confirm`, Anonymous.
 Request: `uid, token, new_password1, new_password2`.
 dj-rest-auth PasswordResetConfirmSerializer kiểm generator và SetPasswordForm;
 adapter kiểm lại token/trạng thái dưới khóa user để hai request không cùng đổi password.
@@ -377,19 +379,19 @@ Mã sai/hết hạn/đã dùng và mật khẩu yếu trả 400 VALIDATION_ERROR
 
 #### 3.2.3. Activation/verification và resend
 
-POST `/api/v1/auth/activate`, Anonymous, `{"key":"<allauth key>"}`.
+POST `/activate`, Anonymous, `{"key":"<allauth key>"}`.
 Imported user có unusable password phải thêm `new_password1,new_password2` qua SetPasswordForm.
 allauth xác minh email, adapter chuyển PENDING → ACTIVE, đồng bộ is_email_verified,
 consume mọi key cũ, audit/outbox cùng transaction. 200 `data=null`, không tự login/cấp JWT.
 Mã sai/hết hạn/đã dùng: 404; trạng thái không phù hợp: 400; validation password: 400.
 
-POST `/api/v1/auth/activation/resend`, Anonymous, `{"email":"..."}`.
+POST `/activation/resend`, Anonymous, `{"email":"..."}`.
 200 trung tính; chỉ user PENDING chưa xóa được enqueue key mới, key cũ bị vô hiệu.
 Provisioning/internal resend đã có route backend theo3.5; không công khai qua gateway, không thay Classroom enrollment acceptance.
 
 #### 3.2.4. Change password
 
-POST `/api/v1/auth/password-change`, Bearer.
+POST `/password-change`, Bearer.
 Request: `old_password,new_password1,new_password2`.
 dj-rest-auth PasswordChangeView/Serializer + SetPasswordForm; adapter recheck credential/session
 dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION_ERROR.
@@ -401,7 +403,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 #### 3.3.0. Khởi tạo OAuth phía server
 
 * **Phương thức:** POST
-* **Đường dẫn:** `/api/v1/auth/oauth/{provider}/start`; provider lowercase google/github.
+* **Đường dẫn:** `/oauth/{provider}/start`; provider lowercase google/github.
 * **Xác thực:** google Anonymous; github Bearer/current session bắt buộc. Rate limit10 requests/phút/IP.
 * **Request:** `{"redirect_uri":"https://utask.edu.vn/auth/callback/google"}`; URI khớp chính xác whitelist theo provider.
 * **Success200:** envelope chuẩn với `data={"authorization_url":"https://accounts.google.com/o/oauth2/v2/auth?...","expires_in":600}`.
@@ -412,7 +414,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.3.1. Đăng nhập / Liên kết Tài khoản Google (Google OAuth2 Callback / Exchange)
 * **Phương thức:** `POST`
-* **Đường dẫn:** `/api/v1/auth/oauth/google`
+* **Đường dẫn:** `/oauth/google`
 * **Xác thực:** Công khai (Rate Limit: 10 requests/phút/IP).
 * **Mô tả:** Đổi Google Authorization Code lấy thông tin người dùng từ Google IdP. Nếu email thuộc tên miền trường đại học (`@*.edu.vn`) và chưa có tài khoản, hệ thống tự động khởi tạo tài khoản mới với vai trò `STUDENT`.
 
@@ -466,7 +468,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.3.2. Liên kết Tài khoản GitHub (GitHub OAuth2 Link)
 * **Phương thức:** `POST`
-* **Đường dẫn:** `/api/v1/auth/oauth/github`
+* **Đường dẫn:** `/oauth/github`
 * **Xác thực:** Bearer Token bắt buộc (Người dùng phải đã đăng nhập UTask).
 * **Mô tả:** Liên kết tài khoản GitHub cá nhân vào hồ sơ UTask để chứng thực đóng góp code tự động theo PRD Mục 7.4.
 
@@ -550,7 +552,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.3.3. Hủy Liên kết Tài khoản Mạng xã hội (Unlink OAuth Provider)
 * **Phương thức:** `DELETE`
-* **Đường dẫn:** `/api/v1/auth/oauth/{provider}`
+* **Đường dẫn:** `/oauth/{provider}`
 * **Tham số URL:** `provider` = `GOOGLE` hoặc `GITHUB`.
 * **Xác thực:** Bearer Token bắt buộc.
 * **Quy tắc An toàn:** Không cho phép hủy liên kết Google nếu has_usable_password() = False; trả 400 CANNOT_UNLINK_ONLY_AUTH_METHOD. Không dùng password_hash IS NULL vì Django unusable password vẫn là chuỗi NOT NULL.
@@ -574,7 +576,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.1. Lấy Thông tin Bản thân (Get Current User Profile)
 * **Phương thức:** `GET`
-* **Đường dẫn:** `/api/v1/users/me`
+* **Đường dẫn:** `/users/me`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Mô tả:** Trả về toàn diện thông tin cá nhân, vai trò toàn cục, thông số sinh viên và cài đặt giao diện.
 
@@ -614,7 +616,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.2. Cập nhật Hồ sơ Bản thân (Update Profile)
 * **Phương thức:** `PATCH`
-* **Đường dẫn:** `/api/v1/users/me`
+* **Đường dẫn:** `/users/me`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Mô tả:** Cập nhật thông tin họ tên, số điện thoại, tiểu sử, cài đặt. Không cho phép sửa `email` tại endpoint này (400 VALIDATION_ERROR); gửi `student_id` trả 403 STUDENT_ID_IMMUTABLE.
 
@@ -657,7 +659,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.3. Yêu cầu Presigned URL Tải lên Avatar (Cloudflare R2 Direct Upload)
 * **Phương thức:** `POST`
-* **Đường dẫn:** `/api/v1/users/me/avatar/presigned-url`
+* **Đường dẫn:** `/users/me/avatar/presigned-url`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Mô tả:** Sinh URL ký trước (Presigned PUT URL) để client tải ảnh trực tiếp lên Cloudflare R2, tránh nghẽn băng thông backend UTask.
 
@@ -696,7 +698,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.4. Xác nhận Đã Tải lên Avatar Hoàn tất (Confirm Avatar Upload)
 * **Phương thức:** `POST`
-* **Đường dẫn:** `/api/v1/users/me/avatar/confirm`
+* **Đường dẫn:** `/users/me/avatar/confirm`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Mô tả:** Sau khi client hoàn tất lệnh HTTP PUT ảnh lên Cloudflare R2, gọi API này để backend kiểm tra và lưu chính thức vào CSDL.
 
@@ -729,7 +731,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.5. Truy vấn Thông tin Công khai Người dùng theo ID (Get Public User Profile)
 * **Phương thức:** `GET`
-* **Đường dẫn:** `/api/v1/users/{user_id}`
+* **Đường dẫn:** `/users/{user_id}`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Mô tả:** Cho phép các dịch vụ vệ tinh (`work-service`, `classroom-service`) hoặc thành viên trong hệ thống xem thông tin công khai (avatar, display name, roles, student_id) của một thành viên đồ án/lớp học.
 
@@ -759,7 +761,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 #### 3.4.6. Truy vấn Hàng loạt Thông tin Người dùng theo Danh sách IDs (Batch Enrich Users)
 * **Phương thức:** `POST`
-* **Đường dẫn:** `/api/v1/users/batch`
+* **Đường dẫn:** `/users/batch`
 * **Xác thực:** Bearer Token bắt buộc.
 * **Batch:** Validate toàn request; sai UUID/quá100 trả400. Dedup IDs; user không có/đã xóa bỏ khỏi data.users; meta.total là số trả được. Single public user không có/đã xóa404. Không trả preferences/password/token. Policy là mọi Bearer hợp lệ xem allowlist, không claim cùng lớp/project.
 * **Mô tả:** Hỗ trợ các microservice vệ tinh (đặc biệt là `work-service` khi render danh sách thành viên dự án, task assignee) truy vấn đồng thời thông tin tối đa 100 người dùng trong 1 request duy nhất, giải quyết triệt để vấn đề N+1 HTTP calls.
@@ -883,7 +885,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 
 #### 3.6.1. Danh sách Người dùng Toàn Hệ thống (Admin List Users)
 * **Phương thức:** `GET`
-* **Đường dẫn:** `/api/v1/admin/users`
+* **Đường dẫn:** `/admin/users`
 * **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
 * **Query Parameters:**
   - `search`: Tìm theo email, display_name, username hoặc student_id.
@@ -927,7 +929,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 
 #### 3.6.2. Thay đổi Trạng thái Tài khoản (Update User Status - Suspend/Unlock)
 * **Phương thức:** `PATCH`
-* **Đường dẫn:** `/api/v1/admin/users/{user_id}/status`
+* **Đường dẫn:** `/admin/users/{user_id}/status`
 * **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
 * **Mô tả:** SYSTEM_ADMIN đổi ACTIVE/SUSPENDED hoặc khôi phục tài khoản xóa mềm bằng restore_deleted=true và reason bắt buộc. Hai dạng lệnh không được gửi cùng nhau; import/register/reset không được khôi phục user.
 
@@ -964,7 +966,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 
 #### 3.6.3. Gán / Thu hồi Vai trò Toàn cục (Assign / Revoke Global Role)
 * **Phương thức:** `POST` / `DELETE`
-* **Đường dẫn:** `/api/v1/admin/users/{user_id}/roles`
+* **Đường dẫn:** `/admin/users/{user_id}/roles`
 * **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
 
 * **Hợp đồng:** POST gán, DELETE thu hồi; cùng nhận body role_code, không nhận trường action. Thu hồi SYSTEM_ADMIN của chính actor trả 400 CANNOT_REVOKE_OWN_ADMIN_ROLE. Đã đúng trạng thái role yêu cầu trả200 no-op; đổi thật ghi identity.user.role_assigned/identity.user.role_revoked, audit/outbox, thu hồi các family hiện có để token cũ không giữ quyền đã bị gỡ.

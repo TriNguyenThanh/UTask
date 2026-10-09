@@ -47,7 +47,7 @@ def test_reset_generator_expires_at_fifteen_minutes():
     future = default_token_generator._now() + timedelta(minutes=16)
     with patch.object(default_token_generator, "_now", return_value=future):
         response = APIClient().post(
-            "/api/v1/auth/password-reset/confirm",
+            "/password-reset/confirm",
             {
                 "uid": user_pk_to_url_str(user),
                 "token": token,
