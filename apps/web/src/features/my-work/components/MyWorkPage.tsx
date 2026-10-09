@@ -93,6 +93,13 @@ function PendingCard({
   );
 }
 
+function githubSyncMessageFor(isError: boolean, state: string | undefined): string {
+  if (isError) return "Không thể tải trạng thái đồng bộ GitHub";
+  if (state === "connected") return "Đồng bộ GitHub đang hoạt động";
+  if (state === "disconnected") return "Kết nối GitHub để đồng bộ hoạt động đồ án";
+  return "Đang tải trạng thái đồng bộ GitHub";
+}
+
 export function MyWorkPage() {
   const { user } = useAuth();
   const overviewQuery = useMyWorkOverview();
@@ -142,6 +149,7 @@ export function MyWorkPage() {
   );
 
   const firstName = user?.display_name.split(" ").at(-1) ?? "";
+  const githubSyncMessage = githubSyncMessageFor(githubQuery.isError, githubQuery.data?.sync.state);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 sm:px-6 lg:px-8">
@@ -199,13 +207,7 @@ export function MyWorkPage() {
 
       <footer className="flex flex-col items-center justify-between gap-4 border-t pt-6 text-xs text-muted-foreground sm:flex-row">
         <span>
-          {githubQuery.isError
-            ? "Không thể tải trạng thái đồng bộ GitHub"
-            : githubQuery.data?.sync.state === "connected"
-              ? "Đồng bộ GitHub đang hoạt động"
-              : githubQuery.data?.sync.state === "disconnected"
-                ? "Kết nối GitHub để đồng bộ hoạt động đồ án"
-                : "Đang tải trạng thái đồng bộ GitHub"}
+          {githubSyncMessage}
         </span>
       </footer>
     </div>
