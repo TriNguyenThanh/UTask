@@ -1,0 +1,16 @@
+{
+  "intent": "risk_analysis",
+  "target": {
+    "type": "sprint",
+    "id": "33333333-3333-4333-8333-333333333333"
+  },
+  "input": {
+    "focus": [
+      "deadline",
+      "blocked_task",
+      "progress",
+      "github_activity"
+    ]
+  },
+  "output_schema_version": "current"
+}

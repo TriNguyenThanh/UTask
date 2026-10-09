@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from random import uniform
 from uuid import UUID, uuid4
 
-from pydantic import TypeAdapter
-from sqlalchemy import delete, or_, select, update
+from pydantic import TypeAdapter, ValidationError
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
@@ -15,11 +15,13 @@ from application.ports import Delivery, StoredRequest
 from application.responses import failed_response
 from errors import failure
 from models import AiResponse, CreateAiRequest, QueuedAiResponse, RunningAiResponse
+from models.validation import validate_result
 
-from .db.tables import DeadLetterRow, DeliveryRow, RequestRow
+from .db.tables import CompletionRow, DeadLetterRow, DeliveryRow, RequestRow
 
 REQUEST_ADAPTER = TypeAdapter(CreateAiRequest)
 RESPONSE_ADAPTER = TypeAdapter(AiResponse)
+COMPLETION_CHANNEL = "utask_ai_completed"
 
 
 def fingerprint(payload: CreateAiRequest) -> str:
@@ -161,27 +163,90 @@ class PostgresRequestRepository:
             ).scalar_one_or_none()
             return limit - changed if changed is not None else None
 
-    def finish(self, request_id: UUID, token: UUID, response: AiResponse, now: datetime) -> bool:
+    def stage_completion(
+        self, request_id: UUID, token: UUID, response: AiResponse, now: datetime
+    ) -> bool:
+        """Bàn giao bền vững và NOTIFY sau commit; chưa cập nhật terminal state."""
         if response.status not in {"succeeded", "failed"} or response.request_id != request_id:
-            raise ValueError("Chỉ ghi kết quả cuối cùng của chính request")
+            raise ValueError("Chỉ bàn giao kết quả cuối cùng của chính request")
         with self.sessions.begin() as session:
             row = session.scalars(
                 select(RequestRow).where(RequestRow.id == request_id).with_for_update()
             ).one_or_none()
             if row is None or row.status != "running" or row.execution_token != token:
                 return False
-            if row.execution_deadline <= now:
-                self._fail(session, row, "WORKFLOW_TIMEOUT", now)
-                return False
-            row.status = response.status
-            row.response = response.model_dump(mode="json")
-            row.credential = ""
-            row.execution_token = None
-            if response.status == "failed":
+            # Lần bàn giao đầu tiên là kết quả duy nhất; retry không thay nội dung.
+            if session.get(CompletionRow, request_id) is None:
+                if row.execution_deadline <= now:
+                    response = failed_response(
+                        REQUEST_ADAPTER.validate_python(row.payload),
+                        row.id,
+                        row.created_at,
+                        now,
+                        failure("WORKFLOW_TIMEOUT", 504),
+                    )
                 session.add(
-                    DeadLetterRow(request_id=row.id, code=response.error.code, created_at=now)
+                    CompletionRow(
+                        request_id=request_id,
+                        execution_token=token,
+                        response=response.model_dump(mode="json"),
+                        created_at=now,
+                    )
                 )
+                # Sau bàn giao không còn dùng Bearer, kể cả khi API tạm dừng.
+                row.credential = ""
+            session.execute(
+                text("SELECT pg_notify(:channel, :request_id)"),
+                {"channel": COMPLETION_CHANNEL, "request_id": str(request_id)},
+            )
             return True
+
+    def accept_completions(self, limit: int = 100) -> int:
+        """API apply inbox + xóa inbox cùng transaction; nhiều API không ghi trùng."""
+        if limit < 1:
+            raise ValueError("Batch completion phải dương")
+        with self.sessions.begin() as session:
+            rows = session.scalars(
+                select(RequestRow)
+                .join(CompletionRow, CompletionRow.request_id == RequestRow.id)
+                .order_by(CompletionRow.created_at, CompletionRow.request_id)
+                .limit(limit)
+                .with_for_update(of=RequestRow, skip_locked=True)
+            ).all()
+            for row in rows:
+                completion = session.get(CompletionRow, row.id)
+                if row.status == "running" and row.execution_token == completion.execution_token:
+                    try:
+                        response = RESPONSE_ADAPTER.validate_python(completion.response)
+                        payload = REQUEST_ADAPTER.validate_python(row.payload)
+                        if (
+                            response.status not in {"succeeded", "failed"}
+                            or response.request_id != row.id
+                            or response.intent != payload.intent
+                            or response.output_schema_version != payload.output_schema_version
+                        ):
+                            raise ValueError("Completion không khớp request")
+                        if response.status == "succeeded":
+                            validate_result(payload.intent, response.result)
+                            if completion.created_at >= row.execution_deadline:
+                                raise ValueError("Success bàn giao quá deadline")
+                    except (ValidationError, ValueError):
+                        self._fail(session, row, "OUTPUT_VALIDATION_FAILED", completion.created_at)
+                    else:
+                        row.status = response.status
+                        row.response = response.model_dump(mode="json")
+                        row.credential = ""
+                        row.execution_token = None
+                        if response.status == "failed":
+                            session.add(
+                                DeadLetterRow(
+                                    request_id=row.id,
+                                    code=response.error.code,
+                                    created_at=completion.created_at,
+                                )
+                            )
+                session.delete(completion)
+            return len(rows)
 
     def deliveries(self, now: datetime, limit: int = 100) -> list[Delivery]:
         with self.sessions.begin() as session:
@@ -249,16 +314,26 @@ class PostgresRequestRepository:
                         (RequestRow.status == "running") & (RequestRow.execution_deadline <= now),
                     )
                 )
+                .where(
+                    ~select(CompletionRow.request_id)
+                    .where(CompletionRow.request_id == RequestRow.id)
+                    .exists()
+                )
                 .with_for_update(skip_locked=True)
             ).all()
+            expired = 0
             for row in rows:
+                # Recheck sau khi khóa: completion có thể commit trong lúc scan.
+                if session.get(CompletionRow, row.id) is not None:
+                    continue
                 self._fail(
                     session,
                     row,
                     "QUEUE_TIMEOUT" if row.status == "queued" else "WORKFLOW_TIMEOUT",
                     now,
                 )
-            return len(rows)
+                expired += 1
+            return expired
 
     def _fail(self, session, row: RequestRow, code: str, now: datetime) -> None:
         response = failed_response(

@@ -8,6 +8,16 @@ Các giá trị được tách giữa tệp `.env` cục bộ và các tệp án
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
 
+AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
+và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
+chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
+không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
+export secret ra terminal. Compose chỉ inject AI_CREDENTIAL_KEY,
+AI_JWT_PUBLIC_KEY và GOOGLE_API_KEY vào AI; DB local nhận AI_DB_PASSWORD.
+CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
+[cấu hình AI](../ai-service/README.md#cấu-hình) và
+[mock data](../ai-service/mock-data.md).
+
 Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo `.env` cục bộ
 theo mẫu repository rồi kiểm tra cấu hình Compose:
 

@@ -18,9 +18,16 @@ Redis cho job nội bộ; Kafka cho event giữa service; AI lấy context qua i
 API sau domain tool/Context Layer. API, dispatcher và worker thuộc cùng service,
 scale độc lập và dùng chung PostgreSQL của AI.
 
+MVP lấy context qua REST khi thực thi và giữ nội dung trong bộ nhớ worker;
+PostgreSQL vẫn lưu request/result và metadata, Redis vẫn là broker. Agent
+phải đọc [chính sách context hiện tại và mở rộng](architecture.md#chính-sách-context-hiện-tại-và-mở-rộng)
+trước khi thêm cache, snapshot hoặc projection.
+
 Pipeline đã chốt là API kiểm tra quyền qua REST, lưu request và ý định giao
 job bền vững, dispatcher giao task qua Redis, Celery worker chạy workflow và
-lưu kết quả vào PostgreSQL của AI. API đọc cùng persistence để client polling;
+bàn giao kết quả vào PostgreSQL của AI, phát `NOTIFY` trong cùng transaction.
+Listener trong API tiếp nhận và cập nhật trạng thái/kết quả cuối, phục hồi
+inbox khi bỏ lỡ tín hiệu. API đọc cùng persistence để client polling;
 Kafka phục vụ sự kiện giữa service. Nguồn chi tiết là
 [pipeline trong kiến trúc AI](architecture.md) và quyết định tại
 [ADR-002](../adr/002-ai-request-pipeline.md). Pipeline source đã được kiểm thử
@@ -43,14 +50,19 @@ và các hành động tự động nằm ngoài giai đoạn 1, dành cho giai 
 
 ## Cấu hình
 
-Copy [`apps/ai-service/.env.example`](../../apps/ai-service/.env.example) thành
-`.env` trong service. Các biến chính:
+Chỉ dùng hai nguồn: [ai-service.env](../../infra/env/ai-service.env) chứa
+biến thường và cờ chế độ; `.env` ở root chứa secret, tạo theo
+[mẫu root](../../.env.example). Settings đọc config rồi secret; biến process
+có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các biến chính:
 
 | Biến | Ý nghĩa |
 | --- | --- |
-| `AI_DATABASE_URL` | PostgreSQL riêng của AI; migration không chạy trong API startup |
+| `AI_ENVIRONMENT`, `MOCK_TEST` | Chế độ development/test/staging/production và cờ context mock |
+| `AI_DATABASE_URL` | PostgreSQL riêng; nếu URL chứa password thì đặt trong `.env` root |
+| `AI_DB_PASSWORD` | Password DB local trong `.env` root; Compose tự tạo URL nội bộ |
 | `AI_BROKER_URL` | Redis broker; không dùng Redis làm result repository |
-| `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext bị xóa khi terminal |
+| `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext xóa khi bàn giao kết quả hoặc terminal |
+| `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
 | `AI_JWT_PUBLIC_KEY` hoặc `AI_JWT_JWKS_URL` | Public key PEM hoặc JWKS của Identity; chỉ chọn một |
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
@@ -65,7 +77,10 @@ true}` và [ContextDocument](../../apps/ai-service/src/models/context.py);
 đây là hợp đồng nội bộ adapter, không khẳng định domain đã cung cấp schema đó.
 Thiếu cấu hình hoặc quyền/context lỗi thì từ chối.
 
-Sinh khóa rồi điền vào `.env`:
+Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `GOOGLE_API_KEY` nằm trong
+`.env` root. Chỉ `AI_CREDENTIAL_KEY` là khóa Fernet bí mật; public key là
+credential xác minh JWT, lưu cùng bộ credential để không commit key local.
+Sinh Fernet key rồi điền vào `.env` root:
 
 ```sh
 uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
@@ -73,13 +88,23 @@ uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_
 
 Không commit `.env`, JWT private key hoặc API key.
 
+## Mock quyền/context để chạy local
+
+MOCK_TEST chọn fixture tại adapter cho quyền/context của Work/Integration;
+luồng API, job và LLM giữ nguyên. Xem [hướng dẫn mock data](mock-data.md) để
+chạy cùng Compose và gửi request mẫu. Không cần server mock hoặc launcher;
+fixture không xác nhận contract domain production.
+
 ## Chạy bằng Compose riêng của AI
 
-Chạy từ `apps/ai-service/`, sau khi điền `.env`:
+Chạy từ `apps/ai-service/`, sau khi điền `.env` root và chọn chế độ trong
+`infra/env/ai-service.env`. Dùng cùng Compose cho cả mock và dữ liệu thật:
 
 ```sh
-docker compose up --build -d
-docker compose ps
+docker compose --project-name ai-mock --env-file ../../.env \
+  --env-file ../../infra/env/ai-service.env up --build -d --wait --wait-timeout 60 --remove-orphans
+docker compose --project-name ai-mock --env-file ../../.env \
+  --env-file ../../infra/env/ai-service.env ps
 curl http://localhost:8000/healthz
 ```
 
@@ -90,10 +115,12 @@ dispatcher chỉ khởi động sau migration; DB/broker không mở cổng ra h
 đặt URL DB/broker theo tên container. Worker local dùng concurrency 2, có thể
 điều chỉnh theo tài nguyên; đây không phải quyết định topology production.
 
-`AI_HTTP_PORT` đổi cổng API khi cần. `AI_ENV_FILE` có thể chỉ định file cấu hình
-khác thay `.env`; dùng `docker compose --env-file <file>` đồng thời nếu cần
-thay giá trị interpolation như password/cổng. `docker compose down` dừng stack
-và giữ volume DB. Compose này không sửa gateway/stack root của UTask.
+`AI_HTTP_PORT` đổi cổng API; các cờ và giới hạn nằm trong `ai-service.env`.
+`MOCK_TEST` chỉ hợp lệ với development/test; staging/production bật mock sẽ
+lỗi startup. API/worker dùng cùng factory: mock đọc fixture tại adapter;
+tắt mock gọi REST của Work/Integration. JWT và LLM vẫn thật. Đổi cờ/key rồi
+chạy lại `docker compose ... up` để các process nạp cùng cấu hình. Không có
+server mock, launcher riêng hoặc Compose override cho mock.
 
 ## Chạy từng process bằng uv
 
@@ -101,19 +128,20 @@ Chạy trong `apps/ai-service/`:
 
 ```sh
 uv sync --all-groups --locked
-uv run --env-file .env alembic upgrade head
-uv run --env-file .env uvicorn main:app --app-dir src --reload
+uv run alembic upgrade head
+uv run uvicorn main:app --app-dir src --reload
 ```
 
 Trong hai terminal khác, từ cùng service root:
 
 ```sh
-PYTHONPATH=src uv run --env-file .env celery -A jobs.celery_app:celery_app worker --loglevel=INFO --concurrency=2
-PYTHONPATH=src uv run --env-file .env python -m jobs.dispatcher
+PYTHONPATH=src uv run celery -A jobs.celery_app:celery_app worker --loglevel=INFO --concurrency=2
+PYTHONPATH=src uv run python -m jobs.dispatcher
 ```
 
-PostgreSQL/Redis phải đang chạy với URL trong `.env`. Chạy migration trước khi
-nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
+Settings tự đọc hai file dù cwd khác. URL DB/broker host phải cấu hình phù
+hợp. Mock đọc fixture trong package và không cần microservice/server khác.
+Chạy migration trước khi nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
 POST trả `202`, request chỉ được xử lý khi pipeline hoạt động. JWT phải ký
 hợp lệ; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu
 hình sẽ từ chối request có target. `/healthz` kiểm tra process, không thay

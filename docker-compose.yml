@@ -118,6 +118,10 @@ services:
     restart: unless-stopped
     env_file:
       - ./infra/env/ai-service.env
+    environment:
+      AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
+      AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     volumes:
       - ./datasets:/app/datasets:ro
     depends_on:

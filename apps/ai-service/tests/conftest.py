@@ -22,6 +22,17 @@ from models.context import ContextDocument
 from models.security import Principal
 
 
+@pytest.fixture(autouse=True)
+def isolate_local_configuration(monkeypatch):
+    from config import Settings, get_settings
+
+    # Test không tự nạp credential/config developer; test dotenv dùng _env_file riêng.
+    monkeypatch.setitem(Settings.model_config, "env_file", ())
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def payload():
     return BacklogGenerationRequest(

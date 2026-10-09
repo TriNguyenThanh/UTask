@@ -66,7 +66,13 @@ class AdkRuntime:
         agent = LlmAgent(
             name="domain_agent",
             model=self.model
-            or Gemini(model=settings.model, retry_options=types.HttpRetryOptions(attempts=1)),
+            or Gemini(
+                model=settings.model,
+                retry_options=types.HttpRetryOptions(attempts=1),
+                client_kwargs={"api_key": settings.google_api_key.get_secret_value()}
+                if settings.google_api_key
+                else None,
+            ),
             instruction=build_instruction(payload),
             tools=pool.tools(),
             generate_content_config=types.GenerateContentConfig(

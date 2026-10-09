@@ -12,7 +12,8 @@ và [ADR-002](../adr/002-ai-request-pipeline.md).
 | Identity | PyJWT RS256/ES256, issuer/audience, public key/JWKS |
 | Context | HTTPX, REST adapter + domain tools + filter/freshness/size |
 | Job | Celery + Redis broker; worker và dispatcher riêng |
-| Persistence | PostgreSQL riêng, SQLAlchemy + Psycopg, Alembic migration |
+| Persistence | PostgreSQL riêng, SQLAlchemy + Psycopg, Alembic migration, completion inbox |
+| Thông báo nội bộ | PostgreSQL LISTEN/NOTIFY; listener API tiếp nhận kết quả worker |
 | Credential | Fernet từ cryptography; khóa cấu hình ngoài source |
 | Quality | uv/lock, Ruff, Pytest, fake ADK model, PostgreSQL/Redis integration |
 | Image | Dockerfile chung API/worker/dispatcher và migrations |
@@ -26,3 +27,8 @@ ADK callback/Runner và Celery late-ack được đối chiếu
 [tài liệu Celery Redis](https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html).
 Idempotency, deadline, budget và result vẫn được AI persistence/application
 kiểm soát; broker/framework không thay thế những bảo đảm này.
+
+LISTEN/NOTIFY chỉ đánh thức API, inbox giữ kết quả để phục hồi. Notification
+chỉ được phát sau commit; listener đăng ký LISTEN trước khi đọc inbox theo
+[tài liệu NOTIFY](https://www.postgresql.org/docs/current/sql-notify.html) và
+[LISTEN](https://www.postgresql.org/docs/current/sql-listen.html).

@@ -61,7 +61,10 @@ async def test_invalid_output_exhausts_revisions(payload, principal):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("settings", [Settings(max_model_calls=1), Settings(max_output_tokens=5)])
+@pytest.mark.parametrize(
+    "settings",
+    [Settings(_env_file=None, max_model_calls=1), Settings(_env_file=None, max_output_tokens=5)],
+)
 async def test_budget_applies_across_revisions(payload, principal, settings):
     with pytest.raises(ServiceError) as error:
         await run(payload, principal, ["invalid", '{"items":[],"warnings":[]}'], settings=settings)
@@ -131,3 +134,34 @@ async def test_adk_timeout_and_expired_deadline(payload, principal):
         with pytest.raises(ServiceError) as error:
             await runtime.run(uuid4(), payload, now, pool, charge, deadline)
         assert error.value.code == "WORKFLOW_TIMEOUT"
+
+
+async def test_provider_uses_key_from_settings_without_exporting_secret(
+    tmp_path, monkeypatch, payload, principal
+):
+    path = tmp_path / ".env"
+    path.write_text("GOOGLE_API_KEY=dotenv-test-key\n")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    settings = Settings(_env_file=path)
+    captured = []
+
+    def model_factory(**kwargs):
+        captured.append(kwargs)
+        return ScriptedModel(['{"items":[],"warnings":[]}'])
+
+    monkeypatch.setattr("infrastructure.providers.Gemini", model_factory)
+
+    async def charge(kind, limit, amount=1):
+        return limit - amount
+
+    pool = ContextToolPool(FakeGateway(), principal, payload, charge, 5)
+    now = datetime.now(UTC)
+    response = await AdkRuntime(settings).run(
+        uuid4(), payload, now, pool, charge, now + timedelta(seconds=1)
+    )
+    assert response.status == "succeeded"
+    assert captured[0]["client_kwargs"] == {"api_key": "dotenv-test-key"}
+    assert captured[0]["retry_options"].attempts == 1
+    import os
+
+    assert "GOOGLE_API_KEY" not in os.environ

@@ -49,7 +49,11 @@ Dispatcher → claim delivery có lease → Redis → Celery task(request_id)
   → giải mã credential → xác minh lại JWT/quyền
   → ADK ProposalWorkflow → LlmAgent → domain tool pool → REST adapter
   → kiểm tra output đúng intent/version → revise/retry trong budget
-  → Application lưu succeeded/result hoặc failed/error; xóa credential
+  → transaction: lưu ai_completion + xóa credential + pg_notify(request_id)
+
+API listener LISTEN utask_ai_completed → Application tiếp nhận ai_completion
+  → transaction: kiểm tra token/output → cập nhật succeeded/result hoặc failed/error
+  → xóa ai_completion; GET/POST đọc trạng thái cuối từ ai_request
 
 GET /api/ai/v1/requests/{request_id}
   → JWT → ownership AI request → đọc cùng PostgreSQL → response hiện tại
@@ -74,20 +78,64 @@ GET /api/ai/v1/requests/{request_id}
    `queued` được chuyển sang `running`. Job trùng/terminal không gọi LLM.
    Deadline bắt đầu từ lần claim, không được đặt lại khi task giao lại.
 6. Worker giải mã Bearer bằng Fernet và xác minh lại JWT/quyền trước chạy.
-   Credential không xuất hiện trong task/prompt/log, được xóa ở mọi trạng thái
-   cuối. Token hết hạn trong queue làm request thất bại; không giữ quyền cũ.
+   Credential không xuất hiện trong task/prompt/log, được xóa khi bàn giao kết
+   quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Token hết hạn trong
+   queue làm request thất bại; không giữ quyền cũ.
 7. Model/tool budget được trừ trong PostgreSQL trước lời gọi. Output token
    được tính theo usage; lần model tiếp theo chỉ được cấp phần cap còn lại.
    SDK thiếu usage thì trừ toàn bộ cap đã cấp. Retry provider tạm lỗi và revise
    output dùng chung số vòng, budget và deadline; SDK retry ẩn bị tắt.
-8. Chỉ worker có execution token hiện hành, request còn `running` và chưa hết
-   deadline được ghi kết quả. Dispatcher kết thúc request quá hạn, lưu
-   dead-letter và xóa credential; worker đến muộn không ghi đè terminal result.
+8. Worker có execution token hiện hành bàn giao kết quả vào `ai_completion`
+   và phát notification cùng transaction; chưa cập nhật terminal state. API
+   kiểm tra lại token/schema/intent/version rồi cập nhật request và xóa inbox
+   cùng transaction. Success phải bàn giao trước deadline; bàn giao quá hạn
+   thành lỗi timeout. Dispatcher chỉ timeout request chưa có completion.
 
 API/dispatcher/worker là process của cùng AI Service, cùng code và AI DB;
 không bắt buộc singleton. ADK session chỉ ở memory trong một job, không phải
 request repository. Nguồn schema là [migration](../../apps/ai-service/migrations/versions/0001_request_pipeline.py),
 không tạo bảng khi API startup.
+
+### Bàn giao kết quả worker cho API
+
+**Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
+Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
+và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
+[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+terminal result ở mục 3 của quyết định ban đầu.
+
+- Worker gọi `stage_completion`: khóa request, kiểm tra execution token,
+  lưu kết quả đã validate vào inbox (bảng chờ tiếp nhận) `ai_completion`, xóa
+  credential không còn cần và gọi `pg_notify` trong cùng transaction. Payload
+  notification chỉ có request UUID, không có kết quả/context/credential.
+- Mỗi process API có listener riêng, đăng ký `LISTEN utask_ai_completed`
+  trước khi đọc inbox. Khi nhận tín hiệu, listener gọi application để đọc
+  và tiếp nhận completion; không chạy workflow/LLM trong API.
+- API khóa request bằng `FOR UPDATE SKIP LOCKED`, kiểm tra execution token và
+  schema/intent/version/result. Ghi trạng thái cuối, kết quả hoặc lỗi/dead-letter
+  và xóa inbox cùng transaction. Nhiều API process hoặc thông báo trùng không
+  ghi đè kết quả hay tạo dead-letter trùng. Completion sai schema thành failed;
+  completion có token cũ bị bỏ qua và xóa, không sửa request.
+- `NOTIFY` chỉ đánh thức listener, không bảo đảm lưu thông báo khi API mất
+  kết nối. `ai_completion` là nguồn phục hồi bền vững. Listener đọc inbox sau
+  mỗi lần kết nối, khi có tín hiệu và định kỳ mỗi 5 giây theo
+  `AI_COMPLETION_RECONCILE_SECONDS`; lỗi kết nối/tiếp nhận được thử lại, không
+  chạy lại LLM. Worker chết trước khi commit bàn giao vẫn bị timeout như cũ.
+- Khi API tạm dừng, completion đã commit được giữ lại; request vẫn `running`
+  đến khi API tiếp nhận. Kết quả bàn giao đúng hạn không bị dispatcher đổi
+  thành timeout chỉ vì API xử lý muộn. Bearer đã xóa từ lúc bàn giao.
+
+Listener dùng một connection PostgreSQL riêng, autocommit và đóng khi API
+shutdown; cần kết nối trực tiếp hoặc session pooling, không dùng transaction
+pooling cho `LISTEN`. Các query/transaction tiếp nhận dùng connection pool
+hiện có. Chạy Alembic tới migration `0002` trước khi khởi động phiên bản mới;
+phối hợp cập nhật API và worker, không trộn worker cũ ghi terminal trực tiếp
+với luồng bàn giao mới.
+
+Đây là thông báo nội bộ cùng AI Service, không phải Kafka domain event hoặc
+SSE/WebSocket cho frontend. POST vẫn chờ persistence tối đa 10 giây và GET
+vẫn đọc bản ghi cuối theo ownership. Không thay đổi schema/URL public v1.
+Xem [ERD](erd.md) và [code map](code-map.md).
 
 ### Thiết kế mục tiêu
 
@@ -118,10 +166,11 @@ quyền, context, retry và revise. Thời gian queue riêng, mặc định 300 
 | Thành phần | Trách nhiệm |
 | --- | --- |
 | API | Xác thực, nhận request, chờ/đọc trạng thái cho client |
-| PostgreSQL của AI | Request/input/result, idempotency, delivery lease, budget, dead-letter |
+| PostgreSQL của AI | Request/input/result, idempotency, delivery lease, budget, completion inbox, dead-letter |
 | Dispatcher | Giao lại delivery và kết thúc queue/worker quá hạn |
 | Redis | Broker Celery, không là nguồn result/trạng thái |
-| Celery worker | Entry point gọi application xử lý request |
+| Celery worker | Chạy application/workflow, bàn giao completion và phát NOTIFY |
+| Listener trong API | Nhận NOTIFY/phục hồi inbox, gọi application cập nhật trạng thái/kết quả cuối |
 | ADK workflow / agent | Validation/retry có giới hạn và suy luận/chọn domain tool |
 
 ### Retry, phục hồi và dead-letter
@@ -139,7 +188,73 @@ quyền, context, retry và revise. Thời gian queue riêng, mặc định 300 
 
 ## Context flow
 
+### Chính sách context hiện tại và mở rộng
+
+**Quyết định cho MVP:** mỗi lần thực thi request cần context, AI lấy dữ liệu
+qua domain tool → `ContextGateway` → REST adapter của service sở hữu rồi xử
+lý trong bộ nhớ worker. Không lưu nội dung context lấy từ Work/Integration
+vào PostgreSQL, MongoDB hoặc Redis; không xây cache dùng chung giữa request
+hay projection trong giai đoạn này. Context chỉ tồn tại trong lần thực thi;
+request mới cần context thì lấy lại qua adapter. Request idempotent đã kết
+thúc vẫn trả kết quả đã lưu theo quy tắc pipeline, không chạy lại AI.
+
+**Đã triển khai trong source:** `ContextToolPool.documents` giữ context trong
+bộ nhớ của từng lần chạy; PostgreSQL vẫn lưu request/input, trạng thái,
+result/error và metadata context gồm nguồn, thời điểm, phiên bản nếu có,
+fingerprint. Metadata không chứa nội dung context và không đủ để dựng lại
+snapshot. Redis hiện chỉ là broker Celery. Context cache, snapshot bền vững
+và projection **Chưa triển khai**; tích hợp REST thực tế với domain service
+**Chưa xác minh**. Xem [code map](code-map.md) và [ERD](erd.md).
+
+Context là dữ liệu nghiệp vụ được chọn cho ý định và target của request,
+trong phạm vi quyền của người yêu cầu. Ví dụ: mục tiêu/backlog của project,
+mô tả/dependency/subtask của task hoặc tiến độ/workload của sprint. Đây không
+phải bản sao toàn bộ database Work hay lịch sử hội thoại của agent.
+
+**Phân công theo thiết kế mục tiêu:** Work kiểm tra quyền, truy vấn quan hệ
+nghiệp vụ và tính các chỉ số như tiến độ, task quá hạn, workload bằng quy
+tắc rõ ràng. AI Context Layer kiểm tra schema/độ mới, lọc, giới hạn và ghép
+dữ liệu cần thiết từ các adapter trước khi đưa cho mô hình. Mô hình phân tích
+và đề xuất, không tính lại giá trị nguồn thay Work. Contract REST của Work
+phải được công bố trước tích hợp; các ví dụ trên không định nghĩa endpoint
+hoặc schema mới.
+
+**Thiết kế mục tiêu khi cần tối ưu:** giữ cách lấy context sau
+`ContextGateway`; domain tools và workflow không phụ thuộc Redis, SQL hoặc
+Kafka. Khi bổ sung cache/projection, mở rộng adapter/Context Layer và giữ
+contract domain tool nếu dữ liệu trả về vẫn tương thích. Không thêm cơ chế
+lưu chỉ vì dự đoán sẽ cần hoặc vì context có dạng JSON.
+
+| Nhu cầu đã xác định | Hướng mở rộng |
+| --- | --- |
+| Nhiều request lấy lặp cùng context từ Work | Redis cache có TTL (thời hạn sống), có thể lấy lại từ service sở hữu khi thiếu/cũ |
+| Cần truy vết chính xác dữ liệu AI đã dùng | Snapshot (bản chụp context đã lọc) trong PostgreSQL riêng của AI, gắn với request và có thời hạn lưu |
+| Cần bản sao phục vụ phân tích thường xuyên | Projection (bản sao dữ liệu đọc) trong PostgreSQL riêng của AI, đồng bộ qua event đã có contract |
+| Work truy vấn hoặc tính chỉ số chậm | Tối ưu tại Work trước khi quyết định tạo bản sao ở AI |
+| Lời gọi mô hình chậm do context lớn | Giảm và tổng hợp context trước khi gửi mô hình |
+
+Trước khi triển khai mở rộng, đo riêng thời gian lấy context, thời gian xử lý
+LLM, kích thước context và mức gọi lặp. Lưu DB không tự làm AI nhanh hơn;
+snapshot phục vụ truy vết, không mặc nhiên là cache cho request mới. Không
+thêm MongoDB chỉ để lưu JSON; việc thêm công nghệ cần quyết định kiến trúc.
+
+Khi thêm cache/projection, phải xác định key theo domain, target, bộ lọc và
+phạm vi quyền; giữ metadata nguồn/thời điểm/phiên bản, ngưỡng dữ liệu cũ,
+cách hết hạn hoặc vô hiệu hóa cache và cách lấy lại dữ liệu. Kiểm tra quyền
+hiện hành trước khi dùng bản sao, không dùng cache/projection làm bằng chứng
+phân quyền. Work vẫn là nguồn dữ liệu chuẩn. Projection cần quy tắc đồng bộ,
+chống lặp và xử lý phiên bản; snapshot cần policy retention (thời hạn lưu).
+Kiểm thử mở rộng phải bao phủ lấy được context, cache thiếu/cũ, quyền bị thu
+hồi, lỗi service nguồn và ranh giới giữa các phạm vi quyền.
+
 ### Implementation hiện tại
+
+**Mock development/test:** MOCK_TEST=true chọn FixtureContextAdapter tại
+composition root API và worker, đọc dữ liệu/quyền domain từ fixture trong
+package. Không gọi microservice hoặc mở server mock riêng. MOCK_TEST=false
+chọn REST adapter như mô tả dưới đây. JWT, queue, ADK/LLM, validation,
+completion và polling giữ cùng luồng; fixture không là dữ liệu production.
+Xem [cách dùng mock data](mock-data.md).
 
 `ContextToolPool` gắn với target của request đã xác thực. Tool không nhận URL,
 credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_context`,

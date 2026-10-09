@@ -56,15 +56,16 @@ async def test_worker_validates_executor_output_before_persisting(claimed, vault
         response = response.model_copy(update=changes[case])
     if case == "not_response":
         response = claimed.response
-    repository = Mock(claim=Mock(return_value=claimed), finish=Mock(return_value=True))
+    repository = Mock(claim=Mock(return_value=claimed), stage_completion=Mock(return_value=True))
     executor = Mock(execute=AsyncMock(return_value=response))
     worker = RequestWorker(repository, FakeAuthenticator(), AllowAuthorizer(), vault, executor)
     assert await worker.execute(claimed.request_id)
-    persisted = repository.finish.call_args.args[2]
+    persisted = repository.stage_completion.call_args.args[2]
     assert persisted.status == ("succeeded" if case == "ok" else "failed")
     if case != "ok":
         assert persisted.error.code == "OUTPUT_VALIDATION_FAILED"
-    assert repository.finish.call_args.args[1] == claimed.execution_token
+    assert repository.stage_completion.call_args.args[1] == claimed.execution_token
+    repository.finish.assert_not_called()
 
 
 @pytest.mark.parametrize("case", ["unclaimed", "identity", "budget", "permission"])
@@ -73,7 +74,7 @@ async def test_worker_does_not_run_executor_without_claim_identity_permission_or
 ):
     repository = Mock(
         claim=Mock(return_value=None if case == "unclaimed" else claimed),
-        finish=Mock(return_value=True),
+        stage_completion=Mock(return_value=True),
         consume=Mock(return_value=None),
     )
     auth = Mock(authenticate=AsyncMock(return_value=type("User", (), {"user_id": "other"})()))
@@ -94,10 +95,10 @@ async def test_worker_does_not_run_executor_without_claim_identity_permission_or
     if case != "budget":
         executor.execute.assert_not_awaited()
     if case == "unclaimed":
-        repository.finish.assert_not_called()
+        repository.stage_completion.assert_not_called()
     else:
         assert (
-            repository.finish.call_args.args[2].error.code
+            repository.stage_completion.call_args.args[2].error.code
             == {
                 "identity": "AUTHENTICATION_REQUIRED",
                 "budget": "RATE_LIMITED",

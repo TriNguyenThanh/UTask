@@ -14,6 +14,251 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-09 — Mock data trực tiếp tại adapter, giữ luồng request chuẩn
+
+- Trạng thái: Đã hoàn thành theo yêu cầu làm rõ của user.
+- Luồng: Client vẫn gọi API AI, lưu PostgreSQL, dispatcher giao Redis/Celery,
+  worker chạy ADK, bàn giao completion cho API và client GET/replay kết quả.
+  Chỉ nguồn quyền/context của microservice chưa có được thay bằng fixture.
+  LLM runtime vẫn thật; không mock workflow hoặc kết quả trong source runtime.
+- Factory: API/worker cùng dùng `build_context_adapter`. MOCK_TEST=true chọn
+  FixtureContextAdapter đọc JSON tại package, kiểm tra allowed_users/target,
+  lọc allowlist/giới hạn và trả ContextDocument; false chọn REST adapter cũ.
+  JWT tại API/worker giữ nguyên. Config giữ ai-service.env + .env root; bỏ
+  mock URL và cơ chế chuyển URL sang server giả. Cấm mock ngoài dev/test.
+- Dọn: Xóa dev/, server mock_domain.py, launcher run_local.py và
+  compose.mock.yaml. JSON chuyển tới src/infrastructure/fixtures/domain.json;
+  request mẫu tới examples/requests/. Helper JWT chuyển scripts/setup_mock.py,
+  chỉ dùng khi cần credential local, không nằm trong pipeline/startup.
+  Secret/JWT hiện có giữ nguyên; không sửa CI/CD hoặc reset DB user.
+- Files: `src/infrastructure/context_{factory,fixtures}.py`, fixture JSON,
+  wiring main.py/jobs/tasks.py, config.py, compose.yaml, ai-service.env,
+  scripts/setup_mock.py, examples/requests/, tests config/mock/pipeline và
+  docs README/code-map/architecture/mock-data AI, environment infra.
+- Unit tests: Chọn fixture/REST, không có HTTP trong mock mode, all domain
+  tools/ba intent, ADK thật với model fake, quyền bị từ chối, unknown target,
+  context thiếu/domain sai, draft, fixture/schema lỗi và cách ly document.
+  API/worker composition chọn cùng adapter; wiring kiểm tra qua unit/integration.
+  Hai adapter mới/factory đạt **100%** coverage qua 33 targeted tests.
+- Integration: **203 passed, 0 skipped** với PostgreSQL 17 và Redis 7 test
+  riêng. Test pipeline ba intent qua API/JWT ký thật, repository/claim/budget,
+  Celery, ADK, listener completion/polling, replay và ownership. Fake đúng LLM
+  bên ngoài, không gọi service mock hoặc LLM trả phí. Container test/credential
+  tạm đã dọn; không dừng hay restart stack user.
+- Validation: Ruff check/format pass (81 file); Docker build
+  utask/ai-service:fixture-context pass. Trong image, adapter đọc fixture thành
+  công không cần dev/server. Compose chỉ có API/worker/dispatcher/migrate/
+  DB/broker, MOCK_TEST lấy từ ai-service.env; config --format json pass.
+  60 link/anchor trong năm docs đúng, fence cân bằng, git diff --check pass.
+- GitNexus: Bound UTask đúng workspace. Impact create_app/execute_request LOW;
+  decorators/fetch/dataset UNKNOWN được đối chiếu source/tests. Giữ tên symbol
+  khi chuyển module, không find-replace tên hàm. Index/graph diff cập nhật;
+  diff tổng có completion/env/mock trước đó và không bao phủ đầy đủ untracked/
+  enumeration flow, nên dùng inventory/full tests bổ sung. Không commit/push.
+- Giới hạn: REST Work/Integration và LLM production chưa xác minh. Google
+  project 403 trước đó là vấn đề external, không được giải quyết bằng fixture.
+
+### 2026-10-09 — Một ai-service.env cho cấu hình và .env root cho secret
+
+- Trạng thái: Đã hoàn thành theo yêu cầu thống nhất cấu hình mới.
+- Nguồn chuẩn: `infra/env/ai-service.env` giữ biến thường/cờ chế độ;
+  `.env` root giữ GOOGLE_API_KEY, AI_CREDENTIAL_KEY, AI_DB_PASSWORD và bộ
+  credential xác minh AI_JWT_PUBLIC_KEY. Xóa các env/template riêng của AI;
+  chuyển JWT sang `.env.mock/` root, không phải dotenv thứ ba. Giữ nguyên
+  credential hiện có, không in secret, không restart stack đang chạy của user.
+- Settings: Đọc config → secret, biến process ưu tiên cao nhất. Thêm
+  AI_ENVIRONMENT, MOCK_TEST (alias chính xác), AI_MOCK_DOMAIN_URL và LLM
+  SecretStr. Mock chỉ development/test; tạo URL domain REST theo flag và
+  chặn URL không hợp lệ. Validation error không in giá trị input/secret.
+- Runtime/Compose: Provider truyền key từ Settings qua Gemini client_kwargs,
+  không export vào process. Compose inject riêng secret AI, DB local nhận
+  password; không đưa toàn bộ `.env` root vào container. Launcher local chọn
+  override theo cờ, truyền hai env_file để interpolation/cờ process nhất quán.
+  Factory mock cũng từ chối khi flag tắt hoặc ngoài môi trường local.
+- Setup: Ghi biến thường vào file chuẩn và secret vào root; --refresh thay
+  JWT/public key, giữ DB/Fernet/LLM key và secret khác. Credential directory
+  0700, secret/token 0600; chưa chỉ định refresh thì từ chối thay JWT đã có.
+- File: `src/config.py`, `src/infrastructure/providers.py`, `dev/{setup_mock,
+  run_local,mock_domain}.py`, Compose AI/mock/root, `infra/env/ai-service.env`,
+  `.env.example`, `.agent/ENV_PLAN.md`, tests config/mock/workflow/conftest và
+  tài liệu README/code-map/mock-data AI, environment infra. Không sửa schema
+  DB, API/event contract hoặc CI/CD; git diff .github/workflows bằng không.
+- Tests: **190 passed, 35 skipped** do chưa đặt PostgreSQL/Redis test. Thêm
+  coverage flag true/false, staging/production, URL, precedence, giữ secret khi
+  refresh, CLI success/error/exit, factory guard và key provider không cần
+  export. Test không tự đọc env developer; fixture isolation là wiring được
+  kiểm chứng bởi toàn bộ tests và test dotenv dùng checkout/file tạm riêng.
+  Targeted config/dev tests đạt 98% coverage trước test hide-input bổ sung;
+  entrypoint CLI được kiểm tra bằng module launcher thật.
+- Validation: Ruff check/format pass (80 file), build
+  `utask/ai-service:unified-env` pass. Launcher/Compose mode true/false kiểm
+  chứng cờ runtime và lựa chọn service khớp; config root với .env.example pass.
+  HTTP qua image mới trên project smoke riêng xác minh health/context owner
+  và outsider 403; stack smoke đã dọn. Không gọi LLM thật trong lượt này.
+- Tài liệu: 41 link/anchor đúng, fence cân bằng; không còn tham chiếu env
+  riêng cũ trong source/tài liệu hiện hành, git diff --check pass. Secret
+  Google/root và JWT được Git bỏ qua, file cấu hình thường không chứa secret.
+- GitNexus: Bound repo UTask, impact Settings MEDIUM, provider/CLI LOW;
+  factory/decorator UNKNOWN và receiver gaps đối chiếu source/tests. Index
+  cập nhật và detect_changes(all) không partial/truncated, risk HIGH vì gồm
+  completion/mock có sẵn; không suy ra an toàn từ diff bỏ qua file untracked
+  hoặc giới hạn enumeration flow. Không commit/push/deploy remote.
+- Giới hạn: Domain/LLM production chưa xác minh. Google project đã trả 403
+  trước đó; thay cấu hình không chứng minh project đã được cấp quyền.
+
+### 2026-10-09 — Gom env vào infra/env và giữ nguyên CI/CD
+
+- Trạng thái: Đã hoàn thành theo yêu cầu điều chỉnh phạm vi của user.
+- Vị trí cuối: `infra/env/ai-service.env` giữ ánh xạ deployment; mẫu runtime
+  ở `infra/env/ai-service.env.example`; config local mặc định ở
+  `infra/env/.env.ai-service`; bộ mock đã chuyển vào
+  `infra/env/.env.ai-service.mock/`. Không có local runtime env để di chuyển;
+  chỉ cập nhật đường dẫn mặc định. Giữ nguyên credential đã sinh và quyền file.
+- CI/CD: Hoàn nguyên đúng các dòng đã sửa ở `ci.yml`/`release-staging.yml` và
+  đường dẫn Compose root. `git diff --exit-code -- .github/workflows
+  docker-compose.yml docs/infrastructure/ci-cd.md` pass. Không thay glob,
+  upload script hoặc cấu trúc staging; không chạy deploy/commit/push.
+- Source: Cập nhật ENV_DIR/default dotenv của Settings, output mặc định script
+  mock và Compose AI/mock. Cập nhật unit tests vị trí env/CLI; giữ success,
+  error/missing file, precedence, cwd khác và chống ghi đè. Không sửa hàm
+  runtime xử lý AI hoặc schema database trong lượt này.
+- Validation: Ruff check/format pass (77 file); **164 passed, 35 skipped**
+  do chưa cấu hình PostgreSQL/Redis test. Docker build
+  `utask/ai-service:env-central` pass; Compose root, AI sample và AI/mock
+  config --quiet pass. Credential đã chuyển vẫn xác minh owner 200/outsider
+  403 qua mock ASGI HTTP thật; không gọi LLM. Git bỏ qua config/JWT local;
+  chỉ mapping `.env` khớp glob CI, sample/mock không bị upload bởi glob đó.
+- Tài liệu: README/code-map/mock-data AI và environment infra cập nhật vị trí
+  cuối; CI-CD doc hoàn nguyên. 42 link/anchor pass, code fence cân bằng,
+  git diff --check pass. Mục lịch sử phía dưới giữ đường dẫn ở thời điểm làm.
+- GitNexus: Impact Settings MEDIUM, CLI LOW; test UNKNOWN được kiểm chứng
+  bằng source/Pytest. Cập nhật index và graph diff; diff tổng workspace vẫn
+  gồm completion/mock có sẵn, không dùng zero/untracked làm kết luận an toàn.
+
+### 2026-10-09 — Gom file môi trường AI vào infra/env/ai-service
+
+- Trạng thái: Đã hoàn thành di chuyển và cập nhật tham chiếu local/CI.
+- File: Chuyển `apps/ai-service/.env.example` và bộ `.env.mock/` sang
+  `infra/env/ai-service/`; giữ `ai-service.env` đã được user chuyển sẵn.
+  Không có `.env` runtime trong service để di chuyển; default mới trỏ tới
+  `infra/env/ai-service/.env`. Giữ nguyên nội dung credential và quyền file.
+- Source/config: `src/config.py` tính ENV_DIR theo vị trí source, không theo
+  cwd; `dev/setup_mock.py` mặc định sinh config/JWT trong ENV_DIR/.env.mock.
+  Cập nhật Compose AI/mock/root, CI path filter cho env lồng thư mục và
+  staging mkdir/scp chỉ file ánh xạ không bí mật. Phạm vi infra/workflow được
+  user cho phép trực tiếp trong yêu cầu di chuyển, không sửa service khác.
+- Tests: Thêm `tests/test_env_location.py` kiểm tra checkout/cwd khác, đọc
+  dotenv, env precedence, cấu hình sai và file thiếu; thêm unit test CLI
+  mock mặc định chọn thư mục central và từ chối ghi đè. Toàn bộ **164 passed,
+  35 skipped** vì không đặt DB/Redis test trong lượt này. Không suy ra kết
+  quả integration từ test skip; không chạy lại migration/pipeline DB.
+- Validation: Ruff check/format pass (77 file); Docker build
+  `utask/ai-service:env-location` pass. Compose root, Compose riêng AI với
+  sample và AI/mock với credential đã chuyển đều config --quiet pass.
+  YAML và 14 script shell workflow parse pass; không chạy deployment remote.
+  Container import Settings thành công khi không có dotenv checkout.
+- Smoke: Uvicorn dùng env/JWT tại vị trí mới; HTTP health, quyền/context owner
+  và outsider 403 pass. Process smoke đã dừng. Git tiếp tục bỏ qua env/JWT
+  thật; sample và file ánh xạ là nguồn theo dõi trong repo.
+- Tài liệu: Cập nhật README/code-map/mock-data AI và environment/CI-CD infra;
+  43 link/anchor pass, code fence cân bằng, git diff --check pass. Không còn
+  env ở apps/ai-service hoặc tham chiếu đường dẫn cũ trong tài liệu hiện hành;
+  các mục lịch sử task log giữ nguyên để truy nguyên.
+- GitNexus: Bound UTask đúng workspace, impact Settings MEDIUM và CLI LOW;
+  test UNKNOWN được đối chiếu Pytest/source. Index và graph diff được cập
+  nhật; phạm vi diff còn gồm các thay đổi completion/mock có sẵn. Không
+  dùng graph zero hoặc file untracked làm bằng chứng không có tác động.
+  Không commit/push.
+
+### 2026-10-09 — Mock API quyền/context của Work và Integration
+
+- Trạng thái: Đã hoàn thành mock local; domain/LLM production chưa xác minh.
+- Phạm vi theo yêu cầu: Chỉ mock quyền/context, không mock LLM. Thêm process
+  FastAPI local trong `dev/`, reuse JWT verifier/dependency, error envelope và
+  REST adapter/tool pool hiện có; không sửa hàm runtime AI, service khác,
+  schema DB hoặc contract API/event. Giữ các thay đổi completion có sẵn.
+- Dữ liệu: Project/Task/Sprint, bốn task có trạng thái/dependency, team/
+  workload/capacity, progress cố định và GitHub activity giả. Các document
+  có source_version/warning mock; as_of sinh khi trả response. Fixture kiểm
+  tra UUID, target type và reference/domain; provider Work/Integration và
+  scope target được kiểm tra trên từng endpoint.
+- File: `dev/{__init__,mock_domain,setup_mock}.py`, `dev/fixtures/domain.json`,
+  `dev/requests/{backlog,task-decomposition,risk-analysis}.json`,
+  `compose.mock.yaml`, `tests/test_mock_domain.py`, `pyproject.toml` (thêm
+  root vào pytest pythonpath), `docs/ai-service/mock-data.md` và link/entry
+  point trong README/code-map AI. Không thêm dependency.
+- Credential: Sinh RSA/Fernet/password riêng, JWT owner và outsider ký thật,
+  thời hạn 1–24 giờ; không lưu private key, không in secret, không ghi đè
+  thư mục đã tồn tại. Config/token trong `.env.mock/` được Git/Docker bỏ qua,
+  quyền directory/file 0700/0600. Image production không copy `dev/`.
+- Unit tests: **32 passed**, coverage `dev/` **99%**; dòng entry point CLI
+  còn lại được kiểm tra qua lần chạy module thật. Kiểm tra JWT, denied user,
+  missing target/context, provider/domain sai, validation fixture/config,
+  chống ghi đè và cả ba intent lấy context qua ASGI HTTP + adapter/tool pool.
+- Validation: Ruff check/format toàn service pass; **197 passed, 0 skipped**
+  với PostgreSQL 17/Redis 7 test riêng, database `ai_test` và Redis DB 15.
+  Docker build `utask/ai-service:mock-check` và Compose config pass. Host
+  không có `uv`, dùng `.venv/bin/python`/Ruff; Docker build sync dependency
+  frozen thành công. Cảnh báo ADK JSON schema experimental có sẵn.
+- Smoke: Compose riêng `ai-mock-verify` chạy migration/API/dispatcher/worker/
+  mock/DB/broker. HTTP thật kiểm tra 13 scope context, quyền owner/outsider;
+  cả ba payload có outsider 403, owner 202, GET terminal failed khi thiếu
+  LLM credential và GET khác owner 404. Không gọi LLM trả phí. Stack và
+  volume test do lượt này tạo đã được dọn; giữ config/token local cho user.
+- GitNexus: Bound repo/worktree UTask hiện tại, cập nhật index. Adapter risk
+  LOW; Depends/factory/new symbol UNKNOWN được xác minh bằng source, Compose,
+  tests và HTTP smoke, không coi zero caller là an toàn. detect_changes(all)
+  không partial/truncated, risk HIGH do gồm cả refactor completion có sẵn;
+  graph diff không bao phủ file mới untracked. Analyzer cũng báo giới hạn
+  enumeration flow, nên inventory/tests bổ sung kiểm chứng phần mock.
+  Không commit/push.
+- Tài liệu: Hướng dẫn Compose/local, JWT/token expiry, payload/polling,
+  mock contract và giới hạn tích hợp; 37 link/anchor trong ba tài liệu đã
+  kiểm tra, fence cân bằng, không có file mới rỗng, git diff --check pass.
+
+### 2026-10-08 — Worker thông báo kết quả để API cập nhật DB
+
+- Trạng thái: Đã hoàn thành source và kiểm thử local; production chưa xác minh.
+- Quyết định: Process API của AI nhận completion và ghi trạng thái/kết quả cuối.
+  Worker lưu `ai_completion` và phát PostgreSQL NOTIFY cùng transaction; API
+  LISTEN, tiếp nhận qua application, kiểm tra token/schema/intent/version,
+  ghi response/dead-letter và xóa inbox cùng transaction. Redis vẫn là broker;
+  không thêm Kafka, HTTP callback hoặc lưu nội dung context.
+- Tin cậy: Inbox phục hồi sau restart/mất tín hiệu; listener reconnect và đọc
+  lại định kỳ. SKIP LOCKED cho nhiều API consumer; thông báo trùng hoặc token
+  cũ không ghi đè kết quả. Success bàn giao trước deadline không bị dispatcher
+  timeout khi API tạm dừng. Credential xóa khi bàn giao hoặc terminal failure.
+- File: `src/application/{ports,execution,service}.py`, `src/config.py`,
+  `src/infrastructure/{repositories,completions}.py`, `src/infrastructure/db/tables.py`,
+  `src/main.py`, migration `0002_completion_handoff.py`, `.env.example`,
+  `tests/test_completion_{unit,postgres}.py`, các test application/worker/job/
+  repository/lifecycle liên quan, `AGENTS.md`, `.agent/COMPLETION_PLAN.md` và
+  `docs/ai-service/{README,architecture,api,workflow,erd,code-map,tech-stack}.md`.
+- Unit tests: application tiếp nhận không chạy executor; worker bàn giao
+  success/failure; listener LISTEN trước read, drain, mất tín hiệu, reconnect
+  khi connect/LISTEN/accept/notify lỗi, cancellation và cleanup. Protocol,
+  ORM/migration và composition wiring kiểm tra bằng architecture/lifecycle/
+  integration tests. Transaction, khóa hàng và NOTIFY dùng PostgreSQL thật
+  vì mock không xác minh được rollback, commit hoặc tranh chấp giữa consumer.
+- Validation: Ruff format/check pass; **165 passed, 0 skipped**, coverage source
+  **98%**. PostgreSQL 17 và Redis 7 trong container test riêng; DB chỉ tên
+  `ai_test`, không dùng dữ liệu nghiệp vụ. Migration upgrade/downgrade và ORM
+  schema drift pass. Celery/Redis thật + ADK fake model → completion listener
+  → API application → terminal result pass; không gọi LLM trả phí.
+- Docker build `utask/ai-service:completion-local` pass. Kiểm tra 74 link nội
+  bộ trong 9 tài liệu, anchor, code fence, file rỗng và tham chiếu luồng cũ
+  trong tài liệu AI; `git diff --check` pass.
+- GitNexus: impact trước sửa chủ yếu LOW/MEDIUM; UNKNOWN ở test/lifecycle và
+  dynamic repository dispatch được đối chiếu source/config/Pytest. Lập lại
+  index; detect-changes(all) nhận diện 83 symbol, 9 flow, risk HIGH, bao gồm
+  README root đã thay đổi sẵn. Graph diff không thay thế inventory/test cho
+  file mới untracked; không coi zero là không ảnh hưởng. Không commit/push.
+- Vận hành: Alembic upgrade head tới `0002` trước restart API/worker. Listener
+  cần connection trực tiếp/session pooling; chưa xác minh production và
+  tích hợp Identity/Work/Integration/LLM. Hợp đồng POST/GET v1 được giữ nguyên,
+  client vẫn GET polling. Chính sách mới nằm trong architecture AI; ADR-002
+  là quyết định ban đầu về worker ghi terminal trực tiếp.
+
 ### 2026-10-08 — Chia commit theo từng phần AI Service
 
 - Trạng thái: Đã hoàn thành.
