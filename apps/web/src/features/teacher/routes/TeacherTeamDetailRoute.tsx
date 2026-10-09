@@ -50,7 +50,7 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div>
       <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -66,16 +66,16 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  * hides the task data next to it. "No repository" and "project missing" are
  * different states: the second never reaches this component.
  */
-function GitHubSection({ projectId }: { projectId: string }) {
+function GitHubSection({ projectId }: Readonly<{ projectId: string }>) {
   const code = useProjectCode(projectId);
 
   let body: React.ReactNode;
   if (code.isPending) {
     body = (
-      <div role="status" aria-label="Đang tải dữ liệu GitHub" className="space-y-2">
+      <output aria-label="Đang tải dữ liệu GitHub" className="block space-y-2">
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
-      </div>
+      </output>
     );
   } else if (code.isError) {
     body = <ErrorState error={code.error} onRetry={() => void code.refetch()} />;
@@ -135,7 +135,7 @@ function GitHubSection({ projectId }: { projectId: string }) {
  * yet, so it says so; writing is a draft only. Nothing here changes tasks,
  * deadlines or assignees.
  */
-function FeedbackSection({ detail }: { detail: TeacherTeamDetail }) {
+function FeedbackSection({ detail }: Readonly<{ detail: TeacherTeamDetail }>) {
   return (
     <Card>
       <CardHeader>
@@ -157,7 +157,7 @@ function FeedbackSection({ detail }: { detail: TeacherTeamDetail }) {
   );
 }
 
-function TeamBody({ detail }: { detail: TeacherTeamDetail }) {
+function TeamBody({ detail }: Readonly<{ detail: TeacherTeamDetail }>) {
   const { project } = detail;
   const overdue = detail.overdue;
 

@@ -43,7 +43,7 @@ function compare(sort: SortKey, a: TeacherOversightRow, b: TeacherOversightRow):
   return b.signals.length - a.signals.length || a.name.localeCompare(b.name, "vi");
 }
 
-function ProjectCell({ row, courseId }: { row: TeacherOversightRow; courseId: string }) {
+function ProjectCell({ row, courseId }: Readonly<{ row: TeacherOversightRow; courseId: string }>) {
   return (
     <div>
       <p className="font-semibold">
@@ -66,7 +66,21 @@ function ProjectCell({ row, courseId }: { row: TeacherOversightRow; courseId: st
   );
 }
 
-function WorkCell({ row }: { row: TeacherOversightRow }) {
+function SprintLine({ row }: Readonly<{ row: TeacherOversightRow }>) {
+  if (row.sprint) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {row.sprint.name} • kết thúc {formatDate(row.sprint.endsAt)}
+      </p>
+    );
+  }
+  if (row.project) {
+    return <p className="text-xs text-muted-foreground">Không có Sprint đang chạy</p>;
+  }
+  return null;
+}
+
+function WorkCell({ row }: Readonly<{ row: TeacherOversightRow }>) {
   return (
     <div className="space-y-1 text-sm">
       <ProgressMeter
@@ -79,13 +93,7 @@ function WorkCell({ row }: { row: TeacherOversightRow }) {
           {row.issues.done}/{row.issues.total} issue đã hoàn thành
         </p>
       ) : null}
-      {row.sprint ? (
-        <p className="text-xs text-muted-foreground">
-          {row.sprint.name} • kết thúc {formatDate(row.sprint.endsAt)}
-        </p>
-      ) : row.project ? (
-        <p className="text-xs text-muted-foreground">Không có Sprint đang chạy</p>
-      ) : null}
+      <SprintLine row={row} />
     </div>
   );
 }
@@ -193,7 +201,7 @@ export function Component() {
         />
       </div>
 
-      <div role="group" aria-label="Lọc theo tín hiệu" className="flex flex-wrap gap-1.5">
+      <fieldset aria-label="Lọc theo tín hiệu" className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0">
         {chips.map((chip) => (
           <button
             key={chip.id}
@@ -210,7 +218,7 @@ export function Component() {
             {chip.label} ({chip.count})
           </button>
         ))}
-      </div>
+      </fieldset>
 
       {visible.length === 0 ? (
         <EmptyState

@@ -27,7 +27,7 @@ interface FlaggedTeam {
  * its own. It is a to-look-at list, not a ranking: no scores, no AI, and "no
  * signal" is never presented as "doing well".
  */
-export function AttentionPanel({ courses }: { courses: TeacherCourseSummary[] }) {
+export function AttentionPanel({ courses }: Readonly<{ courses: TeacherCourseSummary[] }>) {
   const client = useApiClient();
   const { user } = useAuth();
   const userId = user?.id ?? "anonymous";
@@ -65,10 +65,10 @@ export function AttentionPanel({ courses }: { courses: TeacherCourseSummary[] })
           </p>
 
           {pending ? (
-            <div role="status" aria-label="Đang tải tín hiệu" className="space-y-2">
+            <output aria-label="Đang tải tín hiệu" className="block space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
-            </div>
+            </output>
           ) : null}
 
           {failed.length > 0 ? (

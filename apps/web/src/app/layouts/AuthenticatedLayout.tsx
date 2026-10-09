@@ -19,7 +19,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import { TeacherChromeContext } from "@/app/layouts/TeacherChromeContext";
 
-function UserSummary({ onLogout }: { onLogout: () => void }) {
+function UserSummary({ onLogout }: Readonly<{ onLogout: () => void }>) {
   const { user } = useAuth();
   return (
     <details className="group relative">
@@ -41,7 +41,7 @@ function UserSummary({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function SidebarShell({ children, home }: { children: ReactNode; home: string }) {
+function SidebarShell({ children, home }: Readonly<{ children: ReactNode; home: string }>) {
   return (
     <>
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">

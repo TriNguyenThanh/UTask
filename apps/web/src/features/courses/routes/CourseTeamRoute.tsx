@@ -83,7 +83,7 @@ function remainingTime(deadline: string): string {
 /* View: membership.status === "none" (Team Formation)                 */
 /* ------------------------------------------------------------------ */
 
-function DeadlineBanner({ course }: { course: CourseDetail }) {
+function DeadlineBanner({ course }: Readonly<{ course: CourseDetail }>) {
   const deadline = course.teamFormation.registrationDeadline;
   if (!deadline) {
     return null;
@@ -115,7 +115,7 @@ function DeadlineBanner({ course }: { course: CourseDetail }) {
   );
 }
 
-function OpenTeamsSection({ openTeams }: { openTeams: OpenTeamSlot[] }) {
+function OpenTeamsSection({ openTeams }: Readonly<{ openTeams: OpenTeamSlot[] }>) {
   return (
     <section className="space-y-3 pt-2" aria-labelledby="open-teams-heading">
       <div className="flex flex-col justify-between gap-2 border-b pb-3 md:flex-row md:items-center">
@@ -187,9 +187,9 @@ function OpenTeamsSection({ openTeams }: { openTeams: OpenTeamSlot[] }) {
 
 function UnassignedClassmatesSection({
   classmates,
-}: {
+}: Readonly<{
   classmates: UnassignedClassmate[];
-}) {
+}>) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -282,11 +282,11 @@ function CreateTeamDialog({
   course,
   open,
   onOpenChange,
-}: {
+}: Readonly<{
   course: CourseDetail;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+}>) {
   const createTeam = useCreateTeam(course.courseId);
   const [teamName, setTeamName] = useState("");
   const [description, setDescription] = useState("");
@@ -405,7 +405,7 @@ function CreateTeamDialog({
   );
 }
 
-function TeamFormationView({ course }: { course: CourseDetail }) {
+function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
   const [createOpen, setCreateOpen] = useState(false);
   const deadline = course.teamFormation.registrationDeadline;
   const deadlinePassed = deadline !== null && new Date(deadline).getTime() <= Date.now();
@@ -474,7 +474,7 @@ function TeamFormationView({ course }: { course: CourseDetail }) {
 /* View: membership.status === "pending"                               */
 /* ------------------------------------------------------------------ */
 
-function PendingJoinRequestView({ course }: { course: CourseDetail }) {
+function PendingJoinRequestView({ course }: Readonly<{ course: CourseDetail }>) {
   const membership = course.membership;
   if (membership.status !== "pending") {
     return null;
@@ -560,7 +560,7 @@ const TOPIC_STATUS: Record<
   rejected: { label: "BỊ TỪ CHỐI", className: "border-red-200 bg-red-50 text-red-800" },
 };
 
-function TopicDraftForm({ course }: { course: CourseDetail }) {
+function TopicDraftForm({ course }: Readonly<{ course: CourseDetail }>) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [objectives, setObjectives] = useState("");
@@ -614,11 +614,11 @@ function TopicTitle({
   topic,
   isDraft,
   editableByLeader,
-}: {
+}: Readonly<{
   topic: TopicProposal;
   isDraft: boolean;
   editableByLeader: boolean;
-}) {
+}>) {
   if (topic.title) {
     return <h3 className="text-lg font-bold tracking-tight">{topic.title}</h3>;
   }
@@ -629,7 +629,7 @@ function TopicTitle({
   return <p className="text-sm text-muted-foreground">Nhóm chưa có đề tài. {hint}</p>;
 }
 
-function TopicDetails({ topic }: { topic: TopicProposal }) {
+function TopicDetails({ topic }: Readonly<{ topic: TopicProposal }>) {
   return (
     <>
       {topic.feedback ? (
@@ -663,7 +663,7 @@ function TopicDetails({ topic }: { topic: TopicProposal }) {
   );
 }
 
-function ApprovedTopicAction({ projectId }: { projectId?: string | null }) {
+function ApprovedTopicAction({ projectId }: Readonly<{ projectId?: string | null }>) {
   if (!projectId) {
     return (
       <output className="text-xs text-muted-foreground">
@@ -686,10 +686,10 @@ function ApprovedTopicAction({ projectId }: { projectId?: string | null }) {
 function TopicSection({
   course,
   permissionCtx,
-}: {
+}: Readonly<{
   course: CourseDetail;
   permissionCtx: CoursePermissionContext;
-}) {
+}>) {
   const team = course.team;
   if (!team) return null;
   const topic = team.topic;
@@ -742,7 +742,7 @@ function TopicSection({
   );
 }
 
-function MembersSection({ teamName, members }: { teamName: string; members: TeamMember[] }) {
+function MembersSection({ teamName, members }: Readonly<{ teamName: string; members: TeamMember[] }>) {
   return (
     <section className="space-y-3" aria-labelledby="members-heading">
       <div className="flex items-center justify-between pb-1">
@@ -813,7 +813,7 @@ function MembersSection({ teamName, members }: { teamName: string; members: Team
   );
 }
 
-function RepositoryCard({ repository }: { repository: string }) {
+function RepositoryCard({ repository }: Readonly<{ repository: string }>) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
@@ -841,7 +841,7 @@ function RepositoryCard({ repository }: { repository: string }) {
   );
 }
 
-function TeamHubView({ course }: { course: CourseDetail }) {
+function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
   const team = course.team;
   if (!team) {
     return (

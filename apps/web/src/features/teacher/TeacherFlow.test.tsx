@@ -225,7 +225,7 @@ describe("Access: role, assignment, sidebar and deep link agree", () => {
       const sidebar = await screen.findByRole("navigation", { name: "Điều hướng giảng viên" });
       const nav = sidebar.parentElement as HTMLElement;
       await waitFor(() =>
-        expect(within(nav).getAllByRole("link", { name: /sinh viên · / }).length).toBe(TAUGHT.length),
+        expect(within(nav).getAllByRole("link", { name: /sinh viên · / })).toHaveLength(TAUGHT.length),
       );
       const inSidebar = within(nav)
         .getAllByRole("link", { name: /sinh viên · / })
@@ -546,7 +546,7 @@ describe("Teams (T07)", () => {
     expect(card).toHaveTextContent("NEXUS");
     expect(card).toHaveTextContent(nexus.project!.name);
     const bar = within(card).getByRole("progressbar", { name: "Tiến độ Team NEXUS" });
-    expect(bar).toHaveAttribute("aria-valuenow", String(nexus.progress!.percent));
+    expect(bar).toHaveAttribute("value", String(nexus.progress!.percent));
     expect(card).toHaveTextContent("theo điểm Sprint đang chạy");
     expect(card).toHaveTextContent("Cập nhật issue •");
   });
@@ -641,7 +641,7 @@ describe("Oversight (read-only)", () => {
     const row = within(table).getByText("Team NEXUS").closest("tr") as HTMLElement;
     expect(row).toHaveTextContent(nexus.project!.name);
     expect(within(row).getByRole("progressbar", { name: "Tiến độ Team NEXUS" })).toHaveAttribute(
-      "aria-valuenow",
+      "value",
       String(nexus.progress!.percent),
     );
     expect(row).toHaveTextContent("theo điểm Sprint đang chạy");

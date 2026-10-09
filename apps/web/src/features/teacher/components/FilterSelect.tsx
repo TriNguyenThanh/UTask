@@ -12,13 +12,13 @@ export function FilterSelect({
   onChange,
   options,
   className,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   className?: string;
-}) {
+}>) {
   const id = useId();
   return (
     <div className={cn("flex flex-col gap-1", className)}>

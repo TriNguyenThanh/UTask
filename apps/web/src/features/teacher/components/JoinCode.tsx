@@ -19,7 +19,7 @@ export async function copyJoinCode(code: string) {
   }
 }
 
-export function CopyJoinCodeButton({ code }: { code: string }) {
+export function CopyJoinCodeButton({ code }: Readonly<{ code: string }>) {
   return (
     <Button
       type="button"

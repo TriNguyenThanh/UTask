@@ -38,7 +38,7 @@ const MODES: { id: Mode; label: string }[] = [
 
 const NONE = "";
 
-function VerdictView({ verdict }: { verdict: Verdict }) {
+function VerdictView({ verdict }: Readonly<{ verdict: Verdict }>) {
   return (
     <div className="space-y-2" aria-live="polite">
       {verdict.errors.length > 0 ? (
@@ -63,7 +63,7 @@ function VerdictView({ verdict }: { verdict: Verdict }) {
   );
 }
 
-function Body({ onDone }: { onDone: () => void }) {
+function Body({ onDone }: Readonly<{ onDone: () => void }>) {
   const course = useTeacherCourseContext();
   const students = useTeacherStudents(course.courseId);
   const teams = useTeacherTeams(course.courseId);
@@ -77,7 +77,7 @@ function Body({ onDone }: { onDone: () => void }) {
   const [founderId, setFounderId] = useState(NONE);
 
   if (students.isPending || teams.isPending) {
-    return <p role="status" className="text-sm text-muted-foreground">Đang tải dữ liệu lớp…</p>;
+    return <output className="text-sm text-muted-foreground">Đang tải dữ liệu lớp…</output>;
   }
   if (students.isError || teams.isError) {
     return (
@@ -137,7 +137,7 @@ function Body({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div role="group" aria-label="Loại điều chỉnh" className="flex flex-wrap gap-1.5">
+      <fieldset aria-label="Loại điều chỉnh" className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0">
         {MODES.map((item) => (
           <button
             key={item.id}
@@ -152,7 +152,7 @@ function Body({ onDone }: { onDone: () => void }) {
             {item.label}
           </button>
         ))}
-      </div>
+      </fieldset>
 
       {mode === "move" ? (
         <div className="space-y-3">
@@ -238,9 +238,9 @@ function Body({ onDone }: { onDone: () => void }) {
       ) : null}
 
       <VerdictView verdict={verdict} />
-      <p role="status" className="text-sm font-medium">
+      <output className="block text-sm font-medium">
         {verdict.ok ? "Đúng điều kiện cơ bản, nhưng việc xác nhận vẫn chưa khả dụng." : "Chưa đủ điều kiện để xác nhận."}
-      </p>
+      </output>
       <p className="text-xs text-amber-900">{TEAM_ADJUST_UNAVAILABLE}</p>
 
       <DialogFooter>
