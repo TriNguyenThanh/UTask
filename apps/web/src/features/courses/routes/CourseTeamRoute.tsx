@@ -610,6 +610,79 @@ function TopicDraftForm({ course }: { course: CourseDetail }) {
   );
 }
 
+function TopicTitle({
+  topic,
+  isDraft,
+  editableByLeader,
+}: {
+  topic: TopicProposal;
+  isDraft: boolean;
+  editableByLeader: boolean;
+}) {
+  if (topic.title) {
+    return <h3 className="text-lg font-bold tracking-tight">{topic.title}</h3>;
+  }
+  if (!isDraft) return null;
+  const hint = editableByLeader
+    ? "Trưởng nhóm soạn và nộp đề tài để Giảng viên phê duyệt."
+    : "Trưởng nhóm sẽ soạn và nộp đề tài để Giảng viên phê duyệt.";
+  return <p className="text-sm text-muted-foreground">Nhóm chưa có đề tài. {hint}</p>;
+}
+
+function TopicDetails({ topic }: { topic: TopicProposal }) {
+  return (
+    <>
+      {topic.feedback ? (
+        <div className="border-l-2 border-primary py-0.5 pl-3">
+          <p className="text-xs italic leading-relaxed text-muted-foreground">
+            "{topic.feedback}"
+          </p>
+        </div>
+      ) : null}
+
+      {topic.description ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{topic.description}</p>
+      ) : null}
+
+      {topic.objectives.length > 0 ? (
+        <div>
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Mục tiêu &amp; Phạm vi triển khai chính:
+          </span>
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            {topic.objectives.map((objective) => (
+              <li key={objective} className="flex items-start gap-2">
+                <span className="mt-0.5 font-bold leading-none text-primary" aria-hidden>•</span>
+                {objective}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function ApprovedTopicAction({ projectId }: { projectId?: string | null }) {
+  if (!projectId) {
+    return (
+      <output className="text-xs text-muted-foreground">
+        Đề tài đã được duyệt. Workspace của nhóm chưa sẵn sàng — vui lòng chờ giảng viên khởi
+        tạo.
+      </output>
+    );
+  }
+  return (
+    <Button asChild>
+      <Link to={`/projects/${encodeURIComponent(projectId)}/backlog`}>
+        <KanbanSquare className="size-4" aria-hidden />
+        Mở Project Workspace
+        <ArrowRight className="size-4" aria-hidden />
+      </Link>
+    </Button>
+  );
+}
+
 function TopicSection({
   course,
   permissionCtx,
@@ -644,43 +717,8 @@ function TopicSection({
             ) : null}
           </div>
 
-          {topic.title ? (
-            <h3 className="text-lg font-bold tracking-tight">{topic.title}</h3>
-          ) : isDraft ? (
-            <p className="text-sm text-muted-foreground">
-              Nhóm chưa có đề tài. {editableByLeader
-                ? "Trưởng nhóm soạn và nộp đề tài để Giảng viên phê duyệt."
-                : "Trưởng nhóm sẽ soạn và nộp đề tài để Giảng viên phê duyệt."}
-            </p>
-          ) : null}
-
-          {topic.feedback ? (
-            <div className="border-l-2 border-primary py-0.5 pl-3">
-              <p className="text-xs italic leading-relaxed text-muted-foreground">
-                "{topic.feedback}"
-              </p>
-            </div>
-          ) : null}
-
-          {topic.description ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">{topic.description}</p>
-          ) : null}
-
-          {topic.objectives.length > 0 ? (
-            <div>
-              <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Mục tiêu &amp; Phạm vi triển khai chính:
-              </span>
-              <ul className="space-y-1.5 text-xs text-muted-foreground">
-                {topic.objectives.map((objective) => (
-                  <li key={objective} className="flex items-start gap-2">
-                    <span className="mt-0.5 font-bold leading-none text-primary" aria-hidden>•</span>
-                    {objective}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <TopicTitle topic={topic} isDraft={isDraft} editableByLeader={editableByLeader} />
+          <TopicDetails topic={topic} />
         </div>
 
         <div className="flex shrink-0 flex-col items-start gap-2 pt-1 lg:items-end">
@@ -696,20 +734,7 @@ function TopicSection({
             </Button>
           ) : null}
           {topic.status === "approved" ? (
-            course.team?.projectId ? (
-              <Button asChild>
-                <Link to={`/projects/${encodeURIComponent(course.team.projectId)}/backlog`}>
-                  <KanbanSquare className="size-4" aria-hidden />
-                  Mở Project Workspace
-                  <ArrowRight className="size-4" aria-hidden />
-                </Link>
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground" role="status">
-                Đề tài đã được duyệt. Workspace của nhóm chưa sẵn sàng — vui lòng chờ giảng viên
-                khởi tạo.
-              </p>
-            )
+            <ApprovedTopicAction projectId={team.projectId} />
           ) : null}
         </div>
       </div>
