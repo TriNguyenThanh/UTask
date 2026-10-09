@@ -217,7 +217,7 @@ describe("per-user state isolation", () => {
     await user.click(unreadRows[0]);
 
     await waitFor(() => {
-      expect((repository.db.notificationReadByUser[LEADER_ID] ?? []).length).toBe(1);
+      expect(repository.db.notificationReadByUser[LEADER_ID] ?? []).toHaveLength(1);
     });
     expect(repository.db.notificationReadByUser[MEMBER_ID] ?? []).toHaveLength(0);
   });
