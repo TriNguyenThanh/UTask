@@ -30,6 +30,12 @@ import {
  * creating the class is NOT possible yet because no API for it exists, and
  * the page says so instead of pretending. Nothing is sent or saved.
  */
+const CHECK_MESSAGES = {
+  idle: "",
+  valid: "Thông tin đúng định dạng. Việc tạo lớp vẫn chưa khả dụng.",
+  invalid: "Còn thông tin chưa đúng, xem các thông báo cạnh từng ô.",
+} as const;
+
 export function Component() {
   const [checked, setChecked] = useState<"idle" | "valid" | "invalid">("idle");
   const form = useForm<CourseFormValues>({
@@ -50,7 +56,6 @@ export function Component() {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
@@ -191,13 +196,9 @@ export function Component() {
           </div>
 
           <div className="space-y-3 border-t pt-5">
-            <p role="status" aria-live="polite" className="text-sm">
-              {checked === "valid"
-                ? "Thông tin đúng định dạng. Việc tạo lớp vẫn chưa khả dụng."
-                : checked === "invalid"
-                  ? "Còn thông tin chưa đúng, xem các thông báo cạnh từng ô."
-                  : ""}
-            </p>
+            <output className="block text-sm">
+              {CHECK_MESSAGES[checked]}
+            </output>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => void checkInformation()}>
                 Kiểm tra thông tin

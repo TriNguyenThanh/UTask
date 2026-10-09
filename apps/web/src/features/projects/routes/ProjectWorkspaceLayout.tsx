@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -88,6 +88,21 @@ export default function ProjectWorkspaceLayout() {
   // A teacher-only account has no Student project list to go back to.
   const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
 
+  const workspaceData = workspaceQuery.data;
+  const contextValue = useMemo<ProjectWorkspaceContextValue | null>(
+    () =>
+      workspaceData
+        ? {
+            projectId,
+            workspace: workspaceData,
+            viewer: workspaceData.viewer,
+            readOnly: isReadOnlyViewer(workspaceData.viewer),
+            activeModule: moduleFromPathname(pathname),
+          }
+        : null,
+    [projectId, workspaceData, pathname],
+  );
+
   if (workspaceQuery.isPending) {
     return <PageSkeleton label="Đang tải không gian dự án" />;
   }
@@ -125,22 +140,13 @@ export default function ProjectWorkspaceLayout() {
     );
   }
 
-  const workspace = workspaceQuery.data;
-  if (!workspace) {
+  if (!workspaceData || !contextValue) {
     return <PageSkeleton label="Đang tải không gian dự án" />;
   }
 
   return (
-    <ProjectWorkspaceContext.Provider
-      value={{
-        projectId,
-        workspace,
-        viewer: workspace.viewer,
-        readOnly: isReadOnlyViewer(workspace.viewer),
-        activeModule: moduleFromPathname(pathname),
-      }}
-    >
-      <ProjectWorkspaceHeader workspace={workspace} />
+    <ProjectWorkspaceContext.Provider value={contextValue}>
+      <ProjectWorkspaceHeader workspace={workspaceData} />
       <Outlet />
     </ProjectWorkspaceContext.Provider>
   );

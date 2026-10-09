@@ -64,21 +64,38 @@ export function TeacherSidebar() {
         <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Lớp phụ trách
         </p>
-        {courses.isPending ? (
-          <ul className="space-y-1" role="status" aria-label="Đang tải danh sách lớp">
-            <li><Skeleton className="h-10" /></li>
-            <li><Skeleton className="h-10" /></li>
-          </ul>
-        ) : courses.isError ? (
-          <div className="space-y-2 px-3 text-xs text-muted-foreground" role="alert">
-            <p>Không tải được danh sách lớp.</p>
-            <Button type="button" size="sm" variant="outline" onClick={() => void courses.refetch()}>
-              Thử lại
-            </Button>
-          </div>
-        ) : courses.data.courses.length === 0 ? (
-          <p className="px-3 text-xs text-muted-foreground">Chưa phụ trách lớp nào.</p>
-        ) : (
+        <CourseNavList courses={courses} openCourseId={openCourseId} />
+      </div>
+    </div>
+  );
+}
+
+function CourseNavList({
+  courses,
+  openCourseId,
+}: Readonly<{ courses: ReturnType<typeof useTeacherCourses>; openCourseId: string | undefined }>) {
+  if (courses.isPending) {
+    return (
+      <output className="block space-y-1" aria-label="Đang tải danh sách lớp">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-10" />
+      </output>
+    );
+  }
+  if (courses.isError) {
+    return (
+      <div className="space-y-2 px-3 text-xs text-muted-foreground" role="alert">
+        <p>Không tải được danh sách lớp.</p>
+        <Button type="button" size="sm" variant="outline" onClick={() => void courses.refetch()}>
+          Thử lại
+        </Button>
+      </div>
+    );
+  }
+  if (courses.data.courses.length === 0) {
+    return <p className="px-3 text-xs text-muted-foreground">Chưa phụ trách lớp nào.</p>;
+  }
+  return (
           <ul className="space-y-1">
             {courses.data.courses.map((course) => (
               <li key={course.courseId}>
@@ -126,8 +143,5 @@ export function TeacherSidebar() {
               </li>
             ))}
           </ul>
-        )}
-      </div>
-    </div>
   );
 }

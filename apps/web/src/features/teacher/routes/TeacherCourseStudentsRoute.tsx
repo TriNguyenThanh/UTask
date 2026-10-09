@@ -15,6 +15,23 @@ import { cn } from "@/lib/utils";
 
 type TeamFilter = "all" | "has-team" | "no-team";
 
+function NoStudents({ hasStudents }: Readonly<{ hasStudents: boolean }>) {
+  if (!hasStudents) {
+    return (
+      <EmptyState
+        title="Lớp chưa có sinh viên"
+        description="Danh sách sẽ hiển thị tại đây khi sinh viên được thêm vào lớp."
+      />
+    );
+  }
+  return (
+    <EmptyState
+      title="Không có sinh viên khớp bộ lọc"
+      description="Thử đổi từ khóa hoặc bộ lọc nhóm."
+    />
+  );
+}
+
 function parseFilter(value: string | null): TeamFilter {
   return value === "has-team" || value === "no-team" ? value : "all";
 }
@@ -111,7 +128,7 @@ export function Component() {
         </div>
       </div>
 
-      <div role="group" aria-label="Lọc theo nhóm" className="flex flex-wrap gap-1.5">
+      <fieldset aria-label="Lọc theo nhóm" className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0">
         {chips.map((chip) => (
           <button
             key={chip.id}
@@ -128,18 +145,10 @@ export function Component() {
             {chip.label} ({chip.count})
           </button>
         ))}
-      </div>
+      </fieldset>
 
-      {all.length === 0 ? (
-        <EmptyState
-          title="Lớp chưa có sinh viên"
-          description="Danh sách sẽ hiển thị tại đây khi sinh viên được thêm vào lớp."
-        />
-      ) : visible.length === 0 ? (
-        <EmptyState
-          title="Không có sinh viên khớp bộ lọc"
-          description="Thử đổi từ khóa hoặc bộ lọc nhóm."
-        />
+      {visible.length === 0 ? (
+        <NoStudents hasStudents={all.length > 0} />
       ) : (
         <>
           <p className="text-sm text-muted-foreground" aria-live="polite">

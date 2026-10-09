@@ -24,6 +24,26 @@ export function Component() {
   const withoutProject = teams.data?.teams.filter((team) => team.project === null) ?? [];
   const base = `/teacher/courses/${course.courseId}`;
 
+  const renderWithoutProject = () => {
+    if (teams.isPending) return <output className="text-muted-foreground">Đang tải…</output>;
+    if (teams.isError) {
+      return <p className="text-muted-foreground">Không tải được danh sách nhóm.</p>;
+    }
+    if (withoutProject.length === 0) {
+      return <p className="text-muted-foreground">Mọi nhóm trong lớp đều đã có project.</p>;
+    }
+    return (
+      <ul className="space-y-1">
+        {withoutProject.map((team) => (
+          <li key={team.teamId} className="flex items-center justify-between gap-2">
+            <span className="font-medium">{team.name}</span>
+            <Badge variant="outline">{team.memberCount} thành viên</Badge>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <section aria-label="Chỉ số của lớp" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -92,22 +112,7 @@ export function Component() {
             <CardTitle className="text-base">Nhóm chưa có project</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            {teams.isPending ? (
-              <p className="text-muted-foreground" role="status">Đang tải…</p>
-            ) : teams.isError ? (
-              <p className="text-muted-foreground">Không tải được danh sách nhóm.</p>
-            ) : withoutProject.length === 0 ? (
-              <p className="text-muted-foreground">Mọi nhóm trong lớp đều đã có project.</p>
-            ) : (
-              <ul className="space-y-1">
-                {withoutProject.map((team) => (
-                  <li key={team.teamId} className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{team.name}</span>
-                    <Badge variant="outline">{team.memberCount} thành viên</Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {renderWithoutProject()}
             <p className="text-xs text-muted-foreground">
               Xem workspace của nhóm (Backlog, Board, Code) sẽ khả dụng ở giai đoạn sau.
             </p>

@@ -9,7 +9,7 @@ const CODE_CHANGE_UNAVAILABLE =
 const CODE_DISABLE_UNAVAILABLE =
   "Vô hiệu mã chưa khả dụng: chưa có hợp đồng API. Khi bật, thao tác này sẽ cần xác nhận vì sinh viên mới không thể vào lớp bằng mã này nữa.";
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div>
       <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

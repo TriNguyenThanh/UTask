@@ -36,6 +36,30 @@ export function leadersOf(team: AdjustTeam): AdjustMember[] {
   return team.members.filter((member) => member.role === "leader");
 }
 
+/** Findings about the team the student leaves: Leader succession and minimum roster. */
+function sourceTeamFindings(
+  fromTeam: AdjustTeam,
+  studentId: string,
+  replacementLeaderId: string | null,
+  minMembers: number,
+  errors: string[],
+  warnings: string[],
+): void {
+  const remaining = fromTeam.members.filter((member) => member.userId !== studentId);
+  const student = fromTeam.members.find((member) => member.userId === studentId);
+  const onlyLeader =
+    student?.role === "leader" && leadersOf(fromTeam).every((leader) => leader.userId === studentId);
+  const hasReplacement = remaining.some((member) => member.userId === replacementLeaderId);
+  if (onlyLeader && remaining.length > 0 && !hasReplacement) {
+    errors.push(`${fromTeam.name} sẽ mất Leader. Chọn một thành viên còn lại làm Leader mới.`);
+  }
+  if (remaining.length === 0) {
+    warnings.push(`${fromTeam.name} sẽ không còn thành viên. Nhóm không bị xóa tự động.`);
+  } else if (remaining.length < minMembers) {
+    warnings.push(`${fromTeam.name} sẽ còn ${remaining.length} thành viên, ít hơn mức tối thiểu ${minMembers} của lớp.`);
+  }
+}
+
 /**
  * Move a student between teams, or seat an unteamed student (`fromTeam` null).
  * When the student is the only Leader of the team they leave, a replacement
@@ -56,7 +80,7 @@ export function validateMove(input: {
   if (!toTeam) errors.push("Chọn nhóm đích.");
   if (!studentId || !toTeam) return verdict(errors, warnings);
 
-  if (fromTeam && fromTeam.teamId === toTeam.teamId) {
+  if (fromTeam?.teamId === toTeam.teamId) {
     errors.push("Sinh viên đã ở nhóm này.");
   }
   if (toTeam.members.length >= toTeam.maxMembers) {
@@ -65,22 +89,7 @@ export function validateMove(input: {
     );
   }
 
-  if (fromTeam) {
-    const remaining = fromTeam.members.filter((member) => member.userId !== studentId);
-    const student = fromTeam.members.find((member) => member.userId === studentId);
-    const onlyLeader =
-      student?.role === "leader" && leadersOf(fromTeam).every((leader) => leader.userId === studentId);
-    if (onlyLeader && remaining.length > 0) {
-      if (!replacementLeaderId || !remaining.some((member) => member.userId === replacementLeaderId)) {
-        errors.push(`${fromTeam.name} sẽ mất Leader. Chọn một thành viên còn lại làm Leader mới.`);
-      }
-    }
-    if (remaining.length === 0) {
-      warnings.push(`${fromTeam.name} sẽ không còn thành viên. Nhóm không bị xóa tự động.`);
-    } else if (remaining.length < minMembers) {
-      warnings.push(`${fromTeam.name} sẽ còn ${remaining.length} thành viên, ít hơn mức tối thiểu ${minMembers} của lớp.`);
-    }
-  }
+  if (fromTeam) sourceTeamFindings(fromTeam, studentId, replacementLeaderId, minMembers, errors, warnings);
 
   warnings.push(
     "Lịch sử thành viên và đóng góp cũ được giữ nguyên. Task đã làm không tự chuyển sang nhóm mới.",

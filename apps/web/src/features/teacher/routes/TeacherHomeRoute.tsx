@@ -21,7 +21,7 @@ import { useTeacherCourses } from "@/lib/query/teacherFlowHooks";
  * dashboard. With no deadline anywhere the card says "no data": zero would
  * claim that nothing is late.
  */
-function OverdueStat({ classes }: { classes: TeacherCourseSummary[] }) {
+function OverdueStat({ classes }: Readonly<{ classes: TeacherCourseSummary[] }>) {
   const parts = classes.flatMap((course) => (course.overdue ? [course.overdue] : []));
   if (parts.length === 0) {
     return (

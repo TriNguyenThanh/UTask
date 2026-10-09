@@ -14,6 +14,7 @@ import {
   preflightImportFile,
   readImportFile,
   type ImportIssue,
+  type ImportIssueLevel,
   type ImportPreview,
   type ImportRow,
 } from "@/features/teacher/lib/csvImport";
@@ -45,11 +46,17 @@ const RESULT_LEGEND: { title: string; description: string }[] = [
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
     reader.onerror = () => reject(reader.error ?? new Error("Không đọc được file."));
     reader.readAsText(file, "utf-8");
   });
 }
+
+const LEVEL_LABEL: Record<ImportIssueLevel, string> = {
+  error: "Lỗi: ",
+  warning: "Lưu ý: ",
+  info: "Ghi chú: ",
+};
 
 const LEVEL_STYLE: Record<ImportIssue["level"], string> = {
   error: "bg-red-50 text-red-900",
@@ -57,7 +64,7 @@ const LEVEL_STYLE: Record<ImportIssue["level"], string> = {
   info: "bg-slate-50 text-slate-700",
 };
 
-function RowIssues({ row }: { row: ImportRow }) {
+function RowIssues({ row }: Readonly<{ row: ImportRow }>) {
   if (row.issues.length === 0) {
     return (
       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -76,7 +83,7 @@ function RowIssues({ row }: { row: ImportRow }) {
           )}
           <span>
             <span className="font-semibold">
-              {issue.level === "error" ? "Lỗi: " : issue.level === "warning" ? "Lưu ý: " : "Ghi chú: "}
+              {LEVEL_LABEL[issue.level]}
             </span>
             {issue.message}
           </span>
@@ -90,7 +97,7 @@ function fullName(row: ImportRow): string {
   return [row.lastName, row.firstName].filter(Boolean).join(" ") || "—";
 }
 
-function Preview({ preview, onlyProblems }: { preview: ImportPreview; onlyProblems: boolean }) {
+function Preview({ preview, onlyProblems }: Readonly<{ preview: ImportPreview; onlyProblems: boolean }>) {
   const rows = onlyProblems
     ? preview.rows.filter((row) => row.issues.some((issue) => issue.level !== "info"))
     : preview.rows;
@@ -241,9 +248,9 @@ export function Component() {
             {MAX_IMPORT_ROWS} dòng mỗi file theo giới hạn của giao diện. Giao diện không tạo mật khẩu, không
             gửi thư kích hoạt và không đưa ai vào nhóm.
           </p>
-          <p role="status" aria-live="polite" className="text-sm">
+          <output className="block text-sm">
             {reading ? "Đang đọc file…" : ""}
-          </p>
+          </output>
           {problem ? (
             <Alert variant="destructive">
               <AlertTitle>Không dùng được file này</AlertTitle>
@@ -287,7 +294,7 @@ export function Component() {
                 checked={onlyProblems}
                 onChange={(event) => setOnlyProblems(event.target.checked)}
               />
-              Chỉ hiện dòng có lỗi hoặc lưu ý
+              <span>Chỉ hiện dòng có lỗi hoặc lưu ý</span>
             </label>
             <Preview preview={preview} onlyProblems={onlyProblems} />
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">
@@ -307,10 +314,10 @@ export function Component() {
           <CardTitle className="text-base">3. Kết quả</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground" role="status">
+          <output className="block text-sm text-muted-foreground">
             Chưa có kết quả nào: file chưa được gửi. Khi có hợp đồng, báo cáo sẽ liệt kê từng dòng theo các nhóm
             dưới đây; sinh viên chỉ được tính là đã thêm khi dòng đó báo đã thuộc lớp.
-          </p>
+          </output>
           <ul aria-label="Các loại kết quả theo dòng" className="grid gap-2 sm:grid-cols-2">
             {RESULT_LEGEND.map((item) => (
               <li key={item.title} className="rounded-md border bg-background p-3 text-sm">

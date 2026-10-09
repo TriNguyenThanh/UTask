@@ -74,7 +74,7 @@ export function CourseUnavailable() {
 }
 
 /** Error body for a Teacher query: unavailable class vs. a retryable failure. */
-export function TeacherQueryError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+export function TeacherQueryError({ error, onRetry }: Readonly<{ error: unknown; onRetry: () => void }>) {
   if (isCourseUnavailable(error)) {
     return <CourseUnavailable />;
   }
@@ -86,14 +86,17 @@ export function StatCard({
   value,
   hint,
   tone = "default",
-}: {
+}: Readonly<{
   label: string;
   value: ReactNode;
   hint?: string;
   tone?: "default" | "attention";
-}) {
+}>) {
   return (
-    <Card role="group" aria-label={label} className="gap-1 py-4">
+    <fieldset
+      aria-label={label}
+      className="m-0 flex min-w-0 flex-col gap-1 rounded-xl border bg-card px-0 py-4 text-card-foreground shadow-sm"
+    >
       <CardHeader className="pb-1">
         <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
@@ -105,7 +108,7 @@ export function StatCard({
         </div>
         {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
       </CardContent>
-    </Card>
+    </fieldset>
   );
 }
 
@@ -115,12 +118,12 @@ function initialsOf(name: string): string {
     .trim()
     .split(/\s+/u);
   const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
+  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
   return (first + last).toUpperCase();
 }
 
 /** Decorative initials; the name is always printed next to it. */
-export function PersonAvatar({ name, className }: { name: string; className?: string }) {
+export function PersonAvatar({ name, className }: Readonly<{ name: string; className?: string }>) {
   return (
     <span
       aria-hidden
@@ -144,11 +147,11 @@ export function ProgressMeter({
   label,
   progress,
   emptyText,
-}: {
+}: Readonly<{
   label: string;
   progress: TeacherTeamProgress | null;
   emptyText: string;
-}) {
+}>) {
   if (!progress) {
     return <p className="text-sm text-muted-foreground">{emptyText}</p>;
   }
@@ -158,16 +161,12 @@ export function ProgressMeter({
         <span className="text-muted-foreground">Tiến độ ({BASIS_TEXT[progress.basis]})</span>
         <span className="font-semibold">{progress.percent}%</span>
       </div>
-      <div
-        role="progressbar"
+      <progress
         aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress.percent}
-        className="h-2 w-full overflow-hidden rounded-full bg-secondary"
-      >
-        <div className="h-full rounded-full bg-primary" style={{ width: `${progress.percent}%` }} />
-      </div>
+        max={100}
+        value={progress.percent}
+        className="h-2 w-full appearance-none overflow-hidden rounded-full bg-secondary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-secondary [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
+      />
     </div>
   );
 }
@@ -191,12 +190,12 @@ export function SignalList({
   signals,
   emptyText,
   subject,
-}: {
+}: Readonly<{
   signals: TeacherSignal[];
   emptyText?: string;
   /** Whose signals these are (a team name). Makes each source link's accessible name unique. */
   subject?: string;
-}) {
+}>) {
   if (signals.length === 0) {
     return emptyText ? (
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -256,12 +255,12 @@ export function DisabledAction({
   reason,
   variant = "outline",
   className,
-}: {
+}: Readonly<{
   children: ReactNode;
   reason: string;
   variant?: "default" | "outline";
   className?: string;
-}) {
+}>) {
   const reasonId = useId();
   return (
     <>
@@ -282,7 +281,25 @@ export function DisabledAction({
   );
 }
 
-export function CourseCard({ course }: { course: TeacherCourseSummary }) {
+function CourseSignalSummary({ course }: Readonly<{ course: TeacherCourseSummary }>) {
+  if (course.teamCount === 0) {
+    return <p className="text-xs text-muted-foreground">Lớp chưa có nhóm nào để theo dõi.</p>;
+  }
+  if (course.teamsWithSignals > 0) {
+    return (
+      <Badge variant="outline" className="w-fit border-amber-300 bg-amber-50 text-amber-900">
+        <AlertTriangle aria-hidden /> {course.teamsWithSignals} nhóm có tín hiệu cần chú ý
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-50 text-emerald-900">
+      <CheckCircle2 aria-hidden /> Chưa phát hiện tín hiệu cần chú ý
+    </Badge>
+  );
+}
+
+export function CourseCard({ course }: Readonly<{ course: TeacherCourseSummary }>) {
   const base = `/teacher/courses/${course.courseId}`;
   return (
     <Card className="flex flex-col gap-4 py-5">
@@ -332,20 +349,7 @@ export function CourseCard({ course }: { course: TeacherCourseSummary }) {
           </div>
         </dl>
 
-        {course.teamCount === 0 ? (
-          <p className="text-xs text-muted-foreground">Lớp chưa có nhóm nào để theo dõi.</p>
-        ) : course.teamsWithSignals > 0 ? (
-          <Badge variant="outline" className="w-fit border-amber-300 bg-amber-50 text-amber-900">
-            <AlertTriangle aria-hidden /> {course.teamsWithSignals} nhóm có tín hiệu cần chú ý
-          </Badge>
-        ) : (
-          <Badge
-            variant="outline"
-            className="w-fit border-emerald-300 bg-emerald-50 text-emerald-900"
-          >
-            <CheckCircle2 aria-hidden /> Chưa phát hiện tín hiệu cần chú ý
-          </Badge>
-        )}
+        <CourseSignalSummary course={course} />
 
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-3">
           <p className="flex items-center gap-1 text-xs text-muted-foreground">

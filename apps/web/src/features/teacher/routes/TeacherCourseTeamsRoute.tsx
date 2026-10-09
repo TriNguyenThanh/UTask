@@ -26,7 +26,7 @@ function parseFilter(value: string | null): TeamFilter {
   return value === "open-slots" || value === "no-project" ? value : "all";
 }
 
-function TeamCard({ team, courseId }: { team: TeacherTeam; courseId: string }) {
+function TeamCard({ team, courseId }: Readonly<{ team: TeacherTeam; courseId: string }>) {
   const openSlots = Math.max(team.maxMembers - team.memberCount, 0);
   return (
     <Card className="flex flex-col gap-4 py-5">
@@ -103,7 +103,7 @@ function TeamCard({ team, courseId }: { team: TeacherTeam; courseId: string }) {
   );
 }
 
-function UnassignedPanel({ courseId }: { courseId: string }) {
+function UnassignedPanel({ courseId }: Readonly<{ courseId: string }>) {
   const students = useTeacherStudents(courseId);
   if (students.isPending) return <PageSkeleton label="Đang tải danh sách sinh viên" />;
   if (students.isError) {
@@ -147,7 +147,7 @@ function UnassignedPanel({ courseId }: { courseId: string }) {
   );
 }
 
-function TeamsPanel({ courseId }: { courseId: string }) {
+function TeamsPanel({ courseId }: Readonly<{ courseId: string }>) {
   const teams = useTeacherTeams(courseId);
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
@@ -223,7 +223,7 @@ function TeamsPanel({ courseId }: { courseId: string }) {
         <TeamAdjustDialog />
       </div>
 
-      <div role="group" aria-label="Lọc nhóm" className="flex flex-wrap gap-1.5">
+      <fieldset aria-label="Lọc nhóm" className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0">
         {chips.map((chip) => (
           <button
             key={chip.id}
@@ -240,7 +240,7 @@ function TeamsPanel({ courseId }: { courseId: string }) {
             {chip.label} ({chip.count})
           </button>
         ))}
-      </div>
+      </fieldset>
 
       {visible.length === 0 ? (
         <EmptyState

@@ -29,11 +29,11 @@ export function validateFeedback(text: string): string | null {
 export function FeedbackComposer({
   scope,
   label,
-}: {
+}: Readonly<{
   /** What the draft belongs to, e.g. `team.<courseId>.<teamId>`; part of the storage key. */
   scope: string;
   label: string;
-}) {
+}>) {
   const { user } = useAuth();
   const textareaId = useId();
   const errorId = useId();

@@ -17,8 +17,15 @@ export const MAX_IMPORT_ROWS = 2000;
 
 export type ImportIssueLevel = "error" | "warning" | "info";
 
+export type ImportIssueCode =
+  | "invalid-email"
+  | "no-identity"
+  | "duplicate-in-file"
+  | "student-id-only"
+  | "email-only";
+
 export interface ImportIssue {
-  code: "invalid-email" | "no-identity" | "duplicate-in-file" | "student-id-only" | "email-only";
+  code: ImportIssueCode;
   level: ImportIssueLevel;
   message: string;
 }
@@ -64,17 +71,34 @@ const COLUMN_ALIASES: Record<string, "student_id" | "email" | "first_name" | "la
   ho_dem: "last_name",
 };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Shape only: no whitespace, one "@", and a dot inside the domain (no backtracking regex). */
+export function isValidEmail(value: string): boolean {
+  if (/\s/.test(value)) return false;
+  const at = value.indexOf("@");
+  if (at <= 0 || at !== value.lastIndexOf("@")) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
+
+function trimUnderscores(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === "_") start += 1;
+  while (end > start && value[end - 1] === "_") end -= 1;
+  return value.slice(start, end);
+}
 
 function normalizeHeader(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/đ/gi, "d")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  return trimUnderscores(
+    value
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/đ/gi, "d")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_"),
+  );
 }
 
 function detectDelimiter(firstLine: string): "," | ";" | "\t" {
@@ -86,46 +110,65 @@ function detectDelimiter(firstLine: string): "," | ";" | "\t" {
   return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] as "," | ";" | "\t") ?? ",";
 }
 
+interface CsvState {
+  records: string[][];
+  record: string[];
+  field: string;
+  inQuotes: boolean;
+}
+
+function endField(state: CsvState): void {
+  state.record.push(state.field);
+  state.field = "";
+}
+
+function endRecord(state: CsvState): void {
+  endField(state);
+  state.records.push(state.record);
+  state.record = [];
+}
+
+/** Handles one character inside a quoted field; returns the index of the last character used. */
+function consumeQuoted(state: CsvState, source: string, i: number): number {
+  if (source[i] !== '"') {
+    state.field += source[i];
+    return i;
+  }
+  if (source[i + 1] === '"') {
+    state.field += '"';
+    return i + 1;
+  }
+  state.inQuotes = false;
+  return i;
+}
+
+/** Handles one character; returns the index of the last character used. */
+function consumeChar(state: CsvState, source: string, i: number, delimiter: string): number {
+  if (state.inQuotes) return consumeQuoted(state, source, i);
+  const char = source[i];
+  if (char === '"') {
+    state.inQuotes = true;
+  } else if (char === delimiter) {
+    endField(state);
+  } else if (char === "\n" || char === "\r") {
+    const crlf = char === "\r" && source[i + 1] === "\n";
+    endRecord(state);
+    return crlf ? i + 1 : i;
+  } else {
+    state.field += char;
+  }
+  return i;
+}
+
 /** RFC 4180-style records: quoted fields, doubled quotes, CRLF or LF, optional BOM. */
 export function parseCsv(text: string, delimiter: string): string[][] {
   const source = text.replace(/^﻿/, "");
-  const records: string[][] = [];
-  let record: string[] = [];
-  let field = "";
-  let inQuotes = false;
+  const state: CsvState = { records: [], record: [], field: "", inQuotes: false };
   for (let i = 0; i < source.length; i += 1) {
-    const char = source[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (source[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += char;
-      }
-    } else if (char === '"') {
-      inQuotes = true;
-    } else if (char === delimiter) {
-      record.push(field);
-      field = "";
-    } else if (char === "\n" || char === "\r") {
-      if (char === "\r" && source[i + 1] === "\n") i += 1;
-      record.push(field);
-      records.push(record);
-      record = [];
-      field = "";
-    } else {
-      field += char;
-    }
+    i = consumeChar(state, source, i, delimiter);
   }
-  if (field !== "" || record.length > 0) {
-    record.push(field);
-    records.push(record);
-  }
-  return records;
+  if (state.field !== "" || state.record.length > 0) endRecord(state);
+  return state.records;
 }
 
 export function isSpreadsheetFile(fileName: string): boolean {
@@ -153,6 +196,73 @@ export function preflightImportFile(fileName: string, size: number): string | nu
   return null;
 }
 
+type ColumnKey = "student_id" | "email" | "first_name" | "last_name";
+
+function locateColumns(header: string[]): Partial<Record<ColumnKey, number>> {
+  const columnIndex: Partial<Record<ColumnKey, number>> = {};
+  header.forEach((cell, index) => {
+    const canonical = COLUMN_ALIASES[normalizeHeader(cell)];
+    if (canonical && columnIndex[canonical] === undefined) columnIndex[canonical] = index;
+  });
+  return columnIndex;
+}
+
+function identityIssues(studentId: string, email: string): ImportIssue[] {
+  if (!studentId && !email) {
+    return [
+      {
+        code: "no-identity",
+        level: "error",
+        message: "Dòng không có email lẫn mã sinh viên nên không xác định được người cần thêm.",
+      },
+    ];
+  }
+  const issues: ImportIssue[] = [];
+  const emailValid = email !== "" && isValidEmail(email);
+  if (email && !emailValid) {
+    issues.push({ code: "invalid-email", level: "error", message: "Email sai định dạng." });
+  }
+  if (studentId && !email) {
+    issues.push({
+      code: "student-id-only",
+      level: "warning",
+      message: "Chỉ có mã sinh viên: hệ thống chỉ tìm tài khoản có sẵn, không tạo tài khoản mới.",
+    });
+  }
+  if (emailValid && !studentId) {
+    issues.push({
+      code: "email-only",
+      level: "info",
+      message: "Chưa có mã sinh viên; vẫn hợp lệ nếu chỉ có email.",
+    });
+  }
+  return issues;
+}
+
+/** Records the row under its email / student code keys; returns a warning when either was already seen. */
+function duplicateIssue(
+  studentId: string,
+  email: string,
+  rowNumber: number,
+  firstSeen: Map<string, number>,
+): ImportIssue | null {
+  let duplicate: ImportIssue | null = null;
+  for (const key of [email ? `e:${email.toLowerCase()}` : "", studentId ? `s:${studentId.toLowerCase()}` : ""]) {
+    if (!key) continue;
+    const first = firstSeen.get(key);
+    if (first === undefined) {
+      firstSeen.set(key, rowNumber);
+    } else {
+      duplicate ??= {
+        code: "duplicate-in-file",
+        level: "warning",
+        message: `Trùng với dòng ${first} trong file. Hệ thống sẽ đánh dấu dòng trùng.`,
+      };
+    }
+  }
+  return duplicate;
+}
+
 /**
  * Reads CSV text into a preview. Spreadsheet files are refused with a clear
  * reason: the app has no Excel reader, and guessing at binary content would
@@ -170,12 +280,7 @@ export function readImportFile(fileName: string, size: number, text: string): Im
   const firstLine = text.replace(/^﻿/, "").split(/\r?\n/, 1)[0] ?? "";
   const delimiter = detectDelimiter(firstLine);
   const records = parseCsv(text, delimiter);
-  const header = records[0] ?? [];
-  const columnIndex: Partial<Record<"student_id" | "email" | "first_name" | "last_name", number>> = {};
-  header.forEach((cell, index) => {
-    const canonical = COLUMN_ALIASES[normalizeHeader(cell)];
-    if (canonical && columnIndex[canonical] === undefined) columnIndex[canonical] = index;
-  });
+  const columnIndex = locateColumns(records[0] ?? []);
   if (columnIndex.email === undefined && columnIndex.student_id === undefined) {
     return {
       ok: false,
@@ -192,7 +297,7 @@ export function readImportFile(fileName: string, size: number, text: string): Im
     };
   }
 
-  const cell = (record: string[], key: keyof typeof columnIndex) =>
+  const cell = (record: string[], key: ColumnKey) =>
     columnIndex[key] === undefined ? "" : (record[columnIndex[key] as number] ?? "").trim();
 
   const rows: ImportRow[] = [];
@@ -202,48 +307,9 @@ export function readImportFile(fileName: string, size: number, text: string): Im
     const rowNumber = index + 2;
     const studentId = cell(record, "student_id");
     const email = cell(record, "email");
-    const issues: ImportIssue[] = [];
-
-    if (!studentId && !email) {
-      issues.push({
-        code: "no-identity",
-        level: "error",
-        message: "Dòng không có email lẫn mã sinh viên nên không xác định được người cần thêm.",
-      });
-    } else {
-      if (email && !EMAIL_PATTERN.test(email)) {
-        issues.push({ code: "invalid-email", level: "error", message: "Email sai định dạng." });
-      }
-      if (studentId && !email) {
-        issues.push({
-          code: "student-id-only",
-          level: "warning",
-          message: "Chỉ có mã sinh viên: hệ thống chỉ tìm tài khoản có sẵn, không tạo tài khoản mới.",
-        });
-      }
-      if (email && !studentId && EMAIL_PATTERN.test(email)) {
-        issues.push({
-          code: "email-only",
-          level: "info",
-          message: "Chưa có mã sinh viên; vẫn hợp lệ nếu chỉ có email.",
-        });
-      }
-    }
-
-    for (const key of [email ? `e:${email.toLowerCase()}` : "", studentId ? `s:${studentId.toLowerCase()}` : ""]) {
-      if (!key) continue;
-      const first = firstSeen.get(key);
-      if (first === undefined) {
-        firstSeen.set(key, rowNumber);
-      } else if (!issues.some((issue) => issue.code === "duplicate-in-file")) {
-        issues.push({
-          code: "duplicate-in-file",
-          level: "warning",
-          message: `Trùng với dòng ${first} trong file. Hệ thống sẽ đánh dấu dòng trùng.`,
-        });
-      }
-    }
-
+    const issues = identityIssues(studentId, email);
+    const duplicate = duplicateIssue(studentId, email, rowNumber, firstSeen);
+    if (duplicate) issues.push(duplicate);
     rows.push({
       rowNumber,
       studentId,
@@ -265,7 +331,7 @@ export function readImportFile(fileName: string, size: number, text: string): Im
       fileName,
       delimiter,
       rows,
-      columns: (Object.keys(columnIndex) as string[]).sort(),
+      columns: (Object.keys(columnIndex) as string[]).sort((a, b) => a.localeCompare(b)),
       readyCount: rows.filter((row) => !hasLevel(row, "error")).length,
       errorCount: rows.filter((row) => hasLevel(row, "error")).length,
       warningCount: rows.filter((row) => hasLevel(row, "warning")).length,

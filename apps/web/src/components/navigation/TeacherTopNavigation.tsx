@@ -9,7 +9,7 @@ import { isStudentAccount } from "@/features/auth/utils";
  * Top bar of the Teacher space. It carries no Student actions (create task,
  * Git sync, search of tasks) and issues no requests of its own.
  */
-export function TeacherTopNavigation({ onOpenMobileNav }: { onOpenMobileNav?: () => void }) {
+export function TeacherTopNavigation({ onOpenMobileNav }: Readonly<{ onOpenMobileNav?: () => void }>) {
   const { user } = useAuth();
 
   return (

@@ -87,11 +87,11 @@ function SyncBanner({
   tone,
   title,
   children,
-}: {
+}: Readonly<{
   tone: "info" | "warning" | "error";
   title: string;
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <section
       role={tone === "error" ? "alert" : "status"}
@@ -142,7 +142,7 @@ function ResyncButton() {
 /* Synced view sections                                                */
 /* ------------------------------------------------------------------ */
 
-function RepoStrip({ code }: { code: ProjectCode }) {
+function RepoStrip({ code }: Readonly<{ code: ProjectCode }>) {
   const { repository, defaultBranch, latestCommitSha } = code;
   return (
     <section className="flex flex-col justify-between gap-3 rounded-md border border-border bg-secondary/40 p-3 text-xs md:flex-row md:items-center">
@@ -198,13 +198,13 @@ function MetricCard({
   value,
   valueHint,
   footer,
-}: {
+}: Readonly<{
   label: string;
   icon: React.ReactNode;
   value: string;
   valueHint?: React.ReactNode;
   footer: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="flex flex-col justify-between rounded-md border border-border bg-card p-3.5">
       <div className="mb-1 flex items-center justify-between text-muted-foreground">
@@ -224,7 +224,7 @@ function MetricCard({
   );
 }
 
-function MetricsRow({ code }: { code: ProjectCode }) {
+function MetricsRow({ code }: Readonly<{ code: ProjectCode }>) {
   const { stats } = code;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -313,10 +313,10 @@ function MetricsRow({ code }: { code: ProjectCode }) {
 function ContributorRow({
   contributor,
   showStatus,
-}: {
+}: Readonly<{
   contributor: CodeContributor;
   showStatus: boolean;
-}) {
+}>) {
   const status = contributorStatusConfig[contributor.status];
   const githubUrl =
     contributor.githubUsername !== null
@@ -427,10 +427,10 @@ function ContributorRow({
 function ContributorsTable({
   contributors,
   showStatus,
-}: {
+}: Readonly<{
   contributors: CodeContributor[];
   showStatus: boolean;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="border-b border-border p-4">
@@ -481,12 +481,12 @@ function IssueKeyLink({
   issueKey,
   onOpenIssue,
   muted = false,
-}: {
+}: Readonly<{
   projectId: string;
   issueKey: string;
   onOpenIssue: (projectId: string, issueKey: string) => void;
   muted?: boolean;
-}) {
+}>) {
   return (
     <button
       type="button"
@@ -506,11 +506,11 @@ function PullRequestsSection({
   projectId,
   pullRequests,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   pullRequests: CodePullRequest[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -590,11 +590,11 @@ function BranchesSection({
   projectId,
   branches,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   branches: CodeBranch[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -652,11 +652,11 @@ function CommitsSection({
   projectId,
   commits,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   commits: CodeCommit[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -721,42 +721,19 @@ function CommitsSection({
 /* Main route                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function ProjectCodeRoute() {
-  const { projectId = "" } = useParams();
-  const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useProjectCode(projectId);
-  const { readOnly } = useProjectWorkspaceContext();
-
-  const openIssueKey = (pid: string, key: string) => {
-    navigate(`/projects/${pid}/board?issue=${key}`);
-  };
-
-  if (error) {
-    if (error instanceof ApiError && error.status === 403) {
-      return <ForbiddenPage />;
-    }
-    return (
-      <div className="p-6">
-        <ErrorState error={error} onRetry={() => void refetch()} />
-      </div>
-    );
-  }
-
-  if (isLoading || !data) {
-    return <PageSkeleton label="Đang tải thống kê mã nguồn" />;
-  }
-
-  const { syncState } = data;
-
-  let banner: React.ReactNode = null;
+function SyncStatusBanner({
+  syncState,
+  readOnly,
+}: Readonly<{ syncState: ProjectCode["syncState"]; readOnly: boolean }>) {
   if (syncState === "pending-webhook") {
-    banner = (
+    return (
       <SyncBanner tone="info" title="Đang chờ webhook đồng bộ">
         Dữ liệu GitHub sẽ được cập nhật tự động trong ít phút.
       </SyncBanner>
     );
-  } else if (syncState === "webhook-error") {
-    banner = (
+  }
+  if (syncState === "webhook-error") {
+    return (
       <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold text-red-700">
@@ -769,8 +746,9 @@ export default function ProjectCodeRoute() {
         <ResyncButton />
       </div>
     );
-  } else if (syncState === "token-expired") {
-    banner = (
+  }
+  if (syncState === "token-expired") {
+    return (
       <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
         <div>
           <p className="text-sm font-semibold text-red-700">
@@ -790,15 +768,22 @@ export default function ProjectCodeRoute() {
         </div>
       </div>
     );
-  } else if (syncState === "no-repo-permission") {
-    banner = (
+  }
+  if (syncState === "no-repo-permission") {
+    return (
       <SyncBanner tone="warning" title="UTask chưa có quyền đọc repository">
         Hãy kiểm tra đã cấp quyền cho ứng dụng UTask trên repository của nhóm,
         sau đó đồng bộ lại.
       </SyncBanner>
     );
   }
+  return null;
+}
 
+function codeUnavailableState(
+  syncState: ProjectCode["syncState"],
+  readOnly: boolean,
+): React.ReactElement | null {
   if (syncState === "disconnected") {
     return (
       <div className="p-6">
@@ -835,6 +820,37 @@ export default function ProjectCodeRoute() {
       </div>
     );
   }
+  return null;
+}
+
+export default function ProjectCodeRoute() {
+  const { projectId = "" } = useParams();
+  const navigate = useNavigate();
+  const { data, isLoading, error, refetch } = useProjectCode(projectId);
+  const { readOnly } = useProjectWorkspaceContext();
+
+  const openIssueKey = (pid: string, key: string) => {
+    navigate(`/projects/${pid}/board?issue=${key}`);
+  };
+
+  if (error) {
+    if (error instanceof ApiError && error.status === 403) {
+      return <ForbiddenPage />;
+    }
+    return (
+      <div className="p-6">
+        <ErrorState error={error} onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  if (isLoading || !data) {
+    return <PageSkeleton label="Đang tải thống kê mã nguồn" />;
+  }
+
+  const { syncState } = data;
+  const unavailable = codeUnavailableState(syncState, readOnly);
+  if (unavailable) return unavailable;
 
   const hasRepository = data.repository !== null;
 
@@ -854,7 +870,7 @@ export default function ProjectCodeRoute() {
         </div>
       ) : null}
 
-      {banner}
+      <SyncStatusBanner syncState={syncState} readOnly={readOnly} />
 
       {!hasRepository ? null : (
         <>

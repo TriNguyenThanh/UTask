@@ -75,7 +75,7 @@ describe("Team dashboard (T08)", () => {
     expect(members).toHaveTextContent("MSSV: 21020999");
 
     expect(main.getByRole("progressbar", { name: "Tiến độ Team NEXUS" })).toHaveAttribute(
-      "aria-valuenow",
+      "value",
       String(detail.progress!.percent),
     );
     expect(main.getByText(/theo điểm Sprint đang chạy/)).toBeInTheDocument();

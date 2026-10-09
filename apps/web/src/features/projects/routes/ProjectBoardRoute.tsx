@@ -85,10 +85,10 @@ function matchesFilters(issue: Issue, filters: BoardFilters): boolean {
 function IssueCard({
   issue,
   onOpen,
-}: {
+}: Readonly<{
   issue: Issue;
   onOpen: (key: string) => void;
-}) {
+}>) {
   const done = issue.status === "done";
   return (
     <button
@@ -179,11 +179,11 @@ function BoardColumn({
   column,
   issues,
   onOpenIssue,
-}: {
+}: Readonly<{
   column: (typeof COLUMNS)[number];
   issues: Issue[];
   onOpenIssue: (key: string) => void;
-}) {
+}>) {
   const points = issues.reduce((sum, issue) => sum + issue.storyPoints, 0);
   return (
     <section
@@ -225,11 +225,11 @@ function FilterChip({
   active,
   onClick,
   children,
-}: {
+}: Readonly<{
   active: boolean;
   onClick: () => void;
   children: ReactNode;
-}) {
+}>) {
   return (
     <button
       type="button"
@@ -253,14 +253,14 @@ function BoardToolbar({
   onFiltersChange,
   canCreate,
   showMine,
-}: {
+}: Readonly<{
   sprint: Sprint | null;
   filters: BoardFilters;
   onFiltersChange: (next: BoardFilters) => void;
   canCreate: boolean;
   /** An instructor has no tasks of their own, so there is no "mine" filter. */
   showMine: boolean;
-}) {
+}>) {
   const remainingDays = sprint ? daysLeft(sprint.endDate) : null;
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-subtle bg-background px-6 py-3">

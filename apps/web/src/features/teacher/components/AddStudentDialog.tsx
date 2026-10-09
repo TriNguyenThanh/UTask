@@ -15,6 +15,7 @@ import {
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { DisabledAction } from "@/features/teacher/components/shared";
+import { isValidEmail } from "@/features/teacher/lib/csvImport";
 
 export const ADD_STUDENT_UNAVAILABLE =
   "Thêm sinh viên chưa khả dụng: chưa có hợp đồng API thêm sinh viên vào lớp. Thông tin bạn nhập chưa được gửi đi và không có tài khoản nào được tạo.";
@@ -24,7 +25,7 @@ const schema = z
     email: z
       .string()
       .trim()
-      .refine((value) => value === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value), "Email sai định dạng."),
+      .refine((value) => value === "" || isValidEmail(value), "Email sai định dạng."),
     studentId: z.string().trim().max(30, "Mã sinh viên tối đa 30 ký tự."),
     lastName: z.string().trim().max(80, "Tối đa 80 ký tự."),
     firstName: z.string().trim().max(40, "Tối đa 40 ký tự."),
@@ -47,7 +48,7 @@ type Values = z.infer<typeof schema>;
  * the class is the backend's job. No password is asked for or generated, and
  * nothing here places the student in a team.
  */
-export function AddStudentDialog({ courseName }: { courseName: string }) {
+export function AddStudentDialog({ courseName }: Readonly<{ courseName: string }>) {
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", studentId: "", lastName: "", firstName: "" },

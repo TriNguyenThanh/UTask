@@ -731,6 +731,15 @@ const NO_REPOSITORY_STATS: ProjectCode["stats"] = {
   linesChanged: { added: 0, removed: 0 },
 };
 
+function githubSyncStateFor(scenario: string): ProjectCode["syncState"] {
+  if (scenario === "student-github-disconnected") return "disconnected";
+  if (scenario === "student-webhook-error" || scenario === "teacher-github-error") {
+    return "webhook-error";
+  }
+  if (scenario === "student-token-expired") return "token-expired";
+  return "synced";
+}
+
 /**
  * Code view for a project. A project that exists but has no repository is
  * answered with the `no-repository` state, not with "not found": the two
@@ -758,14 +767,7 @@ export function projectCodeFor(
   if (projectId !== "project-nexus") {
     return null;
   }
-  const syncState =
-    scenario === "student-github-disconnected"
-      ? "disconnected"
-      : scenario === "student-webhook-error" || scenario === "teacher-github-error"
-        ? "webhook-error"
-        : scenario === "student-token-expired"
-          ? "token-expired"
-          : "synced";
+  const syncState = githubSyncStateFor(scenario);
   return {
     repository: "nexus-team/smart-supply-chain",
     defaultBranch: "main",
