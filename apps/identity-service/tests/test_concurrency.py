@@ -45,9 +45,7 @@ def test_two_reset_confirms_have_only_one_success():
     }
 
     def confirm():
-        return (
-            APIClient().post("/password-reset/confirm", body, format="json").status_code
-        )
+        return APIClient().post("/password-reset/confirm", body, format="json").status_code
 
     assert sorted(run_concurrent(confirm, confirm)) == [200, 400]
     user.refresh_from_db()

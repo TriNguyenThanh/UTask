@@ -97,9 +97,7 @@ def test_axes_five_failures_and_fixed_cooldown():
         assert response.status_code == (429 if i == 4 else 401)
     attempt = AccessAttempt.objects.get(username=str(user.pk))
     timestamp, failures = attempt.attempt_time, attempt.failures_since_start
-    response = client.post(
-        "/login", {"email": user.email, "password": PASSWORD}, format="json"
-    )
+    response = client.post("/login", {"email": user.email, "password": PASSWORD}, format="json")
     assert response.status_code == 429
     assert response["Retry-After"] == "900"
     attempt.refresh_from_db()

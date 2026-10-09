@@ -67,14 +67,8 @@ def test_register_verify_login_me_refresh_logout(http_client, live_server, signu
         EmailConfirmation.objects.get(email_address__user=user).key
         == hashlib.sha256(key.encode()).hexdigest()
     )
-    assert (
-        client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code
-        == 200
-    )
-    assert (
-        client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code
-        == 404
-    )
+    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 200
+    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 404
     user.refresh_from_db()
     assert user.is_active and user.is_email_verified
 
@@ -111,10 +105,7 @@ def test_register_verify_login_me_refresh_logout(http_client, live_server, signu
     assert revoked.status_code == 401 and revoked.headers["WWW-Authenticate"].startswith("Bearer")
     client.headers.pop("Authorization")
     assert (
-        client.post(
-            f"{base}/refresh", json={"refresh": new_refresh}, timeout=10
-        ).status_code
-        == 401
+        client.post(f"{base}/refresh", json={"refresh": new_refresh}, timeout=10).status_code == 401
     )
 
 
@@ -126,9 +117,7 @@ def test_forgot_reset_login_and_old_credentials_revoked(http_client, live_server
     response = http_login(client, base, user)
     old_refresh = response.cookies["refresh_token"]
     client.cookies.clear()
-    forgot = client.post(
-        f"{base}/password-reset/request", json={"email": user.email}, timeout=10
-    )
+    forgot = client.post(f"{base}/password-reset/request", json={"email": user.email}, timeout=10)
     assert forgot.status_code == 200, forgot.json()
     event = OutboxEvent.objects.get(
         aggregate_id=user.pk, event_type="identity.password_reset.requested"
@@ -142,15 +131,10 @@ def test_forgot_reset_login_and_old_credentials_revoked(http_client, live_server
     assert client.get(f"{base}/users/me", timeout=10).status_code == 401
     client.headers.pop("Authorization")
     assert (
-        client.post(
-            f"{base}/refresh", json={"refresh": old_refresh}, timeout=10
-        ).status_code
-        == 401
+        client.post(f"{base}/refresh", json={"refresh": old_refresh}, timeout=10).status_code == 401
     )
     assert (
-        client.post(
-            f"{base}/password-reset/confirm", json=reset_data, timeout=10
-        ).status_code
+        client.post(f"{base}/password-reset/confirm", json=reset_data, timeout=10).status_code
         == 400
     )
     assert (
@@ -175,9 +159,7 @@ def test_forgot_is_neutral_and_does_not_enqueue_ineligible_accounts(state):
         user.account_status = state
     user.save()
     email = "unknown@example.edu.vn" if state == "unknown" else user.email
-    response = APIClient().post(
-        "/password-reset/request", {"email": email}, format="json"
-    )
+    response = APIClient().post("/password-reset/request", {"email": email}, format="json")
     assert response.status_code == 200
     assert not OutboxEvent.objects.filter(event_type="identity.password_reset.requested").exists()
 
