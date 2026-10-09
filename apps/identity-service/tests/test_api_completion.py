@@ -21,13 +21,13 @@ def test_profile_update_trigger_event_and_noop(authenticated_account):
         "bio": "Django",
         "preferences": {"theme": "system"},
     }
-    response = client.patch("/api/v1/users/me", changes, format="json")
+    response = client.patch("/users/me", changes, format="json")
     assert response.status_code == 200
     assert response.json()["data"]["display_name"] == "Nguyễn An"
     event = OutboxEvent.objects.get(event_type="identity.user.updated")
     assert event.data["data"]["display_name"] == "Nguyễn An"
     assert "github_username" in event.data["data"]
-    assert client.patch("/api/v1/users/me", changes, format="json").status_code == 200
+    assert client.patch("/users/me", changes, format="json").status_code == 200
     assert OutboxEvent.objects.filter(event_type="identity.user.updated").count() == 1
     assert AuditLog.objects.filter(action="PROFILE_UPDATED").count() == 1
 
@@ -42,7 +42,7 @@ def test_profile_update_trigger_event_and_noop(authenticated_account):
 )
 def test_profile_protected_fields(field, status, code, authenticated_account):
     _, client = authenticated_account()
-    result = client.patch("/api/v1/users/me", {field: "invalid"}, format="json")
+    result = client.patch("/users/me", {field: "invalid"}, format="json")
     assert result.status_code == status
     assert result.json()["error"]["code"] == code
 
@@ -50,10 +50,10 @@ def test_profile_protected_fields(field, status, code, authenticated_account):
 def test_public_batch_allowlist_dedup_and_deleted(authenticated_account):
     _, client = authenticated_account()
     target, deleted = create_user(), create_user(deleted_at=timezone.now())
-    assert client.get(f"/api/v1/users/{target.pk}").status_code == 200
-    assert client.get(f"/api/v1/users/{deleted.pk}").status_code == 404
+    assert client.get(f"/users/{target.pk}").status_code == 200
+    assert client.get(f"/users/{deleted.pk}").status_code == 404
     result = client.post(
-        "/api/v1/users/batch",
+        "/users/batch",
         {"user_ids": [str(target.pk), str(target.pk), str(deleted.pk), str(uuid4())]},
         format="json",
     )
@@ -76,8 +76,8 @@ def test_public_batch_allowlist_dedup_and_deleted(authenticated_account):
 def test_admin_status_role_noop_and_revocation(authenticated_account, mutation):
     _, client = authenticated_account(global_role_code="SYSTEM_ADMIN")
     target, victim = authenticated_account()
-    role_url = f"/api/v1/admin/users/{target.pk}/roles"
-    status_url = f"/api/v1/admin/users/{target.pk}/status"
+    role_url = f"/admin/users/{target.pk}/roles"
+    status_url = f"/admin/users/{target.pk}/status"
     if mutation == "revoke-role":
         assert client.post(role_url, {"role_code": "TEACHER"}, format="json").status_code == 200
         login(victim, target)
@@ -95,7 +95,7 @@ def test_admin_status_role_noop_and_revocation(authenticated_account, mutation):
 
     assert result.status_code == 200, result.json()
     target.refresh_from_db()
-    assert victim.get("/api/v1/users/me").status_code == 401
+    assert victim.get("/users/me").status_code == 401
     assert not UserSession.objects.filter(user=target, is_revoked=False).exists()
     assert OutboxEvent.objects.filter(aggregate_id=target.pk).count() == events_before + 1
     if mutation == "suspend":
@@ -109,53 +109,53 @@ def test_admin_status_role_noop_and_revocation(authenticated_account, mutation):
         noop = getattr(client, method)(role_url, {"role_code": "TEACHER"}, format="json")
         assert noop.status_code == 200
         assert OutboxEvent.objects.filter(aggregate_id=target.pk).count() == events_before + 1
-        assert victim.get("/api/v1/users/me").status_code == 200
+        assert victim.get("/users/me").status_code == 200
 
 
 def test_admin_cannot_revoke_own_admin_role(authenticated_account):
     admin, client = authenticated_account(global_role_code="SYSTEM_ADMIN")
 
     response = client.delete(
-        f"/api/v1/admin/users/{admin.pk}/roles", {"role_code": "SYSTEM_ADMIN"}, format="json"
+        f"/admin/users/{admin.pk}/roles", {"role_code": "SYSTEM_ADMIN"}, format="json"
     )
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "CANNOT_REVOKE_OWN_ADMIN_ROLE"
     assert admin.global_role_assignments.filter(role__code="SYSTEM_ADMIN").exists()
     assert not OutboxEvent.objects.filter(aggregate_id=admin.pk).exists()
-    assert client.get("/api/v1/users/me").status_code == 200
+    assert client.get("/users/me").status_code == 200
 
 
 def test_admin_reactivation_does_not_restore_revoked_session(authenticated_account):
     _, client = authenticated_account(global_role_code="SYSTEM_ADMIN")
     target, victim = authenticated_account()
-    url = f"/api/v1/admin/users/{target.pk}/status"
+    url = f"/admin/users/{target.pk}/status"
     assert (
         client.patch(url, {"status": "SUSPENDED", "reason": "test"}, format="json").status_code
         == 200
     )
-    assert victim.get("/api/v1/users/me").status_code == 401
+    assert victim.get("/users/me").status_code == 401
 
     response = client.patch(url, {"status": "ACTIVE", "reason": "test"}, format="json")
 
     assert response.status_code == 200
     target.refresh_from_db()
     assert target.is_active
-    assert victim.get("/api/v1/users/me").status_code == 401
+    assert victim.get("/users/me").status_code == 401
     assert not UserSession.objects.filter(user=target, is_revoked=False).exists()
     login(victim, target)
-    assert victim.get("/api/v1/users/me").status_code == 200
+    assert victim.get("/users/me").status_code == 200
 
 
 def test_admin_filter_pagination_and_student_denied(authenticated_account):
     _, client = authenticated_account(global_role_code="SYSTEM_ADMIN")
     student, student_client = authenticated_account()
-    assert student_client.get("/api/v1/admin/users").status_code == 403
-    result = client.get("/api/v1/admin/users", {"role": "STUDENT", "limit": 1})
+    assert student_client.get("/admin/users").status_code == 403
+    result = client.get("/admin/users", {"role": "STUDENT", "limit": 1})
     assert result.status_code == 200
     assert result.json()["data"][0]["id"] == str(student.pk)
     assert result.json()["meta"]["total_count"] == 1
-    assert client.get("/api/v1/admin/users", {"limit": 101}).status_code == 400
+    assert client.get("/admin/users", {"limit": 101}).status_code == 400
 
 
 def test_session_status_live_revoked_invalid_and_caller_keys(settings, authenticated_account):
@@ -174,7 +174,7 @@ def test_session_status_live_revoked_invalid_and_caller_keys(settings, authentic
         "data"
     ] == {"active": True}
     client.cookies.clear()
-    assert client.post("/api/v1/auth/logout-all", {}, format="json").status_code == 200
+    assert client.post("/logout-all", {}, format="json").status_code == 200
     assert client.post(url, {}, format="json", HTTP_X_SERVICE_KEY="local-work-key").json()[
         "data"
     ] == {"active": False}
@@ -236,7 +236,7 @@ def test_jwt_errors_headers_and_resolver_envelope(kind, code, authenticated_acco
         token.set_exp(lifetime=timedelta(seconds=-1))
         raw = str(token)
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw}")
-    response = client.get("/api/v1/users/me")
+    response = client.get("/users/me")
     assert response.status_code == 401
     assert response.json()["error"]["code"] == code
     assert response.headers["WWW-Authenticate"].startswith("Bearer")
@@ -250,7 +250,7 @@ def test_profile_transaction_rollback_on_outbox_failure(monkeypatch, authenticat
         raise RuntimeError("test infrastructure failure")
 
     monkeypatch.setattr("accounts.services.profiles.emit_user", fail)
-    result = client.patch("/api/v1/users/me", {"bio": "not committed"}, format="json")
+    result = client.patch("/users/me", {"bio": "not committed"}, format="json")
     assert result.status_code == 500
     user.profile.refresh_from_db()
     assert user.profile.bio is None
@@ -263,6 +263,6 @@ def test_profile_transaction_rollback_on_outbox_failure(monkeypatch, authenticat
 )
 def test_batch_rejects_invalid_identifiers_and_size(user_ids, authenticated_account):
     _, client = authenticated_account()
-    response = client.post("/api/v1/users/batch", {"user_ids": user_ids}, format="json")
+    response = client.post("/users/batch", {"user_ids": user_ids}, format="json")
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"

@@ -86,16 +86,16 @@ def test_auth_framework_loads_canonical_hooks_and_unchanged_model_owner():
 @pytest.mark.parametrize(
     "name,path,module",
     [
-        ("identity-login", "/api/v1/auth/login", "authentication.views.auth"),
-        ("identity-refresh", "/api/v1/auth/refresh", "authentication.views.auth"),
-        ("identity-current-user", "/api/v1/users/me", "accounts.views.profiles"),
-        ("identity-register", "/api/v1/auth/register", "authentication.views.registration"),
-        ("identity-activate", "/api/v1/auth/activate", "authentication.views.registration"),
-        ("identity-logout", "/api/v1/auth/logout", "authentication.views.devices"),
-        ("identity-sessions", "/api/v1/auth/sessions", "authentication.views.devices"),
+        ("identity-login", "/login", "authentication.views.auth"),
+        ("identity-refresh", "/refresh", "authentication.views.auth"),
+        ("identity-current-user", "/users/me", "accounts.views.profiles"),
+        ("identity-register", "/register", "authentication.views.registration"),
+        ("identity-activate", "/activate", "authentication.views.registration"),
+        ("identity-logout", "/logout", "authentication.views.devices"),
+        ("identity-sessions", "/sessions", "authentication.views.devices"),
         (
             "identity-password-change",
-            "/api/v1/auth/password-change",
+            "/password-change",
             "dj_rest_auth.views",
         ),
     ],
@@ -115,8 +115,8 @@ def test_oauth_flags_keep_routes_closed_or_open_as_before(settings, google, gith
     try:
         importlib.reload(urls)
         paths = {str(pattern.pattern) for pattern in urls.urlpatterns}
-        assert ("api/v1/auth/oauth/google" in paths) is google
-        assert ("api/v1/auth/oauth/github" in paths) is github
+        assert ("oauth/google" in paths) is google
+        assert ("oauth/github" in paths) is github
     finally:
         settings.IDENTITY_GOOGLE_ENABLED = False
         settings.IDENTITY_GITHUB_ENABLED = False

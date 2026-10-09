@@ -38,7 +38,7 @@ def test_legacy_pbkdf2_user_can_log_in_and_check_password_upgrades_the_hash(fiel
     user.refresh_from_db()
     assert identify_hasher(user.password).algorithm == "argon2"
     assert user.check_password("LegacyPassword123!")
-    assert client.get("/api/v1/users/me").status_code == 200
+    assert client.get("/users/me").status_code == 200
 
 
 @pytest.mark.django_db

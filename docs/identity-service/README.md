@@ -3,7 +3,8 @@
 Identity là nguồn dữ liệu gốc về tài khoản, hồ sơ, vai trò toàn hệ thống và phiên đăng
 nhập của UTask. Tài liệu này hướng dẫn các service khác tích hợp; chi tiết request/response
 nằm trong [đặc tả API](../architecture/Identity_Service_API_Specification.md).
-Schema OpenAPI được cung cấp tại `/api/schema/` của Identity.
+Schema OpenAPI local được cung cấp tại `/openapi/`; qua gateway staging là
+`/api/auth/openapi/`.
 
 **Phạm vi:** API lõi có source và kiểm thử local. Google/GitHub OAuth và avatar R2 được
 mở bằng feature flags khi đủ cấu hình. Provider thật, gửi email, publisher Kafka và
@@ -54,25 +55,25 @@ Identity không ghi enrollment, project membership hoặc dữ liệu repository
 
 Các đường dưới đây là đường **trong service**. Backend gọi `http://identity-service:8000`
 trên mạng Compose; local là `http://localhost:8001`. Gateway bỏ tiền tố `/api/auth/`:
-`/api/auth/api/v1/auth/login` được chuyển thành `/api/v1/auth/login`.
-Routes `/api/v1/internal/` dành cho backend và bị chặn ở gateway.
+`/api/auth/login` được chuyển thành `/login`.
+Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `/api/v1/admin` không còn được đăng ký. Routes `/api/v1/internal/` dành cho backend và bị chặn ở gateway.
 
 | Nhóm | API | Quyền/đặc điểm |
 | --- | --- | --- |
-| Đăng ký | POST `/api/v1/auth/register` | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key |
-| Kích hoạt | POST `/api/v1/auth/activate`, `/api/v1/auth/activation/resend` | Anonymous; key dùng một lần, resend vô hiệu key cũ |
-| Login/refresh | POST `/api/v1/auth/login`, `/api/v1/auth/refresh` | Login email/username; refresh bằng body JWT hoặc cookie |
-| Password | POST `/api/v1/auth/password-reset/request`, `/api/v1/auth/password-reset/confirm`, `/api/v1/auth/password-change` | Request/confirm anonymous; change cần Bearer và password cũ |
-| Logout | POST `/api/v1/auth/logout`, `/api/v1/auth/logout-all` | Bearer |
-| Thiết bị | GET `/api/v1/auth/sessions`; DELETE `/api/v1/auth/sessions/{session_id}` | Bearer; phiên thuộc user hiện tại |
-| Hồ sơ cá nhân | GET/PATCH `/api/v1/users/me` | Bearer; không tự đổi role/email/MSSV qua PATCH |
-| Tra cứu | GET `/api/v1/users/{user_id}`; POST `/api/v1/users/batch` | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy |
-| Quản trị | GET `/api/v1/admin/users`; PATCH `/api/v1/admin/users/{user_id}/status`; POST/DELETE `/api/v1/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình |
+| Đăng ký | POST `/register` | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key |
+| Kích hoạt | POST `/activate`, `/activation/resend` | Anonymous; key dùng một lần, resend vô hiệu key cũ |
+| Login/refresh | POST `/login`, `/refresh` | Login email/username; refresh bằng body JWT hoặc cookie |
+| Password | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change` | Request/confirm anonymous; change cần Bearer và password cũ |
+| Logout | POST `/logout`, `/logout-all` | Bearer |
+| Thiết bị | GET `/sessions`; DELETE `/sessions/{session_id}` | Bearer; phiên thuộc user hiện tại |
+| Hồ sơ cá nhân | GET/PATCH `/users/me` | Bearer; không tự đổi role/email/MSSV qua PATCH |
+| Tra cứu | GET `/users/{user_id}`; POST `/users/batch` | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy |
+| Quản trị | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình |
 | Kiểm tra phiên | POST `/api/v1/internal/auth/session-status` | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai` |
 | Cấp sinh viên | POST `/api/v1/internal/users/provision-students` | Classroom key + actor Bearer TEACHER/SYSTEM_ADMIN + Idempotency-Key UUID |
 | Resend nội bộ | POST `/api/v1/internal/users/{user_id}/resend-activation` | Classroom key + actor Bearer; user pending đủ điều kiện |
 | GitHub mapping | GET `/api/v1/internal/users/{user_id}/oauth/GITHUB` | Integration key; mapping có thể là null |
-| Khóa công khai | GET `/api/v1/auth/.well-known/jwks.json` | Anonymous; `keys` ở root |
+| Khóa công khai | GET `/.well-known/jwks.json` | Anonymous; `keys` ở root |
 
 Tra cứu public/batch chỉ trả dữ liệu cho phép, không password/token/preferences của
 user khác. Provisioning nhận tối đa100 JSON rows và trả kết quả từng row. Cùng actor,
@@ -112,7 +113,7 @@ Blacklist refresh không tự thu hồi access ở consumer chỉ kiểm chữ k
 giúp consumer thấy logout, đổi password/role, suspended/deleted hoặc replay sau commit.
 Private signing key chỉ ở Identity; service khác dùng public JWKS và caller key riêng.
 
-Web nhận refresh qua cookie HttpOnly/Secure/SameSite=Lax, path `/api/v1/auth`.
+Web nhận refresh qua cookie HttpOnly/Secure/SameSite=Lax, path `/api/auth`.
 Mutation dùng cookie phải qua CSRF/Origin của Django; cookie và body khác nhau trả400.
 Backend service không giữ refresh token thay người dùng.
 
@@ -150,7 +151,9 @@ Compose local và staging cùng dùng mapping `infra/env/identity-service.env`.
 Điền giá trị tại `.env` của từng máy theo `.env.example`: signing key host path,
 caller keys, mail encryption và nhóm Google/GitHub/R2. Giữ secrets ngoài source;
 xem [cấu hình môi trường](../infrastructure/environment.md).
-Swagger local `/api/schema/swagger/`; OpenAPI JSON `/api/schema/`; health `/healthz`.
+Swagger local `/docs/`; qua gateway staging là
+`/api/auth/docs/`. OpenAPI JSON local `/openapi/`, qua gateway là
+`/api/auth/openapi/`; health `/healthz`.
 
 Source: `accounts` sở hữu user/profile/roles; `authentication` quản lý credential/session
 và hooks thư viện; `messaging` ghi event/mã hóa mail; `common` xử lý response/error;

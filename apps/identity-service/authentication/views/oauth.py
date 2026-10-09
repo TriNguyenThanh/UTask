@@ -94,7 +94,7 @@ class OAuthStartView(APIView):
             secure=True,
             httponly=True,
             samesite="Lax",
-            path="/api/v1/auth/oauth",
+            path="/api/auth",
         )
         return response
 
