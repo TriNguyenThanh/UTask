@@ -17,17 +17,17 @@ def test_device_scope_remote_revoke_and_logout_all():
     login(second, user)
     login(stranger, other)
     first.cookies.clear()
-    devices = first.get("/api/v1/auth/sessions").json()["data"]
+    devices = first.get("/sessions").json()["data"]
     assert len(devices) == 2
     assert sum(device["is_current"] for device in devices) == 1
     target = next(device for device in devices if not device["is_current"])
-    response = stranger.delete("/api/v1/auth/sessions/" + target["id"])
+    response = stranger.delete("/sessions/" + target["id"])
     assert response.status_code == 404
-    assert first.delete("/api/v1/auth/sessions/" + target["id"]).status_code == 200
-    assert second.get("/api/v1/users/me").status_code == 401
-    assert first.get("/api/v1/users/me").status_code == 200
-    assert first.post("/api/v1/auth/logout-all", {}, format="json").status_code == 200
-    assert first.get("/api/v1/users/me").status_code == 401
-    assert stranger.get("/api/v1/users/me").status_code == 200
+    assert first.delete("/sessions/" + target["id"]).status_code == 200
+    assert second.get("/users/me").status_code == 401
+    assert first.get("/users/me").status_code == 200
+    assert first.post("/logout-all", {}, format="json").status_code == 200
+    assert first.get("/users/me").status_code == 401
+    assert stranger.get("/users/me").status_code == 200
     login(first, user)
-    assert first.get("/api/v1/users/me").status_code == 200
+    assert first.get("/users/me").status_code == 200

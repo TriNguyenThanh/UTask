@@ -190,7 +190,7 @@ Compose staging không có fallback `utask:*:local`. Ví dụ lệnh trên serve
 docker compose -f docker-compose.staging.yml config --quiet
 docker compose -f docker-compose.staging.yml pull
 docker compose -f docker-compose.staging.yml up -d --no-build --wait postgres redis
-docker compose -f docker-compose.staging.yml run --rm --no-deps identity-service /app/.venv/bin/python manage.py migrate --noinput
+docker compose -f docker-compose.staging.yml run --rm --no-deps --interactive=false identity-service /app/.venv/bin/python manage.py migrate --noinput < /dev/null
 docker compose -f docker-compose.staging.yml up -d --no-build --wait --wait-timeout 120
 ```
 
@@ -221,6 +221,8 @@ Namespace GHCR luôn chuyển owner repository về chữ thường, ví dụ
 một lần, dùng chung khi publish, tái sử dụng image và deploy. Bước kiểm tra Compose
 cũng chuẩn hóa cùng quy tắc; tên hiển thị tài khoản GitHub không cần đổi.
 
+Workflow đóng stdin cho các lệnh Docker chạy bên trong script SSH truyền qua `bash -s`;
+lệnh migration và nghiệm thu không được tiêu thụ phần script deploy còn lại.
 Workflow chạy `manage.py migrate --noinput` cho app có dependency Django được nhận diện,
 bằng `/app/.venv/bin/python`. App không có Django không bị ép chạy lệnh Django.
 Migration lỗi dừng trước bước khởi động app mới. Khi thêm

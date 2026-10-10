@@ -12,8 +12,9 @@ Identity OpenAPI 1.8 được sinh từ URLconf và serializers của
 service bằng drf-spectacular. Artifact mặc định gồm 25 thao tác; OAuth/avatar tắt mặc định
 không xuất thành route đang mở. Bật flags trong môi trường đủ cấu hình để xuất riêng.
 Trách nhiệm, luồng và cách tích hợp: [Identity Service](../../docs/identity-service/README.md).
-Khi Identity chạy local, Swagger UI ở `/api/schema/swagger/` và OpenAPI JSON ở
-`/api/schema/`. Compose bind Identity tới loopback; Nginx không route hai URL này.
+Khi Identity chạy local, Swagger UI ở `/docs/` và OpenAPI JSON ở
+`/openapi/`. Trên staging qua Nginx, dùng `/api/auth/docs/` và
+`/api/auth/openapi/`.
 
 ### Xuất hợp đồng Identity
 

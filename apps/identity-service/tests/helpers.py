@@ -28,7 +28,7 @@ def create_user(**kwargs):
 
 def login(client, user, password=PASSWORD, *, field="email"):
     response = client.post(
-        "/api/v1/auth/login",
+        "/login",
         {field: getattr(user, field), "password": password, "device_name": "Acceptance browser"},
         format="json",
     )
@@ -39,7 +39,7 @@ def login(client, user, password=PASSWORD, *, field="email"):
 
 def refresh_from_body(client, raw):
     client.cookies.clear()
-    return client.post("/api/v1/auth/refresh", {"refresh": raw}, format="json")
+    return client.post("/refresh", {"refresh": raw}, format="json")
 
 
 def mail_secret(event):

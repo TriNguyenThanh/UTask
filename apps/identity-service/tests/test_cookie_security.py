@@ -30,7 +30,7 @@ def test_cookie_mutation_accepts_valid_csrf_and_same_origin(browser_session, end
     user, client, csrf, raw = browser_session
     before = UserSession.objects.get(user=user)
     response = client.post(
-        f"/api/v1/auth/{endpoint}",
+        f"/{endpoint}",
         {},
         format="json",
         secure=True,
@@ -44,15 +44,15 @@ def test_cookie_mutation_accepts_valid_csrf_and_same_origin(browser_session, end
     if endpoint == "refresh":
         assert cookie.value != raw
         assert cookie["httponly"] and cookie["secure"] and cookie["samesite"] == "Lax"
-        assert cookie["path"] == "/api/v1/auth"
+        assert cookie["path"] == "/api/auth"
         assert UntypedToken(cookie.value)["family_exp"] == UntypedToken(raw)["family_exp"]
         assert UserSession.objects.filter(user=user).count() == 1
         assert not before.is_revoked
-        assert client.get("/api/v1/users/me").status_code == 200
+        assert client.get("/users/me").status_code == 200
     else:
         assert cookie["max-age"] == 0
         assert before.is_revoked
-        assert client.get("/api/v1/users/me").status_code == 401
+        assert client.get("/users/me").status_code == 401
     assert BlacklistedToken.objects.filter(token__jti=UntypedToken(raw)["jti"]).exists()
 
 
@@ -78,7 +78,7 @@ def test_cookie_mutation_rejects_csrf_or_origin_without_side_effects(
         headers.pop("HTTP_ORIGIN")
         headers["HTTP_REFERER"] = "https://untrusted.example/"
 
-    response = client.post(f"/api/v1/auth/{endpoint}", {}, format="json", secure=True, **headers)
+    response = client.post(f"/{endpoint}", {}, format="json", secure=True, **headers)
 
     assert response.status_code == 403
     assert response.json()["error"] == {"code": "PERMISSION_DENIED", "details": []}
@@ -94,7 +94,7 @@ def test_cookie_and_body_conflict_is_rejected_without_mutation(browser_session, 
     user, client, csrf, raw = browser_session
     before = UserSession.objects.get(user=user).refresh_token_hash
     response = client.post(
-        f"/api/v1/auth/{endpoint}",
+        f"/{endpoint}",
         {"refresh": raw + "x"},
         format="json",
         secure=True,

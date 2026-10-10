@@ -49,7 +49,7 @@ def test_admin_actor_role_is_rechecked_after_waiting_for_lock(monkeypatch):
             client = APIClient()
             client.credentials(HTTP_AUTHORIZATION="Bearer " + token)
             return client.patch(
-                f"/api/v1/admin/users/{target.pk}/status",
+                f"/admin/users/{target.pk}/status",
                 {"status": "SUSPENDED", "reason": "race"},
                 format="json",
             )
@@ -79,7 +79,7 @@ def test_refresh_competing_admin_suspend_never_leaves_live_session():
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION="Bearer " + admin_token)
         return client.patch(
-            f"/api/v1/admin/users/{target.pk}/status",
+            f"/admin/users/{target.pk}/status",
             {"status": "SUSPENDED", "reason": "race"},
             format="json",
         ).status_code
