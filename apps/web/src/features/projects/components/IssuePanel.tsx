@@ -1,3 +1,4 @@
+import { FeedbackComposer } from "@/features/teacher/components/FeedbackComposer";
 import {
   GitBranch,
   GitCommitHorizontal,
@@ -7,7 +8,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,7 @@ function formatDateTime(value: string): string {
   });
 }
 
-function GitLinkBadge({ link }: { link: IssueDetail["gitLinks"][number] }) {
+function GitLinkBadge({ link }: Readonly<{ link: IssueDetail["gitLinks"][number] }>) {
   const Icon =
     link.kind === "branch" ? GitBranch : link.kind === "pr" ? GitPullRequest : GitCommitHorizontal;
   const kindLabel =
@@ -105,10 +106,13 @@ function PanelSkeleton() {
 function SubtaskList({
   subtasks,
   onToggle,
-}: {
+  readOnly,
+}: Readonly<{
   subtasks: { id: string; title: string; done: boolean }[];
   onToggle: (id: string) => void;
-}) {
+  /** Instructors see the checklist but cannot change it, not even locally. */
+  readOnly: boolean;
+}>) {
   const doneCount = subtasks.filter((subtask) => subtask.done).length;
   const percent = subtasks.length > 0 ? Math.round((doneCount / subtasks.length) * 100) : 0;
 
@@ -127,8 +131,9 @@ function SubtaskList({
               <input
                 type="checkbox"
                 checked={subtask.done}
+                disabled={readOnly}
                 onChange={() => onToggle(subtask.id)}
-                className="size-4 shrink-0 cursor-pointer rounded accent-primary"
+                className="size-4 shrink-0 cursor-pointer rounded accent-primary disabled:cursor-not-allowed"
               />
               <span className={cn("truncate", subtask.done && "text-muted-foreground line-through")}>
                 {subtask.title}
@@ -148,8 +153,404 @@ function SubtaskList({
         ))}
       </ul>
       <p className="text-[11px] text-muted-foreground">
-        Đánh dấu chỉ áp dụng cho phiên xem hiện tại.
+        {readOnly
+          ? "Bạn chỉ có quyền xem nhiệm vụ con."
+          : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
       </p>
+    </div>
+  );
+}
+
+const ISSUE_TYPE_LABELS: Record<IssueDetail["issue"]["type"], string> = {
+  story: "Story",
+  task: "Task",
+  bug: "Bug",
+};
+
+/** Focus the close button on open; restore focus to the issue card on close. */
+function useRestoreFocus(closeButtonRef: RefObject<HTMLButtonElement | null>) {
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [closeButtonRef]);
+}
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Keeps Tab inside the panel by wrapping focus between its first and last control. */
+function trapTab(event: globalThis.KeyboardEvent, panel: HTMLElement) {
+  const focusables = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const atEdge = event.shiftKey ? document.activeElement === first : document.activeElement === last;
+  if (!atEdge) return;
+  event.preventDefault();
+  (event.shiftKey ? last : first).focus();
+}
+
+/** Escape closes; Tab is trapped inside the panel. */
+function useEscapeAndTabTrap(panelRef: RefObject<HTMLDivElement | null>, onClose: () => void) {
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      } else if (event.key === "Tab" && panelRef.current) {
+        trapTab(event, panelRef.current);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, panelRef]);
+}
+
+function AiSubtaskAction({
+  canBreakdownWithAI,
+  aiKeyMissing,
+  projectId,
+}: Readonly<{ canBreakdownWithAI: boolean; aiKeyMissing: boolean; projectId: string }>) {
+  if (canBreakdownWithAI) {
+    return (
+      <Button variant="outline" size="xs" disabled title="Chưa có API sinh sub-tasks bằng AI">
+        <Sparkles aria-hidden />
+        AI Tự động sinh Sub-tasks
+      </Button>
+    );
+  }
+  if (aiKeyMissing) {
+    return (
+      <Button asChild variant="link" size="xs" title="Cấu hình AI key tại Project Settings">
+        <Link to={`/projects/${projectId}/settings`}>Cấu hình AI key tại Project Settings</Link>
+      </Button>
+    );
+  }
+  return null;
+}
+
+function IssueTitleBlock({ issue, sprint }: Readonly<{ issue: IssueDetail["issue"]; sprint: Sprint | null }>) {
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+          {ISSUE_TYPE_LABELS[issue.type]}
+        </span>
+        {sprint ? (
+          <span className="text-xs text-muted-foreground">
+            • Sprint:{" "}
+            <span className="font-semibold text-foreground">{sprint.name}</span>{" "}
+            ({formatDayRange(sprint)})
+          </span>
+        ) : null}
+        <span
+          className={cn(
+            "rounded border px-1.5 py-0.5 text-[11px] font-semibold",
+            PRIORITY_STYLES[issue.priority],
+          )}
+        >
+          Ưu tiên: {PRIORITY_LABELS[issue.priority]}
+        </span>
+      </div>
+      <h2 className="text-xl font-bold leading-snug tracking-tight md:text-2xl">
+        {issue.title}
+      </h2>
+    </div>
+  );
+}
+
+function IssueStatusField({ status }: Readonly<{ status: IssueDetail["issue"]["status"] }>) {
+  return (
+    <div>
+      <label
+        htmlFor="issue-status-select"
+        className="text-xs font-semibold text-muted-foreground"
+      >
+        Trạng thái
+      </label>
+      <select
+        id="issue-status-select"
+        value={status}
+        disabled
+        title="Cập nhật trạng thái sẽ khả dụng khi API hỗ trợ"
+        className="mt-1.5 w-full max-w-xs cursor-not-allowed rounded-md border border-outline-subtle bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
+      >
+        {STATUS_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function IssueDescription({ detail }: Readonly<{ detail: IssueDetail }>) {
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xs font-bold uppercase tracking-wider">
+        Mô tả công việc (Description)
+      </h3>
+      <div className="space-y-3.5 rounded-lg border border-outline-subtle bg-muted/40 p-4 text-[13px] leading-relaxed">
+        <p>{detail.description}</p>
+        <div className="border-t border-outline-subtle pt-3">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-primary">
+            Tiêu chí nghiệm thu (Acceptance Criteria)
+          </div>
+          <ul className="space-y-2 text-xs text-muted-foreground">
+            {detail.acceptanceCriteria.map((criterion) => (
+              <li key={criterion} className="flex items-start gap-2">
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                <span>{criterion}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean }>) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+          Nhiệm vụ con (Sub-tasks)
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            {subtasks.filter((s) => s.done).length}/{subtasks.length} hoàn thành
+          </span>
+        </h3>
+        <AiSubtaskAction
+          canBreakdownWithAI={canBreakdownWithAI}
+          aiKeyMissing={aiKeyMissing}
+          projectId={projectId}
+        />
+      </div>
+      {subtasks.length > 0 ? (
+        <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} />
+      ) : (
+        <p className="text-xs text-muted-foreground">Chưa có nhiệm vụ con nào.</p>
+      )}
+    </section>
+  );
+}
+
+function CommentsSection({ detail, readOnly, projectId, issueKey }: Readonly<{ detail: IssueDetail; readOnly: boolean; projectId: string; issueKey: string }>) {
+  return (
+    <section className="space-y-3 border-t border-outline-subtle pt-4">
+      <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+        <MessageSquare className="size-4" aria-hidden />
+        Bình luận (Comments)
+      </h3>
+      {readOnly ? (
+        <FeedbackComposer scope={`task.${projectId}.${issueKey}`} label="Soạn bình luận cho task (nháp)" />
+      ) : null}
+      {detail.comments.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Chưa có bình luận nào.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {detail.comments.map((comment) => (
+            <li
+              key={comment.id}
+              className="rounded-lg border border-outline-subtle bg-muted/40 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                    {comment.authorInitials}
+                  </span>
+                  <span className="truncate text-xs font-bold">
+                    {comment.authorName}
+                  </span>
+                </div>
+                <time dateTime={comment.createdAt} className="shrink-0 text-[11px] text-muted-foreground">
+                  {formatDateTime(comment.createdAt)}
+                </time>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {comment.body}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function HistorySection({ detail }: Readonly<{ detail: IssueDetail }>) {
+  return (
+    <section className="space-y-3 border-t border-outline-subtle pt-4">
+      <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+        <History className="size-4" aria-hidden />
+        Lịch sử (History)
+      </h3>
+      {detail.history.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Chưa có hoạt động nào.</p>
+      ) : (
+        <ul className="space-y-2">
+          {detail.history.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex items-start justify-between gap-3 rounded-md border border-outline-subtle bg-card px-3 py-2"
+            >
+              <span className="text-xs">
+                <span className="font-semibold">{entry.actorName}</span>{" "}
+                <span className="text-muted-foreground">{entry.summary}</span>
+              </span>
+              <time dateTime={entry.at} className="shrink-0 text-[11px] text-muted-foreground">
+                {formatDateTime(entry.at)}
+              </time>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void }>) {
+  return (
+    <div className="space-y-5 border-outline-subtle lg:col-span-4 lg:border-l lg:pl-6">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Chi tiết &amp; Thuộc tính
+      </h3>
+      <dl className="space-y-3 text-xs">
+        <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+          <dt className="shrink-0 text-muted-foreground">Mức độ ưu tiên</dt>
+          <dd
+            className={cn(
+              "rounded border px-2 py-0.5 text-[11px] font-semibold",
+              PRIORITY_STYLES[issue.priority],
+            )}
+          >
+            {PRIORITY_LABELS[issue.priority]}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+          <dt className="shrink-0 text-muted-foreground">Người thực hiện</dt>
+          <dd className="flex min-w-0 items-center gap-1.5">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+              {issue.assignee?.initials ?? "?"}
+            </span>
+            <span className="truncate font-medium">
+              {issue.assignee?.displayName ?? "Chưa gán"}
+            </span>
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+          <dt className="shrink-0 text-muted-foreground">Người báo cáo</dt>
+          <dd className="truncate font-medium">{detail.reporterName}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+          <dt className="shrink-0 text-muted-foreground">Story Points</dt>
+          <dd className="rounded border border-outline-subtle bg-muted px-2 py-0.5 font-bold">
+            {issue.storyPoints}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+          <dt className="shrink-0 text-muted-foreground">Epic</dt>
+          <dd className="min-w-0 truncate">
+            {epic ? (
+              <span
+                className="rounded border px-2 py-0.5 text-[11px] font-semibold"
+                style={{
+                  backgroundColor: `${epic.color}1a`,
+                  borderColor: `${epic.color}55`,
+                  color: epic.color,
+                }}
+              >
+                {epic.name}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="shrink-0 text-muted-foreground">Sprint</dt>
+          <dd className="min-w-0 truncate font-medium">
+            {sprint ? sprint.name : "Product Backlog"}
+          </dd>
+        </div>
+      </dl>
+
+      {/* Git links */}
+      <section className="space-y-2.5 rounded-lg border border-outline-subtle bg-muted/40 p-3.5">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          GitHub Development
+        </h3>
+        {detail.gitLinks.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Chưa có liên kết mã nguồn.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {detail.gitLinks.map((link) => (
+              <GitLinkBadge key={`${link.kind}-${link.label}`} link={link} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <Button variant="outline" size="sm" className="w-full" onClick={onClose}>
+        Quay lại Bảng công việc Sprint
+      </Button>
+    </div>
+  );
+}
+
+function IssueDetailBody({
+  detail,
+  issue,
+  epic,
+  sprint,
+  subtasks,
+  onToggleSubtask,
+  projectId,
+  issueKey,
+  canBreakdownWithAI,
+  aiKeyMissing,
+  readOnly,
+  onClose,
+}: Readonly<{
+  detail: IssueDetail;
+  issue: IssueDetail["issue"];
+  epic: Epic | null;
+  sprint: Sprint | null;
+  subtasks: { id: string; title: string; done: boolean }[];
+  onToggleSubtask: (id: string) => void;
+  projectId: string;
+  issueKey: string;
+  canBreakdownWithAI: boolean;
+  aiKeyMissing: boolean;
+  readOnly: boolean;
+  onClose: () => void;
+}>) {
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <IssueTitleBlock issue={issue} sprint={sprint} />
+
+      <div className="grid items-start gap-8 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-8">
+          <IssueStatusField status={issue.status} />
+          <IssueDescription detail={detail} />
+          <SubtasksSection
+            subtasks={subtasks}
+            onToggle={onToggleSubtask}
+            readOnly={readOnly}
+            projectId={projectId}
+            canBreakdownWithAI={canBreakdownWithAI}
+            aiKeyMissing={aiKeyMissing}
+          />
+          <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />
+          <HistorySection detail={detail} />
+        </div>
+
+        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} />
+      </div>
     </div>
   );
 }
@@ -169,8 +570,9 @@ export function IssuePanel({
   error,
   canBreakdownWithAI,
   aiKeyMissing,
+  readOnly = false,
   onClose,
-}: {
+}: Readonly<{
   projectId: string;
   projectName: string;
   issueKey: string;
@@ -183,50 +585,17 @@ export function IssuePanel({
   canBreakdownWithAI: boolean;
   /** Leader but AI key missing → link to Project Settings. */
   aiKeyMissing: boolean;
+  /** Instructor view: no subtask toggling, and a note that comments are view-only. */
+  readOnly?: boolean;
   onClose: () => void;
-}) {
+}>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   /** Local-only subtask overrides keyed by subtask id. */
   const [localDone, setLocalDone] = useState<Record<string, boolean>>({});
 
-  /* Focus X button on open; restore focus to the issue card on close. */
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
-    return () => {
-      previouslyFocused?.focus?.();
-    };
-  }, []);
-
-  /* Escape closes; Tab is trapped inside the panel. */
-  useEffect(() => {
-    function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const panel = panelRef.current;
-      if (!panel) return;
-      const focusables = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useRestoreFocus(closeButtonRef);
+  useEscapeAndTabTrap(panelRef, onClose);
 
   /* Reset local checkbox state when a different issue is opened. */
   useEffect(() => {
@@ -249,14 +618,8 @@ export function IssuePanel({
   }
 
   const issue = detail?.issue;
-  const epic =
-    issue?.epicId != null
-      ? (epics.find((candidate) => candidate.id === issue.epicId) ?? null)
-      : null;
-  const sprint =
-    issue?.sprintId != null
-      ? (sprints.find((candidate) => candidate.id === issue.sprintId) ?? null)
-      : null;
+  const epic = epics.find((candidate) => candidate.id === issue?.epicId) ?? null;
+  const sprint = sprints.find((candidate) => candidate.id === issue?.sprintId) ?? null;
   const isNotFound = error instanceof ApiError && error.status === 404;
 
   return (
@@ -317,270 +680,20 @@ export function IssuePanel({
         ) : null}
 
         {!isLoading && !error && detail && issue ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            {/* Title + type + priority */}
-            <div className="mb-5">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                  {issue.type === "story" ? "Story" : issue.type === "task" ? "Task" : "Bug"}
-                </span>
-                {sprint ? (
-                  <span className="text-xs text-muted-foreground">
-                    • Sprint:{" "}
-                    <span className="font-semibold text-foreground">{sprint.name}</span>{" "}
-                    ({formatDayRange(sprint)})
-                  </span>
-                ) : null}
-                <span
-                  className={cn(
-                    "rounded border px-1.5 py-0.5 text-[11px] font-semibold",
-                    PRIORITY_STYLES[issue.priority],
-                  )}
-                >
-                  Ưu tiên: {PRIORITY_LABELS[issue.priority]}
-                </span>
-              </div>
-              <h2 className="text-xl font-bold leading-snug tracking-tight md:text-2xl">
-                {issue.title}
-              </h2>
-            </div>
-
-            <div className="grid items-start gap-8 lg:grid-cols-12">
-              {/* Left column */}
-              <div className="space-y-6 lg:col-span-8">
-                {/* Status — read-only until the API supports updates */}
-                <div>
-                  <label
-                    htmlFor="issue-status-select"
-                    className="text-xs font-semibold text-muted-foreground"
-                  >
-                    Trạng thái
-                  </label>
-                  <select
-                    id="issue-status-select"
-                    value={issue.status}
-                    disabled
-                    title="Cập nhật trạng thái sẽ khả dụng khi API hỗ trợ"
-                    className="mt-1.5 w-full max-w-xs cursor-not-allowed rounded-md border border-outline-subtle bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Description + acceptance criteria */}
-                <section className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">
-                    Mô tả công việc (Description)
-                  </h3>
-                  <div className="space-y-3.5 rounded-lg border border-outline-subtle bg-muted/40 p-4 text-[13px] leading-relaxed">
-                    <p>{detail.description}</p>
-                    <div className="border-t border-outline-subtle pt-3">
-                      <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-primary">
-                        Tiêu chí nghiệm thu (Acceptance Criteria)
-                      </div>
-                      <ul className="space-y-2 text-xs text-muted-foreground">
-                        {detail.acceptanceCriteria.map((criterion) => (
-                          <li key={criterion} className="flex items-start gap-2">
-                            <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                            <span>{criterion}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Subtasks */}
-                <section className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
-                      Nhiệm vụ con (Sub-tasks)
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                        {subtasks.filter((s) => s.done).length}/{subtasks.length} hoàn thành
-                      </span>
-                    </h3>
-                    {canBreakdownWithAI ? (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        disabled
-                        title="Chưa có API sinh sub-tasks bằng AI"
-                      >
-                        <Sparkles aria-hidden />
-                        AI Tự động sinh Sub-tasks
-                      </Button>
-                    ) : aiKeyMissing ? (
-                      <Button asChild variant="link" size="xs" title="Cấu hình AI key tại Project Settings">
-                        <Link to={`/projects/${projectId}/settings`}>
-                          Cấu hình AI key tại Project Settings
-                        </Link>
-                      </Button>
-                    ) : null}
-                  </div>
-                  {subtasks.length > 0 ? (
-                    <SubtaskList subtasks={subtasks} onToggle={toggleSubtask} />
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Chưa có nhiệm vụ con nào.</p>
-                  )}
-                </section>
-
-                {/* Comments */}
-                <section className="space-y-3 border-t border-outline-subtle pt-4">
-                  <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
-                    <MessageSquare className="size-4" aria-hidden />
-                    Bình luận (Comments)
-                  </h3>
-                  {detail.comments.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Chưa có bình luận nào.</p>
-                  ) : (
-                    <ul className="space-y-2.5">
-                      {detail.comments.map((comment) => (
-                        <li
-                          key={comment.id}
-                          className="rounded-lg border border-outline-subtle bg-muted/40 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                                {comment.authorInitials}
-                              </span>
-                              <span className="truncate text-xs font-bold">
-                                {comment.authorName}
-                              </span>
-                            </div>
-                            <time dateTime={comment.createdAt} className="shrink-0 text-[11px] text-muted-foreground">
-                              {formatDateTime(comment.createdAt)}
-                            </time>
-                          </div>
-                          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                            {comment.body}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                {/* History */}
-                <section className="space-y-3 border-t border-outline-subtle pt-4">
-                  <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
-                    <History className="size-4" aria-hidden />
-                    Lịch sử (History)
-                  </h3>
-                  {detail.history.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Chưa có hoạt động nào.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {detail.history.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="flex items-start justify-between gap-3 rounded-md border border-outline-subtle bg-card px-3 py-2"
-                        >
-                          <span className="text-xs">
-                            <span className="font-semibold">{entry.actorName}</span>{" "}
-                            <span className="text-muted-foreground">{entry.summary}</span>
-                          </span>
-                          <time dateTime={entry.at} className="shrink-0 text-[11px] text-muted-foreground">
-                            {formatDateTime(entry.at)}
-                          </time>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-
-              {/* Right column: meta grid */}
-              <div className="space-y-5 border-outline-subtle lg:col-span-4 lg:border-l lg:pl-6">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Chi tiết &amp; Thuộc tính
-                </h3>
-                <dl className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
-                    <dt className="shrink-0 text-muted-foreground">Mức độ ưu tiên</dt>
-                    <dd
-                      className={cn(
-                        "rounded border px-2 py-0.5 text-[11px] font-semibold",
-                        PRIORITY_STYLES[issue.priority],
-                      )}
-                    >
-                      {PRIORITY_LABELS[issue.priority]}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
-                    <dt className="shrink-0 text-muted-foreground">Người thực hiện</dt>
-                    <dd className="flex min-w-0 items-center gap-1.5">
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                        {issue.assignee?.initials ?? "?"}
-                      </span>
-                      <span className="truncate font-medium">
-                        {issue.assignee?.displayName ?? "Chưa gán"}
-                      </span>
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
-                    <dt className="shrink-0 text-muted-foreground">Người báo cáo</dt>
-                    <dd className="truncate font-medium">{detail.reporterName}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
-                    <dt className="shrink-0 text-muted-foreground">Story Points</dt>
-                    <dd className="rounded border border-outline-subtle bg-muted px-2 py-0.5 font-bold">
-                      {issue.storyPoints}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-b border-outline-subtle/60 pb-2">
-                    <dt className="shrink-0 text-muted-foreground">Epic</dt>
-                    <dd className="min-w-0 truncate">
-                      {epic ? (
-                        <span
-                          className="rounded border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{
-                            backgroundColor: `${epic.color}1a`,
-                            borderColor: `${epic.color}55`,
-                            color: epic.color,
-                          }}
-                        >
-                          {epic.name}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="shrink-0 text-muted-foreground">Sprint</dt>
-                    <dd className="min-w-0 truncate font-medium">
-                      {sprint ? sprint.name : "Product Backlog"}
-                    </dd>
-                  </div>
-                </dl>
-
-                {/* Git links */}
-                <section className="space-y-2.5 rounded-lg border border-outline-subtle bg-muted/40 p-3.5">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    GitHub Development
-                  </h3>
-                  {detail.gitLinks.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Chưa có liên kết mã nguồn.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {detail.gitLinks.map((link) => (
-                        <GitLinkBadge key={`${link.kind}-${link.label}`} link={link} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                <Button variant="outline" size="sm" className="w-full" onClick={onClose}>
-                  Quay lại Bảng công việc Sprint
-                </Button>
-              </div>
-            </div>
-          </div>
+          <IssueDetailBody
+            detail={detail}
+            issue={issue}
+            epic={epic}
+            sprint={sprint}
+            subtasks={subtasks}
+            onToggleSubtask={toggleSubtask}
+            projectId={projectId}
+            issueKey={issueKey}
+            canBreakdownWithAI={canBreakdownWithAI}
+            aiKeyMissing={aiKeyMissing}
+            readOnly={readOnly}
+            onClose={onClose}
+          />
         ) : null}
       </div>
     </div>

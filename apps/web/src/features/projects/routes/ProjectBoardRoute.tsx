@@ -1,6 +1,6 @@
 import { Plus, Search, Zap } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   aiRequiresKey,
   canBreakdownTaskWithAI,
   canCreateTask,
+  projectPermissionContext,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import {
@@ -84,10 +85,10 @@ function matchesFilters(issue: Issue, filters: BoardFilters): boolean {
 function IssueCard({
   issue,
   onOpen,
-}: {
+}: Readonly<{
   issue: Issue;
   onOpen: (key: string) => void;
-}) {
+}>) {
   const done = issue.status === "done";
   return (
     <button
@@ -178,11 +179,11 @@ function BoardColumn({
   column,
   issues,
   onOpenIssue,
-}: {
+}: Readonly<{
   column: (typeof COLUMNS)[number];
   issues: Issue[];
   onOpenIssue: (key: string) => void;
-}) {
+}>) {
   const points = issues.reduce((sum, issue) => sum + issue.storyPoints, 0);
   return (
     <section
@@ -224,11 +225,11 @@ function FilterChip({
   active,
   onClick,
   children,
-}: {
+}: Readonly<{
   active: boolean;
   onClick: () => void;
   children: ReactNode;
-}) {
+}>) {
   return (
     <button
       type="button"
@@ -251,12 +252,15 @@ function BoardToolbar({
   filters,
   onFiltersChange,
   canCreate,
-}: {
+  showMine,
+}: Readonly<{
   sprint: Sprint | null;
   filters: BoardFilters;
   onFiltersChange: (next: BoardFilters) => void;
   canCreate: boolean;
-}) {
+  /** An instructor has no tasks of their own, so there is no "mine" filter. */
+  showMine: boolean;
+}>) {
   const remainingDays = sprint ? daysLeft(sprint.endDate) : null;
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-subtle bg-background px-6 py-3">
@@ -278,12 +282,14 @@ function BoardToolbar({
         ) : null}
         <div className="hidden h-4 w-px bg-outline-subtle sm:block" aria-hidden />
         <div className="flex flex-wrap items-center gap-1.5">
-          <FilterChip
-            active={filters.mineOnly}
-            onClick={() => onFiltersChange({ ...filters, mineOnly: !filters.mineOnly })}
-          >
-            Chỉ việc của tôi
-          </FilterChip>
+          {showMine ? (
+            <FilterChip
+              active={filters.mineOnly}
+              onClick={() => onFiltersChange({ ...filters, mineOnly: !filters.mineOnly })}
+            >
+              Chỉ việc của tôi
+            </FilterChip>
+          ) : null}
           <FilterChip
             active={filters.prOnly}
             onClick={() => onFiltersChange({ ...filters, prOnly: !filters.prOnly })}
@@ -330,7 +336,7 @@ function BoardToolbar({
 /* ------------------------------------------------------------------ */
 
 export function Component() {
-  const { projectId, workspace } = useProjectWorkspaceContext();
+  const { projectId, workspace, viewer, readOnly } = useProjectWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<BoardFilters>({
     search: "",
@@ -341,7 +347,11 @@ export function Component() {
 
   const issueKey = searchParams.get("issue");
   const issueQuery = useIssueDetail(projectId, issueKey);
-  const aiSettingsQuery = useProjectAiSettings(projectId);
+  // Only the leader can read project settings; nobody else asks for them.
+  const aiSettingsQuery = useProjectAiSettings(
+    projectId,
+    viewer.kind === "team-member" && viewer.role === "leader",
+  );
 
   function openIssue(key: string) {
     const next = new URLSearchParams(searchParams);
@@ -356,10 +366,7 @@ export function Component() {
   }
 
   const aiEnabled = aiSettingsQuery.data?.ai.keyConfigured ?? false;
-  const permissionCtx: ProjectPermissionContext = {
-    role: workspace.myRole,
-    aiEnabled,
-  };
+  const permissionCtx: ProjectPermissionContext = projectPermissionContext(viewer, aiEnabled);
 
   const sprint = useMemo(() => {
     return workspace.sprints.find((candidate) => candidate.state === "active") ?? null;
@@ -382,14 +389,27 @@ export function Component() {
         filters={filters}
         onFiltersChange={setFilters}
         canCreate={permissionCtx !== null && canCreateTask(permissionCtx)}
+        showMine={!readOnly}
       />
 
       {sprint === null ? (
         <div className="p-6">
-          <EmptyState
-            title="Chưa có Sprint đang chạy"
-            description="Sprint hiện chưa được khởi tạo. Vui lòng liên hệ Trưởng nhóm để khởi tạo Sprint cho dự án."
-          />
+          {readOnly ? (
+            <EmptyState
+              title="Nhóm chưa có Sprint đang chạy"
+              description="Bảng công việc chỉ hiển thị issue của Sprint đang chạy, nên hiện chưa có gì để xem ở đây. Các issue của nhóm vẫn có trong Backlog."
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/projects/${projectId}/backlog`}>Xem Backlog của nhóm</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="Chưa có Sprint đang chạy"
+              description="Sprint hiện chưa được khởi tạo. Vui lòng liên hệ Trưởng nhóm để khởi tạo Sprint cho dự án."
+            />
+          )}
         </div>
       ) : visibleIssues.length === 0 ? (
         <div className="p-6">
@@ -442,6 +462,7 @@ export function Component() {
           aiKeyMissing={
             permissionCtx !== null && aiRequiresKey(permissionCtx)
           }
+          readOnly={readOnly}
           onClose={closeIssue}
         />
       ) : null}

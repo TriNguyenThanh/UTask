@@ -22,6 +22,7 @@ import type {
   ContributorStatus,
   ProjectCode,
 } from "@/features/projects/types";
+import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import { useProjectCode } from "@/lib/query/studentFlowHooks";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
@@ -86,11 +87,11 @@ function SyncBanner({
   tone,
   title,
   children,
-}: {
+}: Readonly<{
   tone: "info" | "warning" | "error";
   title: string;
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <section
       role={tone === "error" ? "alert" : "status"}
@@ -141,7 +142,7 @@ function ResyncButton() {
 /* Synced view sections                                                */
 /* ------------------------------------------------------------------ */
 
-function RepoStrip({ code }: { code: ProjectCode }) {
+function RepoStrip({ code }: Readonly<{ code: ProjectCode }>) {
   const { repository, defaultBranch, latestCommitSha } = code;
   return (
     <section className="flex flex-col justify-between gap-3 rounded-md border border-border bg-secondary/40 p-3 text-xs md:flex-row md:items-center">
@@ -197,13 +198,13 @@ function MetricCard({
   value,
   valueHint,
   footer,
-}: {
+}: Readonly<{
   label: string;
   icon: React.ReactNode;
   value: string;
   valueHint?: React.ReactNode;
   footer: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="flex flex-col justify-between rounded-md border border-border bg-card p-3.5">
       <div className="mb-1 flex items-center justify-between text-muted-foreground">
@@ -223,7 +224,7 @@ function MetricCard({
   );
 }
 
-function MetricsRow({ code }: { code: ProjectCode }) {
+function MetricsRow({ code }: Readonly<{ code: ProjectCode }>) {
   const { stats } = code;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -309,7 +310,13 @@ function MetricsRow({ code }: { code: ProjectCode }) {
 /* Contributors table                                                  */
 /* ------------------------------------------------------------------ */
 
-function ContributorRow({ contributor }: { contributor: CodeContributor }) {
+function ContributorRow({
+  contributor,
+  showStatus,
+}: Readonly<{
+  contributor: CodeContributor;
+  showStatus: boolean;
+}>) {
   const status = contributorStatusConfig[contributor.status];
   const githubUrl =
     contributor.githubUsername !== null
@@ -395,22 +402,35 @@ function ContributorRow({ contributor }: { contributor: CodeContributor }) {
         </span>
         <div className="text-[11px] text-muted-foreground">commits gắn Issue</div>
       </td>
-      <td className="px-4 py-3 text-right">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold",
-            status.badge,
-          )}
-        >
-          <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden />
-          {status.label}
-        </span>
-      </td>
+      {showStatus ? (
+        <td className="px-4 py-3 text-right">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold",
+              status.badge,
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden />
+            {status.label}
+          </span>
+        </td>
+      ) : null}
     </tr>
   );
 }
 
-function ContributorsTable({ contributors }: { contributors: CodeContributor[] }) {
+/**
+ * `showStatus` is off for instructors: the status label judges a student's
+ * contribution from commit counts, which an instructor view must not do
+ * (US-5.3, scope §8.5). The raw numbers stay.
+ */
+function ContributorsTable({
+  contributors,
+  showStatus,
+}: Readonly<{
+  contributors: CodeContributor[];
+  showStatus: boolean;
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="border-b border-border p-4">
@@ -418,10 +438,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
           <Users className="size-4 text-primary" aria-hidden />
           Thống kê Đóng góp của Thành viên (Contributors Breakdown)
         </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Theo dõi lượng commit, dòng code và tỷ lệ liên kết Issue tự động để
-          phục vụ đánh giá điểm công bằng, tránh tình trạng gánh team / ỷ lại.
-        </p>
+
       </div>
       {contributors.length === 0 ? (
         <EmptyState description="Chưa có dữ liệu đóng góp nào được ghi nhận." />
@@ -436,7 +453,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
                 <th className="px-3 py-2.5 font-mono">Dòng Code (+ / -)</th>
                 <th className="px-3 py-2.5">Pull Requests</th>
                 <th className="px-3 py-2.5">Gắn Issue Key</th>
-                <th className="px-4 py-2.5 text-right">Trạng thái</th>
+                {showStatus ? <th className="px-4 py-2.5 text-right">Trạng thái</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -444,6 +461,7 @@ function ContributorsTable({ contributors }: { contributors: CodeContributor[] }
                 <ContributorRow
                   key={contributor.userId}
                   contributor={contributor}
+                  showStatus={showStatus}
                 />
               ))}
             </tbody>
@@ -463,12 +481,12 @@ function IssueKeyLink({
   issueKey,
   onOpenIssue,
   muted = false,
-}: {
+}: Readonly<{
   projectId: string;
   issueKey: string;
   onOpenIssue: (projectId: string, issueKey: string) => void;
   muted?: boolean;
-}) {
+}>) {
   return (
     <button
       type="button"
@@ -488,11 +506,11 @@ function PullRequestsSection({
   projectId,
   pullRequests,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   pullRequests: CodePullRequest[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -572,11 +590,11 @@ function BranchesSection({
   projectId,
   branches,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   branches: CodeBranch[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -634,11 +652,11 @@ function CommitsSection({
   projectId,
   commits,
   onOpenIssue,
-}: {
+}: Readonly<{
   projectId: string;
   commits: CodeCommit[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
-}) {
+}>) {
   return (
     <section className="rounded-md border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-4 pb-2.5 pt-3">
@@ -703,10 +721,113 @@ function CommitsSection({
 /* Main route                                                          */
 /* ------------------------------------------------------------------ */
 
+function SyncStatusBanner({
+  syncState,
+  readOnly,
+}: Readonly<{ syncState: ProjectCode["syncState"]; readOnly: boolean }>) {
+  if (syncState === "pending-webhook") {
+    return (
+      <SyncBanner tone="info" title="Đang chờ webhook đồng bộ">
+        Dữ liệu GitHub sẽ được cập nhật tự động trong ít phút.
+      </SyncBanner>
+    );
+  }
+  if (syncState === "webhook-error") {
+    return (
+      <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
+        <div>
+          <p className="text-sm font-semibold text-red-700">
+            Webhook đồng bộ gặp lỗi
+          </p>
+          <p className="mt-0.5 text-xs text-red-700/80">
+            Dữ liệu hiển thị có thể không mới nhất. Hãy thử đồng bộ lại.
+          </p>
+        </div>
+        <ResyncButton />
+      </div>
+    );
+  }
+  if (syncState === "token-expired") {
+    return (
+      <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
+        <div>
+          <p className="text-sm font-semibold text-red-700">
+            Token GitHub đã hết hạn
+          </p>
+          <p className="mt-0.5 text-xs text-red-700/80">
+            Hãy kết nối lại GitHub trong Cài đặt tích hợp để tiếp tục đồng bộ.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {readOnly ? null : (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/settings/integrations">Kết nối lại GitHub</Link>
+            </Button>
+          )}
+          <ResyncButton />
+        </div>
+      </div>
+    );
+  }
+  if (syncState === "no-repo-permission") {
+    return (
+      <SyncBanner tone="warning" title="UTask chưa có quyền đọc repository">
+        Hãy kiểm tra đã cấp quyền cho ứng dụng UTask trên repository của nhóm,
+        sau đó đồng bộ lại.
+      </SyncBanner>
+    );
+  }
+  return null;
+}
+
+function codeUnavailableState(
+  syncState: ProjectCode["syncState"],
+  readOnly: boolean,
+): React.ReactElement | null {
+  if (syncState === "disconnected") {
+    return (
+      <div className="p-6">
+        <EmptyState
+          title="Chưa kết nối GitHub"
+          description={
+            readOnly
+              ? "Nhóm chưa kết nối GitHub nên chưa có commit hay pull request để xem."
+              : "Kết nối tài khoản GitHub để theo dõi commits, pull requests và đóng góp của từng thành viên trong dự án."
+          }
+          action={
+            readOnly ? undefined : (
+              <Button asChild size="sm">
+                <Link to="/settings/integrations">Kết nối GitHub</Link>
+              </Button>
+            )
+          }
+        />
+      </div>
+    );
+  }
+
+  if (syncState === "no-repository") {
+    return (
+      <div className="p-6">
+        <EmptyState
+          title="Dự án chưa có repository"
+          description={
+            readOnly
+              ? "Nhóm chưa gắn repository GitHub cho dự án này, nên chưa có dữ liệu mã nguồn để xem."
+              : "Nhóm chưa gắn repository GitHub cho dự án này. Trưởng nhóm có thể gắn repository trong cài đặt tích hợp GitHub."
+          }
+        />
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function ProjectCodeRoute() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useProjectCode(projectId);
+  const { readOnly } = useProjectWorkspaceContext();
 
   const openIssueKey = (pid: string, key: string) => {
     navigate(`/projects/${pid}/board?issue=${key}`);
@@ -728,82 +849,8 @@ export default function ProjectCodeRoute() {
   }
 
   const { syncState } = data;
-
-  let banner: React.ReactNode = null;
-  if (syncState === "pending-webhook") {
-    banner = (
-      <SyncBanner tone="info" title="Đang chờ webhook đồng bộ">
-        Dữ liệu GitHub sẽ được cập nhật tự động trong ít phút.
-      </SyncBanner>
-    );
-  } else if (syncState === "webhook-error") {
-    banner = (
-      <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-semibold text-red-700">
-            Webhook đồng bộ gặp lỗi
-          </p>
-          <p className="mt-0.5 text-xs text-red-700/80">
-            Dữ liệu hiển thị có thể không mới nhất. Hãy thử đồng bộ lại.
-          </p>
-        </div>
-        <ResyncButton />
-      </div>
-    );
-  } else if (syncState === "token-expired") {
-    banner = (
-      <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3.5 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-semibold text-red-700">
-            Token GitHub đã hết hạn
-          </p>
-          <p className="mt-0.5 text-xs text-red-700/80">
-            Hãy kết nối lại GitHub trong Cài đặt tích hợp để tiếp tục đồng bộ.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/settings/integrations">Kết nối lại GitHub</Link>
-          </Button>
-          <ResyncButton />
-        </div>
-      </div>
-    );
-  } else if (syncState === "no-repo-permission") {
-    banner = (
-      <SyncBanner tone="warning" title="UTask chưa có quyền đọc repository">
-        Hãy kiểm tra đã cấp quyền cho ứng dụng UTask trên repository của nhóm,
-        sau đó đồng bộ lại.
-      </SyncBanner>
-    );
-  }
-
-  if (syncState === "disconnected") {
-    return (
-      <div className="p-6">
-        <EmptyState
-          title="Chưa kết nối GitHub"
-          description="Kết nối tài khoản GitHub để theo dõi commits, pull requests và đóng góp của từng thành viên trong dự án."
-          action={
-            <Button asChild size="sm">
-              <Link to="/settings/integrations">Kết nối GitHub</Link>
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  if (syncState === "no-repository") {
-    return (
-      <div className="p-6">
-        <EmptyState
-          title="Dự án chưa có repository"
-          description="Nhóm chưa gắn repository GitHub cho dự án này. Trưởng nhóm có thể gắn repository trong cài đặt tích hợp GitHub."
-        />
-      </div>
-    );
-  }
+  const unavailable = codeUnavailableState(syncState, readOnly);
+  if (unavailable) return unavailable;
 
   const hasRepository = data.repository !== null;
 
@@ -823,13 +870,13 @@ export default function ProjectCodeRoute() {
         </div>
       ) : null}
 
-      {banner}
+      <SyncStatusBanner syncState={syncState} readOnly={readOnly} />
 
       {!hasRepository ? null : (
         <>
           <RepoStrip code={data} />
           <MetricsRow code={data} />
-          <ContributorsTable contributors={data.contributors} />
+          <ContributorsTable contributors={data.contributors} showStatus={!readOnly} />
           <PullRequestsSection
             projectId={projectId}
             pullRequests={data.pullRequests}

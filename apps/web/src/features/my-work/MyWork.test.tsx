@@ -7,12 +7,15 @@ import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { RequireAuth } from "@/app/router/RequireAuth";
 import { MyWorkPage } from "@/features/my-work/components/MyWorkPage";
 import { createMyWorkHandlers } from "@/mocks/handlers/myWork";
+import { createMemoryRepository } from "@/mocks/data/storage";
 import type { MockScenario } from "@/mocks/scenarios";
 import { renderApp } from "@/test/render";
 import { server } from "@/mocks/server";
 
 function useMyWorkScenario(scenario: MockScenario) {
-  server.use(...createMyWorkHandlers(scenario));
+  // Runtime handlers share a repository so account-bound fixtures and
+  // session mutations (read state, disconnect) behave like the demo app.
+  server.use(...createMyWorkHandlers(scenario, createMemoryRepository(scenario)));
 }
 
 function myWorkRoutes(): RouteObject[] {
@@ -63,9 +66,10 @@ describe("my-work mixed scenario", () => {
       await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ }),
     ).toBeInTheDocument();
 
-    // Tasks from both assigned projects are aggregated.
-    expect(screen.getAllByText("NEXUS-12").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/DELI-08/).length).toBeGreaterThan(0);
+    // Tasks from both assigned projects are aggregated (keys mirror real
+    // workspace issues so task links stay valid).
+    expect(screen.getAllByText("NEXUS-104").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/DELI-02/).length).toBeGreaterThan(0);
 
     // One leader course, one member course — both sprints visible.
     expect(screen.getByText(/Team NEXUS · Leader/)).toBeInTheDocument();
@@ -163,13 +167,12 @@ describe("task and sprint interplay", () => {
       route: "/my-work",
       routes: myWorkRoutes(),
     });
-
     const user = userEvent.setup();
     const overdueTab = await screen.findByRole("tab", { name: /Quá hạn/ });
     await user.click(overdueTab);
 
     // The overdue task appears with its overdue due-date text.
-    expect(await screen.findByText("NEXUS-01")).toBeInTheDocument();
+    expect(await screen.findByText("NEXUS-111")).toBeInTheDocument();
     expect(screen.getAllByText(/Quá hạn \d+ ngày/).length).toBeGreaterThan(0);
   });
 });
@@ -183,8 +186,7 @@ describe("github section resilience", () => {
     });
 
     // Task rows still appear despite the GitHub endpoint failing.
-    expect(await screen.findByText("NEXUS-12")).toBeInTheDocument();
-
+    expect(await screen.findByText("NEXUS-104")).toBeInTheDocument();
     // GitHub section shows its own error with a retry button.
     expect(
       await screen.findByRole("button", { name: "Thử lại" }),
@@ -203,7 +205,7 @@ describe("github section resilience", () => {
     await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
 
     // Flip to a healthy handler, then retry.
-    server.use(...createMyWorkHandlers("my-work-mixed"));
+    server.use(...createMyWorkHandlers("my-work-mixed", createMemoryRepository("my-work-mixed")));
     const user = userEvent.setup();
     const retry = await screen.findByRole("button", { name: "Thử lại" });
     await user.click(retry);

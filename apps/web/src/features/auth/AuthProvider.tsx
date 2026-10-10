@@ -12,6 +12,7 @@ import {
 import { loginRequest, logoutRequest, refreshRequest } from "@/features/auth/api/auth";
 import type { LoginPayload } from "@/features/auth/api/auth";
 import type { AuthSession, AuthStatus, AuthUser } from "@/features/auth/types";
+import { clearAllDrafts } from "@/features/teacher/lib/drafts";
 import { createApiClient } from "@/lib/api/client";
 
 const MOCK_REFRESH_TOKEN_KEY = "utask.mock.refresh-token";
@@ -28,7 +29,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function mocksEnabled() {
-  return import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === "true";
+  // Mirror mocks/enableMocking.ts: run in any build when explicitly
+  // enabled, so a deployed mock demo also restores its session.
+  return import.meta.env.VITE_ENABLE_MOCKS === "true";
 }
 
 function readRefreshToken(): string | null {
@@ -125,10 +128,13 @@ export function AuthProvider({
     if (mocksEnabled()) {
       writeRefreshToken(response.refresh_token);
     }
+    // A new sign-in starts from an empty cache so nothing fetched for a
+    // previous account (or while anonymous) can be shown to this one.
+    queryClient.clear();
     setSession(nextSession);
     setStatus("authenticated");
     return response.user;
-  }, [unauthenticatedClient]);
+  }, [queryClient, unauthenticatedClient]);
 
   const logout = useCallback(async () => {
     const refreshToken = session?.refreshToken;
@@ -139,6 +145,8 @@ export function AuthProvider({
     } catch {
       // Logout is local-authoritative after best-effort token revocation.
     } finally {
+      // An explicit sign-out also forgets unsent drafts; an expired session does not.
+      clearAllDrafts();
       clearSession();
     }
   }, [clearSession, session?.refreshToken, unauthenticatedClient]);

@@ -26,6 +26,9 @@ export const MOCK_SCENARIOS = [
   "student-loading",
   "student-partial-error",
   "student-forbidden",
+  "teacher-empty",
+  "teacher-partial-error",
+  "teacher-github-error",
 ] as const;
 
 export type MockScenario = (typeof MOCK_SCENARIOS)[number];

@@ -3,6 +3,7 @@ import {
   CheckSquare2,
   ChevronRight,
   FolderKanban,
+  BookOpen,
   GraduationCap,
   QrCode,
   Settings,
@@ -11,6 +12,8 @@ import {
 import { NavLink, useParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { canUseTeacherSpace } from "@/features/auth/utils";
 import { useMyWorkOverview } from "@/features/my-work/queries";
 import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
 import { useNotifications } from "@/lib/query/studentFlowHooks";
@@ -96,6 +99,7 @@ function CourseNavItem({ enrollment }: { enrollment: CourseEnrollment }) {
 }
 
 export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
+  const { user } = useAuth();
   const { data: overview, isLoading } = useMyWorkOverview();
   const enrollments = overview?.enrollments ?? [];
   const { data: notifications } = useNotifications();
@@ -179,6 +183,15 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           <Settings className="size-4" aria-hidden />
           Cài đặt
         </NavLink>
+        {canUseTeacherSpace(user) ? (
+          <NavLink
+            to="/teacher"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <BookOpen className="size-4" aria-hidden />
+            Không gian giảng viên
+          </NavLink>
+        ) : null}
         <NavLink
           to="/notifications"
           className="flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -223,10 +236,12 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           Tiện ích nhanh
         </p>
         <nav aria-label="Tiện ích nhanh" className="space-y-0.5">
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
+          <span
+            className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70"
+            title="GitHub Sync sẽ khả dụng ở slice sau"
+          >
             <Users className="size-4" aria-hidden />
             GitHub Sync
-            <span className="ml-auto size-1.5 rounded-full bg-emerald-500" aria-hidden />
           </span>
           <span className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
             <QrCode className="size-4" aria-hidden />

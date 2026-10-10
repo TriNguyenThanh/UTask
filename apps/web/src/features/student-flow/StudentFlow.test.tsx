@@ -176,9 +176,10 @@ describe("project access and permissions", () => {
 describe("notifications", () => {
   it("deep-links a task notification to the board issue URL and marks it read", async () => {
     const user = userEvent.setup();
+    // The default scenario is account-bound: the leader owns NEXUS and its
+    // task notifications; the unteamed student has no project scope.
     const result = renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
       route: "/notifications",
-      session: studentTestSession,
       routes: studentRoutes(),
     });
 
