@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { resolveLoginTarget } from "@/features/auth/utils";
 import { ApiError } from "@/lib/api/errors";
-import { isSafeInternalPath } from "@/lib/navigation/safeInternalPath";
 
 const loginSchema = z.object({
   email: z.email("Nhập địa chỉ email hợp lệ."),
@@ -26,14 +26,6 @@ const loginSchema = z.object({
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
-
-function safeReturnTarget(state: unknown): string {
-  if (!state || typeof state !== "object" || !("returnTo" in state)
-    || !isSafeInternalPath(state.returnTo)) {
-    return "/my-work";
-  }
-  return state.returnTo;
-}
 
 export function LoginForm() {
   const auth = useAuth();
@@ -49,8 +41,10 @@ export function LoginForm() {
   async function submit(values: LoginValues) {
     setSubmitError(null);
     try {
-      await auth.login(values);
-      navigate(safeReturnTarget(location.state), { replace: true });
+      const user = await auth.login(values);
+      // A valid internal returnTo wins; otherwise land on the account's home.
+      // Access to the target is still checked by its own route and server.
+      navigate(resolveLoginTarget(location.state, user), { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         setSubmitError(error.message);
@@ -172,10 +166,10 @@ export function LoginForm() {
           />
 
           <div className="flex items-center justify-between gap-4 pt-1">
-            <span className="flex items-center gap-1.5 text-[13px] text-[#484649]">
+            {/* <span className="flex items-center gap-1.5 text-[13px] text-[#484649]">
               <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
               Phiên đăng nhập an toàn
-            </span>
+            </span> */}
             <Link className="shrink-0 text-[13px] font-medium text-primary hover:underline" to="/forgot-password">
               Quên mật khẩu?
             </Link>
@@ -190,24 +184,6 @@ export function LoginForm() {
           </div>
         </form>
       </Form>
-
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-[#e5e3df] pt-5 text-xs text-[#787586]">
-        <span className="flex items-center gap-1.5">
-          <LockKeyhole className="size-3.5 text-primary" aria-hidden="true" />
-          Mã hóa SSL 256-bit
-        </span>
-        <span className="hidden size-1 rounded-full bg-[#c8c4be] sm:block" />
-        <span className="flex items-center gap-1.5">
-          <ShieldCheck className="size-3.5 text-primary" aria-hidden="true" />
-          Đồng bộ Cổng Đào tạo
-        </span>
-      </div>
-
-      <p className="mt-5 text-center text-xs leading-relaxed text-[#787586]">
-        <strong className="font-medium text-[#484649]">Lưu ý:</strong>{" "}
-        UTask không mở đăng ký công cộng. Tài khoản được cấp theo danh sách lớp học phần.
-        Chưa có quyền truy cập? Vui lòng liên hệ Giảng viên bộ môn hoặc Quản trị viên khoa.
-      </p>
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { myWorkKeys } from "@/features/my-work/queries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
@@ -50,9 +51,14 @@ export function useCreateTeam(courseId: string) {
       maxMembers: number;
     }) => createTeamRequest(client, courseId, input),
     onSuccess: () => {
+      // Course detail, Home overview and the projects list all embed team
+      // membership; refetch them together so the UI reflects the new team
+      // without a reload.
       queryClient.invalidateQueries({
         queryKey: studentFlowKeys.course(courseId),
       });
+      queryClient.invalidateQueries({ queryKey: myWorkKeys.overview });
+      queryClient.invalidateQueries({ queryKey: studentFlowKeys.projects });
     },
   });
 }
@@ -105,11 +111,13 @@ export function useProjectCode(projectId: string) {
   });
 }
 
-export function useProjectAiSettings(projectId: string) {
+/** `enabled` is false for viewers who can never read project settings (not the leader). */
+export function useProjectAiSettings(projectId: string, enabled = true) {
   const client = useApiClient();
   return useQuery({
     queryKey: studentFlowKeys.aiSettings(projectId),
     queryFn: () => projectAiSettingsRequest(client, projectId),
+    enabled,
     retry: (failureCount, error) => {
       if ((error as { status?: number }).status === 403) return false;
       return failureCount < 1;
@@ -196,6 +204,8 @@ export function useDisconnectGitHub() {
     mutationFn: () => disconnectGitHubRequest(client),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studentFlowKeys.settings });
+      // Home reads GitHub sync state from /my-work/github — refresh it too.
+      queryClient.invalidateQueries({ queryKey: myWorkKeys.github });
     },
   });
 }

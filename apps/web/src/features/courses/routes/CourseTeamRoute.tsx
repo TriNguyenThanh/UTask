@@ -83,7 +83,7 @@ function remainingTime(deadline: string): string {
 /* View: membership.status === "none" (Team Formation)                 */
 /* ------------------------------------------------------------------ */
 
-function DeadlineBanner({ course }: { course: CourseDetail }) {
+function DeadlineBanner({ course }: Readonly<{ course: CourseDetail }>) {
   const deadline = course.teamFormation.registrationDeadline;
   if (!deadline) {
     return null;
@@ -108,14 +108,14 @@ function DeadlineBanner({ course }: { course: CourseDetail }) {
             : `Hạn chót tự lập nhóm: ${remainingTime(deadline)} (${formatDateTime(deadline)}).`}
         </span>
         <span className={passed ? "text-red-800/90 text-[13px]" : "text-amber-800/90 text-[13px]"}>
-          Sau thời hạn này, Giảng viên sẽ kích hoạt phân nhóm ngẫu nhiên cho sinh viên chưa có nhóm.
+          Sau thời hạn này, giảng viên sẽ xem xét phương án phân nhóm cho sinh viên chưa có nhóm.
         </span>
       </p>
     </div>
   );
 }
 
-function OpenTeamsSection({ openTeams }: { openTeams: OpenTeamSlot[] }) {
+function OpenTeamsSection({ openTeams }: Readonly<{ openTeams: OpenTeamSlot[] }>) {
   return (
     <section className="space-y-3 pt-2" aria-labelledby="open-teams-heading">
       <div className="flex flex-col justify-between gap-2 border-b pb-3 md:flex-row md:items-center">
@@ -187,9 +187,9 @@ function OpenTeamsSection({ openTeams }: { openTeams: OpenTeamSlot[] }) {
 
 function UnassignedClassmatesSection({
   classmates,
-}: {
+}: Readonly<{
   classmates: UnassignedClassmate[];
-}) {
+}>) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -282,11 +282,11 @@ function CreateTeamDialog({
   course,
   open,
   onOpenChange,
-}: {
+}: Readonly<{
   course: CourseDetail;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+}>) {
   const createTeam = useCreateTeam(course.courseId);
   const [teamName, setTeamName] = useState("");
   const [description, setDescription] = useState("");
@@ -405,7 +405,7 @@ function CreateTeamDialog({
   );
 }
 
-function TeamFormationView({ course }: { course: CourseDetail }) {
+function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
   const [createOpen, setCreateOpen] = useState(false);
   const deadline = course.teamFormation.registrationDeadline;
   const deadlinePassed = deadline !== null && new Date(deadline).getTime() <= Date.now();
@@ -474,7 +474,7 @@ function TeamFormationView({ course }: { course: CourseDetail }) {
 /* View: membership.status === "pending"                               */
 /* ------------------------------------------------------------------ */
 
-function PendingJoinRequestView({ course }: { course: CourseDetail }) {
+function PendingJoinRequestView({ course }: Readonly<{ course: CourseDetail }>) {
   const membership = course.membership;
   if (membership.status !== "pending") {
     return null;
@@ -560,7 +560,7 @@ const TOPIC_STATUS: Record<
   rejected: { label: "BỊ TỪ CHỐI", className: "border-red-200 bg-red-50 text-red-800" },
 };
 
-function TopicDraftForm({ course }: { course: CourseDetail }) {
+function TopicDraftForm({ course }: Readonly<{ course: CourseDetail }>) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [objectives, setObjectives] = useState("");
@@ -610,13 +610,86 @@ function TopicDraftForm({ course }: { course: CourseDetail }) {
   );
 }
 
+function TopicTitle({
+  topic,
+  isDraft,
+  editableByLeader,
+}: Readonly<{
+  topic: TopicProposal;
+  isDraft: boolean;
+  editableByLeader: boolean;
+}>) {
+  if (topic.title) {
+    return <h3 className="text-lg font-bold tracking-tight">{topic.title}</h3>;
+  }
+  if (!isDraft) return null;
+  const hint = editableByLeader
+    ? "Trưởng nhóm soạn và nộp đề tài để Giảng viên phê duyệt."
+    : "Trưởng nhóm sẽ soạn và nộp đề tài để Giảng viên phê duyệt.";
+  return <p className="text-sm text-muted-foreground">Nhóm chưa có đề tài. {hint}</p>;
+}
+
+function TopicDetails({ topic }: Readonly<{ topic: TopicProposal }>) {
+  return (
+    <>
+      {topic.feedback ? (
+        <div className="border-l-2 border-primary py-0.5 pl-3">
+          <p className="text-xs italic leading-relaxed text-muted-foreground">
+            "{topic.feedback}"
+          </p>
+        </div>
+      ) : null}
+
+      {topic.description ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{topic.description}</p>
+      ) : null}
+
+      {topic.objectives.length > 0 ? (
+        <div>
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Mục tiêu &amp; Phạm vi triển khai chính:
+          </span>
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            {topic.objectives.map((objective) => (
+              <li key={objective} className="flex items-start gap-2">
+                <span className="mt-0.5 font-bold leading-none text-primary" aria-hidden>•</span>
+                {objective}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function ApprovedTopicAction({ projectId }: Readonly<{ projectId?: string | null }>) {
+  if (!projectId) {
+    return (
+      <output className="text-xs text-muted-foreground">
+        Đề tài đã được duyệt. Workspace của nhóm chưa sẵn sàng — vui lòng chờ giảng viên khởi
+        tạo.
+      </output>
+    );
+  }
+  return (
+    <Button asChild>
+      <Link to={`/projects/${encodeURIComponent(projectId)}/backlog`}>
+        <KanbanSquare className="size-4" aria-hidden />
+        Mở Project Workspace
+        <ArrowRight className="size-4" aria-hidden />
+      </Link>
+    </Button>
+  );
+}
+
 function TopicSection({
   course,
   permissionCtx,
-}: {
+}: Readonly<{
   course: CourseDetail;
   permissionCtx: CoursePermissionContext;
-}) {
+}>) {
   const team = course.team;
   if (!team) return null;
   const topic = team.topic;
@@ -644,43 +717,8 @@ function TopicSection({
             ) : null}
           </div>
 
-          {topic.title ? (
-            <h3 className="text-lg font-bold tracking-tight">{topic.title}</h3>
-          ) : isDraft ? (
-            <p className="text-sm text-muted-foreground">
-              Nhóm chưa có đề tài. {editableByLeader
-                ? "Trưởng nhóm soạn và nộp đề tài để Giảng viên phê duyệt."
-                : "Trưởng nhóm sẽ soạn và nộp đề tài để Giảng viên phê duyệt."}
-            </p>
-          ) : null}
-
-          {topic.feedback ? (
-            <div className="border-l-2 border-primary py-0.5 pl-3">
-              <p className="text-xs italic leading-relaxed text-muted-foreground">
-                "{topic.feedback}"
-              </p>
-            </div>
-          ) : null}
-
-          {topic.description ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">{topic.description}</p>
-          ) : null}
-
-          {topic.objectives.length > 0 ? (
-            <div>
-              <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Mục tiêu &amp; Phạm vi triển khai chính:
-              </span>
-              <ul className="space-y-1.5 text-xs text-muted-foreground">
-                {topic.objectives.map((objective) => (
-                  <li key={objective} className="flex items-start gap-2">
-                    <span className="mt-0.5 font-bold leading-none text-primary" aria-hidden>•</span>
-                    {objective}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <TopicTitle topic={topic} isDraft={isDraft} editableByLeader={editableByLeader} />
+          <TopicDetails topic={topic} />
         </div>
 
         <div className="flex shrink-0 flex-col items-start gap-2 pt-1 lg:items-end">
@@ -696,13 +734,7 @@ function TopicSection({
             </Button>
           ) : null}
           {topic.status === "approved" ? (
-            <Button asChild>
-              <Link to="/projects">
-                <KanbanSquare className="size-4" aria-hidden />
-                Mở Project Workspace
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </Button>
+            <ApprovedTopicAction projectId={team.projectId} />
           ) : null}
         </div>
       </div>
@@ -710,7 +742,7 @@ function TopicSection({
   );
 }
 
-function MembersSection({ teamName, members }: { teamName: string; members: TeamMember[] }) {
+function MembersSection({ teamName, members }: Readonly<{ teamName: string; members: TeamMember[] }>) {
   return (
     <section className="space-y-3" aria-labelledby="members-heading">
       <div className="flex items-center justify-between pb-1">
@@ -781,7 +813,7 @@ function MembersSection({ teamName, members }: { teamName: string; members: Team
   );
 }
 
-function RepositoryCard({ repository }: { repository: string }) {
+function RepositoryCard({ repository }: Readonly<{ repository: string }>) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
@@ -809,7 +841,7 @@ function RepositoryCard({ repository }: { repository: string }) {
   );
 }
 
-function TeamHubView({ course }: { course: CourseDetail }) {
+function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
   const team = course.team;
   if (!team) {
     return (
