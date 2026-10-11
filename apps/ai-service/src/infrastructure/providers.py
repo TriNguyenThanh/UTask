@@ -2,12 +2,13 @@
 
 import asyncio
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.run_config import RunConfig
 from google.adk.models import BaseLlm
-from google.adk.models.google_llm import Gemini
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -22,6 +23,53 @@ from models.validation import validate_result
 from workflow.bounded import build_workflow
 from workflow.instructions import build_instruction
 from workflow.ports import Charge, ContextGateway
+
+
+def build_litellm_model(settings: Settings) -> LiteLlm:
+    """Tạo model qua custom OpenAI-compatible endpoint; không chọn provider ngầm."""
+    if not settings.model:
+        error = failure("PROVIDER_UNAVAILABLE", 502)
+        error.details = {"reason": "AI_MODEL_REQUIRED"}
+        raise error
+    model_name = settings.model.removeprefix("openai/")
+    if not model_name:
+        error = failure("PROVIDER_UNAVAILABLE", 502)
+        error.details = {"reason": "LITELLM_OPENAI_MODEL_REQUIRED"}
+        raise error
+    if not settings.llm_api_base:
+        error = failure("PROVIDER_UNAVAILABLE", 502)
+        error.details = {"reason": "AI_LLM_API_BASE_REQUIRED"}
+        raise error
+    try:
+        parsed_base = urlsplit(settings.llm_api_base)
+        valid_base = (
+            not any(character.isspace() for character in settings.llm_api_base)
+            and parsed_base.scheme in {"http", "https"}
+            and bool(parsed_base.hostname)
+            and (parsed_base.port is None or 1 <= parsed_base.port <= 65535)
+            and parsed_base.username is None
+            and parsed_base.password is None
+            and parsed_base.query == ""
+            and parsed_base.fragment == ""
+        )
+        if parsed_base.scheme == "http":
+            valid_base = valid_base and settings.environment in {"development", "test"}
+    except ValueError:
+        valid_base = False
+    if not valid_base:
+        error = failure("PROVIDER_UNAVAILABLE", 502)
+        error.details = {"reason": "AI_LLM_API_BASE_INVALID"}
+        raise error
+    if not settings.llm_api_key or not settings.llm_api_key.get_secret_value().strip():
+        error = failure("PROVIDER_UNAVAILABLE", 502)
+        error.details = {"reason": "AI_LLM_API_KEY_REQUIRED"}
+        raise error
+    return LiteLlm(
+        model=f"openai/{model_name}",
+        api_base=settings.llm_api_base,
+        api_key=settings.llm_api_key.get_secret_value(),
+        num_retries=0,
+    )
 
 
 class AdkRuntime:
@@ -65,21 +113,14 @@ class AdkRuntime:
 
         agent = LlmAgent(
             name="domain_agent",
-            model=self.model
-            or Gemini(
-                model=settings.model,
-                retry_options=types.HttpRetryOptions(attempts=1),
-                client_kwargs={"api_key": settings.google_api_key.get_secret_value()}
-                if settings.google_api_key
-                else None,
-            ),
+            model=self.model or build_litellm_model(settings),
             instruction=build_instruction(payload),
             tools=pool.tools(),
             generate_content_config=types.GenerateContentConfig(
                 max_output_tokens=settings.max_output_tokens,
                 temperature=0.2,
                 http_options=types.HttpOptions(
-                    timeout=int(remaining * 1000), retry_options=types.HttpRetryOptions(attempts=1)
+                    timeout=int(remaining * 1000), retry_options=types.HttpRetryOptions(attempts=0)
                 ),
             ),
             before_model_callback=before_model,

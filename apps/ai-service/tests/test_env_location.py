@@ -17,12 +17,12 @@ def test_settings_reads_central_env_and_preserves_environment_precedence(tmp_pat
     env_file.parent.mkdir(parents=True)
     env_file.write_text("AI_MODEL=central-model\nAI_MAX_MODEL_CALLS=2\n")
     secret_file = tmp_path / "checkout" / ".env"
-    secret_file.write_text("GOOGLE_API_KEY=local-test-key\nAI_MODEL=root-model\n")
+    secret_file.write_text("AI_LLM_API_KEY=local-test-key\nAI_MODEL=root-model\n")
     monkeypatch.chdir(tmp_path)
     relocated_settings = runpy.run_path(str(source))["Settings"]
     settings = relocated_settings()
     assert settings.model == "root-model" and settings.max_model_calls == 2
-    assert settings.google_api_key.get_secret_value() == "local-test-key"
+    assert settings.llm_api_key.get_secret_value() == "local-test-key"
     assert "local-test-key" not in repr(settings)
     monkeypatch.setenv("AI_MODEL", "environment-model")
     assert relocated_settings().model == "environment-model"

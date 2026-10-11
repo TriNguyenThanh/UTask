@@ -14,6 +14,37 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-09 — Chọn rõ Gemini Developer API và bỏ model fallback
+
+- Trạng thái: Đã hoàn thành; user xác nhận Gemini Developer API, model chỉ
+  định trong AI_MODEL. Không đổi API/context/queue/ADK workflow hoặc CI/CD.
+- Source: Settings.model không có giá trị mặc định; kiểm tra tên rỗng/space.
+  build_gemini_model yêu cầu model và key, lắp Gemini với API v1beta và
+  enterprise=False, không tự dùng Cloud/Vertex/ADC. Model dạng projects/...
+  bị từ chối. Thiếu model/key có reason rõ trước khi gọi SDK/trừ budget;
+  model fake vẫn được inject cho unit tests như trước.
+- Cấu hình: AI_MODEL=gemini-3.8-flash trong infra/env/ai-service.env, model
+  cụ thể được Google công bố; GOOGLE_API_KEY tiếp tục nằm .env root, không
+  đổi hoặc in secret. Không tạo thêm env hoặc thay kiểu context mock.
+- File: src/config.py, src/infrastructure/providers.py,
+  tests/test_gemini_api_configuration.py, test_workflow.py, ai-service.env,
+  docs/ai-service/{README,code-map,mock-data}.md.
+- Tests: **177 passed, 38 skipped** vì không đặt PostgreSQL/Redis test;
+  targeted provider/workflow **22 passed**. Kiểm tra backend API khi các cờ
+  Cloud bật, key/model/env không fallback, input model lỗi, key không export,
+  thiếu cấu hình không gọi SDK/budget, deadline/retry/schema/tool flow cũ.
+- Validation: Ruff check/format pass (82 file), Docker build
+  utask/ai-service:gemini-api-explicit pass, Compose config --quiet pass;
+  36 link nội bộ và fence được kiểm tra, git diff --check pass.
+- Local apply: Rebuild/recreate API/worker theo xác nhận user; migration head
+  chạy lại không thay schema, giữ database/broker và volume. API healthy.
+  Worker dùng model cấu hình và client vertexai=False, API v1beta; metadata
+  model đọc qua SDK được kiểm tra mà không gọi inference. Không deploy remote.
+- GitNexus: Bound UTask đúng workspace, Settings MEDIUM, runtime LOW nhưng
+  receiver gaps được đối chiếu source/tests; index và graph diff cập nhật.
+  Không commit/push. Quyền Google project/inference vẫn là giới hạn riêng,
+  không tuyên bố cấu hình đã giải quyết lỗi 403 trước đó.
+
 ### 2026-10-09 — Mock data trực tiếp tại adapter, giữ luồng request chuẩn
 
 - Trạng thái: Đã hoàn thành theo yêu cầu làm rõ của user.
@@ -443,6 +474,49 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 - Ghi chú hoặc blocker: Provider thật, ADK Workflow, Kafka consumer, context
   projection và PostgreSQL persistence chưa triển khai. Provider mặc định fail
   closed với `PROVIDER_UNAVAILABLE`; repository hiện chỉ lưu trong memory.
+
+### 2026-10-09 — Chuyển ADK sang custom provider qua LiteLLM
+
+- Trạng thái: Đã hoàn thành phần cấu hình và adapter; chưa xác minh endpoint/key
+  nhà cung cấp cụ thể vì chưa có giá trị cấu hình.
+- Mục tiêu: Cho ADK gọi endpoint tùy chọn tương thích OpenAI qua LiteLLM, giữ
+  nguyên API request, mock context, workflow, budget và completion.
+- Thay đổi: `AI_LLM_PROVIDER=litellm`, `AI_MODEL=openai/<model-id>` và
+  `AI_LLM_API_BASE` ở `infra/env/ai-service.env`; `AI_LLM_API_KEY` ở `.env`
+  root. Endpoint production yêu cầu HTTPS; HTTP chỉ chấp nhận loopback trong
+  development/test. Thời hạn lấy từ deadline request và không retry.
+- File: `src/config.py`, `src/infrastructure/providers.py`, `pyproject.toml`,
+  `uv.lock`, test provider/workflow/config, `compose.yaml`, root `docker-compose.yml`,
+  `scripts/setup_mock.py`, `.env.example`, docs AI Service và cấu hình env.
+- Kiểm tra: uv lock/sync pass; Ruff check/format pass; full suite
+  **180 passed, 38 skipped**; root và AI Compose config pass; Docker build và
+  image smoke `LiteLlm` pass; `git diff --check` pass.
+- GitNexus: Re-index source mới và chạy `detect_changes` đầy đủ; risk MEDIUM,
+  ba execution flows `Execute → Metadata`, `Execute → Tools`, `Execute → Failure`
+  được đánh dấu do thay đổi runtime; diff nhận diện đủ 18 file, không bị partial.
+- Tài liệu: Kiểm tra 8 file docs/ai-service, không có link nội bộ hỏng.
+- Giới hạn: Chưa có model ID, base URL hoặc API key nhà cung cấp để chạy inference.
+  Yêu cầu cũ Gemini Developer API được thay bằng custom OpenAI-compatible provider.
+
+### 2026-10-09 — Cấu hình local CLIProxyAPI làm custom provider
+
+- Trạng thái: AI Service đã cấu hình và stack local healthy; inference chờ
+  người dùng thay api-keys mẫu trong CLIProxyAPI Management.
+- Cấu hình: `AI_MODEL=gemini-3.8-flash-high`; endpoint host được ánh xạ thành
+  `http://host.docker.internal:8317/v1` cho container Linux. LiteLLM tự thêm
+  prefix `openai/`. Tạo `AI_LLM_API_KEY` ngẫu nhiên trong root `.env` mode 0600;
+  giữ các secret hiện có.
+- Compose: Thêm host-gateway mapping cho AI Service ở local và root Compose;
+  áp dụng bằng build/recreate `ai-mock` API/worker/dispatcher/migrate. Database
+  và broker giữ nguyên, API healthcheck pass.
+- Kiểm tra: **182 passed, 38 skipped**; Compose config, Ruff và Docker build
+  pass. Từ container truy cập được host port 8317, nhưng `/v1/models` trả 403
+  `unsafe_example_api_key`, CLIProxyAPI thông báo `api-keys` còn giá trị mẫu.
+- GitNexus: impact `build_litellm_model` LOW trước sửa; re-index và
+  `detect_changes` sau sửa báo MEDIUM, ba luồng Execute bị ảnh hưởng như dự kiến.
+- Việc còn lại: Trong `http://127.0.0.1:8317/management.html?safe-mode=configure`,
+  thay key mẫu bằng giá trị `AI_LLM_API_KEY` trong root `.env`; sau đó kiểm tra
+  `/v1/models` và gửi request AI. Không ghi giá trị key vào log.
 
 ## Đang thực hiện
 
