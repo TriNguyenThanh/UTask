@@ -39,7 +39,7 @@ def prepare_mock_environment(
         "AI_DB_PASSWORD": existing.get("AI_DB_PASSWORD") or token_hex(16),
         "AI_CREDENTIAL_KEY": existing.get("AI_CREDENTIAL_KEY") or Fernet.generate_key().decode(),
         "AI_JWT_PUBLIC_KEY": public.decode(),
-        "GOOGLE_API_KEY": existing.get("GOOGLE_API_KEY") or "",
+        "AI_LLM_API_KEY": existing.get("AI_LLM_API_KEY") or "",
     }
     now = datetime.now(UTC)
     tokens = {

@@ -41,14 +41,16 @@ def test_environment_flags_and_secret_error_redaction(tmp_path, monkeypatch):
     with pytest.raises(ValidationError):
         Settings(_env_file=path)
     with pytest.raises(ValidationError) as error:
-        Settings(environment="production", mock_test=True, google_api_key="sensitive-key")
+        Settings(environment="production", mock_test=True, llm_api_key="sensitive-key")
     assert "sensitive-key" not in str(error.value)
 
 
 async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
     from infrastructure.security import JwtAuthenticator
 
-    (tmp_path / ".env").write_text("GOOGLE_API_KEY=existing-key\nOTHER_SECRET=keep\n")
+    (tmp_path / ".env").write_text(
+        "AI_LLM_API_KEY=existing-key\nGOOGLE_API_KEY=legacy-key\nOTHER_SECRET=keep\n"
+    )
     prepare_mock_environment(tmp_path)
     before = dotenv_values(tmp_path / ".env")
     config = tmp_path / "infra/env/ai-service.env"
@@ -61,7 +63,13 @@ async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
         prepare_mock_environment(tmp_path)
     prepare_mock_environment(tmp_path, refresh=True)
     after = dotenv_values(tmp_path / ".env")
-    for key in ["GOOGLE_API_KEY", "AI_DB_PASSWORD", "AI_CREDENTIAL_KEY", "OTHER_SECRET"]:
+    for key in [
+        "AI_LLM_API_KEY",
+        "GOOGLE_API_KEY",
+        "AI_DB_PASSWORD",
+        "AI_CREDENTIAL_KEY",
+        "OTHER_SECRET",
+    ]:
         assert before[key] == after[key]
     assert before["AI_JWT_PUBLIC_KEY"] != after["AI_JWT_PUBLIC_KEY"]
     assert "AI_MOCK_DOMAIN_URL" not in dotenv_values(config)

@@ -8,7 +8,9 @@ x-ai: &ai
     AI_BROKER_URL: redis://broker:6379/0
     AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
     AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
-    GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+  extra_hosts:
+    - host.docker.internal:host-gateway
   init: true
 
 services:

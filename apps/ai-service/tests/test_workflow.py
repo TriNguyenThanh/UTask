@@ -136,20 +136,24 @@ async def test_adk_timeout_and_expired_deadline(payload, principal):
         assert error.value.code == "WORKFLOW_TIMEOUT"
 
 
-async def test_provider_uses_key_from_settings_without_exporting_secret(
+async def test_custom_provider_uses_key_from_settings_without_exporting_secret(
     tmp_path, monkeypatch, payload, principal
 ):
     path = tmp_path / ".env"
-    path.write_text("GOOGLE_API_KEY=dotenv-test-key\n")
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    settings = Settings(_env_file=path)
+    path.write_text("AI_LLM_API_KEY=dotenv-test-key\n")
+    monkeypatch.delenv("AI_LLM_API_KEY", raising=False)
+    settings = Settings(
+        _env_file=path,
+        model="openai/test-model",
+        llm_api_base="https://llm.example.test/v1",
+    )
     captured = []
 
     def model_factory(**kwargs):
         captured.append(kwargs)
         return ScriptedModel(['{"items":[],"warnings":[]}'])
 
-    monkeypatch.setattr("infrastructure.providers.Gemini", model_factory)
+    monkeypatch.setattr("infrastructure.providers.LiteLlm", model_factory)
 
     async def charge(kind, limit, amount=1):
         return limit - amount
@@ -160,8 +164,10 @@ async def test_provider_uses_key_from_settings_without_exporting_secret(
         uuid4(), payload, now, pool, charge, now + timedelta(seconds=1)
     )
     assert response.status == "succeeded"
-    assert captured[0]["client_kwargs"] == {"api_key": "dotenv-test-key"}
-    assert captured[0]["retry_options"].attempts == 1
+    assert captured[0]["model"] == "openai/test-model"
+    assert captured[0]["api_base"] == "https://llm.example.test/v1"
+    assert captured[0]["api_key"] == "dotenv-test-key"
+    assert captured[0]["num_retries"] == 0
     import os
 
-    assert "GOOGLE_API_KEY" not in os.environ
+    assert "AI_LLM_API_KEY" not in os.environ

@@ -18,5 +18,7 @@ root. Giữ CI/CD và credential local hiện có; không sửa schema/API nghi�
 
 ## Giới hạn
 
-Domain production và quyền project Gemini chưa xác minh; lỗi Google 403 của
-project đã quan sát trước không được giải quyết bởi thay đổi cấu hình này.
+Domain production chưa xác minh. LLM nay dùng LiteLLM tới endpoint custom tương
+thích OpenAI; cần model ID, base URL và key hợp lệ từ nhà cung cấp trước khi có
+thể xác minh inference. Lỗi quyền Google 403 trước đó không kiểm tra được endpoint
+custom và không khẳng định đã được khắc phục.

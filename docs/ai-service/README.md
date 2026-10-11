@@ -67,7 +67,10 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
 | `AI_CONTEXT_URLS` | JSON map `target_type:domain` → URL lấy context |
-| `AI_MODEL`, `GOOGLE_API_KEY` | Model và credential provider Gemini |
+| `AI_LLM_PROVIDER` | Chọn adapter `litellm` |
+| `AI_MODEL` | Model ID mà local proxy công bố; adapter tự thêm route LiteLLM `openai/` |
+| `AI_LLM_API_BASE` | URL endpoint tương thích OpenAI, ví dụ `https://provider.example/v1` |
+| `AI_LLM_API_KEY` | API key trong `.env` root, bắt buộc khi gọi LLM thật |
 
 URL template chỉ dùng `{target_type}` và `{target_id}` từ request đã validate.
 Các target là `project`, `task`, `sprint`; domain là `project`, `task`, `team`,
@@ -77,9 +80,19 @@ true}` và [ContextDocument](../../apps/ai-service/src/models/context.py);
 đây là hợp đồng nội bộ adapter, không khẳng định domain đã cung cấp schema đó.
 Thiếu cấu hình hoặc quyền/context lỗi thì từ chối.
 
-Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `GOOGLE_API_KEY` nằm trong
+ADK dùng `LiteLlm` để gọi custom endpoint tương thích OpenAI. Model có thể là
+ID gốc của proxy (ví dụ `gemini-3.8-flash-high`) hoặc route `openai/<model-id>`,
+kèm `AI_LLM_API_BASE` và key.
+Thiếu hoặc sai cấu hình thì worker trả `PROVIDER_UNAVAILABLE` trước lời gọi
+model, với reason chỉ rõ trường cần sửa. HTTPS được yêu cầu ngoài development/
+test; HTTP chỉ được phép trong development/test. Timeout lấy từ deadline
+request và LiteLLM không tự retry. Cách gọi này giữ nguyên pipeline request,
+context và budget; nó không xác nhận endpoint hay model cụ thể của nhà cung cấp.
+
+Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY` nằm trong
 `.env` root. Chỉ `AI_CREDENTIAL_KEY` là khóa Fernet bí mật; public key là
 credential xác minh JWT, lưu cùng bộ credential để không commit key local.
+Điền model/base URL vào `infra/env/ai-service.env` và API key vào `.env` root.
 Sinh Fernet key rồi điền vào `.env` root:
 
 ```sh

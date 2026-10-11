@@ -99,10 +99,12 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
 
 ## LLM providers
 
-Lock hiện dùng Google ADK 2.11, Google GenAI, Celery 5.6, SQLAlchemy 2.1,
-Psycopg 3 và Alembic; phiên bản cụ thể nằm trong `uv.lock`. Model mặc định
-`gemini-flash-latest`, cấu hình `AI_MODEL`. Cần `GOOGLE_API_KEY` hoặc cơ chế
-credential Google tương ứng trước khi gọi model thật; chưa chạy evaluation.
+Lock hiện dùng Google ADK 2.11, LiteLLM, Celery 5.6, SQLAlchemy 2.1,
+Psycopg 3 và Alembic; phiên bản cụ thể nằm trong `uv.lock`. Không có model mặc định
+trong code; `build_litellm_model` yêu cầu `AI_MODEL` theo ID gốc hoặc route `openai/<id>`,
+`AI_LLM_API_BASE` và `AI_LLM_API_KEY`. Adapter ADK `LiteLlm` gọi endpoint tương
+thích OpenAI, không tự chọn endpoint/provider thay cấu hình. Chưa xác minh nhà
+cung cấp cụ thể hoặc chạy evaluation production.
 
 ## Tests và tooling
 

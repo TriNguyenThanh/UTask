@@ -13,13 +13,19 @@ Compose override cho mock.
 ```dotenv
 AI_ENVIRONMENT=development
 MOCK_TEST=true
-AI_MODEL=gemini-flash-latest
+AI_LLM_PROVIDER=litellm
+AI_MODEL=gemini-3.8-flash-high
+AI_LLM_API_BASE=http://host.docker.internal:8317/v1
 ```
 
 Secret và credential xác minh JWT giữ trong `.env` root theo
-[mẫu root](../../.env.example): GOOGLE_API_KEY, AI_CREDENTIAL_KEY,
+[mẫu root](../../.env.example): AI_LLM_API_KEY, AI_CREDENTIAL_KEY,
 AI_DB_PASSWORD và AI_JWT_PUBLIC_KEY. Settings đọc config rồi secret;
 biến process có ưu tiên cao nhất. Không có env riêng cho mock.
+`host.docker.internal` được ánh xạ về host trong Compose vì `localhost` bên
+trong container là chính container AI. `AI_LLM_API_KEY` phải khớp một key trong
+CLIProxyAPI Management → `api-keys`; model ID được LiteLLM bọc thành route
+`openai/` khi gọi endpoint.
 
 | Cờ | Nguồn dữ liệu tại adapter |
 | --- | --- |
@@ -47,9 +53,11 @@ mock-domain cũ nếu còn từ cách chạy trước. Đổi cờ rồi chạy 
 worker nạp cùng nguồn. Nếu chạy bằng uv, không đổi entrypoint API/worker;
 Settings tự đọc config, fixture đóng gói trong src.
 
-GOOGLE_API_KEY phải thuộc project được phép dùng Gemini để tạo proposal
-thành công. Thiếu key hoặc provider từ chối vẫn kết thúc failed theo luồng
-error hiện có; mock data không mock kết quả LLM.
+Mock chỉ thay quyền/context Work/Integration. Muốn tạo proposal thành công,
+CLIProxyAPI phải có credential provider/model hợp lệ và `api-keys` không còn
+giá trị mẫu; `AI_LLM_API_KEY` phải nằm trong danh sách key đó. Thiếu cấu hình
+hoặc provider từ chối vẫn kết thúc failed theo luồng error hiện có; mock data
+không mock kết quả LLM.
 
 ## Fixture và request mẫu
 

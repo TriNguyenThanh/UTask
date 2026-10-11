@@ -18,11 +18,14 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
         hide_input_in_errors=True,
+        env_ignore_empty=True,
     )
 
     environment: Literal["development", "test", "staging", "production"] = "development"
     mock_test: bool = Field(default=False, validation_alias="MOCK_TEST")
-    google_api_key: SecretStr | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
+    llm_provider: Literal["litellm"] = "litellm"
+    llm_api_key: SecretStr | None = None
+    llm_api_base: str | None = None
     app_name: str = "utask-ai-service"
     database_url: str = "postgresql+psycopg://localhost/ai_context_db"
     broker_url: str = "redis://localhost:6379/0"
@@ -32,7 +35,7 @@ class Settings(BaseSettings):
     jwt_issuer: str | None = None
     jwt_audience: str | None = None
     jwt_algorithm: str = "RS256"
-    model: str = "gemini-flash-latest"
+    model: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
     sync_timeout_seconds: float = Field(default=10, gt=0, le=10)
     workflow_timeout_seconds: float = Field(default=30, gt=0, le=30)
     poll_interval_seconds: float = Field(default=0.1, gt=0)
