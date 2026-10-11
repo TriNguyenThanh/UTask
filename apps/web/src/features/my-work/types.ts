@@ -58,6 +58,8 @@ export interface MyTask {
   courseId: string;
   courseCode: string;
   projectName: string;
+  /** Project workspace id; null while the workspace is not provisioned. */
+  projectId: string | null;
   priority: TaskPriority;
   status: TaskStatus;
   /** Deadline (ISO 8601). */
@@ -75,6 +77,8 @@ export interface CourseSprint {
   courseName: string;
   semester: string;
   projectName: string;
+  /** Project workspace id backing this sprint; null while the workspace is not provisioned. */
+  projectId: string | null;
   teamId: string;
   teamName: string;
   role: TeamRole;

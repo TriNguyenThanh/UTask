@@ -1,8 +1,10 @@
 import { CheckSquare2, LogOut, Menu } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { TeacherSidebar } from "@/components/navigation/TeacherSidebar";
+import { TeacherTopNavigation } from "@/components/navigation/TeacherTopNavigation";
 import { TopNavigation } from "@/components/navigation/TopNavigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +16,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
+import { TeacherChromeContext } from "@/app/layouts/TeacherChromeContext";
 
-function UserSummary({ onLogout }: { onLogout: () => void }) {
+function UserSummary({ onLogout }: Readonly<{ onLogout: () => void }>) {
   const { user } = useAuth();
   return (
     <details className="group relative">
@@ -37,11 +41,11 @@ function UserSummary({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function SidebarShell({ children }: { children: ReactNode }) {
+function SidebarShell({ children, home }: Readonly<{ children: ReactNode; home: string }>) {
   return (
     <>
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
-        <NavLink className="flex items-center gap-2.5" to="/my-work" aria-label="UTask — Trang chủ">
+        <NavLink className="flex items-center gap-2.5" to={home} aria-label="UTask — Trang chủ">
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             UT
           </span>
@@ -62,7 +66,28 @@ export function AuthenticatedLayout() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const [instructorProjectView, setInstructorProjectView] = useState(false);
+  // The Teacher chrome (sidebar, top bar) is used only inside /teacher by an
+  // account that may use it, so a blocked account never triggers Teacher
+  // queries and Student pages never show Teacher navigation.
+  const inTeacherArea = location.pathname === "/teacher" || location.pathname.startsWith("/teacher/");
+  // A project opened by its class's instructor shows Teacher navigation. A
+  // teacher-only account gets it at once (it has no Student navigation to
+  // load); an account that is also a student gets it once the workspace says
+  // the viewer is an instructor.
+  const inInstructorProject =
+    location.pathname.startsWith("/projects/") &&
+    canUseTeacherSpace(auth.user) &&
+    (!isStudentAccount(auth.user) || instructorProjectView);
+  const inTeacherSpace = (inTeacherArea && canUseTeacherSpace(auth.user)) || inInstructorProject;
+  const sidebar = inTeacherSpace ? <TeacherSidebar /> : <AppSidebar />;
 
+  // Any navigation (including search-param deep links from task rows or
+  // notifications) must close the mobile drawer so the page is visible.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search]);
   function logout() {
     void auth.logout();
     navigate("/login", { replace: true });
@@ -79,8 +104,8 @@ export function AuthenticatedLayout() {
 
       {/* Desktop sidebar */}
       <aside className="hidden min-h-screen flex-col border-r border-sidebar-border bg-sidebar lg:flex">
-        <SidebarShell>
-          <AppSidebar />
+        <SidebarShell home={inTeacherSpace ? "/teacher" : "/my-work"}>
+          {sidebar}
         </SidebarShell>
         <div className="border-t border-sidebar-border bg-secondary/70 p-3">
           <UserSummary onLogout={logout} />
@@ -88,9 +113,15 @@ export function AuthenticatedLayout() {
       </aside>
 
       <div className="min-w-0">
-        <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        {inTeacherSpace ? (
+          <TeacherTopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        ) : (
+          <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
+        )}
         <main className="min-w-0 pb-16" id="main-content">
-          <Outlet />
+          <TeacherChromeContext.Provider value={setInstructorProjectView}>
+            <Outlet />
+          </TeacherChromeContext.Provider>
         </main>
       </div>
 
@@ -105,9 +136,7 @@ export function AuthenticatedLayout() {
               Academic Portal
             </SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <AppSidebar />
-          </div>
+          <div className="flex min-h-0 flex-1 flex-col">{sidebar}</div>
           <div className="border-t border-sidebar-border p-3">
             <UserSummary onLogout={logout} />
           </div>

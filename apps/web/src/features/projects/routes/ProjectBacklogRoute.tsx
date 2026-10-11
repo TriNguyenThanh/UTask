@@ -31,6 +31,7 @@ import {
   aiRequiresKey,
   canCreateTask,
   canManageSprint,
+  projectPermissionContext,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
@@ -322,6 +323,14 @@ const filterChips: { id: FilterChip; label: string }[] = [
   { id: "bug", label: "Bugs" },
 ];
 
+function emptyBacklogDescription(hasActiveFilters: boolean, readOnly: boolean): string {
+  if (hasActiveFilters) {
+    return "Không issue nào khớp epic, từ khóa hoặc bộ lọc đang chọn. Thử xóa bộ lọc để xem toàn bộ.";
+  }
+  if (readOnly) return "Nhóm này chưa có issue nào trong dự án.";
+  return "Dự án này chưa có issue nào. Trưởng nhóm sẽ thêm issue khi bắt đầu lập kế hoạch Sprint.";
+}
+
 function BacklogSkeleton() {
   return (
     <div
@@ -347,10 +356,28 @@ function BacklogSkeleton() {
   );
 }
 
+function issueMatches(
+  issue: Issue,
+  epicFilter: string | null,
+  query: string,
+  chips: FilterChip[],
+): boolean {
+  if (epicFilter !== null && issue.epicId !== epicFilter) return false;
+  if (query && !`${issue.key} ${issue.title}`.toLowerCase().includes(query)) return false;
+  if (chips.includes("mine") && !issue.isMine) return false;
+  if (chips.includes("unassigned") && issue.assignee !== null) return false;
+  if (chips.includes("pull-request") && !issue.hasPullRequest) return false;
+  return !(chips.includes("bug") && issue.type !== "bug");
+}
+
 export default function ProjectBacklogRoute() {
   const navigate = useNavigate();
-  const { projectId, workspace: data } = useProjectWorkspaceContext();
-  const { data: aiSettings } = useProjectAiSettings(projectId);
+  const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
+  // Only the leader can read project settings; nobody else asks for them.
+  const { data: aiSettings } = useProjectAiSettings(
+    projectId,
+    viewer.kind === "team-member" && viewer.role === "leader",
+  );
 
   const [epicFilter, setEpicFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -380,23 +407,15 @@ export default function ProjectBacklogRoute() {
   const filteredIssues = useMemo(() => {
     if (!data) return [];
     const q = search.trim().toLowerCase();
-    return data.issues.filter((issue) => {
-      if (epicFilter !== null && issue.epicId !== epicFilter) return false;
-      if (q && !`${issue.key} ${issue.title}`.toLowerCase().includes(q)) return false;
-      if (chips.includes("mine") && !issue.isMine) return false;
-      if (chips.includes("unassigned") && issue.assignee !== null) return false;
-      if (chips.includes("pull-request") && !issue.hasPullRequest) return false;
-      if (chips.includes("bug") && issue.type !== "bug") return false;
-      return true;
-    });
+    return data.issues.filter((issue) => issueMatches(issue, epicFilter, q, chips));
   }, [data, epicFilter, search, chips]);
 
   const workspace = data;
-  const permCtx: ProjectPermissionContext = {
-    role: workspace.myRole,
-    aiEnabled: aiSettings?.ai.keyConfigured ?? false,
-  };
-  const isLeader = workspace.myRole === "leader";
+  const permCtx: ProjectPermissionContext = projectPermissionContext(
+    viewer,
+    aiSettings?.ai.keyConfigured ?? false,
+  );
+  const isLeader = permCtx.role === "leader";
   const needsAiKey = aiRequiresKey(permCtx);
   const canCompleteSprint = canManageSprint(permCtx);
   const showCreateEpic = canCreateTask(permCtx);
@@ -550,7 +569,9 @@ export default function ProjectBacklogRoute() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {filterChips.map((chip) => {
+              {filterChips
+                .filter((chip) => !(readOnly && chip.id === "mine"))
+                .map((chip) => {
                 const active = chips.includes(chip.id);
                 return (
                   <button
@@ -598,11 +619,7 @@ export default function ProjectBacklogRoute() {
           {filteredIssues.length === 0 ? (
             <EmptyState
               title={hasActiveFilters ? "Không có issue khớp bộ lọc" : "Backlog trống"}
-              description={
-                hasActiveFilters
-                  ? "Không issue nào khớp epic, từ khóa hoặc bộ lọc đang chọn. Thử xóa bộ lọc để xem toàn bộ."
-                  : "Dự án này chưa có issue nào. Trưởng nhóm sẽ thêm issue khi bắt đầu lập kế hoạch Sprint."
-              }
+              description={emptyBacklogDescription(hasActiveFilters, readOnly)}
               action={
                 hasActiveFilters ? (
                   <Button size="sm" variant="outline" onClick={clearFilters}>
