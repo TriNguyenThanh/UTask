@@ -44,9 +44,9 @@ export function createTeamRequest(
   courseId: string,
   input: { teamName: string; description: string; neededSkills: string; maxMembers: number },
 ): Promise<void> {
-  return client.request(`${WORK_ROOT}/courses/${courseId}/teams`, {
+  return client.request(`${WORK_ROOT}/courses/${encodeURIComponent(courseId)}/teams`, {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 
@@ -93,10 +93,13 @@ export function saveAiKeyRequest(
   provider: string,
   apiKey: string,
 ): Promise<void> {
-  return client.request(`${WORK_ROOT}/projects/${projectId}/settings/ai-key`, {
-    method: "PUT",
-    body: JSON.stringify({ provider, apiKey }),
-  });
+  return client.request(
+    `${WORK_ROOT}/projects/${encodeURIComponent(projectId)}/settings/ai-key`,
+    {
+      method: "PUT",
+      body: { provider, apiKey },
+    },
+  );
 }
 
 export function notificationsRequest(
@@ -130,7 +133,7 @@ export function updateAccountSettingsRequest(
 ): Promise<void> {
   return client.request(`${WORK_ROOT}/me/settings`, {
     method: "PATCH",
-    body: JSON.stringify(input),
+    body: input,
   });
 }
 

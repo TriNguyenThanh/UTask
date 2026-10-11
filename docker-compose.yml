@@ -1,9 +1,12 @@
 name: utask
 
 services:
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:55432:5432"
     env_file:
       - ./infra/env/database.env
       - ./infra/env/postgres.env
@@ -46,10 +49,17 @@ services:
     image: ${UTASK_IMAGE_PREFIX:-utask}/identity-service:${UTASK_IMAGE_TAG:-local}
     build: ./apps/identity-service
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
     env_file:
       - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/identity-service.env
+    volumes:
+      - type: bind
+        source: ${IDENTITY_JWT_PRIVATE_KEY_HOST_PATH:-./.local-secrets/identity-jwt-private.pem}
+        target: /run/identity-secrets/jwt-private.pem
+        read_only: true
     depends_on:
       postgres:
         condition: service_healthy

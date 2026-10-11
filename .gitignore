@@ -98,3 +98,4 @@ docs/temp
 CLAUDE.md
 .agents/skills/gitnexus-*/
 .claude/skills/gitnexus-*/
+.stitch/
