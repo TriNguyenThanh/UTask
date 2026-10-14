@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.messaging.models import IdempotencyRecord, OutboxEvent
 from apps.projects.models import Project
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskRelation
 from apps.tasks.services.hierarchy import reparent_task
 from common.errors import WorkError
 
@@ -66,3 +66,31 @@ def test_existing_foreign_assignee_state_and_parent_are_rejected(task_api, forei
     assert Task.objects.get(pk=local["id"]).parent_id is None
     assert Project.objects.get(pk=local["project_id"]).current_task_sequence == 1
     assert OutboxEvent.objects.count() == before
+
+
+def test_relation_self_foreign_and_duplicate_canonicalization(task_api, foreign_scope):
+    leader, _, create = task_api
+    _, foreign = foreign_scope
+    a, b = create(), create()
+    path = f"/api/v1/tasks/{a['id']}/relations/"
+    before = OutboxEvent.objects.count()
+    for target in [a["id"], foreign["id"]]:
+        response = leader.post(
+            path, {"related_task_id": target, "relation_type": "BLOCKS"}, format="json"
+        )
+        assert response.status_code == 400, response.content
+    assert not TaskRelation.objects.exists()
+    assert OutboxEvent.objects.count() == before
+    reply = leader.post(
+        path, {"related_task_id": b["id"], "relation_type": "DUPLICATE"}, format="json"
+    )
+    assert reply.status_code == 201, reply.content
+    row = reply.json()["data"]
+    assert UUID(row["task_id"]) < UUID(row["related_task_id"])
+    inverse = leader.post(
+        f"/api/v1/tasks/{b['id']}/relations/",
+        {"related_task_id": a["id"], "relation_type": "DUPLICATE"},
+        format="json",
+    )
+    assert inverse.status_code == 409
+    assert TaskRelation.objects.count() == 1
