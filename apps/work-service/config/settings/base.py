@@ -52,4 +52,41 @@ DATABASES = {
         },
     }
 }
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["common.authentication.WorkJWTAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["common.renderers.EnvelopeJSONRenderer"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "common.exception_handler.exception_handler",
+    "UNAUTHENTICATED_USER": None,
+    "DEFAULT_PARSER_CLASSES": [
+        "common.parsers.WorkJSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
+    ],
+}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "UTask Work API",
+    "OAS_VERSION": "3.1.0",
+    "VERSION": "1.4",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": "/api/v1",
+}
+IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")
+IDENTITY_WORK_SERVICE_KEY = os.environ.get("IDENTITY_WORK_SERVICE_KEY", "")
+IDENTITY_JWT_ISSUER = os.environ.get("IDENTITY_JWT_ISSUER", "https://identity.utask.internal")
+IDENTITY_JWT_AUDIENCE = os.environ.get("IDENTITY_JWT_AUDIENCE", "utask-platform")
+BACKEND_HTTP_TIMEOUT = (2, 5)
 CELERY_TASK_IGNORE_RESULT = True
+
+
+SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
+    "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",
+    "BacklogTaskTypeEnum": ["TASK", "BUG", "STORY"],
+    "WorkTaskSourceEnum": "apps.tasks.models.Task.Source",
+    "WorkPriorityEnum": "apps.tasks.models.Task.Priority",
+    "EpicStatusEnum": "apps.tasks.models.Epic.Status",
+    "AttachmentStatusEnum": "apps.collaboration.models.Attachment.Status",
+    "MemberStatusEnum": "apps.projects.models.ProjectMember.Status",
+    "ScopeActionEnum": ["ADD", "REMOVE"],
+}
