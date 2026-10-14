@@ -3,7 +3,8 @@
 **Trạng thái: Đã triển khai schema và repository PostgreSQL; production chưa
 xác minh.** Nguồn thực thi là
 [migration 0001](../../apps/ai-service/migrations/versions/0001_request_pipeline.py)
-và [migration 0002](../../apps/ai-service/migrations/versions/0002_completion_handoff.py),
+[migration 0002](../../apps/ai-service/migrations/versions/0002_completion_handoff.py)
+và [migration 0003](../../apps/ai-service/migrations/versions/0003_request_admission.py),
 cùng [ORM metadata](../../apps/ai-service/src/infrastructure/db/tables.py).
 Không giữ các bảng projection cũ như schema bắt buộc khi pipeline dùng REST.
 
@@ -74,6 +75,13 @@ có FK xuyên service. Các FK trên chỉ nằm trong AI database.
 unique `(user_id, idempotency_key)`, check status/budget không âm, index delivery
 đến hạn và request expiry. Repository dùng connection pool, transaction ngắn;
 không giữ transaction/lock trong lúc gọi broker, REST hoặc LLM.
+
+Migration `0003` thêm index `(user_id, created_at)` cho cửa sổ 60 giây và
+partial index `user_id` với `status IN ('queued','running')` cho slot đang
+xử lý. Không thêm bảng bộ đếm. Transaction enqueue dùng advisory lock theo
+user để serialize kiểm tra/tạo request giữa nhiều connection/process; lock
+tự giải phóng khi commit/rollback. Kiểm tra replay/conflict trước giới hạn.
+Xem [giới hạn tiếp nhận](api.md#giới-hạn-chống-spam).
 
 `INSERT ... ON CONFLICT` bảo vệ POST đồng thời. Claim request khóa hàng;
 claim delivery và API tiếp nhận completion dùng `FOR UPDATE SKIP LOCKED`.

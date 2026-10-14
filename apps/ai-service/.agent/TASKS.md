@@ -14,6 +14,48 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-14 — Giới hạn chống spam tối thiểu cho request AI
+
+- Trạng thái: Đã hoàn thành trong source và kiểm thử local; không deploy hoặc
+  chạy migration trên database nghiệp vụ.
+- Phạm vi: tối đa 5 request mới/user trong cửa sổ trượt 60 giây và 2 request
+  queued/running/user. Cấu hình `AI_REQUESTS_PER_MINUTE` và
+  `AI_MAX_ACTIVE_REQUESTS_PER_USER`, không chấp nhận giá trị nhỏ hơn 1.
+- Enqueue dùng advisory transaction lock theo user trong PostgreSQL hiện có;
+  kiểm tra replay/conflict trước giới hạn. Không tạo request/delivery khi
+  từ chối; completion chưa được API tiếp nhận vẫn giữ slot. Đổi key/target
+  không vượt giới hạn. Không thêm bảng bộ đếm hoặc hạ tầng mới.
+- API trả `429 RATE_LIMITED`, reason `REQUEST_RATE_LIMIT` hoặc
+  `ACTIVE_REQUEST_LIMIT`, `retryable=true`, `Retry-After` và số giây trong
+  details. Lỗi budget giữ mapping/envelope cũ, không có header admission.
+- Files: `src/config.py`, `src/infrastructure/{bootstrap,repositories}.py`,
+  `src/infrastructure/db/tables.py`, `src/api/exception_handlers.py`,
+  migration `0003_request_admission.py`, tests `test_admission.py`,
+  `test_admission_transport.py` và quota riêng test completion 8 job pending.
+  Cập nhật env thường, contract API v1 và docs AI README/API/architecture/ERD/code-map.
+- Tests: toàn suite **257 passed, 0 skipped**, PostgreSQL 17 và Redis 7 test
+  riêng; ADK thật với model fake. Bao phủ cửa sổ đúng 60 giây, replay/conflict,
+  user isolation, queued/running/completion, terminal release, rollback và
+  tranh chấp qua 6 engine độc lập. Migration upgrade/downgrade và ORM parity pass.
+  Hai regression test HTTP thất bại đúng tại expected 429 khi thay enqueue
+  bằng implementation HEAD cũ, pass trên implementation mới.
+- Validation: Ruff check/format **85 file pass**, Docker build
+  `utask/ai-service:admission-check` pass. Smoke image mới với JWT ký thật và
+  PostgreSQL test: health, POST 202, 429/Retry-After, replay và polling pass,
+  không gọi LLM. Kiểm tra 66 link file nội bộ không hỏng; `git diff --check` pass.
+  Host thiếu uv/Python 3.12 nên suite chạy trong container, mount source hiện tại.
+- Review/GitNexus: review độc lập không có finding cần sửa. Reindex source và
+  detect_changes(all) nhận diện 28 symbol/5 flow/14 file tracked, risk MEDIUM,
+  response không partial/truncated. Pre-edit HTTP error helper HIGH với 4
+  caller đã cảnh báo và kiểm thử. Constructor/enqueue UNKNOWN được đối chiếu
+  source/tests; graph diff không bao phủ file untracked, inventory và suite
+  kiểm tra migration/hai file test mới. Flow enumeration có giới hạn và chưa
+  có PDG, không kết luận mọi flow hoặc taint đều đã được graph kiểm chứng.
+- Giới hạn: đây là giới hạn tạo job, không chặn mọi HTTP flood/polling. Budget,
+  reauthorization, tool scope và proposal boundary hiện có được giữ nguyên.
+  Chatbot, lịch 06:00/22:00 chống trùng và chống lặp thông báo chỉ ghi rõ
+  thiết kế tối thiểu; chưa tạo runtime hoặc tuyên bố đã triển khai.
+
 ### 2026-10-09 — Chọn rõ Gemini Developer API và bỏ model fallback
 
 - Trạng thái: Đã hoàn thành; user xác nhận Gemini Developer API, model chỉ
