@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from django.utils import timezone
 
@@ -6,6 +8,26 @@ from apps.tasks.models import Task
 from tests.fixtures.transactions import effect_state
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
+
+
+@pytest.mark.parametrize(
+    "neighbor", ["previous_task_id", "next_task_id", "missing-neighbors", "unknown-state"]
+)
+def test_transition_invalid_position_rolls_back_task_and_effects(task_api, neighbor):
+    leader, _, create = task_api
+    task = create()
+    create()  # Target column is nonempty even after excluding the moving Task.
+    before_task = Task.objects.filter(pk=task["id"]).values().get()
+    before = effect_state(task["project_id"])
+    body = {"expected_version": 1, "target_state_id": task["state_id"]}
+    if neighbor in ["previous_task_id", "next_task_id"]:
+        body[neighbor] = task["id"]
+    elif neighbor == "unknown-state":
+        body["target_state_id"] = str(uuid4())
+    reply = leader.patch(f"/api/v1/tasks/{task['id']}/transition/", body, format="json")
+    assert reply.status_code == (422 if neighbor == "unknown-state" else 409), reply.content
+    assert Task.objects.filter(pk=task["id"]).values().get() == before_task
+    assert effect_state(task["project_id"]) == before
 
 
 def test_restore_live_task_rejects_without_any_effect(task_api):
@@ -117,3 +139,29 @@ def test_subtask_command_rejects_detachment_and_root_task_can_detach(task_api, a
     reply = reparent_task(Actor(actors["leader"]), UUID(root["id"]), None, 2)
     assert reply.data["data"]["parent_id"] is None and reply.data["data"]["version"] == 3
     assert leader.get(f"/api/v1/tasks/{root['id']}/").json()["data"]["parent_id"] is None
+
+
+@pytest.mark.parametrize("adjacent", [False, True])
+def test_reorder_validates_neighbor_adjacency_and_finite_midpoint(task_api, adjacent):
+    leader, _, create = task_api
+    first, second, third, moving = [create() for _ in range(4)]
+    before = effect_state(moving["project_id"])
+    reply = leader.patch(
+        f"/api/v1/tasks/{moving['id']}/transition/",
+        {
+            "expected_version": 1,
+            "target_state_id": moving["state_id"],
+            "previous_task_id": first["id"],
+            "next_task_id": second["id"] if adjacent else third["id"],
+        },
+        format="json",
+    )
+    assert reply.status_code == (200 if adjacent else 409), reply.content
+    if adjacent:
+        data = reply.json()["data"]
+        assert (
+            first["sort_order"] < data["sort_order"] < second["sort_order"] and data["version"] == 2
+        )
+        assert Task.objects.get(pk=moving["id"]).sort_order == data["sort_order"]
+    else:
+        assert effect_state(moving["project_id"]) == before
