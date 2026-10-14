@@ -86,6 +86,49 @@ def test_receipt_message_commits_with_result_and_replay_keeps_original_envelope(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["project", "state", "sprint", "username"])
+def test_owned_api_validation_messages_are_vietnamese_and_have_no_effect(
+    created_project, actors, client_for, kind
+):
+    project_id = created_project["id"]
+    client = client_for(actors["leader"])
+    routes = {
+        "project": (
+            "/api/v1/projects/",
+            {"identifier": "bad", "name": "Tên dự án", "classroom_group_id": "group-1"},
+            "identifier",
+        ),
+        "state": (
+            f"/api/v1/projects/{project_id}/states/",
+            {"name": "Kiểm tra", "color": "red", "sequence": 100, "group": "BACKLOG"},
+            "color",
+        ),
+        "sprint": (
+            f"/api/v1/projects/{project_id}/sprints/",
+            {"name": "Kế hoạch", "start_date": "bad-date"},
+            "start_date",
+        ),
+        "username": (
+            f"/api/v1/projects/{project_id}/members/{actors['leader']}/github/",
+            {"github_username": ""},
+            "github_username",
+        ),
+    }
+    before = effect_state(project_id)
+    route, payload, field = routes[kind]
+    reply = getattr(client, "patch" if kind == "username" else "post")(
+        route,
+        payload,
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="invalid-message",
+    )
+    assert reply.status_code == 400 and reply.json()["error"]["code"] == "VALIDATION_ERROR"
+    detail = reply.json()["error"]["details"][0]
+    assert detail["field"] == field and any("À" <= char <= "ỹ" for char in detail["issue"])
+    assert "<" not in detail["issue"] and effect_state(project_id) == before
+
+
+@pytest.mark.django_db
 def test_owned_read_outcomes_and_actual_auth_error_envelope(github, actors, client_for):
     _, _, repository, task = github
     client = client_for(actors["member"])
