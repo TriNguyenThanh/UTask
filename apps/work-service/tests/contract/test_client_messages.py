@@ -9,12 +9,14 @@ from rest_framework.exceptions import (
     Throttled,
     ValidationError,
 )
+from rest_framework.test import APIClient
 
 from apps.messaging.models import IdempotencyRecord
 from apps.messaging.services.receipts import claim_receipt, replay_response, save_receipt
 from common.errors import WorkError
 from common.exception_handler import exception_handler
 from common.responses import build_envelope
+from tests.fixtures.transactions import effect_state
 
 pytestmark = pytest.mark.contract
 
@@ -81,3 +83,29 @@ def test_receipt_message_commits_with_result_and_replay_keeps_original_envelope(
     with transaction.atomic():
         legacy = save_receipt(legacy_scope, {}, {"saved": True})
     assert legacy.data == build_envelope({"saved": True})
+
+
+@pytest.mark.django_db
+def test_owned_read_outcomes_and_actual_auth_error_envelope(github, actors, client_for):
+    _, _, repository, task = github
+    client = client_for(actors["member"])
+    routes = {
+        "/api/v1/projects/": "Đã lấy danh sách dự án.",
+        f"/api/v1/projects/{task.project_id}/": "Đã lấy thông tin dự án.",
+        f"/api/v1/projects/{task.project_id}/members/": "Đã lấy danh sách thành viên dự án.",
+        f"/api/v1/projects/{task.project_id}/states/": "Đã lấy danh sách cột trạng thái.",
+        f"/api/v1/projects/{task.project_id}/kanban/": "Đã lấy bảng công việc của dự án.",
+        f"/api/v1/projects/{task.project_id}/dashboard/": "Đã lấy số liệu công việc của dự án.",
+        f"/api/v1/projects/{task.project_id}/sprints/": "Đã lấy danh sách chu kỳ làm việc.",
+        repository: "Đã lấy thông tin kết nối kho mã nguồn của dự án.",
+        f"/api/v1/tasks/{task.pk}/github-links/": "Đã lấy danh sách liên kết GitHub của công việc.",
+    }
+    before = effect_state(task.project_id)
+    for route, message in routes.items():
+        reply = client.get(route)
+        assert reply.status_code == 200 and reply.json()["message"] == message
+        assert set(reply.json()) == {"success", "message", "data", "meta", "error"}
+    assert effect_state(task.project_id) == before
+    denied = APIClient().get(repository)
+    assert denied.status_code == 401 and denied["WWW-Authenticate"] == "Bearer"
+    assert denied.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"

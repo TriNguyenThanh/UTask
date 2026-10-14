@@ -35,3 +35,31 @@ def test_teacher_external_recipient_requires_recipient_scope_adapter(task_api, a
     )
     assert reply.status_code == 503 and reply.json()["error"]["code"] == "CLASSROOM_UNAVAILABLE"
     assert not Comment.objects.exists() and effect_state(task["project_id"]) == before
+
+
+@pytest.mark.parametrize(
+    "kind,ref",
+    [
+        ("PULL_REQUEST", "0"),
+        ("PULL_REQUEST", "abc"),
+        ("BRANCH", "feature/work"),
+        ("COMMIT", "abc123"),
+    ],
+)
+def test_github_reference_input_canonicalization_by_ref_kind(github, kind, ref):
+    _, leader, _, task = github
+    before = effect_state(task.project_id)
+    reply = leader.post(
+        f"/api/v1/tasks/{task.pk}/github-links/",
+        {"link_type": kind, "github_ref_id": ref},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="kind-reference",
+    )
+    assert reply.status_code == (400 if kind == "PULL_REQUEST" else 201), reply.content
+    if kind == "PULL_REQUEST":
+        assert effect_state(task.project_id) == before
+    else:
+        assert (
+            reply.json()["data"]["link_type"] == kind
+            and reply.json()["data"]["github_ref_id"] == ref
+        )

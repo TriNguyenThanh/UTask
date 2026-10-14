@@ -92,6 +92,10 @@ WORK_R2_SECRET_KEY = os.environ.get("WORK_R2_SECRET_KEY", "")
 WORK_R2_BUCKET = os.environ.get("WORK_R2_BUCKET", "")
 
 
+INTEGRATION_ADAPTER = os.environ.get(
+    "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
+)
+
 SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",
     "BacklogTaskTypeEnum": ["TASK", "BUG", "STORY"],
