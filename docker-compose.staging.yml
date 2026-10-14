@@ -1,9 +1,26 @@
 # Keep the existing project/volume names when switching staging to this file.
 name: utask
 
+# Work API and workers share one image, env mappings and database/cache dependencies.
+x-work-runtime: &work_runtime
+  profiles: [work-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/work-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/work-service.env
+  depends_on: &work_dependencies
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
 
   postgres:
+    x-deploy:
+      role: infrastructure
     image: postgres:16-alpine
     restart: unless-stopped
     env_file:
@@ -19,6 +36,8 @@ services:
       retries: 10
 
   redis:
+    x-deploy:
+      role: infrastructure
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
@@ -31,7 +50,9 @@ services:
       retries: 10
 
   kafka:
-    profiles: [kafka]
+    x-deploy:
+      role: infrastructure
+    profiles: [kafka, work-service]
     image: apache/kafka:3.9.0
     restart: unless-stopped
     env_file:
@@ -46,6 +67,8 @@ services:
       start_period: 15s
 
   identity-service:
+    x-deploy:
+      gateway_health_path: /api/auth/healthz
     x-ci:
       test_env:
         IDENTITY_TEST_DB_NAME: test_identity_ci
@@ -79,17 +102,58 @@ services:
       start_period: 15s
 
   work-service:
-    profiles: [work-service]
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/work-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    restart: unless-stopped
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/work-service.env
+    <<: *work_runtime
+    x-deploy:
+      gateway_health_path: /api/work/healthz
+    x-ci:
+      test_env:
+        WORK_TEST_DB_NAME: ci
+        WORK_TEST_DATABASE: test_work_ci
+        WORK_TEST_DB_USER: utask_ci
+        WORK_TEST_DB_PASSWORD: ci-only-postgres-password
+        WORK_TEST_DB_PORT: "5432"
+    healthcheck: *django_healthcheck
+
+  work-publisher:
+    <<: *work_runtime
+    x-deploy: &work_worker
+      role: worker
+      application: work-service
+    command: ["celery", "-A", "config", "worker", "-Q", "work-publisher", "--concurrency=1"]
+    depends_on:
+      <<: *work_dependencies
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 15s
+
+  work-beat:
+    <<: *work_runtime
+    x-deploy: *work_worker
+    command: ["celery", "-A", "config", "beat", "--pidfile=/tmp/work-beat.pid"]
+
+    # Process/broker readiness only; scheduling and task delivery need flow tests.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; from config.celery import app; os.kill(int(Path('/tmp/work-beat.pid').read_text()), 0); app.connection_for_write().ensure_connection(max_retries=0, timeout=3)"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 15s
+
+  work-profile-consumer:
+    <<: *work_runtime
+    x-deploy: *work_worker
+    profiles: [work-profile-consumer]
+    command: ["python", "manage.py", "consume_identity"]
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck: *django_healthcheck
+      kafka:
+        condition: service_healthy
 
   classroom-service:
     profiles: [classroom-service]
@@ -143,14 +207,11 @@ services:
         condition: service_healthy
       integration-service:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 15s
+    healthcheck: *django_healthcheck
 
   nginx:
+    x-deploy:
+      role: gateway
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
@@ -160,6 +221,12 @@ services:
     depends_on:
       identity-service:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t && nc -z -w 3 127.0.0.1 80"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
 
 volumes:
   postgres_data:
