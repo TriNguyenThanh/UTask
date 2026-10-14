@@ -130,6 +130,22 @@ def created_project(db, client_for, actors, project_payload):
     return response.json()["data"]
 
 
+@pytest.fixture
+def task_api(created_project, client_for, actors):
+    leader = client_for(actors["leader"])
+    route = f"/api/v1/projects/{created_project['id']}/tasks/"
+
+    def create(**changes):
+        key = changes.pop("key", str(uuid4()))
+        body = {"title": "Xây dựng API", "assignee_ids": [str(actors["member"])], **changes}
+        response = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        assert response.status_code == 201, response.content
+        return response.json()["data"]
+
+    return leader, route, create
+
+
 pytest_plugins = [
     "tests.fixtures.project_api",
+    "tests.fixtures.tasks",
 ]
