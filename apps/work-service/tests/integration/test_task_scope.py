@@ -1,7 +1,10 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 
 from apps.messaging.models import IdempotencyRecord, OutboxEvent
@@ -113,3 +116,48 @@ def test_non_assignee_cannot_change_workflow(task_api, actors, client_for, actio
     row = Task.objects.get(pk=task["id"])
     assert row.version == 1 and not row.is_blocked
     assert OutboxEvent.objects.count() == before
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_rebalance_preserves_cards_and_rejects_stale_writer(
+    task_api, actors, client_for
+):
+    _, _, create = task_api
+    left, right, a, b = [create() for _ in range(4)]
+    Task.objects.filter(pk=left["id"]).update(sort_order=1.0)
+    Task.objects.filter(pk=right["id"]).update(sort_order=1.0000000000000002)
+    barrier = Barrier(2)
+
+    def drag(task):
+        close_old_connections()
+        try:
+            client = client_for(actors["leader"])
+            barrier.wait(timeout=10)
+            return client.patch(
+                f"/api/v1/tasks/{task['id']}/transition/",
+                {
+                    "expected_version": 1,
+                    "target_state_id": left["state_id"],
+                    "previous_task_id": left["id"],
+                    "next_task_id": right["id"],
+                },
+                format="json",
+            ).status_code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = sorted(pool.map(drag, [a, b]))
+    assert statuses == [200, 409]
+    rows = list(Task.objects.order_by("sort_order", "id"))
+    assert len(rows) == 4 and len({row.pk for row in rows}) == 4
+    assert len({row.sort_order for row in rows}) == 4
+    assert rows[0].pk == UUID(left["id"])
+    assert rows[2].pk == UUID(right["id"])
+    board = (
+        client_for(actors["leader"])
+        .get(f"/api/v1/projects/{left['project_id']}/kanban/")
+        .json()["data"]
+    )
+    assert board["total_tasks"] == 4

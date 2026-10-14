@@ -8,6 +8,7 @@ from django.db import close_old_connections
 
 from apps.collaboration.models import Attachment
 from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
+from apps.projects.models import Project
 from apps.tasks.models import Task
 from apps.tasks.services.hierarchy import reparent_task
 from common.errors import WorkError
@@ -63,6 +64,38 @@ def test_concurrent_reparent_cannot_create_cycle(task_api, actors):
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(parent, [(a, b), (b, a)])) == [200, 409]
     assert Task.objects.filter(parent__isnull=False).count() == 1
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_transition_stale_writer_and_board_readback(task_api, actors, client_for):
+    _, _, create = task_api
+    task = create()
+    project = Project.objects.get(pk=task["project_id"])
+    target = project.states.get(group="UNSTARTED")
+    barrier = Barrier(2)
+
+    def drag(index):
+        close_old_connections()
+        try:
+            client = client_for(actors["member"])
+            barrier.wait(timeout=10)
+            return client.patch(
+                f"/api/v1/tasks/{task['id']}/transition/",
+                {"expected_version": 1, "target_state_id": str(target.pk)},
+                format="json",
+            ).status_code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(drag, [1, 2])) == [200, 409]
+    board = (
+        client_for(actors["leader"]).get(f"/api/v1/projects/{project.pk}/kanban/").json()["data"]
+    )
+    column = next(column for column in board["columns"] if column["state_id"] == str(target.pk))
+    assert column["tasks"][0]["id"] == task["id"]
+    assert column["tasks"][0]["version"] == 2
 
 
 @pytest.mark.postgres
