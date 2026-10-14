@@ -7,9 +7,14 @@ from apps.projects.views import ERRORS
 from apps.tasks.api_documentation import KEY_PARAMETER, LIST_PARAMETERS, READ_TASK, TASK, TASK_LIST
 from apps.tasks.filters import TaskFilter
 from apps.tasks.queries import project_tasks, visible_task
-from apps.tasks.serializers import CreateTaskSerializer, PatchTaskSerializer
+from apps.tasks.serializers import (
+    CreateTaskSerializer,
+    PatchTaskSerializer,
+    TaskVersionSerializer,
+)
 from apps.tasks.serializers.presentation import serialize_tasks
 from apps.tasks.services.creation import create_task
+from apps.tasks.services.mutations import lifecycle_task, update_task
 from common.errors import WorkError
 from common.pagination import paginate
 from common.responses import success_response
@@ -100,4 +105,34 @@ class TaskDetailView(GenericAPIView):
                 expand=request.query_params.get("expand"),
             ),
             message="Đã tải chi tiết công việc.",
+        )
+
+    @extend_schema(request=PatchTaskSerializer, responses={200: TASK, **ERRORS})
+    def patch(self, request, task_id):
+        visible_task(request.user, task_id, for_write=True)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return update_task(request.user, task_id, serializer.validated_data)
+
+    @extend_schema(request=TaskVersionSerializer, responses={200: TASK, **ERRORS})
+    def delete(self, request, task_id):
+        visible_task(request.user, task_id, for_write=True)
+        serializer = TaskVersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return lifecycle_task(
+            request.user, task_id, serializer.validated_data["expected_version"], "delete"
+        )
+
+
+class TaskLifecycleView(GenericAPIView):
+    serializer_class = TaskVersionSerializer
+    action = "archive"
+
+    @extend_schema(request=TaskVersionSerializer, responses={200: TASK, **ERRORS})
+    def post(self, request, task_id):
+        visible_task(request.user, task_id, for_write=True, deleted=self.action == "restore")
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return lifecycle_task(
+            request.user, task_id, serializer.validated_data["expected_version"], self.action
         )

@@ -98,6 +98,46 @@ def test_create_audit_outbox_failure_rolls_back(task_api, reject_outbox_event):
     assert effect_state(project_id) == before
 
 
+def test_member_patch_version_and_lifecycle(task_api, client_for, actors):
+    leader, route, create = task_api
+    task = create()
+    detail = f"/api/v1/tasks/{task['id']}/"
+    member = client_for(actors["member"])
+    response = member.patch(detail, {"expected_version": 1, "story_points": 8}, format="json")
+    assert response.status_code == 403
+    response = member.patch(
+        detail, {"expected_version": 1, "description_html": "<p>Kết quả</p>"}, format="json"
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["version"] == 2
+    assert (
+        leader.patch(detail, {"expected_version": 1, "priority": "HIGH"}, format="json").status_code
+        == 409
+    )
+    assert (
+        leader.post(detail + "archive/", {"expected_version": 2}, format="json").status_code == 200
+    )
+    assert leader.get(route).json()["data"] == []
+    assert len(leader.get(route + "?status=archived").json()["data"]) == 1
+    assert (
+        member.patch(
+            detail, {"expected_version": 3, "description_html": "Cấm"}, format="json"
+        ).status_code
+        == 400
+    )
+    assert (
+        leader.post(detail + "unarchive/", {"expected_version": 3}, format="json").status_code
+        == 200
+    )
+    assert leader.delete(detail, {"expected_version": 4}, format="json").status_code == 200
+    assert leader.get(detail).status_code == 404
+    assert leader.get(route).json()["meta"]["pagination"]["total_count"] == 0
+    assert (
+        leader.post(detail + "restore/", {"expected_version": 5}, format="json").status_code == 200
+    )
+    assert leader.get(detail).json()["data"]["deleted_at"] is None
+
+
 def test_cursor_filters_expand_and_query_bound(task_api, django_assert_max_num_queries):
     leader, route, create = task_api
     first = create(title="API mới")
