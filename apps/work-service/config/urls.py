@@ -21,6 +21,7 @@ urlpatterns = [
     ),
     path("api/v1/", include("apps.projects.urls")),
     path("api/v1/", include("apps.sprints.urls")),
+    path("api/v1/", include("apps.integrations.urls")),
     path("api/v1/", include("apps.tasks.urls")),
     path("api/v1/", include("apps.collaboration.urls")),
 ]
