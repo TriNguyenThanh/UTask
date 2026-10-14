@@ -1,78 +1,167 @@
+<div align="center">
+
 # UTask
 
-> Nền tảng quản lý project phần mềm cho nhóm học tập.
+### Agile Project Management for Student Teams
 
-<p align="center">
-  <a href="https://github.com/TriNguyenThanh/UTask/actions/workflows/ci.yml"><img src="https://github.com/TriNguyenThanh/UTask/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-Web-61DAFB?logo=react&logoColor=20232A" alt="React" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Web-3178C6?logo=typescript&logoColor=white" alt="TypeScript" /></a>
-  <a href="https://www.django-rest-framework.org/"><img src="https://img.shields.io/badge/Django-REST_Framework-092E20?logo=django&logoColor=white" alt="Django REST Framework" /></a>
-  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-AI_API-009688?logo=fastapi&logoColor=white" alt="FastAPI" /></a>
-  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-Data-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" /></a>
-  <a href="https://kafka.apache.org/"><img src="https://img.shields.io/badge/Apache-Kafka-231F20?logo=apachekafka&logoColor=white" alt="Apache Kafka" /></a>
-  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white" alt="Redis" /></a>
-  <a href="https://docs.docker.com/compose/"><img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose" /></a>
-  <a href="https://docs.github.com/actions"><img src="https://img.shields.io/badge/GitHub-Actions-CI%2FCD-2088FF?logo=githubactions&logoColor=white" alt="GitHub Actions" /></a>
-</p>
+**Plan projects, track sprint progress, and review AI suggestions in an academic workspace.**
 
-UTask hướng tới việc giúp sinh viên và giảng viên tổ chức project, nhóm, Sprint, task và theo dõi tiến độ. Kiến trúc dự kiến kết nối hoạt động GitHub và dùng phân tích AI để gợi ý ưu tiên, tải công việc hoặc rủi ro. AI chỉ đề xuất; người dùng quyết định và service sở hữu dữ liệu thực hiện thay đổi.
+![React](https://img.shields.io/badge/React-Frontend-61DAFB)
+![Django REST Framework](https://img.shields.io/badge/Django_REST_Framework-Domain_APIs-092E20)
+![FastAPI](https://img.shields.io/badge/FastAPI-AI_Service-009688)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791)
+![Google ADK](https://img.shields.io/badge/Google_ADK-AI_Agent-4285F4)
+![Docker](https://img.shields.io/badge/Docker-Containers-2496ED)
 
-## Công nghệ
+</div>
 
-| Lớp | Công nghệ nổi bật |
-| --- | --- |
-| Web | React, TypeScript, Vite; React Router, TanStack Query và Zustand |
-| Backend | Python, Django REST Framework, FastAPI |
-| Dữ liệu và xử lý bất đồng bộ | PostgreSQL, Apache Kafka, Redis |
-| Hạ tầng và triển khai | Docker Compose, Nginx, GitHub Actions, GitHub Container Registry (GHCR) |
+---
 
-Web shell và cấu hình hạ tầng hiện có trong repository. Các công nghệ backend được Compose/CI tham chiếu, nhưng mã nguồn backend chưa có trong checkout hiện tại.
+## Overview
 
-## Cấu trúc project
+**UTask** is a project management platform being developed for students and instructors working on software projects. It brings Scrum and Agile workflows into a classroom setting, connecting courses and teams with project planning, task tracking, and progress reporting.
+
+The AI Service supports planning and analysis by producing suggestions for users to review. The target design keeps progress calculations in the Work Service, using defined rules independently of AI.
+
+**Repository status: Partial.** The repository contains a React web application with mock API support and an AI Service with a request API, PostgreSQL persistence, a dispatcher, and Celery workers. The domain backends are not yet implemented in this checkout. Integration across services and production LLM behavior remain unverified.
+
+---
+
+## Planned Capabilities
+
+The following areas describe the product scope and target architecture.
+
+| Area                | Scope                                                        |
+| ------------------- | ------------------------------------------------------------ |
+| Classroom and Teams | Organize courses, classes, groups, and student participation |
+| Project Management  | Manage projects, members, tasks, comments, and workflows     |
+| Backlog Planning    | Organize epics, user stories, priorities, and story points   |
+| Sprint and Kanban   | Plan sprints and track work through a configurable board     |
+| Progress Tracking   | Calculate task and project progress using defined rules      |
+| GitHub Integration  | Connect repositories and link development activity to tasks  |
+| AI Assistance       | Draft backlogs, break down tasks, and explain delivery risks |
+| Notifications       | Keep users informed about relevant changes and activity      |
+
+---
+
+## AI Assistance
+
+The first version of the AI API supports three intents:
+
+### Backlog Generation
+
+Draft a backlog from a project or feature description for the team to review and refine.
+
+### Task Decomposition
+
+Break a complex task into smaller subtasks using the available task context.
+
+### Risk Analysis
+
+Identify and explain risks that may affect a sprint or deadline using relevant project context.
+
+AI requests are processed through a bounded workflow with output validation and execution limits. Context is obtained through domain tools backed by internal APIs.
+
+> **User review:** AI produces proposals for users to review. Applying confirmed changes belongs to the service that owns the data, which must check permissions and business rules.
+
+See the [AI Service documentation](docs/ai-service/README.md) for setup and API scope, and the [code map](docs/ai-service/code-map.md) for implementation details and verification limits.
+
+---
+
+## Technology Stack
+
+React and the AI Service dependencies are present in the repository. The remaining platform choices follow the [architecture baseline](docs/architecture/README.md).
+
+| Layer               | Technology                              | Scope                          |
+| ------------------- | --------------------------------------- | ------------------------------ |
+| **Frontend**        | React · Vite · TypeScript               | Web application                |
+| **Domain APIs**     | Python · Django · Django REST Framework | Planned business services      |
+| **AI API**          | FastAPI · Pydantic                      | AI requests and validation     |
+| **AI Runtime**      | Google ADK · Gemini                     | Agent workflow and provider    |
+| **Database**        | PostgreSQL                              | Separate database per service  |
+| **Background Jobs** | Celery · Redis                          | Internal service jobs          |
+| **Events**          | Kafka                                   | Planned events across services |
+| **File Storage**    | Cloudflare R2                           | Planned production storage     |
+| **Testing**         | pytest · Vitest · React Testing Library | Backend and frontend tests     |
+| **Infrastructure**  | Docker Compose · Nginx                  | Local stacks and API routing   |
+
+---
+
+## System Architecture
+
+**Target design.** UTask separates services by business responsibility. The diagram shows the intended platform structure.
 
 ```text
-apps/
-  web/                    ứng dụng React
-  <service>/              vị trí các backend service
-contracts/
-  api/                    hợp đồng REST
-  events/                 hợp đồng Kafka
-datasets/                 fixture JSON cho project, task và workload
-docs/
-  system/                 kiến trúc và luồng hệ thống
-  <service>/              tài liệu theo service
-  infrastructure/         cấu hình local và CI/CD
-infra/                    Docker, Nginx, PostgreSQL và biến môi trường
-scripts/                  script kiểm tra CI local
-.github/workflows/        CI và phát hành staging
-docker-compose.yml        cấu hình stack
+React Web Application
+        │ REST
+        ▼
+Nginx / Reverse Proxy
+        ├── Identity Service       Authentication and user profiles
+        ├── Work Service           Projects, tasks, sprints, and progress
+        ├── Classroom Service      Courses, classes, and groups
+        ├── Integration Service    GitHub connection and activity
+        └── Notification Service   Notifications and delivery
+
+Internal AI Service
+        ├── Domain APIs            Authorized project context via REST
+        └── LLM Provider           Google ADK
+
+Infrastructure: PostgreSQL · Redis · Kafka · Cloudflare R2
 ```
 
-Các service dự kiến gồm Identity, Project (`work-service`), Classroom, Integration, Notification và AI. Ranh giới service và quyền sở hữu dữ liệu được mô tả trong [kiến trúc hệ thống](docs/system/architecture.md).
+Each service owns its data and exposes it through agreed APIs or events. REST handles requests that need a direct response; Kafka carries asynchronous events between services. Celery and Redis handle jobs within a service.
 
-## Cấu hình và chạy
+The AI Service provides analysis and proposals without direct access to other services' databases. The Integration Service is the only service that calls the GitHub API.
 
-Cần Docker Compose. Tạo cấu hình local từ mẫu:
+See [system architecture](docs/system/architecture.md) and [data ownership](docs/system/data-ownership.md) for the service boundaries and current decisions.
 
-```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
+---
+
+## Repository Structure
+
+```text
+UTask/
+│
+├── apps/
+│   ├── web/                 # React + Vite application
+│   └── ai-service/          # Internal AI Service
+│
+├── contracts/
+│   ├── api/                 # Machine-readable API contracts
+│   └── events/              # Event contracts; check baseline compatibility
+│
+├── datasets/               # AI evaluation and example data
+├── docs/                   # System, service, and infrastructure documentation
+├── infra/                  # Nginx, PostgreSQL, and environment configuration
+├── scripts/                # Development and CI utilities
+├── docker-compose.yml      # Platform configuration; service sources incomplete
+└── README.md
 ```
 
-Không commit `.env`; thay các giá trị `change-me-*` trước khi dùng môi trường chung. Biến môi trường được ánh xạ qua `infra/env/`.
+---
 
-Có thể chạy riêng Web với Node.js 22+ và pnpm 10:
+## Development and Documentation
 
-```powershell
-Set-Location apps/web
-corepack pnpm install --frozen-lockfile
-corepack pnpm dev
-```
+Start with the [documentation overview](docs/system/README.md). Detailed developer documentation is maintained in Vietnamese under `docs/`.
 
-Toàn bộ stack chưa chạy được trong checkout hiện tại vì các backend service chưa có mã nguồn và Dockerfile.
+| Resource                                             | Purpose                                        |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| [Architecture Baseline](docs/architecture/README.md) | Technology choices and target service design   |
+| [Development Guide](docs/system/development.md)      | Repository conventions and verification        |
+| [Web Application](apps/web/README.md)                | Frontend setup and local commands              |
+| [AI Service](docs/ai-service/README.md)              | Configuration, local stack, and quality checks |
+| [AI Implementation Map](docs/ai-service/code-map.md) | Source locations and integration limits        |
+| [Infrastructure](docs/infrastructure/README.md)      | Environment, storage, messaging, and CI/CD     |
+| [Architecture Decisions](docs/adr/README.md)         | Recorded decisions and changes to the baseline |
 
-## Triển khai
+The root Docker Compose configuration references domain services whose source directories are not yet present. Use the application-specific setup instructions for the web application and the standalone AI stack.
 
-GitHub Actions kiểm tra thay đổi trên Pull Request vào `main` và khi push lên `main`. Sau CI thành công, thay đổi backend hoặc cấu hình triển khai có thể kích hoạt workflow phát hành: build image, gắn thẻ theo commit và triển khai staging bằng Docker Compose qua SSH.
+---
 
-Staging cần GitHub Environment tên `staging`, thông tin SSH/GHCR trong secrets và tệp `.env` trên máy chủ. Cấu hình chi tiết nằm trong [hướng dẫn CI/CD](docs/infrastructure/ci-cd.md). Workflow đã được cấu hình trong repository; môi trường staging chưa được xác minh.
+<div align="center">
+
+### UTask
+
+**Project planning and progress tracking for student teams.**
+
+</div>
