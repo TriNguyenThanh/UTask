@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.tasks.views.actions import SubtaskView
+from apps.tasks.views.actions import RelationDetailView, RelationView, SubtaskView
 from apps.tasks.views.tasks import TaskDetailView, TaskLifecycleView, TaskListCreateView
 
 urlpatterns = [
@@ -11,4 +11,6 @@ urlpatterns = [
         for action in ["archive", "unarchive", "restore"]
     ],
     path("tasks/<uuid:parent_task_id>/subtasks/", SubtaskView.as_view()),
+    path("tasks/<uuid:task_id>/relations/", RelationView.as_view()),
+    path("tasks/<uuid:task_id>/relations/<uuid:relation_id>/", RelationDetailView.as_view()),
 ]
