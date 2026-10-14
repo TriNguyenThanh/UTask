@@ -94,3 +94,22 @@ def test_relation_self_foreign_and_duplicate_canonicalization(task_api, foreign_
     )
     assert inverse.status_code == 409
     assert TaskRelation.objects.count() == 1
+
+
+@pytest.mark.parametrize("action", ["transition", "block", "unblock"])
+def test_non_assignee_cannot_change_workflow(task_api, actors, client_for, action):
+    _, _, create = task_api
+    task = create(assignee_ids=[])
+    before = OutboxEvent.objects.count()
+    payload = {"expected_version": 1}
+    if action == "transition":
+        payload["target_state_id"] = task["state_id"]
+    if action == "block":
+        payload["blocked_reason"] = "Not assigned"
+    reply = client_for(actors["member"]).patch(
+        f"/api/v1/tasks/{task['id']}/{action}/", payload, format="json"
+    )
+    assert reply.status_code == 403, reply.content
+    row = Task.objects.get(pk=task["id"])
+    assert row.version == 1 and not row.is_blocked
+    assert OutboxEvent.objects.count() == before
