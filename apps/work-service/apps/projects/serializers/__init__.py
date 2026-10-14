@@ -6,3 +6,4 @@ from apps.projects.serializers.projects import CreateProjectSerializer as Create
 from apps.projects.serializers.projects import PatchProjectSerializer as PatchProjectSerializer
 from apps.projects.serializers.projects import ProjectSerializer as ProjectSerializer
 from apps.projects.serializers.projects import VersionSerializer as VersionSerializer
+from apps.projects.serializers.states import StateSerializer as StateSerializer
