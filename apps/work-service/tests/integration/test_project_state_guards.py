@@ -98,3 +98,18 @@ def test_capacity_inactive_target_rejects_without_any_effect(created_project, ac
     )
     assert reply.status_code == 422 and reply.json()["error"]["code"] == "MEMBER_NOT_ACTIVE"
     assert effect_state(project.pk) == before
+
+
+@pytest.mark.parametrize("kind", ["labels", "epics"])
+def test_archived_project_metadata_write_does_not_allocate_or_emit(
+    created_project, actors, client_for, kind
+):
+    Project.objects.filter(pk=created_project["id"]).update(archived_at=timezone.now())
+    before = effect_state(created_project["id"])
+    reply = client_for(actors["leader"]).post(
+        f"/api/v1/projects/{created_project['id']}/{kind}/",
+        {"name": "Denied", **({"color": "#123456"} if kind == "labels" else {})},
+        format="json",
+    )
+    assert reply.status_code == 400, reply.content
+    assert effect_state(created_project["id"]) == before
