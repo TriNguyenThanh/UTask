@@ -1,5 +1,11 @@
 # Chạy môi trường local
 
+**Trạng thái: Một phần.** Theo [baseline](../architecture/README.md), local
+dùng Docker Compose cho Nginx, PostgreSQL, Redis, Kafka và sáu service.
+Checkout hiện có AI bootstrap và Web; các backend còn lại chưa có package và
+Dockerfile đầy đủ. Compose có cấu hình nhưng toàn bộ stack chưa được xác
+minh chạy được. Worker Celery chưa được khai báo.
+
 Các lệnh dưới đây dùng PowerShell. Trước khi chạy lần đầu, tạo cấu hình cục bộ:
 
 ```powershell

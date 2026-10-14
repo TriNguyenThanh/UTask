@@ -1,8 +1,12 @@
 # CI/CD
 
+**Trạng thái: Một phần.** Workflow đã được cấu hình; staging/production và
+branch protection trên GitHub chưa được xác minh. Thiết kế vận hành theo
+[baseline](../architecture/README.md), mục 20–26.
+
 UTask dùng một workflow điều phối và hai workflow dùng lại trong GitHub Actions:
 
-1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra service bị ảnh hưởng và cả Compose local/staging. Pull Request dựng image để kiểm tra Dockerfile; push lên `main` chỉ gọi phát hành sau khi các kiểm tra liên quan thành công.
+1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Pytest của AI cần bao gồm regression evaluation khi bộ evaluation được triển khai; bootstrap hiện chỉ có unit/API/workflow test. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` chỉ gọi phát hành sau khi mọi kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` chỉ phát hành các service đang bật: dựng/đẩy image đổi, tái sử dụng manifest `main` cho image không đổi. Staging dùng riêng `docker-compose.staging.yml`, chạy migration rồi `up --no-build` qua SSH.
 
@@ -47,11 +51,11 @@ kích hoạt release để áp dụng phạm vi/cách deploy mới và dựng im
 
 Workflow dùng chung nhận ba input tùy chọn từ job gọi trong `ci.yml`:
 
-| Input | Mặc định | Trách nhiệm |
-| --- | --- | --- |
-| `postgres` | `false` | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
-| `redis` | `false` | Khởi tạo Redis 7 tại `127.0.0.1:6379`. |
-| `test_env` | `{}` | Chuỗi JSON chứa biến môi trường không bí mật, chỉ truyền vào bước pytest. |
+| Input      | Mặc định | Trách nhiệm                                                                                                        |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `postgres` | `false`  | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
+| `redis`    | `false`  | Khởi tạo Redis 7 tại `127.0.0.1:6379`.                                                                             |
+| `test_env` | `{}`     | Chuỗi JSON chứa biến môi trường không bí mật, chỉ truyền vào bước pytest.                                          |
 
 Hai container thuộc riêng từng job trên runner tạm thời. Health checks phải đạt trước
 khi chạy các bước kiểm tra. Credential trên chỉ dành cho CI; không dùng secrets
@@ -102,16 +106,16 @@ service containers như GitHub Actions; không dùng credential staging/producti
 
 Tạo Environment có tên `staging` và giới hạn nhánh triển khai là `main`. Việc yêu cầu người duyệt trước khi triển khai là tùy chọn quản trị, không thay đổi cơ chế workflow tự khởi động sau CI.
 
-| Tên | Khai báo tại | Bắt buộc | Mục đích |
-| --- | --- | --- | --- |
-| `STAGING_WORKDIR` | Environment variable | Có | Thư mục triển khai, ví dụ `/opt/utask`. |
-| `STAGING_URL` | Environment variable | Không | Địa chỉ hiển thị trong GitHub Deployment. |
-| `STAGING_HOST` | Environment secret | Có | Tên máy hoặc địa chỉ máy staging. |
-| `STAGING_USER` | Environment secret | Có | Tài khoản SSH dùng để triển khai. |
-| `STAGING_SSH_PRIVATE_KEY` | Environment secret | Có | Khóa riêng SSH tương ứng với máy staging. |
-| `STAGING_KNOWN_HOSTS` | Environment secret | Có | Nội dung `known_hosts` đã xác minh cho máy staging. |
-| `STAGING_REGISTRY_USERNAME` | Environment secret | Có | Tài khoản có quyền đọc package trên GHCR. |
-| `STAGING_REGISTRY_TOKEN` | Environment secret | Có | Token chỉ có quyền đọc package trên GHCR. |
+| Tên                         | Khai báo tại         | Bắt buộc | Mục đích                                            |
+| --------------------------- | -------------------- | -------- | --------------------------------------------------- |
+| `STAGING_WORKDIR`           | Environment variable | Có       | Thư mục triển khai, ví dụ `/opt/utask`.             |
+| `STAGING_URL`               | Environment variable | Không    | Địa chỉ hiển thị trong GitHub Deployment.           |
+| `STAGING_HOST`              | Environment secret   | Có       | Tên máy hoặc địa chỉ máy staging.                   |
+| `STAGING_USER`              | Environment secret   | Có       | Tài khoản SSH dùng để triển khai.                   |
+| `STAGING_SSH_PRIVATE_KEY`   | Environment secret   | Có       | Khóa riêng SSH tương ứng với máy staging.           |
+| `STAGING_KNOWN_HOSTS`       | Environment secret   | Có       | Nội dung `known_hosts` đã xác minh cho máy staging. |
+| `STAGING_REGISTRY_USERNAME` | Environment secret   | Có       | Tài khoản có quyền đọc package trên GHCR.           |
+| `STAGING_REGISTRY_TOKEN`    | Environment secret   | Có       | Token chỉ có quyền đọc package trên GHCR.           |
 
 Các giá trị sau do GitHub hoặc workflow cung cấp, không cấu hình thủ công: `GITHUB_TOKEN`, `STAGING_REGISTRY`, `STAGING_IMAGE_PREFIX` và `STAGING_IMAGE_TAG`.
 
