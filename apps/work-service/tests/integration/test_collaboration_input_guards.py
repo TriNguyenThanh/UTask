@@ -1,9 +1,23 @@
 import pytest
 
-from apps.collaboration.models import Comment
+from apps.collaboration.models import Attachment, Comment
 from tests.fixtures.transactions import effect_state
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
+
+
+@pytest.mark.parametrize("name", [".", "..", "bad\x01name"])
+def test_presign_rejects_invalid_sanitized_filename_without_allocation(task_api, name):
+    leader, _, create = task_api
+    task = create()
+    before = effect_state(task["project_id"])
+    reply = leader.post(
+        f"/api/v1/tasks/{task['id']}/attachments/presigned-url/",
+        {"file_name": name, "file_size": 10, "content_type": "text/plain"},
+        format="json",
+    )
+    assert reply.status_code == 400 and reply.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert not Attachment.objects.exists() and effect_state(task["project_id"]) == before
 
 
 def test_teacher_external_recipient_requires_recipient_scope_adapter(task_api, actors, client_for):

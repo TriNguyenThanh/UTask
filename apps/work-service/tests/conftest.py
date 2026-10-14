@@ -147,7 +147,9 @@ def task_api(created_project, client_for, actors):
 
 pytest_plugins = [
     "tests.fixtures.project_api",
+    "tests.fixtures.storage",
     "tests.fixtures.tasks",
+    "tests.fixtures.collaboration",
 ]
 
 

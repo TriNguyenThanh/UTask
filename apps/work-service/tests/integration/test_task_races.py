@@ -6,6 +6,8 @@ from uuid import UUID
 import pytest
 from django.db import close_old_connections
 
+from apps.collaboration.models import Attachment
+from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
 from apps.tasks.models import Task
 from apps.tasks.services.hierarchy import reparent_task
 from common.errors import WorkError
@@ -61,3 +63,55 @@ def test_concurrent_reparent_cannot_create_cycle(task_api, actors):
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(parent, [(a, b), (b, a)])) == [200, 409]
     assert Task.objects.filter(parent__isnull=False).count() == 1
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("subject", ["task", "project"])
+def test_concurrent_attachment_confirm_one_effect(task_api, actors, client_for, settings, subject):
+    from tests.fixtures.storage import FixtureStorage
+
+    settings.WORK_STORAGE_ADAPTER = "tests.fixtures.storage.FixtureStorage"
+    FixtureStorage.objects = {}
+    leader, _, create = task_api
+    task = create()
+    route = (
+        f"/api/v1/tasks/{task['id']}/attachments/"
+        if subject == "task"
+        else f"/api/v1/projects/{task['project_id']}/attachments/"
+    )
+    reply = leader.post(
+        route + "presigned-url/",
+        {"file_name": "test.txt", "file_size": 1, "content_type": "text/plain"},
+        format="json",
+    )
+    attachment_id = reply.json()["data"]["attachment_id"]
+    barrier = Barrier(2)
+
+    def confirm(index):
+        close_old_connections()
+        try:
+            client = client_for(actors["leader"])
+            barrier.wait(timeout=10)
+            return client.post(
+                route,
+                {"attachment_id": attachment_id},
+                format="json",
+                HTTP_IDEMPOTENCY_KEY=f"confirm-{index}",
+            ).status_code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert list(pool.map(confirm, [1, 2])) == [200, 200]
+    assert Attachment.objects.count() == 1
+    assert OutboxEvent.objects.filter(event_type="attachment.confirmed").count() == 1
+    row = Attachment.objects.get(pk=attachment_id)
+    assert row.status == "CONFIRMED" and row.confirmed_at is not None
+    assert (row.task_id is not None) == (subject == "task")
+    assert (row.project_id is not None) == (subject == "project")
+    assert IdempotencyRecord.objects.filter(endpoint_path=route).count() == 2
+    assert Activity.objects.filter(field="attachment", verb="created").count() == 1
+    reread = leader.get(route).json()
+    assert [item["id"] for item in reread["data"]] == [attachment_id]
+    assert reread["meta"]["pagination"]["total_count"] == 1

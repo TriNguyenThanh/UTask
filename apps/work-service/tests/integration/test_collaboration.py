@@ -3,12 +3,17 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
-from apps.collaboration.models import Comment
+from apps.collaboration.models import Attachment, Comment
+from apps.collaboration.tasks import cleanup_attachments
 from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
 from apps.projects.models import Project
 from apps.tasks.models import Epic, Label, Task
 from apps.tasks.tasks import scan_deadlines
+from infrastructure.storage import ObjectFacts
+from tests.fixtures.storage import storage as storage
 
 pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
@@ -305,3 +310,154 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     )
     assert scan_deadlines() == 0
     assert OutboxEvent.objects.filter(event_type="task.deadline.reminder").count() == 3
+
+
+def test_attachment_subject_owner_content_confirm_replay_download_and_cleanup(
+    task_api, client_for, actors, storage, monkeypatch
+):
+    leader, _, create = task_api
+    task = create()
+    member = client_for(actors["member"])
+    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    response = member.post(
+        route + "presigned-url/",
+        {"file_name": "../notes.txt", "file_size": 10, "content_type": "text/plain"},
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    attachment_id = response.json()["data"]["attachment_id"]
+    row = Attachment.objects.get(pk=attachment_id)
+    assert row.file_name == "notes.txt"
+    assert row.project_id is None
+    assert leader.get(route).json()["data"] == []
+    assert (
+        leader.post(
+            route, {"attachment_id": attachment_id}, format="json", HTTP_IDEMPOTENCY_KEY="owner"
+        ).status_code
+        == 403
+    )
+    storage.objects[row.storage_key] = ObjectFacts(10, "text/plain", False)
+    assert (
+        member.post(
+            route, {"attachment_id": attachment_id}, format="json", HTTP_IDEMPOTENCY_KEY="confirm"
+        ).status_code
+        == 422
+    )
+    storage.objects[row.storage_key] = ObjectFacts(10, "text/plain", True)
+    response = member.post(
+        route, {"attachment_id": attachment_id}, format="json", HTTP_IDEMPOTENCY_KEY="confirm"
+    )
+    assert response.status_code == 200, response.content
+    assert (
+        member.post(
+            route, {"attachment_id": attachment_id}, format="json", HTTP_IDEMPOTENCY_KEY="confirm"
+        ).json()
+        == response.json()
+    )
+    assert OutboxEvent.objects.filter(event_type="attachment.confirmed").count() == 1
+    assert Attachment.objects.count() == 1
+    teacher = client_for(actors["teacher"])
+    assert teacher.get(route + attachment_id + "/download/").status_code == 200
+    assert (
+        teacher.post(
+            route + "presigned-url/",
+            {"file_name": "x", "file_size": 1, "content_type": "text/plain"},
+            format="json",
+        ).status_code
+        == 403
+    )
+    project_route = f"/api/v1/projects/{task['project_id']}/attachments/"
+    assert (
+        member.post(
+            project_route,
+            {"attachment_id": attachment_id},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="wrong-subject",
+        ).status_code
+        == 404
+    )
+    assert leader.get(f"/api/v1/tasks/{task['id']}/").json()["data"]["attachments_count"] == 1
+    assert member.delete(route + attachment_id + "/").status_code == 200
+    assert leader.get(route).json()["data"] == []
+    assert cleanup_attachments() == 1
+    assert storage.deletes == [row.storage_key]
+    response = member.post(
+        project_route + "presigned-url/",
+        {"file_name": "x", "file_size": 1, "content_type": "application/pdf"},
+        format="json",
+    )
+    pending = Attachment.objects.get(pk=response.json()["data"]["attachment_id"])
+    future = timezone.now() + timedelta(minutes=16)
+    monkeypatch.setattr("django.utils.timezone.now", lambda: future)
+    assert cleanup_attachments() == 2
+    pending.refresh_from_db()
+    assert pending.status == "EXPIRED"
+    assert (
+        member.post(
+            project_route,
+            {"attachment_id": str(pending.pk)},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="expired",
+        ).status_code
+        == 400
+    )
+
+
+def test_collaboration_database_subject_identity(task_api):
+    _, _, create = task_api
+    task = create()
+    comment = Comment.objects.create(
+        task_id=task["id"],
+        user_id=task["created_by_user_id"],
+        content_html="x",
+        content_stripped="x",
+    )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Comment.objects.filter(pk=comment.pk).update(user_id=task["assignee_ids"][0])
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Comment.objects.create(
+            task_id=task["id"],
+            project_id=task["project_id"],
+            user_id=task["created_by_user_id"],
+            content_html="x",
+            content_stripped="x",
+        )
+
+
+def test_feedback_proof_expiry_and_presign_failure_leave_correct_state(
+    task_api, client_for, actors, storage, monkeypatch, classroom
+):
+    from common.errors import WorkError
+    from infrastructure.collaboration_scope import VerifiedFeedbackScope
+
+    leader, _, create = task_api
+    task = create()
+    project = Project.objects.get(pk=task["project_id"])
+    expired = VerifiedFeedbackScope(
+        actors["teacher"],
+        project.pk,
+        project.classroom_group_id,
+        1,
+        timezone.now() - timedelta(seconds=1),
+    )
+    monkeypatch.setattr(
+        classroom, "teacher_feedback_scope", staticmethod(lambda project, actor: expired)
+    )
+    response = client_for(actors["teacher"]).post(
+        "/api/v1/comments/", {"task_id": task["id"], "content_html": "Stale proof"}, format="json"
+    )
+    assert response.status_code == 503
+    assert not Comment.objects.exists()
+
+    def fail(self, row):
+        raise WorkError("STORAGE_UNAVAILABLE", "Signer unavailable", 503)
+
+    monkeypatch.setattr(storage, "presign", fail)
+    response = leader.post(
+        f"/api/v1/tasks/{task['id']}/attachments/presigned-url/",
+        {"file_name": "x.txt", "file_size": 1, "content_type": "text/plain"},
+        format="json",
+    )
+    assert response.status_code == 503
+    assert Attachment.objects.get().status == "PENDING"
+    assert not OutboxEvent.objects.filter(event_type="attachment.confirmed").exists()

@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from apps.tasks.models import Task
 from tests.fixtures.transactions import effect_state
 
 pytestmark = [pytest.mark.contract, pytest.mark.django_db]
@@ -56,6 +57,48 @@ def test_label_pattern_validation_is_vietnamese_and_has_no_effect(task_api):
         ],
     }
     assert effect_state(task["project_id"]) == before
+
+
+def test_task_comment_and_file_messages_describe_saved_outcome_and_business_errors(
+    task_api, storage
+):
+    leader, route, create = task_api
+    task = create()
+    detail = f"/api/v1/tasks/{task['id']}/"
+    changed = leader.patch(detail, {"expected_version": 1, "title": "Updated"}, format="json")
+    assert changed.status_code == 200 and changed.json()["message"] == "Đã cập nhật công việc."
+    assert Task.objects.get(pk=task["id"]).title == "Updated"
+    no_change = leader.patch(detail, {"expected_version": 2, "title": "Updated"}, format="json")
+    assert (
+        no_change.status_code == 200
+        and no_change.json()["message"] == "Công việc không có thay đổi."
+    )
+    before = effect_state(task["project_id"])
+    conflict = leader.patch(detail, {"expected_version": 1, "title": "Stale"}, format="json")
+    assert conflict.status_code == 409 and conflict.json()["error"]["code"] == "VERSION_CONFLICT"
+    assert (
+        conflict.json()["message"]
+        == "Công việc đã có thay đổi bởi thao tác khác, vui lòng tải lại dữ liệu."
+    )
+    assert effect_state(task["project_id"]) == before
+    for url, message in [
+        (route, "Đã tải danh sách công việc."),
+        (detail, "Đã tải chi tiết công việc."),
+        (detail + "activities/", "Đã tải lịch sử công việc."),
+        (detail + "comments/", "Đã tải danh sách bình luận."),
+        (detail + "attachments/", "Đã tải danh sách tệp đính kèm."),
+    ]:
+        reply = leader.get(url)
+        assert reply.status_code == 200 and reply.json()["message"] == message
+    comment = leader.post(
+        "/api/v1/comments/", {"task_id": task["id"], "content_html": "Comment"}, format="json"
+    )
+    assert comment.status_code == 201 and comment.json()["message"] == "Đã gửi bình luận."
+    comment_route = f"/api/v1/comments/{comment.json()['data']['id']}/"
+    edited = leader.patch(comment_route, {"content_html": "Edited"}, format="json")
+    assert edited.status_code == 200 and edited.json()["message"] == "Đã cập nhật bình luận."
+    removed = leader.delete(comment_route)
+    assert removed.status_code == 200 and removed.json()["message"] == "Đã xóa bình luận."
 
 
 @pytest.mark.parametrize("operation", ["feedback", "mention"])
