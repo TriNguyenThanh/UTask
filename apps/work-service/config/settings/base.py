@@ -85,6 +85,12 @@ CLASSROOM_ADAPTER = os.environ.get(
 CLASSROOM_DEV_ENABLED = os.environ.get("WORK_CLASSROOM_DEV_ENABLED", "false").lower() == "true"
 CELERY_TASK_IGNORE_RESULT = True
 
+WORK_STORAGE_ADAPTER = os.environ.get("WORK_STORAGE_ADAPTER", "infrastructure.storage.R2Storage")
+WORK_R2_ENDPOINT = os.environ.get("WORK_R2_ENDPOINT", "")
+WORK_R2_ACCESS_KEY = os.environ.get("WORK_R2_ACCESS_KEY", "")
+WORK_R2_SECRET_KEY = os.environ.get("WORK_R2_SECRET_KEY", "")
+WORK_R2_BUCKET = os.environ.get("WORK_R2_BUCKET", "")
+
 
 SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",

@@ -25,3 +25,7 @@ class TeacherFeedbackEventSerializer(CommentSerializer):
     @extend_schema_field(serializers.ListField(child=serializers.UUIDField()))
     def get_recipient_ids(self, comment):
         return [str(value) for value in self.context["recipient_ids"]]
+
+
+class AttachmentExpiredEventSerializer(serializers.Serializer):
+    attachment_id = serializers.UUIDField()

@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from apps.projects.models import UserProjection
 from apps.tasks.serializers.tasks import TaskSerializer
+from tests.fixtures.collaboration import pending
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
@@ -105,3 +106,50 @@ def test_projection_validates_before_materialization_and_preserves_default_curso
     filtered = leader.get(route, {"fields": "id", "priority": "HIGH"}).json()
     assert filtered["data"] == [{"id": second["id"]}]
     assert filtered["meta"]["pagination"]["total_count"] == 1
+
+
+def test_selected_counts_match_live_children_comments_and_confirmed_files(task_api, storage):
+    leader, route, create = task_api
+    parent = create()
+    detail = f"/api/v1/tasks/{parent['id']}/"
+    child = leader.post(
+        detail + "subtasks/", {"title": "Child"}, format="json", HTTP_IDEMPOTENCY_KEY="child-count"
+    )
+    assert child.status_code == 201
+    comment = leader.post(
+        "/api/v1/comments/", {"task_id": parent["id"], "content_html": "Feedback"}, format="json"
+    )
+    assert comment.status_code == 201
+    row = pending(leader, detail + "attachments/")
+    confirmed = leader.post(
+        detail + "attachments/",
+        {"attachment_id": str(row.pk)},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="file-count",
+    )
+    assert confirmed.status_code == 200
+    params = {"fields": "id,subtasks_count,comments_count,attachments_count"}
+    reply = leader.get(route, params)
+    assert reply.status_code == 200
+    projected = next(row for row in reply.json()["data"] if row["id"] == parent["id"])
+    assert projected == {
+        "id": parent["id"],
+        "subtasks_count": 1,
+        "comments_count": 1,
+        "attachments_count": 1,
+    }
+    child_id = child.json()["data"]["id"]
+    assert (
+        leader.delete(
+            f"/api/v1/tasks/{child_id}/", {"expected_version": 1}, format="json"
+        ).status_code
+        == 200
+    )
+    assert leader.delete(f"/api/v1/comments/{comment.json()['data']['id']}/").status_code == 200
+    projected = leader.get(route, params).json()["data"][0]
+    assert projected == {
+        "id": parent["id"],
+        "subtasks_count": 0,
+        "comments_count": 0,
+        "attachments_count": 1,
+    }
