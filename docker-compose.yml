@@ -81,7 +81,56 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck: *django_healthcheck
+
+  work-publisher:
+    profiles: [work-service]
+    image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "worker", "-Q", "work-publisher", "--concurrency=1"]
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/work-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  work-beat:
+    profiles: [work-service]
+    image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat"]
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/work-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  work-profile-consumer:
+    profiles: [work-profile-consumer]
+    image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    restart: unless-stopped
+    command: ["python", "manage.py", "consume_identity"]
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/work-service.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   classroom-service:
     image: ${UTASK_IMAGE_PREFIX:-utask}/classroom-service:${UTASK_IMAGE_TAG:-local}

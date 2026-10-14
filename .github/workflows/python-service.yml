@@ -27,6 +27,11 @@ on:
         required: false
         default: '{}'
         type: string
+      django:
+        description: Run Django system and migration checks using the supplied test settings.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,6 +39,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: ${{ inputs.postgres && 'postgres:16-alpine' || '' }}
@@ -66,6 +72,8 @@ jobs:
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@v5
       - name: Install locked dependencies
         run: uv sync --all-groups --locked
@@ -73,6 +81,23 @@ jobs:
         run: uv run ruff check .
       - name: Check formatting
         run: uv run ruff format --check .
+      - name: Django system and migration checks
+        if: inputs.django
+        env: ${{ fromJSON(inputs.test_env) }}
+        run: |
+          uv run python manage.py check
+          uv run python manage.py makemigrations --check --dry-run
+      - name: Guard merged migration history
+        if: inputs.django && github.event_name == 'pull_request'
+        env:
+          SERVICE: ${{ inputs.service }}
+        run: |
+          touched=$(git diff --name-status --diff-filter=MDR HEAD^1 HEAD -- ':(glob)**/migrations/*.py')
+          if [[ -n "$touched" ]]; then
+            echo "::error::${SERVICE}: add a migration instead of editing, deleting or renaming merged migrations."
+            printf '%s\n' "$touched"
+            exit 1
+          fi
       - name: Test, including AI evaluations when present
         env: ${{ fromJSON(inputs.test_env) }}
         run: uv run pytest

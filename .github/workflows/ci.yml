@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -22,6 +22,9 @@ jobs:
       checks: ${{ steps.services.outputs.checks }}
       checks_needed: ${{ steps.services.outputs.checks_needed }}
       django_services: ${{ steps.services.outputs.django_services }}
+      gateway_health_paths: ${{ steps.services.outputs.gateway_health_paths }}
+      infrastructure_services: ${{ steps.services.outputs.infrastructure_services }}
+      gateway_service: ${{ steps.services.outputs.gateway_service }}
       release_matrix: ${{ steps.services.outputs.release_matrix }}
       release_needed: ${{ steps.services.outputs.release_needed }}
       web_ready: ${{ steps.services.outputs.web_ready }}
@@ -38,9 +41,7 @@ jobs:
           filters: |
             shared:
               - '.github/workflows/**'
-              - 'scripts/tests/test_staging_deployment.py'
-              - 'scripts/discover_services.py'
-              - 'scripts/ci_local.py'
+              - 'scripts/**'
               - 'docker-compose.yml'
               - 'docker-compose.staging.yml'
               - '.env.example'
@@ -53,6 +54,7 @@ jobs:
               - 'apps/web/**'
             deployment:
               - 'scripts/discover_services.py'
+              - 'scripts/deploy_staging.sh'
               - '.github/workflows/ci.yml'
               - '.github/workflows/release-staging.yml'
               - 'docker-compose.staging.yml'
@@ -66,7 +68,7 @@ jobs:
           CHANGED_FILES: ${{ steps.filter.outputs.code_files }}
           SHARED_CHANGED: ${{ steps.filter.outputs.shared }}
           DEPLOYMENT_CHANGED: ${{ steps.filter.outputs.deployment }}
-        run: uv run --project apps/identity-service --locked python scripts/discover_services.py
+        run: uv run --no-project --with PyYAML==6.0.3 python scripts/discover_services.py
 
   compose-config:
     needs: changes
@@ -78,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Test deployment configuration and failure handling
-        run: uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
+        run: uv run --no-project --with PyYAML==6.0.3 python -m unittest discover -s scripts/tests -p 'test_*.py'
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - name: Validate staging Compose
@@ -109,6 +111,7 @@ jobs:
       postgres: ${{ matrix.postgres }}
       redis: ${{ matrix.redis }}
       test_env: ${{ matrix.test_env }}
+      django: ${{ matrix.django }}
 
   web:
     needs: changes
@@ -147,7 +150,16 @@ jobs:
           import json
           import os
           results = json.loads(os.environ["RESULTS"])
-          failed = [name for name, job in results.items() if job["result"] in ("failure", "cancelled")]
+          selected = results["changes"].get("outputs", {})
+          required = {
+              "changes": True,
+              "compose-config": selected.get("shared") == "true" or selected.get("release_needed") == "true",
+              "python-services": selected.get("checks_needed") == "true",
+              "web": selected.get("web_ready") == "true" and (selected.get("shared") == "true" or selected.get("web") == "true"),
+          }
+          failed = [name for name, job in results.items()
+                    if job["result"] in ("failure", "cancelled")
+                    or (required.get(name, False) and job["result"] != "success")]
           if results["changes"]["result"] != "success" or failed:
               raise SystemExit(f"CI failed: {', '.join(failed)}")
           print("All selected checks passed")
@@ -172,4 +184,7 @@ jobs:
       source_sha: ${{ github.sha }}
       services: ${{ needs.changes.outputs.release_matrix }}
       migration_services: ${{ join(fromJSON(needs.changes.outputs.django_services), ' ') }}
+      gateway_health_paths: ${{ needs.changes.outputs.gateway_health_paths }}
+      infrastructure_services: ${{ join(fromJSON(needs.changes.outputs.infrastructure_services), ' ') }}
+      gateway_service: ${{ needs.changes.outputs.gateway_service }}
     secrets: inherit
