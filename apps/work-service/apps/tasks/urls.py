@@ -8,6 +8,13 @@ from apps.tasks.views.actions import (
     TransitionView,
     UnblockView,
 )
+from apps.tasks.views.metadata import (
+    EpicDetailView,
+    EpicListView,
+    LabelDetailView,
+    LabelListView,
+    TaskLabelsView,
+)
 from apps.tasks.views.tasks import TaskDetailView, TaskLifecycleView, TaskListCreateView
 
 urlpatterns = [
@@ -23,4 +30,9 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/unblock/", UnblockView.as_view()),
     path("tasks/<uuid:task_id>/relations/", RelationView.as_view()),
     path("tasks/<uuid:task_id>/relations/<uuid:relation_id>/", RelationDetailView.as_view()),
+    path("projects/<uuid:project_id>/labels/", LabelListView.as_view()),
+    path("projects/<uuid:project_id>/labels/<uuid:subject_id>/", LabelDetailView.as_view()),
+    path("projects/<uuid:project_id>/epics/", EpicListView.as_view()),
+    path("projects/<uuid:project_id>/epics/<uuid:subject_id>/", EpicDetailView.as_view()),
+    path("tasks/<uuid:task_id>/labels/", TaskLabelsView.as_view()),
 ]

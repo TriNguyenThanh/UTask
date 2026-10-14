@@ -34,3 +34,23 @@ def test_filter_validation_is_vietnamese_without_html_and_has_no_effect(
     }
     assert "<" not in reply.json()["message"] and "<" not in issue
     assert effect_state(task["project_id"]) == before
+
+
+def test_label_pattern_validation_is_vietnamese_and_has_no_effect(task_api):
+    leader, route, create = task_api
+    task = create()
+    before = effect_state(task["project_id"])
+    reply = leader.post(
+        route.rsplit("tasks/", 1)[0] + "labels/", {"name": "Bad", "color": "red"}, format="json"
+    )
+    assert reply.status_code == 400
+    assert reply.json()["error"] == {
+        "code": "VALIDATION_ERROR",
+        "details": [
+            {
+                "field": "color",
+                "issue": "Màu nhãn phải gồm dấu # và 6 ký tự thập lục phân (0–9, A–F).",
+            }
+        ],
+    }
+    assert effect_state(task["project_id"]) == before

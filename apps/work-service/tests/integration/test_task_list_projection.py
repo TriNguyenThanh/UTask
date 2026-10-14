@@ -1,7 +1,9 @@
 import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
+from apps.projects.models import UserProjection
 from apps.tasks.serializers.tasks import TaskSerializer
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
@@ -34,6 +36,49 @@ def test_id_projection_omits_text_relations_and_counts_without_n_plus_one(task_a
         'FROM "task_assignments"' in query or 'FROM "task_labels"' in query for query in sql
     )
     assert len(sql) <= 4
+
+
+@pytest.mark.parametrize("count", [1, 10, 50])
+@pytest.mark.parametrize(
+    "fields",
+    ["id", "id,code,assignee_ids,label_ids,subtasks_count,comments_count,attachments_count"],
+)
+def test_projection_expansions_match_full_response_without_deferred_reads(
+    task_api, actors, count, fields
+):
+    leader, route, create = task_api
+    project = route.rsplit("tasks/", 1)[0]
+    label = leader.post(
+        project + "labels/", {"name": "Backend", "color": "#123456"}, format="json"
+    ).json()["data"]
+    epic = leader.post(project + "epics/", {"name": "Release"}, format="json").json()["data"]
+    UserProjection.objects.create(
+        user_id=actors["member"],
+        display_name="Sinh viên",
+        avatar_url=None,
+        source_event_id="profile-projection",
+        source_occurred_at=timezone.now(),
+    )
+    for _ in range(count):
+        create(label_ids=[label["id"]], epic_id=epic["id"])
+    expansions = "state,epic,labels,assignees"
+    full = leader.get(route, {"page_size": 100, "expand": expansions}).json()
+    with CaptureQueriesContext(connection) as captured:
+        reply = leader.get(route, {"page_size": 100, "fields": fields, "expand": expansions})
+    assert reply.status_code == 200, reply.content
+    expected_fields = set(fields.split(",")) | set(expansions.split(","))
+    assert reply.json()["data"] == [
+        {key: value for key, value in row.items() if key in expected_fields} for row in full["data"]
+    ]
+    assert reply.json()["meta"] == full["meta"]
+    sql = [query["sql"] for query in captured]
+    assert len(sql) <= 7
+    assert sum('FROM "task_assignments"' in query for query in sql) == 1
+    assert sum('FROM "task_labels"' in query for query in sql) == 1
+    assert not any(
+        '"tasks"."description_html"' in query or '"tasks"."acceptance_criteria"' in query
+        for query in sql
+    )
 
 
 def test_projection_validates_before_materialization_and_preserves_default_cursor_counts(task_api):
