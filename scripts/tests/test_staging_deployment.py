@@ -356,6 +356,22 @@ class StagingDeploymentTests(unittest.TestCase):
             ["/api/auth/healthz", "/api/sample/healthz"],
         )
 
+    def test_non_django_service_does_not_receive_django_migrations(self):
+        outputs = self.validate(
+            ["identity-service", "worker-service"],
+            {"shared": True},
+            extra_runtime={
+                "worker-service": {
+                    "profiles": ["worker-service"],
+                    "healthcheck": {"test": ["CMD", "true"]},
+                    "x-deploy": {"gateway_health_path": None},
+                }
+            },
+            fastapi=["worker-service"],
+        )
+        self.assertEqual(outputs["django_services"], ["identity-service"])
+        self.assertFalse(outputs["checks"]["include"][1]["postgres"])
+        self.assertEqual(outputs["gateway_health_paths"], ["/api/auth/healthz"])
 
     def test_missing_gateway_metadata_blocks_service_discovery(self):
         with self.assertRaisesRegex(ValueError, "x-deploy.gateway_health_path"):
@@ -767,6 +783,13 @@ class StagingDeploymentTests(unittest.TestCase):
                 },
             )
 
+    def test_discovery_selects_django_checks_with_project_settings(self):
+        outputs = self.validate(["identity-service"], {"shared": True})
+        check = outputs["checks"]["include"][0]
+        self.assertTrue(check["django"])
+        self.assertEqual(
+            json.loads(check["test_env"])["DJANGO_SETTINGS_MODULE"], "tests.settings"
+        )
 
     def test_missing_deploy_input_stops_before_docker(self):
         with deployment_runtime() as (root, env, calls):
@@ -789,7 +812,80 @@ class StagingDeploymentTests(unittest.TestCase):
             self.assertIn("Missing pinned release images", result.stderr)
             self.assertFalse(calls.exists())
 
+    def test_migration_history_guard_rejects_existing_changes(self):
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/python-service.yml").read_text()
+        )
+        step = next(
+            s
+            for s in workflow["jobs"]["verify"]["steps"]
+            if s.get("name") == "Guard merged migration history"
+        )
+        for changed in (
+            "",
+            "M\taccounts/migrations/0001_initial.py",
+            "D\taccounts/migrations/0001_initial.py",
+            "R100\taccounts/migrations/0001_initial.py\taccounts/migrations/0002_rename.py",
+        ):
+            with (
+                self.subTest(changed=changed),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                git = Path(directory) / "git"
+                git.write_text(
+                    "#!/usr/bin/env python3\nimport os,sys\nassert '--diff-filter=MDR' in sys.argv\nassert 'HEAD^1' in sys.argv\nprint(os.environ['CHANGED'])\n"
+                )
+                git.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-c", step["run"]],
+                    env={
+                        **os.environ,
+                        "PATH": directory + os.pathsep + os.environ["PATH"],
+                        "SERVICE": "sample-service",
+                        "CHANGED": changed,
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 1 if changed else 0, result.stderr)
 
+    def test_django_check_failures_stop_before_tests(self):
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/python-service.yml").read_text()
+        )
+        step = next(
+            s
+            for s in workflow["jobs"]["verify"]["steps"]
+            if s.get("name") == "Django system and migration checks"
+        )
+        for failure in ("", "check", "makemigrations"):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                calls = root / "calls"
+                uv = root / "uv"
+                uv.write_text(
+                    "#!/usr/bin/env python3\nimport json,os,sys\nwith open(os.environ['CALLS'],'a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')\nif os.environ['FAILURE'] in sys.argv[1:]: sys.exit(71)\n"
+                )
+                uv.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-e", "-c", step["run"]],
+                    env={
+                        **os.environ,
+                        "PATH": directory + os.pathsep + os.environ["PATH"],
+                        "CALLS": str(calls),
+                        "FAILURE": failure,
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 71 if failure else 0, result.stderr)
+                commands = [json.loads(line) for line in calls.read_text().splitlines()]
+                self.assertEqual(len(commands), 1 if failure == "check" else 2)
 
 
 if __name__ == "__main__":

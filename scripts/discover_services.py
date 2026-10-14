@@ -42,6 +42,10 @@ def read_python_services(root: Path, compose: dict):
                 re.match(r"django(?:[\[<>=!~; ]|$)", dependency, re.IGNORECASE)
                 for dependency in project.get("project", {}).get("dependencies", [])
             ),
+            "settings": project.get("tool", {})
+            .get("pytest", {})
+            .get("ini_options", {})
+            .get("DJANGO_SETTINGS_MODULE", ""),
         }
     if not services:
         raise ValueError("No runnable Python services found")
@@ -175,6 +179,12 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
         ):
             raise ValueError(f"{name}: x-ci.test_env must contain string values")
         test_env.update(overrides)
+        if service["django"]:
+            if not service["settings"]:
+                raise ValueError(
+                    f"{name}: declare DJANGO_SETTINGS_MODULE in pytest settings"
+                )
+            test_env.setdefault("DJANGO_SETTINGS_MODULE", service["settings"])
         code_changed = any(path.startswith(f"apps/{name}/") for path in changed_files)
         changed = code_changed or deployment
         release_needed = release_needed or changed
@@ -185,6 +195,7 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
                     "postgres": "postgres" in deps,
                     "redis": "redis" in deps,
                     "test_env": json.dumps(test_env),
+                    "django": service["django"],
                 }
             )
         release_services.append({"service": name})

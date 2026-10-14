@@ -111,6 +111,7 @@ jobs:
       postgres: ${{ matrix.postgres }}
       redis: ${{ matrix.redis }}
       test_env: ${{ matrix.test_env }}
+      django: ${{ matrix.django }}
 
   web:
     needs: changes

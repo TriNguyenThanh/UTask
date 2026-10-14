@@ -53,6 +53,11 @@ từ dependency Compose; biến test riêng đặt tại `x-ci.test_env` của s
 kiểm thử thực tế; nhận diện thư mục không tự dựng broker/provider hoặc service bên ngoài.
 Job lỗi hoặc bị hủy vẫn chặn release. Thay đổi scaffolding chưa triển khai không kích
 hoạt release. Django được nhận diện từ dependency trong `pyproject.toml` để chọn migration.
+Settings kiểm thử lấy từ `tool.pytest.ini_options.DJANGO_SETTINGS_MODULE`, dùng chung
+cho pytest và gate Django. CI chạy `check`, `makemigrations --check --dry-run` trước
+tests. PR kiểm diff với cha thứ nhất của merge commit để chặn sửa/xóa/đổi tên
+migration đã trên nhánh gốc; migration mới được phép thêm. Gate này bảo vệ lịch sử
+đã merge, không xác định migration nào đã áp dụng trên từng VPS.
 
 Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
 profile cùng tên service; Kafka có profile `kafka` và được bật cùng profile Work.
@@ -77,7 +82,8 @@ Workflow dùng chung nhận các input tùy chọn từ job gọi trong `ci.yml`
 | --- | --- | --- |
 | `postgres` | `false` | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
 | `redis` | `false` | Khởi tạo Redis 7 tại `127.0.0.1:6379`. |
-| `test_env` | `{}` | Chuỗi JSON chứa biến môi trường không bí mật, chỉ truyền vào bước pytest. |
+| `test_env` | `{}` | JSON chứa biến kiểm thử không bí mật, truyền vào pytest và gate Django. |
+| `django` | `false` | Chạy system check, kiểm tra lệch model/migration và bảo vệ lịch sử migration trên PR. |
 
 Hai container thuộc riêng từng job trên runner tạm thời. Health checks phải đạt trước
 khi chạy các bước kiểm tra. Credential trên chỉ dành cho CI; không dùng secrets

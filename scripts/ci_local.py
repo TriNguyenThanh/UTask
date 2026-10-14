@@ -166,6 +166,14 @@ def main() -> None:
             cwd=service_dir,
             env=service_env,
         )
+        if check["django"]:
+            for command in (["check"], ["makemigrations", "--check", "--dry-run"]):
+                run(
+                    f"Django {' '.join(command)} for {service}",
+                    ["uv", "run", "python", "manage.py", *command],
+                    cwd=service_dir,
+                    env=service_env,
+                )
         run(
             f"Pytest for {service}",
             ["uv", "run", "pytest"],
