@@ -4,21 +4,47 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 
 1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra service bị ảnh hưởng và cả Compose local/staging. Pull Request dựng image để kiểm tra Dockerfile; push lên `main` chỉ gọi phát hành sau khi các kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
-3. `release-staging.yml` chỉ phát hành các service đang bật: dựng/đẩy image đổi, tái sử dụng manifest `main` cho image không đổi. Staging dùng riêng `docker-compose.staging.yml`, chạy migration rồi `up --no-build` qua SSH.
+3. `release-staging.yml` build các service đang bật từ commit đã qua CI, chuyển digest (mã xác định nội dung image) giữa các job bằng artifact của GitHub Actions. VPS dùng `docker-compose.staging.yml` cùng file ghi đè `staging-images.json` để chạy đúng image, migration rồi cập nhật container qua SSH.
 
 ## Phạm vi service đang triển khai
 
 CI và script local dùng `scripts/discover_services.py` để tự nhận diện thư mục trực
-tiếp trong `apps/` có đủ `pyproject.toml`, `uv.lock` và Dockerfile. Hiện nhận diện
-Identity; không còn danh sách `STAGING_SERVICES` phải sửa tay trong workflow. Thư mục
+tiếp trong `apps/` có đủ `pyproject.toml`, `uv.lock` và Dockerfile. Không còn danh sách
+`STAGING_SERVICES` phải sửa tay trong workflow. Thư mục
 chỉ có README được bỏ qua. Có một phần đầu vào thì báo lỗi thiếu file, không bỏ qua để
 báo xanh. Kết quả nhận diện là đầu vào build/test, chưa phải xác nhận tính năng hoàn thiện.
 
-Mỗi service phải có cấu hình trong Compose staging; app ngoài Identity dùng profile
-cùng tên service. Dependency `depends_on` phải tồn tại; nếu phụ thuộc app chưa có code
+Mỗi service phải có cấu hình trong Compose staging; app có thể chạy mặc định hoặc
+dùng profile cùng tên service, không có ngoại lệ theo tên Identity. Dependency `depends_on` phải tồn tại; nếu phụ thuộc app chưa có code
 thì CI dừng. Đây là cấu hình runtime vốn phải khai báo khi thêm service, không phải danh
 sách bật CI thứ hai. Web chưa có source thì không chạy; khi có thư mục Web, thiếu
 manifest/lockfile cũng là lỗi.
+
+Service được nhận diện phải có `healthcheck` bật trong Compose và khai báo
+`x-deploy.gateway_health_path`: path health qua gateway, ví dụ Identity dùng
+`/api/auth/healthz`. Service chỉ dùng nội bộ khai báo giá trị `null`; workflow vẫn
+chờ healthcheck của container nhưng không gọi nó qua gateway. Discovery cũng kiểm tra
+healthcheck của mọi container được profile ứng dụng kích hoạt, gồm worker, scheduler,
+Nginx và dependency; thiếu healthcheck hoặc dùng `NONE`/`disable: true` thì dừng.
+Metadata này nằm ngay trong cấu hình Compose của service, không phải danh sách service thứ hai
+trong workflow. Thiếu metadata, path không hợp lệ hoặc trùng path thì discovery
+dừng trước khi phát hành. Thêm service không cần sửa workflow nghiệm thu.
+
+Container ngoài app khai báo `x-deploy.role`: `infrastructure` cho database/cache/broker,
+`gateway` cho Nginx, `worker` cho tiến trình dùng image app. Worker khai báo thêm
+`x-deploy.application` là app sở hữu image. Discovery kiểm tra quan hệ này, không
+đoán vai trò từ chuỗi image. Stack staging có một gateway; tên lấy từ Compose.
+Trong Compose, `x-work-runtime` dùng YAML anchor để chia sẻ image, env mappings
+và dependency giữa API/worker Work. Mỗi tiến trình vẫn khai báo command, healthcheck
+và phần dependency riêng; cấu hình này được Compose resolve trước khi chạy.
+
+Các script CI là automation chung của repository, không phải Python service hoặc
+project triển khai riêng. Khi chạy script cần đọc YAML, workflow dùng
+`uv run --no-project --with PyYAML==6.0.3`: uv tạo môi trường tạm với dependency
+được pin, không mượn dependency của Identity và không tạo `pyproject.toml` trong
+`scripts/`. `read_python_services` đọc manifest, `validate_runtime` kiểm tra
+Compose, `discover_services` xuất matrix; các hàm này không khởi động container
+hoặc đọc secret.
 
 Workflow tự tạo matrix cho service bị thay đổi hoặc bị ảnh hưởng bởi cấu hình chung,
 không cần thêm job/path filter cho từng service. PostgreSQL/Redis dành test được chọn
@@ -29,7 +55,7 @@ Job lỗi hoặc bị hủy vẫn chặn release. Thay đổi scaffolding chưa 
 hoạt release. Django được nhận diện từ dependency trong `pyproject.toml` để chọn migration.
 
 Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
-profile cùng tên service; Kafka có profile `kafka`, chưa bật trong phạm vi hiện tại.
+profile cùng tên service; Kafka có profile `kafka` và được bật cùng profile Work.
 Workflow cấp profile từ kết quả nhận diện, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
 Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy để khởi động;
 backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
@@ -45,7 +71,7 @@ Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datas
 có thể kích hoạt release trên push `main`. Đổi `ci.yml` hoặc `release-staging.yml` cũng
 kích hoạt release để áp dụng phạm vi/cách deploy mới và dựng image đang bật cho lần đầu.
 
-Workflow dùng chung nhận ba input tùy chọn từ job gọi trong `ci.yml`:
+Workflow dùng chung nhận các input tùy chọn từ job gọi trong `ci.yml`:
 
 | Input | Mặc định | Trách nhiệm |
 | --- | --- | --- |
@@ -65,8 +91,8 @@ pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một
 Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Nếu cần biến test
 khác với quy ước chung, khai báo `x-ci.test_env` cạnh service, không cần sao chép workflow
 hoặc tạo môi trường staging cho test.
-Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` kiểm tra
-các service đang bật; không dùng source thiếu của service chưa bật để chặn Identity.
+Bộ lọc `shared` kiểm tra các service được nhận diện từ source hiện tại; không dùng
+source thiếu của service chưa bật để chặn Identity.
 
 Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
 Không so với `contracts/api/identity.openapi.json` khi artifact này không được lưu trong
@@ -76,22 +102,28 @@ repository; xem [cách xuất hợp đồng](../../contracts/api/README.md).
 
 Chạy từ thư mục gốc repository:
 
-```powershell
-python scripts/ci_local.py
+```bash
+uv run --no-project --with PyYAML==6.0.3 python scripts/ci_local.py
 ```
 
 Script tự nhận diện service bằng cùng hàm với GitHub Actions, kiểm tra tất cả service
 đã có đầu vào trên máy và chỉ kiểm tra Web nếu có source. Kết nối PostgreSQL/Redis local
 được cấp qua biến môi trường của người chạy; các giá trị này ưu tiên hơn mẫu kết nối CI.
-Script không đẩy image hoặc triển khai staging. `--skip-images` bỏ bước build image.
+Script chạy cùng bộ regression deployment với GitHub trước khi kiểm tra Compose và
+service. Regression shell yêu cầu Linux/WSL có Bash; chạy CI local trong môi trường
+này, không coi Python Windows là môi trường đã được kiểm chứng. Script không đẩy
+image hoặc triển khai staging. `--skip-images` chỉ bỏ bước build image, vẫn chạy
+regression deployment.
 
 Kiểm tra regression của cấu hình lựa chọn service và việc dừng deploy khi migration lỗi:
 
 ```bash
-uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
+uv run --no-project --with PyYAML==6.0.3 python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
-Test shell deploy chạy trên Linux (cùng nền tảng runner). Kiểm tra cú pháp workflow bằng
+Test shell deploy chạy [deploy_staging.sh](../../scripts/deploy_staging.sh) trên Linux,
+với fake Docker/SSH dùng chung tại [fixtures/deployment.py](../../scripts/tests/fixtures/deployment.py).
+Regression không thực hiện deploy. Kiểm tra cú pháp workflow bằng
 actionlint; kiểm tra Compose với `.env.example`, image prefix/tag mẫu và các profile đang bật.
 
 Khi chạy tests Identity trên máy local, chuẩn bị PostgreSQL có quyền tạo test database
@@ -117,6 +149,21 @@ Các giá trị sau do GitHub hoặc workflow cung cấp, không cấu hình th�
 
 Không đưa khóa SSH, token registry, khóa Django hoặc `.env` staging vào repository.
 
+`Configure SSH` ghi secret nguyên nội dung bằng `printf '%s\n'` như trước, rồi kiểm tra
+bằng `ssh-keygen -y -P ''` trước khi kết nối. Bước này không đổi CRLF, không chuyển đổi
+định dạng và không tự sửa secret. Public/private key và stderr chứa dữ liệu tùy ý không
+được in ra log. Nếu lỗi, workflow chỉ báo thông báo cố định tương ứng với lỗi OpenSSH
+(`error in libcrypto`, `incorrect passphrase` hoặc lỗi chưa xác định), rồi dừng.
+
+Trong [mã nguồn OpenSSH](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssherr.c),
+`error in libcrypto` là một mã lỗi chung, không xác định nguyên nhân CRLF hay dán thiếu
+khóa. [Tài liệu ssh-keygen](https://man.openbsd.org/ssh-keygen) mô tả kiểm tra private key
+bằng `-y`; `-P ''` thử đọc với passphrase rỗng để tránh prompt trong CI. Test trên khóa
+thử chỉ chứng minh bước kiểm tra hoạt động; nguyên nhân của secret thật phải được xác
+minh trên runner. Khóa có passphrase chưa được workflow hỗ trợ. Đọc được khóa chưa
+chứng minh VPS chấp nhận nó; nếu SSH vẫn trả `Permission denied`, tiếp tục kiểm tra
+user, khóa được cấp và cấu hình SSH phía VPS.
+
 ## Bảo vệ nhánh chính
 
 Trong cài đặt repository, bảo vệ `main` với các quy tắc sau:
@@ -128,13 +175,27 @@ Trong cài đặt repository, bảo vệ `main` với các quy tắc sau:
 
 ## Chuẩn bị máy staging
 
+### HTTP và HTTPS
+
+Cấu hình trong repository hiện chỉ chạy HTTP: [Nginx](../../infra/nginx/nginx.conf)
+nghe port 80, [Compose staging](../../docker-compose.staging.yml) publish
+`${UTASK_HTTP_PORT:-8080}:80`. Đặt `UTASK_HTTP_PORT=80` trong `.env` VPS nếu muốn
+truy cập HTTP không cần ghi port. Security Group/firewall phải cho phép port đã chọn.
+
+Compose không mount chứng chỉ, publish 443 hoặc cấu hình Certbot/gia hạn. TLS trên
+VPS thực tế **chưa xác minh**; không dùng workflow hay tài liệu này để kết luận HTTPS
+đã hoạt động. Bật TLS cần cấu hình riêng và nghiệm thu HTTPS, nằm ngoài luồng hiện tại.
+Kiểm tra HTTP bằng `http://<host>:<UTASK_HTTP_PORT>/api/auth/healthz` và mở Swagger tại
+`http://<host>:<UTASK_HTTP_PORT>/api/auth/docs/` (bỏ phần port khi dùng 80).
+
 Máy staging cần Docker Engine/Compose plugin, `.env` tại `STAGING_WORKDIR` và khóa RSA
 riêng cho Identity. Dùng [.env.example](../../.env.example) làm mẫu rồi thay toàn bộ
 giá trị local của service đang bật bằng cấu hình staging, gồm secrets, domain và đường dẫn
 PEM. Workflow không upload/ghi đè `.env` hoặc file PEM.
 
 Workflow upload `docker-compose.staging.yml`, `.env.example`, bộ ánh xạ dùng chung `infra/env/*.env`,
-Nginx và init PostgreSQL; datasets chỉ upload khi AI được bật. Các biến Google/GitHub/R2/caller keys nếu dùng
+Nginx, init PostgreSQL và script deploy; datasets upload nếu thư mục có trong source,
+không rẽ nhánh theo tên AI. Các biến Google/GitHub/R2/caller keys nếu dùng
 được cung cấp trong `.env` server, không đặt giá trị bí mật vào file ánh xạ tracked.
 
 Các biến runtime trong `.env` staging khi chỉ bật Identity:
@@ -168,15 +229,20 @@ read-only không tự tạo đường dẫn còn thiếu. Không sinh khóa mặ
 Mail key/key ID cần cho đăng ký/recovery; OAuth/R2 cần cấu hình riêng khi bật flags.
 
 `UTASK_HTTP_PORT` mặc định8080. Workflow đặt `UTASK_IMAGE_PREFIX` và
-`UTASK_IMAGE_TAG=sha-<commit>` khi triển khai. Chạy thủ công phải cung cấp hai biến đó;
-Compose staging không có fallback `utask:*:local`. Ví dụ lệnh trên server sau khi cấu hình:
+`UTASK_IMAGE_TAG=sha-<commit>` để nội suy file Compose gốc; image app và worker thực tế
+được ghi đè bằng `image@sha256:...` trong `staging-images.json`. File này do workflow
+ghép từ artifact của đúng lần phát hành rồi upload, không phải file env hoặc danh sách
+service phải quản lý tay. Khi thao tác trên VPS sau deploy, giữ cả hai file Compose
+và cấp hai biến nội suy như lần phát hành; không chạy riêng file Compose gốc.
+Ví dụ với Identity:
 
 ```bash
-docker compose -f docker-compose.staging.yml config --quiet
-docker compose -f docker-compose.staging.yml pull
-docker compose -f docker-compose.staging.yml up -d --no-build --wait postgres redis
-docker compose -f docker-compose.staging.yml run --rm --no-deps identity-service /app/.venv/bin/python manage.py migrate --noinput
-docker compose -f docker-compose.staging.yml up -d --no-build --wait --wait-timeout 120
+compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json --profile identity-service)
+"${compose[@]}" config --quiet
+"${compose[@]}" pull
+"${compose[@]}" up -d --no-build --wait postgres redis
+"${compose[@]}" run --rm --no-deps --interactive=false identity-service /app/.venv/bin/python manage.py migrate --noinput < /dev/null
+"${compose[@]}" up -d --no-build --wait --wait-timeout 120
 ```
 
 Không dùng `docker compose down -v` khi chuyển file. File Compose local cũ trên server
@@ -187,38 +253,89 @@ không còn được workflow gọi; không cần xóa nó để triển khai b�
 ```text
 Pull Request → CI theo đường dẫn → merge vào main
                                   ↓
-             build image đổi + gắn thẻ lại image không đổi
+                 build image → artifact digest → staging-images.json
                                   ↓
                     Environment staging gate (nếu cấu hình)
                                   ↓
-       SSH → pull → PostgreSQL/Redis healthy → migrate → up --no-build --wait
+       SSH → pull → nginx -t → dependency healthy → migrate → app/worker healthy
                                                      ↓
-                              migrate --check + healthz qua Nginx
+               cập nhật/reload Nginx → migrate --check → JSON health qua gateway
 ```
 
-Mỗi service đang bật vẫn có image độc lập. Image thay đổi được gắn hai thẻ: `main` và
-`sha-<commit>`. Image không đổi giữ nguyên manifest và nhận thêm thẻ SHA. Thay cấu hình
-deploy sẽ dựng lại các image đang bật, nên lần triển khai đầu không cần image của app
-chưa làm. Nếu một image cần tái sử dụng chưa tồn tại, phát hành dừng.
+Mỗi service đang bật có image độc lập. Khi một thay đổi kích hoạt release, workflow
+build tất cả image đang bật bằng BuildKit và đẩy manifest theo digest; cache GitHub
+Actions chỉ tái sử dụng layer build. Mỗi job xuất artifact riêng chứa image app cùng
+worker sở hữu bởi app đó. Job deploy tải artifact của cùng workflow run, kiểm tra đủ
+app được chọn rồi ghép `staging-images.json`. Compose trên VPS đọc image theo digest,
+không dùng tag registry để chọn phiên bản. Chạy lại riêng job deploy dùng artifact
+cũ còn lưu; chạy lại job build có thể tạo digest khác và thay artifact của job đó.
+Quyền registry và thời hạn lưu artifact vẫn cần quản lý; không xóa image còn dùng
+trên VPS hoặc cần cho phục hồi.
+
+CI chỉ hủy run cũ khi là Pull Request. Push `main` không hủy run đang migration/deploy;
+workflow phát hành dùng một nhóm concurrency `staging` cho cả publish và deploy,
+không khai báo thêm nhóm trùng tại job deploy.
+Concurrency mặc định không bảo đảm mỗi commit đều được deploy hay thứ tự FIFO;
+run đang chờ có thể được thay bằng run mới. Không tự hủy run đang thực thi.
 
 Namespace GHCR luôn chuyển owner repository về chữ thường, ví dụ
 `TriNguyenThanh` → `ghcr.io/tringuyenthanh/utask`. Workflow phát hành tính namespace
-một lần, dùng chung khi publish, tái sử dụng image và deploy. Bước kiểm tra Compose
+một lần, dùng chung khi publish image và deploy. Bước kiểm tra Compose
 cũng chuẩn hóa cùng quy tắc; tên hiển thị tài khoản GitHub không cần đổi.
 
+Workflow upload `scripts/deploy_staging.sh`; SSH gọi file này trên VPS. Giá trị runtime,
+gồm token registry, được truyền qua stdin, không đặt trong đối số secret hay file env mới.
+Sau dòng workdir dùng để gọi script, mỗi đầu vào có dạng `tên=giá trị`; thứ tự các
+trường không ảnh hưởng. Script chỉ nhận tên trường đã khai báo, từ chối tên lạ hoặc
+thiếu trường trước khi gọi Docker, không dùng `eval`/`source` để thực thi giá trị.
+Giá trị phải nằm trên một dòng. Token không ghi ra file hay log; script xóa biến token
+sau login và logout khi kết thúc.
+Docker interactive được đóng stdin; không trộn mã Bash cần thực thi với dữ liệu/migration.
 Workflow chạy `manage.py migrate --noinput` cho app có dependency Django được nhận diện,
 bằng `/app/.venv/bin/python`. App không có Django không bị ép chạy lệnh Django.
-Migration lỗi dừng trước bước khởi động app mới. Khi thêm
-service dùng framework hoặc lệnh khác, cập nhật bước chuẩn bị runtime tương ứng.
-Đây không phải bảo đảm zero downtime hay rollback database tự động. Bước cuối kiểm tra
-migration Identity và health qua gateway, không thay thế nghiệm thu mọi API.
+Dependency hạ tầng được lấy từ Compose đang bật, gồm cả dependency của worker;
+workflow chờ chúng healthy trước migration, không cố định PostgreSQL/Redis.
+Migration lỗi dừng trước bước khởi động app mới. Cơ chế migration hiện hỗ trợ Django;
+service dùng framework khác cần bổ sung cơ chế migration tương ứng khi có nhu cầu.
+Nginx config được upload dưới tên `nginx.deployment.conf`, kiểm tra bằng container
+chạy `nginx -t` trước migration; file đang dùng được giữ nguyên khi validation lỗi.
+Sau khi app/worker healthy, script ghi nội dung mới vào đúng bind mount hiện có,
+chạy `compose up` cho gateway để áp dụng cả thay đổi image, port hoặc mount, rồi
+`nginx -t` và `nginx -s reload`. Khi cấu hình container không đổi, Compose giữ
+container đang chạy và Nginx thay worker bằng graceful reload. Nếu container cần
+tạo lại, có thể gián đoạn ngắn; staging không bảo đảm không gián đoạn.
+Sau khi các container sẵn sàng, workflow chạy `migrate --check` cho mọi service
+Django được nhận diện, rồi chạy probe Python trong một container app để gọi tất cả
+path health qua Docker DNS `http://nginx`. Không dùng `localhost` của container
+Nginx, tránh lựa chọn IPv6 loopback khi Nginx chỉ nghe IPv4. Probe yêu cầu HTTP 200,
+không redirect và JSON có `status: "ok"` ở root hoặc trong envelope `data`;
+`success: false` bị từ chối. Mỗi request có timeout 5 giây, tối đa 3 lần thử, chờ
+2 giây giữa các lần và ghi path đang kiểm tra, không in response body.
+Header `Host: nginx` dùng tên gateway
+đã có trong `DJANGO_ALLOWED_HOSTS` chung; giữ tên này trong cấu hình môi trường.
+Lệnh lỗi dừng deploy và giữ mã lỗi, không báo thành công khi chỉ một service vượt
+kiểm tra. Script không tự phục hồi runtime hoặc đảo ngược migration; các container
+đã cập nhật có thể vẫn đang chạy. Khi cần phục hồi, chọn lần phát hành thành công
+trước đó và chạy lại riêng job `deploy-staging`, giữ nguyên artifact chứa digest và
+source của lần đó. Không chạy lại toàn workflow nếu cần giữ image gốc. Cách này cần
+artifact còn hạn và run còn được GitHub cho phép chạy lại (tối đa 30 ngày; xem
+[hướng dẫn GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)).
+Migration đã chạy vẫn còn, vì vậy phiên bản trước phải tương thích với schema hiện
+tại; kiểm tra lại health và nghiệp vụ sau phục hồi. Quy trình này không thay thế
+nghiệm thu từng API hoặc kiểm tra HTTPS bên ngoài. Health
+response không có mã định danh backend nên probe chưa chứng minh danh tính service
+ở đầu kia; route vẫn phải được đối chiếu với Nginx. Work publisher dùng Celery ping
+tới đúng node; beat kiểm tra PID còn sống và kết nối broker. Các phép kiểm tra này
+chưa chứng minh scheduler tiến triển, task được thực thi hay event tới Kafka.
+`work-profile-consumer` dùng profile riêng và không được workflow này tự bật.
 
 Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của
 service nằm ngoài phạm vi. Nếu thu hẹp danh sách, các container đã chạy trước đó phải
 được dừng riêng có chủ đích; bỏ profile hoặc source không tự dừng chúng.
 
 Job kiểm tra Python dùng matrix `Check <service>`. Check tổng hợp có tên cố định
-`CI result`, thất bại nếu nhận diện hoặc bất kỳ job được chọn nào lỗi/bị hủy; release
+`CI result`, thất bại nếu nhận diện hoặc bất kỳ job được chọn nào lỗi/bị hủy/bị bỏ qua;
+chỉ cho phép bỏ qua job không được chọn. Release
 phải chờ check này thành công. Khi đổi từ cấu hình cũ, quản trị repository chọn
 `CI result` làm required check một lần trên GitHub, không phải thêm tên check mỗi khi
 có service mới. Thay file workflow không tự đổi branch protection.

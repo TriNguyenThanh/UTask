@@ -52,14 +52,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    require_commands(["docker", "uv", "sh"])
+    require_commands(["docker", "uv", "sh", "bash"])
     discovery = subprocess.run(
         [
             "uv",
             "run",
-            "--project",
-            "apps/identity-service",
-            "--locked",
+            "--no-project",
+            "--with",
+            "PyYAML==6.0.3",
             "python",
             "scripts/discover_services.py",
         ],
@@ -84,6 +84,24 @@ def main() -> None:
         }
     )
 
+    run(
+        "Deployment regression tests",
+        [
+            "uv",
+            "run",
+            "--no-project",
+            "--with",
+            "PyYAML==6.0.3",
+            "python",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "scripts/tests",
+            "-p",
+            "test_*.py",
+        ],
+    )
     run(
         "Validate Docker Compose configuration",
         ["docker", "compose", "--env-file", ".env.example", "config", "--quiet"],

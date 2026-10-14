@@ -8,16 +8,32 @@ on:
         required: true
         type: string
       services:
-        description: Validated JSON matrix of enabled services and change flags.
+        description: Validated JSON matrix of enabled services.
         required: true
         type: string
       migration_services:
         description: Space-separated Django services discovered from project dependencies.
         required: true
         type: string
+      gateway_health_paths:
+        description: JSON array of gateway health paths from enabled service Compose metadata.
+        required: true
+        type: string
+      gateway_service:
+        description: Active gateway declared in Compose.
+        required: true
+        type: string
+      infrastructure_services:
+        description: Space-separated infrastructure services in the active Compose dependency graph.
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: staging
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -50,7 +66,6 @@ jobs:
       matrix: ${{ fromJSON(inputs.services) }}
     steps:
       - name: Check out tested commit
-        if: matrix.changed == true
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
@@ -65,30 +80,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push changed image
-        if: matrix.changed == true
+      - name: Build and push image by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./apps/${{ matrix.service }}
           file: ./apps/${{ matrix.service }}/Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:main
-            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:sha-${{ inputs.source_sha }}
+          outputs: type=image,name=${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-      - name: Reuse unchanged image for this release
-        if: matrix.changed != true
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Export pinned images
         env:
           IMAGE: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
-        shell: bash
+          SERVICE: ${{ matrix.service }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          set -euo pipefail
-          docker buildx imagetools create \
-            --tag "${IMAGE}:sha-${SOURCE_SHA}" \
-            "${IMAGE}:main"
+          uv run --no-project --with PyYAML==6.0.3 python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          import yaml
+          digest = os.environ["DIGEST"]
+          if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+              raise SystemExit("Build returned an invalid image digest")
+          service = os.environ["SERVICE"]
+          compose = yaml.safe_load(Path("docker-compose.staging.yml").read_text())["services"]
+          images = {name: {"image": os.environ["IMAGE"] + "@" + digest}
+                    for name, config in compose.items()
+                    if name == service or config.get("x-deploy", {}).get("application") == service}
+          Path("release-images").mkdir(exist_ok=True)
+          Path(f"release-images/{service}.json").write_text(json.dumps({"services": images}))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-image-${{ matrix.service }}
+          path: release-images/*.json
+          if-no-files-found: error
+          overwrite: true
 
   deploy-staging:
     needs: [image-config, publish-images]
@@ -97,9 +129,6 @@ jobs:
     environment:
       name: staging
       url: ${{ vars.STAGING_URL }}
-    concurrency:
-      group: staging
-      cancel-in-progress: false
     permissions:
       contents: read
     env:
@@ -112,11 +141,13 @@ jobs:
       STAGING_REGISTRY_TOKEN: ${{ secrets.STAGING_REGISTRY_TOKEN }}
       STAGING_REGISTRY: ghcr.io
       STAGING_IMAGE_PREFIX: ${{ needs.image-config.outputs.namespace }}
-      # Deploy the exact release assembled from the tested commit. Changed
-      # images are built; unchanged images reuse their existing manifests.
+      # Base Compose interpolation only; staging-images.json pins deployed images.
       STAGING_IMAGE_TAG: sha-${{ inputs.source_sha }}
       STAGING_SERVICES: ${{ join(fromJSON(inputs.services).include.*.service, ' ') }}
       STAGING_MIGRATION_SERVICES: ${{ inputs.migration_services }}
+      STAGING_GATEWAY_HEALTH_PATHS: ${{ join(fromJSON(inputs.gateway_health_paths), ' ') }}
+      STAGING_INFRASTRUCTURE_SERVICES: ${{ inputs.infrastructure_services }}
+      STAGING_GATEWAY_SERVICE: ${{ inputs.gateway_service }}
     steps:
       - name: Check out tested deployment files
         uses: actions/checkout@v4
@@ -134,6 +165,26 @@ jobs:
             fi
           done
 
+      # Retrieve the image digests from this workflow run, never registry tags.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-image-*
+          path: release-images
+          merge-multiple: true
+
+      - name: Assemble pinned images
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          images = {}
+          for file in Path("release-images").glob("*.json"):
+              images.update(json.loads(file.read_text())["services"])
+          if not set(os.environ["STAGING_SERVICES"].split()).issubset(images):
+              raise SystemExit("Missing release image artifacts")
+          Path("staging-images.json").write_text(json.dumps({"services": images}))
+          PY
+
       - name: Configure SSH
         shell: bash
         run: |
@@ -141,6 +192,21 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
+          key_file="$HOME/.ssh/id_ed25519"
+          key_error=$(mktemp)
+          trap 'rm -f "$key_error"' EXIT
+          if ! LC_ALL=C ssh-keygen -y -P '' -f "$key_file" > /dev/null 2> "$key_error"; then
+            if grep -Fq 'error in libcrypto' "$key_error"; then
+              echo '::error::OpenSSH key validation failed: error in libcrypto. Root cause is not established.'
+            elif grep -Fq 'incorrect passphrase' "$key_error"; then
+              echo '::error::OpenSSH key validation failed: incorrect passphrase with an empty passphrase. This workflow has no passphrase support.'
+            else
+              echo '::error::OpenSSH key validation failed. Root cause is not established; key content was not modified.'
+            fi
+            exit 1
+          else
+            echo 'SSH private key is readable without a passphrase.'
+          fi
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 644 "$HOME/.ssh/known_hosts"
 
@@ -151,68 +217,35 @@ jobs:
           target="${STAGING_USER}@${STAGING_HOST}"
           printf '%s\n' "$STAGING_WORKDIR" | ssh "$target" '
             IFS= read -r workdir
-            mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets"
+            mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets" "$workdir/scripts"
           '
           scp docker-compose.staging.yml "$target:${STAGING_WORKDIR}/docker-compose.staging.yml"
+          scp staging-images.json "$target:${STAGING_WORKDIR}/staging-images.json"
           scp .env.example "$target:${STAGING_WORKDIR}/.env.example"
           scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"
           scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
-          scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.conf"
-          if [[ " $STAGING_SERVICES " == *" ai-service "* ]]; then
+          scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.deployment.conf"
+          scp scripts/deploy_staging.sh "$target:${STAGING_WORKDIR}/scripts/deploy_staging.sh"
+          if [[ -d datasets ]]; then
             scp -r datasets/. "$target:${STAGING_WORKDIR}/datasets/"
           fi
 
-      - name: Pull images and restart staging
+      - name: Deploy tested release
         shell: bash
         run: |
           set -euo pipefail
           target="${STAGING_USER}@${STAGING_HOST}"
           {
-            printf '%s\n' "$STAGING_REGISTRY_TOKEN"
             printf '%s\n' "$STAGING_WORKDIR"
-            printf '%s\n' "$STAGING_REGISTRY"
-            printf '%s\n' "$STAGING_REGISTRY_USERNAME"
-            printf '%s\n' "$STAGING_IMAGE_PREFIX"
-            printf '%s\n' "$STAGING_IMAGE_TAG"
-            printf '%s\n' "$STAGING_SERVICES"
-            printf '%s\n' "$STAGING_MIGRATION_SERVICES"
-            cat <<'REMOTE_SCRIPT'
-          set -euo pipefail
-          printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
-          trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
-          cd "$workdir"
-          test -s .env || { echo "Missing staging .env on server" >&2; exit 1; }
-          export UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag"
-          read -r -a services <<< "$service_names"
-          export COMPOSE_PROFILES="${service_names// /,}"
-          profiles=()
-          for service in "${services[@]}"; do
-            [[ "$service" =~ ^[a-z][a-z0-9-]*-service$ ]] || { echo "Invalid deploy service name" >&2; exit 1; }
-            profiles+=(--profile "$service")
-          done
-          compose=(docker compose --env-file .env -f docker-compose.staging.yml "${profiles[@]}")
-          "${compose[@]}" config --quiet
-          "${compose[@]}" pull --quiet
-          "${compose[@]}" up -d --no-build --wait --wait-timeout 120 postgres redis
-          for service in "${services[@]}"; do
-            if [[ " $migration_names " == *" $service "* ]]; then
-              "${compose[@]}" run --rm --no-deps "$service" /app/.venv/bin/python manage.py migrate --noinput
-            fi
-          done
-          "${compose[@]}" up -d --no-build --wait --wait-timeout 120
-          "${compose[@]}" exec -T identity-service /app/.venv/bin/python manage.py migrate --check
-          "${compose[@]}" exec -T nginx wget -q -O /dev/null --header='Host: identity-service' http://localhost/api/auth/healthz
-          "${compose[@]}" ps
-          REMOTE_SCRIPT
-          } | ssh "$target" '
-            IFS= read -r registry_token
-            IFS= read -r workdir
-            IFS= read -r registry
-            IFS= read -r registry_user
-            IFS= read -r image_prefix
-            IFS= read -r image_tag
-            IFS= read -r service_names
-            IFS= read -r migration_names
-            export registry_token workdir registry registry_user image_prefix image_tag service_names migration_names
-            bash -s
-          '
+            printf '%s\n' \
+              "registry_token=$STAGING_REGISTRY_TOKEN" \
+              "registry=$STAGING_REGISTRY" \
+              "registry_user=$STAGING_REGISTRY_USERNAME" \
+              "image_prefix=$STAGING_IMAGE_PREFIX" \
+              "image_tag=$STAGING_IMAGE_TAG" \
+              "service_names=$STAGING_SERVICES" \
+              "migration_names=$STAGING_MIGRATION_SERVICES" \
+              "gateway_names=$STAGING_GATEWAY_HEALTH_PATHS" \
+              "infrastructure_names=$STAGING_INFRASTRUCTURE_SERVICES" \
+              "gateway_service=$STAGING_GATEWAY_SERVICE"
+          } | ssh "$target" 'IFS= read -r workdir; exec bash "$workdir/scripts/deploy_staging.sh" "$workdir"'
