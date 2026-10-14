@@ -1,5 +1,8 @@
 """Public Integration commands."""
 
+from apps.integrations.services.accounts import apply_account_fact as apply_account_fact
+from apps.integrations.services.accounts import declare_username as declare_username
+from apps.integrations.services.accounts import request_verification as request_verification
 from apps.integrations.services.links import confirm_link as confirm_link
 from apps.integrations.services.links import confirm_link_locked as confirm_link_locked
 from apps.integrations.services.links import ingest_reference as ingest_reference
