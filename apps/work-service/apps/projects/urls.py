@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.projects import views
+from apps.projects.views.board import BoardColumnView, BoardView
 from apps.projects.views.states import StateDetailView
 
 urlpatterns = [
@@ -31,5 +32,11 @@ urlpatterns = [
         "projects/<uuid:project_id>/states/<uuid:state_id>/",
         StateDetailView.as_view(),
         name="state-detail",
+    ),
+    path("projects/<uuid:project_id>/kanban/", BoardView.as_view(), name="project-board"),
+    path(
+        "projects/<uuid:project_id>/kanban/states/<uuid:state_id>/tasks/",
+        BoardColumnView.as_view(),
+        name="board-column",
     ),
 ]
