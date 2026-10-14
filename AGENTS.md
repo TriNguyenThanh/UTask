@@ -68,6 +68,40 @@ môn có ích cho loại công việc tương ứng.
   ý nghĩa với hàm đó. Nếu hàm chỉ là wiring hoặc adapter không thể unit test
   hợp lý, phải nêu lý do và kiểm tra ở test phù hợp hơn.
 
+## Subagent
+
+- Không chọn hoặc spawn model Astra cho project, kể cả khi cần nâng model
+  cho task khó hoặc khi model đang cấu hình không khả dụng.
+- Dùng subagent cho các phần việc độc lập khi có lợi cho tốc độ hoặc chất
+  lượng; việc nhỏ hoặc các bước phụ thuộc nối tiếp do agent chính xử lý.
+- Chọn vai trò trong `.codex/agents/`; quy trình và cách sử dụng tại
+  [hướng dẫn subagent](docs/system/subagents.md).
+  Nếu tool không có lựa chọn custom role, đọc file vai trò và truyền model/
+  reasoning cùng hướng dẫn/phạm vi khi spawn context mới; tên task không tự
+  nạp cấu hình vai trò.
+- Agent chính giao mục tiêu, phạm vi file, đầu ra và kiểm tra cần chạy trước
+  khi spawn; không giao hai agent cùng sửa một file. File dùng chung như
+  contract, lockfile và task log phải có một người phụ trách.
+- Mặc định dùng context mới cho task độc lập; chỉ kế thừa toàn bộ hội thoại
+  khi cần lịch sử quyết định. Nếu tool hỗ trợ `fork_turns`, chọn `none` cho
+  context mới, `all` cho kế thừa; không tạo setting TOML cho lựa chọn này.
+  Tôn trọng giới hạn của tool: full-history fork có thể không nhận model/
+  reasoning override; khi cần model riêng, dùng context mới kèm bản tóm tắt.
+- Bản bàn giao chỉ gồm mục tiêu, file được giao, quyết định/contract đã chốt,
+  bằng chứng file:dòng, tiêu chí chấp nhận và kiểm tra cần chạy. Không sao chép
+  toàn bộ source, hội thoại hoặc log; subagent tự đọc phần cần thiết.
+- Chạy các task độc lập song song trong giới hạn ba subagent; chờ dependency
+  trước task phụ thuộc. Tái sử dụng subagent cho follow-up cùng task để tránh
+  điều tra lại; chỉ spawn mới khi đổi phạm vi hoặc context đã không còn phù hợp.
+- Subagent trả bản tóm tắt tối đa khoảng 250 từ khi đủ để bàn giao, dẫn tới
+  file/bằng chứng thay vì dán log dài. Agent chính giữ quyết định, dependency,
+  kết quả và rủi ro; đọc lại source hoặc chạy lại kiểm tra khi có lý do cụ thể.
+- Subagent tuân thủ AGENTS/skill trong phạm vi của mình, không tự spawn thêm
+  agent hoặc mở rộng phạm vi. Báo agent chính khi cần thay đổi ngoài phần được giao.
+- Agent chính chờ kết quả, review thay đổi và chạy kiểm tra tích hợp phù hợp
+  trước khi báo hoàn thành; không coi báo cáo của subagent là bằng chứng thay
+  thế cho kiểm tra kết quả cuối.
+
 ## Hoàn tất công việc
 
 - Không báo hoàn tất một hàm chức năng nếu thiếu unit test tương ứng, trừ khi
