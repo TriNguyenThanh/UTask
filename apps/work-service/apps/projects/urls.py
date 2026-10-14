@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.projects import views
+from apps.projects.views.states import StateDetailView
 
 urlpatterns = [
     path("projects/", views.ProjectListCreateView.as_view(), name="project-list"),
@@ -24,5 +25,11 @@ urlpatterns = [
         "projects/<uuid:project_id>/members/<uuid:user_id>/capacity/",
         views.CapacityView.as_view(),
         name="member-capacity",
+    ),
+    path("projects/<uuid:project_id>/states/", views.StateListView.as_view(), name="state-list"),
+    path(
+        "projects/<uuid:project_id>/states/<uuid:state_id>/",
+        StateDetailView.as_view(),
+        name="state-detail",
     ),
 ]

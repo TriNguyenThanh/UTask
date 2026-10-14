@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from uuid import uuid4
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, transaction
 from rest_framework.test import APIClient
 
 from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
@@ -262,3 +263,18 @@ def test_concurrent_project_create_replays_one_mutation(identity, token, actors,
         == IdempotencyRecord.objects.count()
         == 1
     )
+
+
+def test_database_rejects_invalid_state_and_member(created_project):
+    from django.db import IntegrityError
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        State.objects.filter(project_id=created_project["id"]).update(sequence=float("nan"))
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ProjectMember.objects.create(
+            project_id=created_project["id"],
+            user_id=uuid4(),
+            role="MEMBER",
+            status="LEFT",
+            joined_at=__import__("django.utils.timezone", fromlist=["now"]).now(),
+        )
