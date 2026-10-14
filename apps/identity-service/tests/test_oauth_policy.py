@@ -41,10 +41,10 @@ def test_social_hook_accepts_verified_educational_google_identity():
 @pytest.mark.parametrize(
     "route",
     [
-        "/api/v1/auth/oauth/google",
-        "/api/v1/auth/oauth/google/start",
-        "/api/v1/auth/oauth/github",
-        "/api/v1/auth/oauth/github/start",
+        "/oauth/google",
+        "/oauth/google/start",
+        "/oauth/github",
+        "/oauth/github/start",
         "/api/v1/registration/",
         "/api/v1/token/verify/",
     ],

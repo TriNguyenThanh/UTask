@@ -33,7 +33,7 @@ def test_replay_commits_family_revocation_and_blocks_child_access():
         action="SECURITY_TOKEN_REPLAY_DETECTED", target_user_id=str(user.pk)
     ).exists()
     client.credentials(HTTP_AUTHORIZATION="Bearer " + rotated.json()["data"]["access"])
-    blocked_access = client.get("/api/v1/users/me")
+    blocked_access = client.get("/users/me")
     assert blocked_access.status_code == 401
     assert blocked_access.json()["error"]["code"] == "TOKEN_REVOKED"
     # No Bearer/cookie: a 401 must come from refresh validation, not access authentication.
@@ -86,7 +86,7 @@ def test_rotated_parent_can_logout_current_family_with_old_access():
     raw = login(client, user).cookies["refresh_token"].value
     assert refresh_from_body(client, raw).status_code == 200
     client.cookies.clear()
-    assert client.post("/api/v1/auth/logout", {"refresh": raw}, format="json").status_code == 200
+    assert client.post("/logout", {"refresh": raw}, format="json").status_code == 200
     assert not UserSession.objects.filter(user=user, is_revoked=False).exists()
 
 
@@ -100,7 +100,7 @@ def test_cookie_refresh_rejects_csrf_and_conflicting_sources(case, status, code)
     raw = login(client, user).cookies["refresh_token"].value
     before = UserSession.objects.get(user=user).refresh_token_hash
     body = {} if case == "csrf" else {"refresh": raw + "x"}
-    response = client.post("/api/v1/auth/refresh", body, format="json")
+    response = client.post("/refresh", body, format="json")
     assert response.status_code == status
     assert response.json()["error"]["code"] == code
     assert UserSession.objects.get(user=user).refresh_token_hash == before

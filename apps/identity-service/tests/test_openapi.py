@@ -6,6 +6,7 @@ from allauth.account.forms import default_token_generator
 from allauth.account.models import EmailAddress
 from allauth.account.utils import user_pk_to_url_str
 from django.core.management import call_command
+from django.urls import Resolver404, resolve
 from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.test import APIClient
 
@@ -14,32 +15,73 @@ from tests.helpers import NEW_PASSWORD, PASSWORD, create_user, login, mail_secre
 
 # Acceptance cases, compared with the generated URLconf: adding an API requires a case here.
 DEFAULT_OPERATIONS = [
-    ("/api/v1/auth/.well-known/jwks.json", "get", 200),
-    ("/api/v1/auth/register", "post", 201),
-    ("/api/v1/auth/activate", "post", 200),
-    ("/api/v1/auth/activation/resend", "post", 200),
-    ("/api/v1/auth/login", "post", 200),
-    ("/api/v1/auth/refresh", "post", 200),
-    ("/api/v1/auth/logout", "post", 200),
-    ("/api/v1/auth/logout-all", "post", 200),
-    ("/api/v1/auth/sessions", "get", 200),
-    ("/api/v1/auth/sessions/{session_id}", "delete", 200),
-    ("/api/v1/auth/password-reset/request", "post", 200),
-    ("/api/v1/auth/password-reset/confirm", "post", 200),
-    ("/api/v1/auth/password-change", "post", 200),
-    ("/api/v1/users/me", "get", 200),
-    ("/api/v1/users/me", "patch", 200),
-    ("/api/v1/users/{user_id}", "get", 200),
-    ("/api/v1/users/batch", "post", 200),
-    ("/api/v1/admin/users", "get", 200),
-    ("/api/v1/admin/users/{user_id}/status", "patch", 200),
-    ("/api/v1/admin/users/{user_id}/roles", "post", 200),
-    ("/api/v1/admin/users/{user_id}/roles", "delete", 200),
+    ("/.well-known/jwks.json", "get", 200),
+    ("/register", "post", 201),
+    ("/activate", "post", 200),
+    ("/activation/resend", "post", 200),
+    ("/login", "post", 200),
+    ("/refresh", "post", 200),
+    ("/logout", "post", 200),
+    ("/logout-all", "post", 200),
+    ("/sessions", "get", 200),
+    ("/sessions/{session_id}", "delete", 200),
+    ("/password-reset/request", "post", 200),
+    ("/password-reset/confirm", "post", 200),
+    ("/password-change", "post", 200),
+    ("/users/me", "get", 200),
+    ("/users/me", "patch", 200),
+    ("/users/{user_id}", "get", 200),
+    ("/users/batch", "post", 200),
+    ("/admin/users", "get", 200),
+    ("/admin/users/{user_id}/status", "patch", 200),
+    ("/admin/users/{user_id}/roles", "post", 200),
+    ("/admin/users/{user_id}/roles", "delete", 200),
     ("/api/v1/internal/users/provision-students", "post", 201),
     ("/api/v1/internal/users/{user_id}/resend-activation", "post", 200),
     ("/api/v1/internal/auth/session-status", "post", 200),
     ("/api/v1/internal/users/{user_id}/oauth/GITHUB", "get", 200),
 ]
+
+
+@pytest.mark.parametrize(
+    ("route", "schema_url", "schema_route"),
+    [("/docs/", "../openapi/", "/openapi/")],
+)
+def test_swagger_ui_points_to_its_matching_schema_route(route, schema_url, schema_route):
+    client = APIClient()
+    response = client.get(route)
+    assert response.status_code == 200
+    assert schema_url in response.content.decode()
+    schema_response = client.get(
+        schema_route,
+        HTTP_ACCEPT="application/vnd.oai.openapi+json",
+    )
+    assert schema_response.status_code == 200
+    assert "/login" in json.loads(schema_response.content)["paths"]
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/api/v1/auth/.well-known/jwks.json",
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/users/me",
+        "/api/v1/users/batch",
+        "/api/v1/admin/users",
+        "/api/schema/",
+        "/api/schema/swagger/",
+    ],
+)
+def test_removed_legacy_routes_are_not_registered(route):
+    with pytest.raises(Resolver404):
+        resolve(route)
+
+
+def test_jwks_route_returns_the_protocol_document():
+    response = APIClient().get("/.well-known/jwks.json")
+    assert response.status_code == 200
+    assert set(response.json()) == {"keys"}
 
 
 @pytest.fixture
@@ -65,7 +107,7 @@ def contract_request(settings, signup_data):
         if route.endswith("/register"):
             return client.post(route, signup_data, format="json")
         if route.endswith("/activate"):
-            registered = client.post("/api/v1/auth/register", signup_data, format="json")
+            registered = client.post("/register", signup_data, format="json")
             assert registered.status_code == 201
             event = OutboxEvent.objects.get(event_type="identity.activation.requested")
             return client.post(route, mail_secret(event), format="json")
@@ -104,7 +146,7 @@ def contract_request(settings, signup_data):
             }
         elif route.endswith("/activation/resend"):
             body = {"email": signup_data["email"]}
-        elif route == "/api/v1/users/me" and method == "patch":
+        elif route == "/users/me" and method == "patch":
             body = {"bio": "Contract example"}
         elif route.endswith("/batch"):
             body = {"user_ids": [str(user.pk)]}
@@ -158,15 +200,19 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
     call_command("export_identity_api", output=str(output))
     schema = json.loads(output.read_text())
     assert schema["info"]["version"] == "1.8"
+    assert schema["servers"][0]["url"] == "/api/auth"
+    assert "/login" in schema["paths"]
+    assert "/api/v1/auth/login" not in schema["paths"]
+    assert "/api/v1/users/me" not in schema["paths"]
     assert sum(len(methods) for methods in schema["paths"].values()) == 25
     assert {
         (route, method) for route, methods in schema["paths"].items() for method in methods
     } == {(route, method) for route, method, _ in DEFAULT_OPERATIONS}
-    assert schema["paths"]["/api/v1/users/me"].keys() == {"get", "patch"}
-    assert schema["paths"]["/api/v1/auth/activate"].keys() == {"post"}
-    assert schema["paths"]["/api/v1/admin/users/{user_id}/roles"].keys() == {"post", "delete"}
-    assert "/api/v1/users/me/avatar/confirm" not in schema["paths"]
-    assert "/api/v1/auth/oauth/github" not in schema["paths"]
+    assert schema["paths"]["/users/me"].keys() == {"get", "patch"}
+    assert schema["paths"]["/activate"].keys() == {"post"}
+    assert schema["paths"]["/admin/users/{user_id}/roles"].keys() == {"post", "delete"}
+    assert "/users/me/avatar/confirm" not in schema["paths"]
+    assert "/oauth/github" not in schema["paths"]
     assert schema["components"]["securitySchemes"]["jwtAuth"]["scheme"] == "bearer"
 
 
@@ -175,7 +221,7 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
 @pytest.mark.postgres
 @pytest.mark.parametrize(
     "route,method,status",
-    DEFAULT_OPERATIONS + [("/api/v1/users/me", "get", 401)],
+    DEFAULT_OPERATIONS + [("/users/me", "get", 401)],
     ids=[f"{method.upper()} {route}" for route, method, _ in DEFAULT_OPERATIONS]
     + ["unauthenticated"],
 )
@@ -217,13 +263,13 @@ def test_live_responses_conform_to_exported_envelopes(
     [
         (route, method)
         for route, method, _ in DEFAULT_OPERATIONS
-        if route.startswith(("/api/v1/users/", "/api/v1/admin/"))
+        if route.startswith(("/users/", "/admin/"))
         or route
         in {
-            "/api/v1/auth/logout",
-            "/api/v1/auth/logout-all",
-            "/api/v1/auth/sessions",
-            "/api/v1/auth/sessions/{session_id}",
+            "/logout",
+            "/logout-all",
+            "/sessions",
+            "/sessions/{session_id}",
         }
     ],
 )

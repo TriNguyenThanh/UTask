@@ -25,7 +25,7 @@ def test_refresh_competing_logout_never_leaves_live_child():
     def logout():
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION="Bearer " + access)
-        return client.post("/api/v1/auth/logout", {"refresh": refresh}, format="json").status_code
+        return client.post("/logout", {"refresh": refresh}, format="json").status_code
 
     statuses = run_concurrent(lambda: refresh_from_body(APIClient(), refresh).status_code, logout)
     assert statuses[0] in {200, 401}
@@ -45,9 +45,7 @@ def test_two_reset_confirms_have_only_one_success():
     }
 
     def confirm():
-        return (
-            APIClient().post("/api/v1/auth/password-reset/confirm", body, format="json").status_code
-        )
+        return APIClient().post("/password-reset/confirm", body, format="json").status_code
 
     assert sorted(run_concurrent(confirm, confirm)) == [200, 400]
     user.refresh_from_db()

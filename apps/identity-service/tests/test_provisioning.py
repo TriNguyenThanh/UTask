@@ -81,14 +81,14 @@ def test_provision_activation_replay_and_payload_conflict(teacher_client):
     public = APIClient()
     assert (
         public.post(
-            "/api/v1/auth/activate",
+            "/activate",
             {"key": secret["key"], "new_password1": PASSWORD, "new_password2": PASSWORD},
             format="json",
         ).status_code
         == 200
     )
     login(public, user)
-    assert public.get("/api/v1/users/me").status_code == 200
+    assert public.get("/users/me").status_code == 200
 
 
 def test_provision_existing_identity_rules_and_invalid_rows(teacher_client):
@@ -163,10 +163,10 @@ def test_resend_import_activation_invalidates_old_key_and_active_guard(teacher_c
     new = mail_secret(OutboxEvent.objects.get(event_type="identity.activation.requested"))["key"]
     assert old != new
     client = APIClient()
-    assert client.post("/api/v1/auth/activate", {"key": old}, format="json").status_code == 404
+    assert client.post("/activate", {"key": old}, format="json").status_code == 404
     assert (
         client.post(
-            "/api/v1/auth/activate",
+            "/activate",
             {"key": new, "new_password1": PASSWORD, "new_password2": PASSWORD},
             format="json",
         ).status_code

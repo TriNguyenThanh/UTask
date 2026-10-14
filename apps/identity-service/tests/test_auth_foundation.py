@@ -36,4 +36,4 @@ def test_current_db_state_blocks_old_access(change):
         )
     user.save()
     session.save()
-    assert client.get("/api/v1/users/me").status_code == 401
+    assert client.get("/users/me").status_code == 401

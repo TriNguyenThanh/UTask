@@ -8,7 +8,7 @@ pytestmark = pytest.mark.contract
     "method,path,status,code",
     [
         ("get", "/api/v1/no-route", 404, "RESOURCE_NOT_FOUND"),
-        ("post", "/api/v1/auth/.well-known/jwks.json", 405, "METHOD_NOT_ALLOWED"),
+        ("post", "/.well-known/jwks.json", 405, "METHOD_NOT_ALLOWED"),
     ],
     ids=["missing-route", "jwks-method-not-allowed"],
 )
