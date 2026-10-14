@@ -1,3 +1,3 @@
-from .tasks import TaskDetailView, TaskListCreateView
+from .tasks import TaskDetailView, TaskLifecycleView, TaskListCreateView
 
-__all__ = ["TaskDetailView", "TaskListCreateView"]
+__all__ = ["TaskDetailView", "TaskLifecycleView", "TaskListCreateView"]
