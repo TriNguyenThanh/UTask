@@ -5,6 +5,8 @@ from apps.messaging.services.receipts import receipt_scope, require_key
 from apps.projects.queries.projects import visible_project
 from apps.sprints.queries.scope import sprint_list, visible_sprint
 from apps.sprints.serializers.lifecycle import (
+    CloseResultSerializer,
+    CloseSprintSerializer,
     CreateSprintSerializer,
     PatchSprintSerializer,
     ScopeResultSerializer,
@@ -12,6 +14,7 @@ from apps.sprints.serializers.lifecycle import (
     SprintSerializer,
     StartSprintSerializer,
 )
+from apps.sprints.services.closure import close_sprint
 from apps.sprints.services.lifecycle import create_sprint, start_sprint, update_sprint
 from apps.sprints.services.scope import change_scope
 from common.responses import success_response
@@ -102,6 +105,26 @@ class SprintScopeView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return change_scope(
+            request.user,
+            sprint_id,
+            serializer.validated_data,
+            receipt_scope(request, require_key(request)),
+        )
+
+
+class SprintCloseView(GenericAPIView):
+    serializer_class = CloseSprintSerializer
+
+    @extend_schema(
+        request=CloseSprintSerializer,
+        parameters=[KEY],
+        responses={200: envelope_schema("SprintCloseEnvelope", CloseResultSerializer), **ERRORS},
+    )
+    def post(self, request, sprint_id):
+        visible_sprint(request.user, sprint_id, for_write=True)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return close_sprint(
             request.user,
             sprint_id,
             serializer.validated_data,

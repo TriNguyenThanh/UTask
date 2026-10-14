@@ -1,5 +1,6 @@
 """Sprint commands used by HTTP and bulk Task apply."""
 
+from apps.sprints.services.closure import close_sprint as close_sprint
 from apps.sprints.services.lifecycle import create_sprint as create_sprint
 from apps.sprints.services.lifecycle import start_sprint as start_sprint
 from apps.sprints.services.lifecycle import update_sprint as update_sprint

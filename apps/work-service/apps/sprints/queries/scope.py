@@ -1,5 +1,13 @@
-from apps.projects.queries.projects import visible_project, visible_projects
-from apps.sprints.models import Sprint
+from django.db import transaction
+from django.utils import timezone
+
+from apps.projects.metrics import FORMULA_VERSION, metric_totals
+from apps.projects.permissions import active_member
+from apps.projects.queries.projects import read_project_scope, visible_project, visible_projects
+from apps.projects.services.locking import lock_project
+from apps.sprints.models import Sprint, SprintTask
+from apps.sprints.queries.history import BUSINESS_ZONE, burndown_history
+from apps.tasks.models import Task
 from common.errors import WorkError
 from common.pagination import paginate
 from infrastructure.classroom import classroom_client
@@ -46,3 +54,52 @@ def visible_sprint(actor, sprint_id, *, for_write=False):
             403,
         )
     return sprint
+
+
+def scope_read(actor, sprint_id, *, burndown=False):
+    sprint = visible_sprint(actor, sprint_id)
+    _, teacher_proven = read_project_scope(actor, sprint.project_id)
+    with transaction.atomic():
+        project = lock_project(sprint.project_id)
+        if active_member(project, actor) is None and not teacher_proven:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Không tìm thấy chu kỳ làm việc yêu cầu.")
+        sprint.refresh_from_db()
+        now = timezone.now()
+        if sprint.status == "COMPLETED":
+            snapshot = sprint.closure_snapshot
+            if burndown:
+                return {
+                    "sprint_id": str(sprint.pk),
+                    "captured_at": snapshot["captured_at"],
+                    "snapshot_version": snapshot["snapshot_version"],
+                    **snapshot["daily_burndown"],
+                }
+            return {
+                "sprint_id": str(sprint.pk),
+                "captured_at": snapshot["captured_at"],
+                "snapshot_version": snapshot["snapshot_version"],
+                "formula_version": snapshot["formula_version"],
+                "totals": snapshot["totals"],
+            }
+        if burndown:
+            return {
+                "sprint_id": str(sprint.pk),
+                "captured_at": now,
+                "snapshot_version": None,
+                **burndown_history(sprint, now),
+            }
+        ids = SprintTask.objects.filter(
+            sprint=sprint, ended_at__isnull=True, deleted_at__isnull=True
+        ).values("task_id")
+        queryset = Task.objects.filter(
+            pk__in=ids, deleted_at__isnull=True, archived_at__isnull=True
+        )
+        return {
+            "sprint_id": str(sprint.pk),
+            "captured_at": now,
+            "snapshot_version": None,
+            "formula_version": FORMULA_VERSION,
+            "totals": metric_totals(queryset, now.astimezone(BUSINESS_ZONE).date()),
+        }
