@@ -8,6 +8,15 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
 from rest_framework.test import APIClient
 
+from tests.fixtures.classroom import FixtureClassroom, GroupMemberFact, GroupSnapshot
+
+
+@pytest.fixture(autouse=True)
+def classroom():
+    FixtureClassroom.groups = {}
+    FixtureClassroom.teachers = {}
+    yield FixtureClassroom
+
 
 @pytest.fixture(scope="session")
 def signing_key():
@@ -87,3 +96,40 @@ def client_for(identity, token):
         return client
 
     return make
+
+
+@pytest.fixture
+def group(classroom, actors):
+    snapshot = GroupSnapshot(
+        "group-1",
+        "class-1",
+        1,
+        (GroupMemberFact(actors["leader"], "LEADER"), GroupMemberFact(actors["member"], "MEMBER")),
+    )
+    classroom.groups[snapshot.group_id] = snapshot
+    classroom.teachers[actors["teacher"]] = [snapshot.group_id]
+    return snapshot
+
+
+@pytest.fixture
+def project_payload(group):
+    return {
+        "identifier": "UT",
+        "name": "Đề tài UTask",
+        "classroom_group_id": group.group_id,
+        "tech_stack": {"backend": "Django"},
+    }
+
+
+@pytest.fixture
+def created_project(db, client_for, actors, project_payload):
+    response = client_for(actors["leader"]).post(
+        "/api/v1/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="project-create"
+    )
+    assert response.status_code == 201, response.content
+    return response.json()["data"]
+
+
+pytest_plugins = [
+    "tests.fixtures.project_api",
+]

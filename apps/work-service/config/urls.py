@@ -1,6 +1,6 @@
 from django.db import connection
 from django.http import JsonResponse
-from django.urls import path
+from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView
 
 
@@ -19,6 +19,7 @@ urlpatterns = [
         "api/v1/schema/",
         SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]),
     ),
+    path("api/v1/", include("apps.projects.urls")),
 ]
 
 handler400 = "common.http_errors.bad_request"
