@@ -8,6 +8,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "drf_spectacular",
+    "apps.projects.apps.ProjectsConfig",
+    "apps.messaging.apps.MessagingConfig",
+    "apps.tasks.apps.TasksConfig",
+    "apps.integrations.apps.IntegrationsConfig",
+    "apps.sprints.apps.SprintsConfig",
+    "apps.collaboration.apps.CollaborationConfig",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
