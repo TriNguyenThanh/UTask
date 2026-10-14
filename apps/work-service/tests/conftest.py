@@ -149,3 +149,24 @@ pytest_plugins = [
     "tests.fixtures.project_api",
     "tests.fixtures.tasks",
 ]
+
+
+@pytest.fixture(autouse=True)
+def feedback_verifier(classroom, monkeypatch):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from infrastructure.collaboration_scope import VerifiedFeedbackScope
+
+    def verify(project, actor):
+        assert project.classroom_group_id in classroom().teacher_group_ids(actor)
+        return VerifiedFeedbackScope(
+            actor.id,
+            project.pk,
+            project.classroom_group_id,
+            1,
+            timezone.now() + timedelta(minutes=1),
+        )
+
+    monkeypatch.setattr(classroom, "teacher_feedback_scope", staticmethod(verify), raising=False)

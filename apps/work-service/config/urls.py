@@ -21,6 +21,7 @@ urlpatterns = [
     ),
     path("api/v1/", include("apps.projects.urls")),
     path("api/v1/", include("apps.tasks.urls")),
+    path("api/v1/", include("apps.collaboration.urls")),
 ]
 
 handler400 = "common.http_errors.bad_request"
