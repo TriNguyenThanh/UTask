@@ -20,6 +20,7 @@ urlpatterns = [
         SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]),
     ),
     path("api/v1/", include("apps.projects.urls")),
+    path("api/v1/", include("apps.sprints.urls")),
     path("api/v1/", include("apps.tasks.urls")),
     path("api/v1/", include("apps.collaboration.urls")),
 ]

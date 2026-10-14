@@ -141,6 +141,60 @@ def test_subtask_command_rejects_detachment_and_root_task_can_detach(task_api, a
     assert leader.get(f"/api/v1/tasks/{root['id']}/").json()["data"]["parent_id"] is None
 
 
+@pytest.mark.parametrize(
+    "command", ["bulk-transition-target", "bulk-transition-tasks", "bulk-sprint-tasks"]
+)
+def test_bulk_command_foreign_scope_rejection_has_no_effect(
+    task_api, foreign_scope, actors, command
+):
+    from uuid import UUID
+
+    from django.db import transaction
+
+    from apps.projects.services.locking import lock_project
+    from apps.tasks.services.bulk import bulk_sprint_scope
+    from apps.tasks.services.workflow import bulk_transition
+    from common.authentication import Actor
+    from common.errors import WorkError
+
+    _, _, create = task_api
+    task = create()
+    foreign_project, foreign_task = foreign_scope
+    before = effect_state(task["project_id"])
+    target = State.objects.get(
+        pk=foreign_task["state_id"] if command == "bulk-transition-target" else task["state_id"]
+    )
+    with transaction.atomic():
+        project = lock_project(task["project_id"])
+        with pytest.raises(WorkError) as error:
+            if command == "bulk-sprint-tasks":
+                bulk_sprint_scope(
+                    project=project,
+                    actor=Actor(actors["leader"]),
+                    task_ids=[UUID(foreign_task["id"])],
+                    sprint_id=uuid4(),
+                    action="ADD",
+                    reason="",
+                    expected_version=1,
+                    operation_id=uuid4(),
+                )
+            else:
+                bulk_transition(
+                    project=project,
+                    actor=Actor(actors["leader"]),
+                    task_ids=[
+                        UUID(
+                            task["id"]
+                            if command == "bulk-transition-target"
+                            else foreign_task["id"]
+                        )
+                    ],
+                    target_state=target,
+                )
+        assert error.value.code == "INVALID_OPERATION"
+    assert effect_state(task["project_id"]) == before
+
+
 @pytest.mark.parametrize("adjacent", [False, True])
 def test_reorder_validates_neighbor_adjacency_and_finite_midpoint(task_api, adjacent):
     leader, _, create = task_api
