@@ -2,7 +2,10 @@ from uuid import uuid4
 
 import pytest
 
+from apps.messaging.models import IdempotencyRecord
+from apps.projects.models import Project
 from apps.tasks.models import Task
+from tests.fixtures.ai_proposals import action_payload, backlog_payload
 from tests.fixtures.transactions import effect_state
 
 pytestmark = [pytest.mark.contract, pytest.mark.django_db]
@@ -55,6 +58,104 @@ def test_label_pattern_validation_is_vietnamese_and_has_no_effect(task_api):
                 "issue": "Màu nhãn phải gồm dấu # và 6 ký tự thập lục phân (0–9, A–F).",
             }
         ],
+    }
+    assert effect_state(task["project_id"]) == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["task", "subtask", "backlog", "ai-subtask", "action", "attachment"]
+)
+def test_receipted_success_message_is_persisted_and_replayed_without_mutation(
+    task_api, actors, client_for, pending_file, ai, kind
+):
+    leader, route, create = task_api
+    task = create()
+    project = Project.objects.get(pk=task["project_id"])
+    if kind == "task":
+        body, message, status = {"title": "Created"}, "Đã tạo công việc.", 201
+    elif kind == "subtask":
+        route = f"/api/v1/tasks/{task['id']}/subtasks/"
+        body, message, status = {"title": "Child"}, "Đã tạo công việc con.", 201
+    elif kind in {"backlog", "ai-subtask"}:
+        body = backlog_payload(project)
+        if kind == "ai-subtask":
+            ai(project.pk, kind="SUBTASK", parent_id=task["id"])
+            route = f"/api/v1/tasks/{task['id']}/subtasks/bulk-apply-ai/"
+            body["subtasks"] = body.pop("tasks")
+            body["expected_parent_version"] = 1
+            body.pop("expected_project_version")
+        else:
+            ai(project.pk)
+            route += "bulk-apply-ai/"
+        message, status = "Đã tạo các công việc từ đề xuất đã duyệt.", 201
+    elif kind == "action":
+        ai(project.pk, kind="ACTION", targets=[task["id"]])
+        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        body = action_payload(
+            {
+                "kind": "SET_PRIORITY",
+                "task_id": task["id"],
+                "expected_version": 1,
+                "priority": "HIGH",
+            }
+        )
+        message, status = "Đã áp dụng các thay đổi trong đề xuất đã duyệt.", 200
+    else:
+        leader, task, route, row = pending_file
+        body = {"attachment_id": str(row.pk)}
+        message, status = "Tệp đính kèm đã được tải lên và xác nhận hoàn tất.", 200
+    first = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="message-replay")
+    assert first.status_code == status, first.content
+    assert first.json()["message"] == message
+    receipt = IdempotencyRecord.objects.get(endpoint_path=route, idempotency_key="message-replay")
+    assert receipt.response_body == first.json()
+    before = effect_state(task["project_id"])
+    tasks = list(Task.objects.order_by("id").values())
+    replay = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="message-replay")
+    assert replay.status_code == status and replay.json() == first.json()
+    assert effect_state(task["project_id"]) == before
+    assert list(Task.objects.order_by("id").values()) == tasks
+
+
+@pytest.mark.parametrize("kind", ["task", "comment", "ai"])
+def test_list_length_validation_is_vietnamese_without_writes(task_api, kind):
+    leader, route, create = task_api
+    task = create()
+    before = effect_state(task["project_id"])
+    if kind == "task":
+        body = {"title": "Bad", "assignee_ids": [str(uuid4())] * 101}
+        expected_field, issue = (
+            "assignee_ids",
+            "Danh sách người phụ trách không được vượt quá 100 mục.",
+        )
+    elif kind == "comment":
+        route = "/api/v1/comments/"
+        body = {
+            "task_id": task["id"],
+            "content_html": "Hi",
+            "mentioned_user_ids": [str(uuid4())] * 101,
+        }
+        expected_field, issue = (
+            "mentioned_user_ids",
+            "Danh sách người được nhắc tên không được vượt quá 100 mục.",
+        )
+    else:
+        route += "bulk-apply-ai/"
+        body = {
+            "proposal_id": "p",
+            "context_version": 0,
+            "expected_project_version": 1,
+            "tasks": [],
+        }
+        expected_field, issue = (
+            "tasks.non_field_errors",
+            "Vui lòng chọn ít nhất một công việc trong đề xuất.",
+        )
+    reply = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="bad-message")
+    assert reply.status_code == 400, reply.content
+    assert reply.json()["error"] == {
+        "code": "VALIDATION_ERROR",
+        "details": [{"field": expected_field, "issue": issue}],
     }
     assert effect_state(task["project_id"]) == before
 

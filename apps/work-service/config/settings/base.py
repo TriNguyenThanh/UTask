@@ -91,6 +91,8 @@ WORK_R2_ACCESS_KEY = os.environ.get("WORK_R2_ACCESS_KEY", "")
 WORK_R2_SECRET_KEY = os.environ.get("WORK_R2_SECRET_KEY", "")
 WORK_R2_BUCKET = os.environ.get("WORK_R2_BUCKET", "")
 
+WORK_AI_ADAPTER = os.environ.get("WORK_AI_ADAPTER", "infrastructure.ai.UnavailableProposals")
+
 
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"

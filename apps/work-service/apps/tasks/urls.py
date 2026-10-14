@@ -8,6 +8,7 @@ from apps.tasks.views.actions import (
     TransitionView,
     UnblockView,
 )
+from apps.tasks.views.ai import ActionApplyView, BacklogApplyView, OperationView, SubtaskApplyView
 from apps.tasks.views.metadata import (
     EpicDetailView,
     EpicListView,
@@ -35,4 +36,8 @@ urlpatterns = [
     path("projects/<uuid:project_id>/epics/", EpicListView.as_view()),
     path("projects/<uuid:project_id>/epics/<uuid:subject_id>/", EpicDetailView.as_view()),
     path("tasks/<uuid:task_id>/labels/", TaskLabelsView.as_view()),
+    path("projects/<uuid:project_id>/tasks/bulk-apply-ai/", BacklogApplyView.as_view()),
+    path("tasks/<uuid:parent_task_id>/subtasks/bulk-apply-ai/", SubtaskApplyView.as_view()),
+    path("projects/<uuid:project_id>/ai-operations/<uuid:operation_id>/", OperationView.as_view()),
+    path("projects/<uuid:project_id>/ai-actions/apply/", ActionApplyView.as_view()),
 ]
