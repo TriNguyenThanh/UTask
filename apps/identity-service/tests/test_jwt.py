@@ -59,7 +59,7 @@ def test_library_rejects_wrong_signature():
 
 
 def test_jwks_is_protocol_root_and_public_only():
-    response = APIClient().get("/api/v1/auth/.well-known/jwks.json")
+    response = APIClient().get("/.well-known/jwks.json")
     assert response.status_code == 200
     assert set(response.json()) == {"keys"}
     key = response.json()["keys"][0]

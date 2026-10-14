@@ -300,41 +300,41 @@ end note
 
 | Use case | API / boundary | Sequence |
 | --- | --- | --- |
-| [UC-ID-01](#uc-id-01) Đăng ký tài khoản Student | `POST /api/v1/auth/register` | [SQ-ID-01](sequence.md#sq-id-01) |
-| [UC-ID-02](#uc-id-02) Đăng nhập bằng mật khẩu | `POST /api/v1/auth/login` | [SQ-ID-02](sequence.md#sq-id-02) |
-| [UC-ID-03](#uc-id-03) Gia hạn phiên bằng refresh JWT | `POST /api/v1/auth/refresh` | [SQ-ID-03](sequence.md#sq-id-03) |
-| [UC-ID-04](#uc-id-04) Cấp khóa công khai JWT | `GET /api/v1/auth/.well-known/jwks.json` | [SQ-ID-20](sequence.md#sq-id-20) |
+| [UC-ID-01](#uc-id-01) Đăng ký tài khoản Student | `POST /register` | [SQ-ID-01](sequence.md#sq-id-01) |
+| [UC-ID-02](#uc-id-02) Đăng nhập bằng mật khẩu | `POST /login` | [SQ-ID-02](sequence.md#sq-id-02) |
+| [UC-ID-03](#uc-id-03) Gia hạn phiên bằng refresh JWT | `POST /refresh` | [SQ-ID-03](sequence.md#sq-id-03) |
+| [UC-ID-04](#uc-id-04) Cấp khóa công khai JWT | `GET /.well-known/jwks.json` | [SQ-ID-20](sequence.md#sq-id-20) |
 | [UC-ID-05](#uc-id-05) Kiểm tra phiên giữa các service | `POST /api/v1/internal/auth/session-status` | [SQ-ID-04](sequence.md#sq-id-04) |
-| [UC-ID-06](#uc-id-06) Đăng xuất thiết bị hiện tại | `POST /api/v1/auth/logout` | [SQ-ID-05](sequence.md#sq-id-05) |
-| [UC-ID-07](#uc-id-07) Đăng xuất tất cả thiết bị | `POST /api/v1/auth/logout-all` | [SQ-ID-05](sequence.md#sq-id-05) |
-| [UC-ID-08](#uc-id-08) Xem thiết bị đang đăng nhập | `GET /api/v1/auth/sessions` | [SQ-ID-21](sequence.md#sq-id-21) |
-| [UC-ID-09](#uc-id-09) Đăng xuất thiết bị từ xa | `DELETE /api/v1/auth/sessions/{session_id}` | [SQ-ID-05](sequence.md#sq-id-05) |
-| [UC-ID-10](#uc-id-10) Yêu cầu đặt lại mật khẩu | `POST /api/v1/auth/password-reset/request` | [SQ-ID-06](sequence.md#sq-id-06) |
-| [UC-ID-11](#uc-id-11) Xác nhận đặt lại mật khẩu | `POST /api/v1/auth/password-reset/confirm` | [SQ-ID-07](sequence.md#sq-id-07) |
-| [UC-ID-12](#uc-id-12) Xác minh và kích hoạt tài khoản | `POST /api/v1/auth/activate` | [SQ-ID-09](sequence.md#sq-id-09) |
-| [UC-ID-13](#uc-id-13) Đổi mật khẩu khi đang đăng nhập | `POST /api/v1/auth/password-change` | [SQ-ID-08](sequence.md#sq-id-08) |
-| [UC-ID-14](#uc-id-14) Đăng nhập bằng Google | `POST /api/v1/auth/oauth/google/start; POST /api/v1/auth/oauth/google` | [SQ-ID-13](sequence.md#sq-id-13) |
-| [UC-ID-15](#uc-id-15) Liên kết GitHub cá nhân | `POST /api/v1/auth/oauth/github/start; POST /api/v1/auth/oauth/github` | [SQ-ID-14](sequence.md#sq-id-14) |
-| [UC-ID-16](#uc-id-16) Hủy liên kết OAuth | `DELETE /api/v1/auth/oauth/google; DELETE /api/v1/auth/oauth/github` | [SQ-ID-14](sequence.md#sq-id-14) |
-| [UC-ID-17](#uc-id-17) Xem hồ sơ của mình | `GET /api/v1/users/me` | [SQ-ID-21](sequence.md#sq-id-21) |
-| [UC-ID-18](#uc-id-18) Cập nhật hồ sơ cá nhân | `PATCH /api/v1/users/me` | [SQ-ID-15](sequence.md#sq-id-15) |
-| [UC-ID-19](#uc-id-19) Thay ảnh đại diện | `POST /api/v1/users/me/avatar/presigned-url; POST /api/v1/users/me/avatar/confirm` | [SQ-ID-16](sequence.md#sq-id-16) |
-| [UC-ID-20](#uc-id-20) Xem hồ sơ người dùng theo UUID | `GET /api/v1/users/{user_id}` | [SQ-ID-21](sequence.md#sq-id-21) |
-| [UC-ID-21](#uc-id-21) Lấy nhiều hồ sơ | `POST /api/v1/users/batch` | [SQ-ID-21](sequence.md#sq-id-21) |
+| [UC-ID-06](#uc-id-06) Đăng xuất thiết bị hiện tại | `POST /logout` | [SQ-ID-05](sequence.md#sq-id-05) |
+| [UC-ID-07](#uc-id-07) Đăng xuất tất cả thiết bị | `POST /logout-all` | [SQ-ID-05](sequence.md#sq-id-05) |
+| [UC-ID-08](#uc-id-08) Xem thiết bị đang đăng nhập | `GET /sessions` | [SQ-ID-21](sequence.md#sq-id-21) |
+| [UC-ID-09](#uc-id-09) Đăng xuất thiết bị từ xa | `DELETE /sessions/{session_id}` | [SQ-ID-05](sequence.md#sq-id-05) |
+| [UC-ID-10](#uc-id-10) Yêu cầu đặt lại mật khẩu | `POST /password-reset/request` | [SQ-ID-06](sequence.md#sq-id-06) |
+| [UC-ID-11](#uc-id-11) Xác nhận đặt lại mật khẩu | `POST /password-reset/confirm` | [SQ-ID-07](sequence.md#sq-id-07) |
+| [UC-ID-12](#uc-id-12) Xác minh và kích hoạt tài khoản | `POST /activate` | [SQ-ID-09](sequence.md#sq-id-09) |
+| [UC-ID-13](#uc-id-13) Đổi mật khẩu khi đang đăng nhập | `POST /password-change` | [SQ-ID-08](sequence.md#sq-id-08) |
+| [UC-ID-14](#uc-id-14) Đăng nhập bằng Google | `POST /oauth/google/start; POST /oauth/google` | [SQ-ID-13](sequence.md#sq-id-13) |
+| [UC-ID-15](#uc-id-15) Liên kết GitHub cá nhân | `POST /oauth/github/start; POST /oauth/github` | [SQ-ID-14](sequence.md#sq-id-14) |
+| [UC-ID-16](#uc-id-16) Hủy liên kết OAuth | `DELETE /oauth/google; DELETE /oauth/github` | [SQ-ID-14](sequence.md#sq-id-14) |
+| [UC-ID-17](#uc-id-17) Xem hồ sơ của mình | `GET /users/me` | [SQ-ID-21](sequence.md#sq-id-21) |
+| [UC-ID-18](#uc-id-18) Cập nhật hồ sơ cá nhân | `PATCH /users/me` | [SQ-ID-15](sequence.md#sq-id-15) |
+| [UC-ID-19](#uc-id-19) Thay ảnh đại diện | `POST /users/me/avatar/presigned-url; POST /users/me/avatar/confirm` | [SQ-ID-16](sequence.md#sq-id-16) |
+| [UC-ID-20](#uc-id-20) Xem hồ sơ người dùng theo UUID | `GET /users/{user_id}` | [SQ-ID-21](sequence.md#sq-id-21) |
+| [UC-ID-21](#uc-id-21) Lấy nhiều hồ sơ | `POST /users/batch` | [SQ-ID-21](sequence.md#sq-id-21) |
 | [UC-ID-22](#uc-id-22) Import và ghi danh lớp — boundary mục tiêu | `Classroom: POST /api/v1/classrooms/{classroom_id}/students/import` | [SQ-ID-10](sequence.md#sq-id-10) |
 | [UC-ID-23](#uc-id-23) Cấp hoặc tìm Student cho Classroom | `POST /api/v1/internal/users/provision-students` | [SQ-ID-11](sequence.md#sq-id-11) |
 | [UC-ID-24](#uc-id-24) Resend kích hoạt nội bộ | `POST /api/v1/internal/users/{user_id}/resend-activation` | [SQ-ID-12](sequence.md#sq-id-12) |
-| [UC-ID-25](#uc-id-25) Tra cứu tài khoản toàn hệ thống | `GET /api/v1/admin/users` | [SQ-ID-21](sequence.md#sq-id-21) |
-| [UC-ID-26](#uc-id-26) Đổi status hoặc khôi phục xóa mềm | `PATCH /api/v1/admin/users/{user_id}/status` | [SQ-ID-17](sequence.md#sq-id-17) |
-| [UC-ID-27](#uc-id-27) Gán hoặc thu hồi global role | `POST/DELETE /api/v1/admin/users/{user_id}/roles` | [SQ-ID-18](sequence.md#sq-id-18) |
-| [UC-ID-28](#uc-id-28) Resend kích hoạt public | `POST /api/v1/auth/activation/resend` | [SQ-ID-22](sequence.md#sq-id-22) |
+| [UC-ID-25](#uc-id-25) Tra cứu tài khoản toàn hệ thống | `GET /admin/users` | [SQ-ID-21](sequence.md#sq-id-21) |
+| [UC-ID-26](#uc-id-26) Đổi status hoặc khôi phục xóa mềm | `PATCH /admin/users/{user_id}/status` | [SQ-ID-17](sequence.md#sq-id-17) |
+| [UC-ID-27](#uc-id-27) Gán hoặc thu hồi global role | `POST/DELETE /admin/users/{user_id}/roles` | [SQ-ID-18](sequence.md#sq-id-18) |
+| [UC-ID-28](#uc-id-28) Resend kích hoạt public | `POST /activation/resend` | [SQ-ID-22](sequence.md#sq-id-22) |
 | [UC-ID-29](#uc-id-29) Đọc mapping GitHub hiện tại | `GET /api/v1/internal/users/{user_id}/oauth/GITHUB` | [SQ-ID-23](sequence.md#sq-id-23) |
 
 <a id="uc-id-01"></a>
 
 ### UC-ID-01 — Đăng ký tài khoản Student
 
-**API / actor:** `POST /api/v1/auth/register`. Guest; username, email, password1, password2, first_name, last_name.
+**API / actor:** `POST /register`. Guest; username, email, password1, password2, first_name, last_name.
 
 **Luồng:** Kiểm mail key, từ chối Idempotency-Key, validate bằng RegisterSerializer. Một transaction tạo PENDING_ACTIVATION, profile, STUDENT, audit REGISTER, user.created và activation.requested mã hóa. Trả201 data.user/account_status; chưa cấp JWT. Kích hoạt rồi login riêng.
 
@@ -349,7 +349,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-02 — Đăng nhập bằng mật khẩu
 
-**API / actor:** `POST /api/v1/auth/login`. Guest; đúng một trong email/username, password; device_name tùy chọn.
+**API / actor:** `POST /login`. Guest; đúng một trong email/username, password; device_name tùy chọn.
 
 **Luồng:** Django authenticate/allauth kiểm credential; Axes kiểm user UUID và IP. Credentials đúng mới kiểm pending/suspended. Khóa user và recheck password/state khi SimpleJWT cấp token, tạo một session/family, audit và user_logged_in signal. Trả200 access/user; refresh body rỗng, refresh JWT trong cookie.
 
@@ -364,7 +364,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-03 — Gia hạn phiên bằng refresh JWT
 
-**API / actor:** `POST /api/v1/auth/refresh`. JWT refresh từ body hoặc cookie; có cookie phải qua CSRF/Origin.
+**API / actor:** `POST /refresh`. JWT refresh từ body hoặc cookie; có cookie phải qua CSRF/Origin.
 
 **Luồng:** UntypedToken xác minh JWT trước tra DB; khóa user, kiểm session_id/sub/token_family. SimpleJWT rotate/blacklist rồi cập nhật hash/JTI trên cùng UserSession. session_id, family và hạn family7 ngày giữ nguyên. Trả200 access/access_expiration và cookie mới, không raw refresh trong body.
 
@@ -379,7 +379,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-04 — Cấp khóa công khai JWT
 
-**API / actor:** `GET /api/v1/auth/.well-known/jwks.json`. Anonymous hoặc service verifier.
+**API / actor:** `GET /.well-known/jwks.json`. Anonymous hoặc service verifier.
 
 **Luồng:** Trả200 {keys:[public RSA JWK]} bằng JsonResponse; Cache-Control public,max-age=300. Một khóa RS256, JWT header không kid. Private key chỉ ở Identity.
 
@@ -409,7 +409,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-06 — Đăng xuất thiết bị hiện tại
 
-**API / actor:** `POST /api/v1/auth/logout`. Bearer; refresh body/cookie tùy chọn.
+**API / actor:** `POST /logout`. Bearer; refresh body/cookie tùy chọn.
 
 **Luồng:** Khóa user, recheck session; nếu gửi refresh phải thuộc user/family hiện tại. Lấy refresh mới nhất từ OutstandingToken và dùng dj-rest-auth LogoutView blacklist. Khi thư viện logout thành công, revoke family, audit và clear cookie; trả200.
 
@@ -424,7 +424,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-07 — Đăng xuất tất cả thiết bị
 
-**API / actor:** `POST /api/v1/auth/logout-all`. Bearer; có refresh cookie cần CSRF.
+**API / actor:** `POST /logout-all`. Bearer; có refresh cookie cần CSRF.
 
 **Luồng:** Khóa user, revoke tất cả session live và blacklist JTI hiện tại, ghi audit. Trả200 data.revoked_sessions_count và clear cookie. Login mới tạo family mới.
 
@@ -439,7 +439,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-08 — Xem thiết bị đang đăng nhập
 
-**API / actor:** `GET /api/v1/auth/sessions`. Bearer.
+**API / actor:** `GET /sessions`. Bearer.
 
 **Luồng:** Lấy session chưa revoke/chưa hết hạn của user, mới nhất trước. id/session_id và family ổn định qua rotation; is_current so theo family. Trả metadata thiết bị, không hash/token.
 
@@ -454,7 +454,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-09 — Đăng xuất thiết bị từ xa
 
-**API / actor:** `DELETE /api/v1/auth/sessions/{session_id}`. Bearer; UUID session thuộc user.
+**API / actor:** `DELETE /sessions/{session_id}`. Bearer; UUID session thuộc user.
 
 **Luồng:** Khóa user, resolve session trong scope user, revoke family mục tiêu, blacklist và audit. Trả200; clear cookie khi target là phiên hiện tại.
 
@@ -469,7 +469,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-10 — Yêu cầu đặt lại mật khẩu
 
-**API / actor:** `POST /api/v1/auth/password-reset/request`. Guest; email.
+**API / actor:** `POST /password-reset/request`. Guest; email.
 
 **Luồng:** Kiểm mail key cho cả email biết/lạ. AllAuthPasswordResetForm chọn ACTIVE/chưa xóa/có password dùng được. Khóa user và recheck; generator allauth/Django tạo uid/token, adapter ghi password_reset.requested mã hóa. Trả200 message trung tính; không xác nhận mail delivered.
 
@@ -484,7 +484,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-11 — Xác nhận đặt lại mật khẩu
 
-**API / actor:** `POST /api/v1/auth/password-reset/confirm`. Guest; uid, token, new_password1, new_password2.
+**API / actor:** `POST /password-reset/confirm`. Guest; uid, token, new_password1, new_password2.
 
 **Luồng:** Serializer/library giải uid, kiểm generator và SetPasswordForm. Trong user lock revalidate account/token, đổi password, revoke mọi session, reset Axes theo UUID, audit PASSWORD_RESET. Trả200; login lại, không tự cấp token.
 
@@ -499,7 +499,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-12 — Xác minh và kích hoạt tài khoản
 
-**API / actor:** `POST /api/v1/auth/activate`. Guest; key; new_password1/new_password2 bắt buộc nếu user import chưa có password.
+**API / actor:** `POST /activate`. Guest; key; new_password1/new_password2 bắt buộc nếu user import chưa có password.
 
 **Luồng:** Hash key để tra EmailConfirmation; khóa user pending/chưa xóa. Nếu password unusable dùng SetPasswordForm; VerifyEmailView/allauth xác minh EmailAddress. Chuyển ACTIVE, xóa confirmations, audit ACCOUNT_ACTIVATED và user.updated. Trả200 detail trong envelope; login riêng.
 
@@ -514,7 +514,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-13 — Đổi mật khẩu khi đang đăng nhập
 
-**API / actor:** `POST /api/v1/auth/password-change`. Bearer; old_password, new_password1, new_password2.
+**API / actor:** `POST /password-change`. Bearer; old_password, new_password1, new_password2.
 
 **Luồng:** PasswordChangeSerializer kiểm password cũ, chính sách và khác password hiện tại. Dưới user lock recheck session/credential, gọi thư viện set password, revoke mọi session kể cả hiện tại, audit PASSWORD_CHANGED. Trả200, login lại.
 
@@ -529,7 +529,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-14 — Đăng nhập bằng Google
 
-**API / actor:** `POST /api/v1/auth/oauth/google/start; POST /api/v1/auth/oauth/google`. Flag IDENTITY_GOOGLE_ENABLED; start: redirect_uri; exchange: code,state,redirect_uri + context cookie.
+**API / actor:** `POST /oauth/google/start; POST /oauth/google`. Flag IDENTITY_GOOGLE_ENABLED; start: redirect_uri; exchange: code,state,redirect_uri + context cookie.
 
 **Luồng:** Server tạo state/nonce/PKCE, Redis context600s/cookie Secure. Consume context một lần; allauth đổi code/verify signature, nonce và verified email. Resolve sub trước email; existing phải active. New user chỉ email domain kết thúc .edu.vn, STUDENT/password unusable. Tạo/link account trong transaction riêng; LoginView cấp session/JWT sau validation.
 
@@ -544,7 +544,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-15 — Liên kết GitHub cá nhân
 
-**API / actor:** `POST /api/v1/auth/oauth/github/start; POST /api/v1/auth/oauth/github`. Flag IDENTITY_GITHUB_ENABLED; Bearer; redirect_uri hoặc code,state,redirect_uri + context cookie.
+**API / actor:** `POST /oauth/github/start; POST /oauth/github`. Flag IDENTITY_GITHUB_ENABLED; Bearer; redirect_uri hoặc code,state,redirect_uri + context cookie.
 
 **Luồng:** Context bound user/state/URI600s, consume một lần. Identity gọi Integration exchange ngoài DB transaction; validate operation/user/provider/expiry/schema. Khóa user, recheck session, lưu SocialAccount/profile/audit/user.updated/github_linked. Đúng ID đã link: no-op200. Không cấp JWT hoặc gọi GitHub API trực tiếp.
 
@@ -559,7 +559,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-16 — Hủy liên kết OAuth
 
-**API / actor:** `DELETE /api/v1/auth/oauth/google; DELETE /api/v1/auth/oauth/github`. Flag provider tương ứng; Bearer; không body nghiệp vụ.
+**API / actor:** `DELETE /oauth/google; DELETE /oauth/github`. Flag provider tương ứng; Bearer; không body nghiệp vụ.
 
 **Luồng:** Khóa user/recheck session. Google-only không có password bị chặn. Dùng SocialAccountDisconnectView để disconnect từng link. GitHub clear profile username, emit github_unlinked cho link bị xóa; audit OAUTH_UNLINKED và user.updated. Trả200.
 
@@ -574,7 +574,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-17 — Xem hồ sơ của mình
 
-**API / actor:** `GET /api/v1/users/me`. Bearer.
+**API / actor:** `GET /users/me`. Bearer.
 
 **Luồng:** dj-rest-auth UserDetailsView và CurrentUserSerializer trả user/profile/roles/preferences; is_email_verified đọc từ allauth EmailAddress hiện tại. MSSV chỉ đọc; không token/password.
 
@@ -589,7 +589,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-18 — Cập nhật hồ sơ cá nhân
 
-**API / actor:** `PATCH /api/v1/users/me`. Bearer; first_name,last_name,phone_number,bio,academic_year,faculty,timezone,preferences.
+**API / actor:** `PATCH /users/me`. Bearer; first_name,last_name,phone_number,bio,academic_year,faculty,timezone,preferences.
 
 **Luồng:** Validate allowlist, khóa user/recheck session. Chỉ khi trường thật sự đổi mới save profile, reread display_name do trigger, audit và user.updated. Trả200 display_name/phone_number/bio/preferences; no-op không emit thêm.
 
@@ -604,7 +604,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-19 — Thay ảnh đại diện
 
-**API / actor:** `POST /api/v1/users/me/avatar/presigned-url; POST /api/v1/users/me/avatar/confirm`. Flag IDENTITY_AVATAR_ENABLED; Bearer; file_name/content_type/file_size hoặc file_key.
+**API / actor:** `POST /users/me/avatar/presigned-url; POST /users/me/avatar/confirm`. Flag IDENTITY_AVATAR_ENABLED; Bearer; file_name/content_type/file_size hoặc file_key.
 
 **Luồng:** Presign R2 PUT300s và receipt Redis bound user/session/key/type/size. Client upload trực tiếp. Confirm kiểm key, current avatar no-op, receipt cùng session và HEAD ngoài user transaction. Khóa lại/recheck session, update profile/audit/user.updated khi đổi; delete receipt best-effort sau commit.
 
@@ -619,7 +619,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-20 — Xem hồ sơ người dùng theo UUID
 
-**API / actor:** `GET /api/v1/users/{user_id}`. Bearer; UUID.
+**API / actor:** `GET /users/{user_id}`. Bearer; UUID.
 
 **Luồng:** Read non-deleted user/profile/roles bằng PublicUserSerializer. Email/MSSV nằm trong allowlist hiện tại; không preferences/password/session. Không kiểm scope cùng lớp/project tại endpoint này.
 
@@ -634,7 +634,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-21 — Lấy nhiều hồ sơ
 
-**API / actor:** `POST /api/v1/users/batch`. Bearer; user_ids tối đa100 UUID.
+**API / actor:** `POST /users/batch`. Bearer; user_ids tối đa100 UUID.
 
 **Luồng:** Validate toàn request, dedup giữ thứ tự input; query non-deleted users. Trả200 data.users, meta.total; bỏ ID không tìm thấy, không tạo row giả.
 
@@ -694,7 +694,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-25 — Tra cứu tài khoản toàn hệ thống
 
-**API / actor:** `GET /api/v1/admin/users`. Bearer SYSTEM_ADMIN; search,role,status,page,limit.
+**API / actor:** `GET /admin/users`. Bearer SYSTEM_ADMIN; search,role,status,page,limit.
 
 **Luồng:** Read current global role, validate query; lọc user/profile/roles, thứ tự ổn định/phân trang20 mặc định, limit tối đa100. Trả200 dữ liệu quản trị và meta pagination; không secret.
 
@@ -709,7 +709,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-26 — Đổi status hoặc khôi phục xóa mềm
 
-**API / actor:** `PATCH /api/v1/admin/users/{user_id}/status`. Bearer SYSTEM_ADMIN; status ACTIVE/SUSPENDED hoặc restore_deleted=true; reason bắt buộc.
+**API / actor:** `PATCH /admin/users/{user_id}/status`. Bearer SYSTEM_ADMIN; status ACTIVE/SUSPENDED hoặc restore_deleted=true; reason bắt buộc.
 
 **Luồng:** Lock actor/target theo UUID, recheck role/session. Status không áp dụng deleted/pending; restore chỉ clear deleted_at giữ status/UUID/email/MSSV/roles. Mọi mutation thật đều revoke toàn session, kể cả chuyển về ACTIVE; ACTIVE reset Axes. Audit/status_changed cùng TX. No-op không revoke/event mới.
 
@@ -724,7 +724,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-27 — Gán hoặc thu hồi global role
 
-**API / actor:** `POST/DELETE /api/v1/admin/users/{user_id}/roles`. Bearer SYSTEM_ADMIN; role_code STUDENT/TEACHER/SYSTEM_ADMIN.
+**API / actor:** `POST/DELETE /admin/users/{user_id}/roles`. Bearer SYSTEM_ADMIN; role_code STUDENT/TEACHER/SYSTEM_ADMIN.
 
 **Luồng:** Lock actor/target có thứ tự/recheck role/session. Unique relation; no-op nếu đã đúng. Mutation thật revoke session target, audit, role_assigned/role_revoked với roles sau đổi. Trả200 user_id/roles.
 
@@ -739,7 +739,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-28 — Resend kích hoạt public
 
-**API / actor:** `POST /api/v1/auth/activation/resend`. Guest; email.
+**API / actor:** `POST /activation/resend`. Guest; email.
 
 **Luồng:** Kiểm mail key, validate/normalize email. Nếu pending/chưa xóa/unverified: khóa user, allauth phát confirmation mới, adapter xóa key cũ và ghi activation.requested mã hóa. Eligible/unknown đều200 detail trung tính, không raw key.
 

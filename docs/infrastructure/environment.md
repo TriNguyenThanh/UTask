@@ -9,8 +9,18 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
 
-Không ghi bí mật thật vào các tệp được theo dõi trong Git. Khi chưa có `.env`,
-tạo từ mẫu rồi điền giá trị của máy đó trước khi chạy Compose:
+AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
+và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
+chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
+không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
+export secret ra terminal. Compose chỉ inject AI_CREDENTIAL_KEY,
+AI_JWT_PUBLIC_KEY và GOOGLE_API_KEY vào AI; DB local nhận AI_DB_PASSWORD.
+CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
+[cấu hình AI](../ai-service/README.md#cấu-hình) và
+[mock data](../ai-service/mock-data.md).
+
+Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo `.env` cục bộ
+theo mẫu repository rồi kiểm tra cấu hình Compose:
 
 ```powershell
 Copy-Item .env.example .env
@@ -30,6 +40,18 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
   Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
 
+**Một phần:** cấu hình local/staging hiện dùng chung `POSTGRES_USER` và
+`POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
+yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
+hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
+khoảng trống triển khai, không phải lựa chọn bảo mật production.
+
+Celery broker, Kafka client và R2 là công nghệ mục tiêu theo baseline; biến
+môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
+triển khai. Không xem URL service trong file env là bằng chứng client đã gọi
+service đó. Xem [job nền](background-jobs.md), [Kafka](kafka.md) và
+[lưu trữ file](storage.md).
+
 ## Điền biến trên VPS staging
 
 Điền trước lần deploy đầu vào **một file `.env` tại `STAGING_WORKDIR`**, cạnh
@@ -48,14 +70,14 @@ chmod 600 .env
 Workflow đọc `.env` này nhưng không upload hoặc ghi đè nó. Secrets GitHub như khóa SSH
 và token GHCR phục vụ triển khai; chúng không tự trở thành biến của ứng dụng.
 
-| Giá trị trong `.env` VPS | Container nhận |
-| --- | --- |
-| `POSTGRES_*` | PostgreSQL và các app cần database, qua mapping dùng chung |
+| Giá trị trong `.env` VPS                                       | Container nhận                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `POSTGRES_*`                                                   | PostgreSQL và các app cần database, qua mapping dùng chung       |
 | `IDENTITY_DB_NAME`, `IDENTITY_DJANGO_SECRET_KEY`, `IDENTITY_*` | Identity: `DATABASE_NAME`, `DJANGO_SECRET_KEY` và cấu hình riêng |
-| `WORK_DB_NAME`, `WORK_DJANGO_SECRET_KEY` | Work khi bật profile của service |
-| `CLASSROOM_DB_NAME`, `CLASSROOM_DJANGO_SECRET_KEY` | Classroom khi bật |
-| `INTEGRATION_DB_NAME`, `INTEGRATION_DJANGO_SECRET_KEY` | Integration khi bật |
-| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY` | Notification khi bật |
+| `WORK_DB_NAME`, `WORK_DJANGO_SECRET_KEY`                       | Work khi bật profile của service                                 |
+| `CLASSROOM_DB_NAME`, `CLASSROOM_DJANGO_SECRET_KEY`             | Classroom khi bật                                                |
+| `INTEGRATION_DB_NAME`, `INTEGRATION_DJANGO_SECRET_KEY`         | Integration khi bật                                              |
+| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
 
 Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
 Không tạo thêm `.env` trong từng container và không đưa nguyên `.env` chung vào tất cả
@@ -68,8 +90,6 @@ Sau khi sửa `.env`, phải tạo lại container của service để áp dụn
 hai biến nội suy image prefix/tag và giữ file `staging-images.json` của lần phát hành.
 Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
 `up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
-
-Các service Django dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD` theo baseline, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng của mình.
 
 Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
 publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
@@ -91,7 +111,7 @@ phải dùng kèm file ghi đè image. Khóa phải có trước khi startup và
 đọc được; workflow không vận chuyển PEM. Nginx hiện chỉ nghe HTTP trong container
 trên port 80; port trên host lấy từ `UTASK_HTTP_PORT` (mặc định 8080). Compose hiện
 không publish HTTPS 443, mount chứng chỉ hoặc chạy Certbot. TLS trên VPS thực tế
-chưa được xác minh; xem [phạm vi HTTP/HTTPS](ci-cd.md#http-và-https).
+chưa được xác minh; xem [cấu hình staging](ci-cd.md#chuẩn-bị-máy-staging).
 Các giá trị OAuth/R2/caller keys nằm trong `.env` của từng máy; file ánh xạ chỉ
 chứa `${...}` hoặc hằng cấu hình container không bí mật. Không điền credential hoặc
 flags trực tiếp vào `infra/env/identity-service.env`.

@@ -1,9 +1,12 @@
 # Tài liệu hệ thống UTask
 
-Thư mục này là nguồn chuẩn cho kiến trúc và cách các phần của UTask phối hợp.
-Tài liệu ở đây mô tả **thiết kế mục tiêu**. Trạng thái triển khai trong mã
-nguồn chưa được rà soát trong lần chuẩn hóa này; không dùng nội dung thiết kế
-để kết luận một tính năng đã chạy.
+Đọc [architecture baseline](../architecture/README.md) trước để biết nguồn
+quyết định công nghệ và phạm vi hệ thống. Thư mục này diễn giải các quyết định
+đó theo chủ đề; tài liệu service/hạ tầng giữ chi tiết tương ứng.
+
+Tài liệu kiến trúc mô tả **thiết kế mục tiêu**. Hiện trạng được ghi riêng khi
+đã đối chiếu source, cấu hình và kiểm thử; không suy ra một tính năng đã chạy
+từ baseline. AI Service hiện có bootstrap, xem [code map](../ai-service/code-map.md).
 
 ## Đọc theo chủ đề
 
@@ -13,8 +16,17 @@ nguồn chưa được rà soát trong lần chuẩn hóa này; không dùng n�
 - [Quyền sở hữu dữ liệu](data-ownership.md)
 - [Danh mục sự kiện Kafka](kafka-events.md)
 - [Hướng dẫn phát triển](development.md)
-- [Tài liệu theo service](../)
+- [Identity Service](../identity-service/README.md)
+- [Work Service](../project-service/README.md)
+- [Classroom Service](../classroom-service/README.md)
+- [Integration Service](../integration-service/README.md)
+- [Notification Service](../notification-service/README.md)
+- [AI Service](../ai-service/README.md)
+- [Web](../web/README.md)
 - [Hạ tầng](../infrastructure/README.md)
+- [Job nền và worker](../infrastructure/background-jobs.md)
+- [Quyết định kiến trúc](../adr/README.md)
+- [Chuyển từ thiết kế cũ sang baseline](../adr/001-adopt-architecture-baseline.md)
 
 ## Quy ước trạng thái
 

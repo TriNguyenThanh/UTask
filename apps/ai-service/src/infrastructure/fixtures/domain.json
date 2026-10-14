@@ -1,0 +1,202 @@
+{
+  "targets": {
+    "project:11111111-1111-4111-8111-111111111111": {
+      "allowed_users": [
+        "mock-owner"
+      ],
+      "contexts": {
+        "project": "demo-project",
+        "team": "demo-team",
+        "progress": "demo-progress",
+        "github_activity": "demo-development"
+      }
+    },
+    "task:22222222-2222-4222-8222-222222222222": {
+      "allowed_users": [
+        "mock-owner"
+      ],
+      "contexts": {
+        "project": "demo-project",
+        "team": "demo-team",
+        "progress": "demo-progress",
+        "github_activity": "demo-development",
+        "task": "demo-task"
+      }
+    },
+    "sprint:33333333-3333-4333-8333-333333333333": {
+      "allowed_users": [
+        "mock-owner"
+      ],
+      "contexts": {
+        "project": "demo-project",
+        "team": "demo-team",
+        "progress": "demo-progress",
+        "github_activity": "demo-development"
+      }
+    }
+  },
+  "documents": {
+    "demo-project": {
+      "domain": "project",
+      "data": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Cổng quản lý bài tập nhóm",
+        "description": "Sinh viên lập nhóm, chia task và theo dõi tiến độ bài tập.",
+        "goals": [
+          "Quản lý task theo sprint",
+          "Theo dõi tiến độ nhóm bằng quy tắc"
+        ],
+        "deadline": "2026-10-30T16:00:00+07:00",
+        "tasks": [
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "title": "Xây dựng API quản lý task",
+            "status": "in_progress",
+            "estimate_points": 8,
+            "dependencies": [
+              "44444444-4444-4444-8444-444444444444"
+            ]
+          },
+          {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "title": "Chốt schema và migration Task",
+            "status": "blocked",
+            "estimate_points": 3
+          },
+          {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "title": "Thiết kế màn hình task",
+            "status": "done",
+            "estimate_points": 3
+          },
+          {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "title": "Khởi tạo ứng dụng",
+            "status": "done",
+            "estimate_points": 2
+          }
+        ],
+        "sprints": [
+          {
+            "id": "33333333-3333-4333-8333-333333333333",
+            "name": "Sprint 1",
+            "deadline": "2026-10-16T16:00:00+07:00"
+          }
+        ]
+      }
+    },
+    "demo-task": {
+      "domain": "task",
+      "data": {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "project_id": "11111111-1111-4111-8111-111111111111",
+        "title": "Xây dựng API quản lý task",
+        "description": "Tạo, sửa, xem và đổi trạng thái task trong project; kiểm tra membership và validation tại Work.",
+        "status": "in_progress",
+        "priority": "high",
+        "deadline": "2026-10-15T16:00:00+07:00",
+        "estimate_points": 8,
+        "dependencies": [
+          {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "title": "Chốt schema và migration Task",
+            "status": "blocked"
+          }
+        ],
+        "acceptance_criteria": [
+          "Chỉ project member được truy cập task",
+          "Validate title, deadline và trạng thái",
+          "Có unit test thành công, không có quyền và input sai"
+        ]
+      }
+    },
+    "demo-team": {
+      "domain": "team",
+      "data": {
+        "members": [
+          {
+            "user_id": "mock-owner",
+            "name": "An",
+            "capacity": 8,
+            "workload": 8
+          },
+          {
+            "user_id": "mock-member-2",
+            "name": "Bình",
+            "capacity": 8,
+            "workload": 3
+          },
+          {
+            "user_id": "mock-member-3",
+            "name": "Chi",
+            "capacity": 5,
+            "workload": 3
+          }
+        ],
+        "capacity": 21,
+        "workload": 14
+      }
+    },
+    "demo-progress": {
+      "domain": "progress",
+      "data": {
+        "total_tasks": 4,
+        "completed_tasks": 2,
+        "blocked_tasks": [
+          {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "title": "Chốt schema và migration Task",
+            "status": "blocked"
+          }
+        ],
+        "metrics": [
+          {
+            "name": "completion_percent",
+            "value": 50,
+            "unit": "percent"
+          },
+          {
+            "name": "remaining_points",
+            "value": 11,
+            "unit": "points"
+          },
+          {
+            "name": "blocked_tasks",
+            "value": 1,
+            "unit": "tasks"
+          }
+        ]
+      }
+    },
+    "demo-development": {
+      "domain": "github_activity",
+      "data": {
+        "mapping_status": "mapped",
+        "commits": [
+          {
+            "id": "mock-commit-001",
+            "title": "Add task serializer validation",
+            "user_id": "mock-owner",
+            "task_id": "22222222-2222-4222-8222-222222222222"
+          }
+        ],
+        "pull_requests": [
+          {
+            "id": "mock-pr-12",
+            "title": "Task API and permission checks",
+            "state": "open",
+            "task_id": "22222222-2222-4222-8222-222222222222"
+          }
+        ],
+        "issues": [
+          {
+            "id": "mock-issue-7",
+            "title": "Task schema decision blocks API",
+            "state": "open",
+            "task_id": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
+    }
+  }
+}

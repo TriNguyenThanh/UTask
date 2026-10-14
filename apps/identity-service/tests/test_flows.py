@@ -33,7 +33,7 @@ def http_client(live_server):
 def http_login(client, base_url, user, password=PASSWORD, *, field="email"):
     client.headers.pop("Authorization", None)
     response = client.post(
-        f"{base_url}/api/v1/auth/login",
+        f"{base_url}/login",
         json={field: getattr(user, field), "password": password},
         timeout=10,
     )
@@ -49,7 +49,7 @@ def http_login(client, base_url, user, password=PASSWORD, *, field="email"):
 )
 def test_register_verify_login_me_refresh_logout(http_client, live_server, signup_data):
     client, base = http_client, live_server.url
-    response = client.post(f"{base}/api/v1/auth/register", json=signup_data, timeout=10)
+    response = client.post(f"{base}/register", json=signup_data, timeout=10)
     assert response.status_code == 201, response.json()
     assert response.json()["data"]["user"]["roles"] == ["STUDENT"]
     assert response.json()["data"]["user"]["student_id"] is None
@@ -67,14 +67,8 @@ def test_register_verify_login_me_refresh_logout(http_client, live_server, signu
         EmailConfirmation.objects.get(email_address__user=user).key
         == hashlib.sha256(key.encode()).hexdigest()
     )
-    assert (
-        client.post(f"{base}/api/v1/auth/activate", json={"key": key}, timeout=10).status_code
-        == 200
-    )
-    assert (
-        client.post(f"{base}/api/v1/auth/activate", json={"key": key}, timeout=10).status_code
-        == 404
-    )
+    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 200
+    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 404
     user.refresh_from_db()
     assert user.is_active and user.is_email_verified
 
@@ -87,11 +81,11 @@ def test_register_verify_login_me_refresh_logout(http_client, live_server, signu
     assert cookie.secure and cookie.has_nonstandard_attr("HttpOnly")
     assert cookie.get_nonstandard_attr("SameSite") == "Lax"
     original = cookie.value
-    me = client.get(f"{base}/api/v1/users/me", timeout=10)
+    me = client.get(f"{base}/users/me", timeout=10)
     assert me.status_code == 200 and me.json()["data"]["id"] == str(user.pk)
     assert {"display_name", "roles", "student_id", "preferences"} <= me.json()["data"].keys()
     client.cookies.clear()
-    refreshed = client.post(f"{base}/api/v1/auth/refresh", json={"refresh": original}, timeout=10)
+    refreshed = client.post(f"{base}/refresh", json={"refresh": original}, timeout=10)
     assert refreshed.status_code == 200, refreshed.json()
     new_refresh = refreshed.cookies["refresh_token"]
     assert new_refresh != original
@@ -102,19 +96,16 @@ def test_register_verify_login_me_refresh_logout(http_client, live_server, signu
     assert session.refresh_jti == UntypedToken(new_refresh)["jti"]
     client.headers["Authorization"] = "Bearer " + refreshed.json()["data"]["access"]
     client.cookies.clear()
-    logout = client.post(f"{base}/api/v1/auth/logout", json={"refresh": new_refresh}, timeout=10)
+    logout = client.post(f"{base}/logout", json={"refresh": new_refresh}, timeout=10)
     assert logout.status_code == 200 and logout.json()["data"] is None
     assert "Max-Age=0" in logout.headers["Set-Cookie"]
     session.refresh_from_db()
     assert session.is_revoked
-    revoked = client.get(f"{base}/api/v1/users/me", timeout=10)
+    revoked = client.get(f"{base}/users/me", timeout=10)
     assert revoked.status_code == 401 and revoked.headers["WWW-Authenticate"].startswith("Bearer")
     client.headers.pop("Authorization")
     assert (
-        client.post(
-            f"{base}/api/v1/auth/refresh", json={"refresh": new_refresh}, timeout=10
-        ).status_code
-        == 401
+        client.post(f"{base}/refresh", json={"refresh": new_refresh}, timeout=10).status_code == 401
     )
 
 
@@ -126,9 +117,7 @@ def test_forgot_reset_login_and_old_credentials_revoked(http_client, live_server
     response = http_login(client, base, user)
     old_refresh = response.cookies["refresh_token"]
     client.cookies.clear()
-    forgot = client.post(
-        f"{base}/api/v1/auth/password-reset/request", json={"email": user.email}, timeout=10
-    )
+    forgot = client.post(f"{base}/password-reset/request", json={"email": user.email}, timeout=10)
     assert forgot.status_code == 200, forgot.json()
     event = OutboxEvent.objects.get(
         aggregate_id=user.pk, event_type="identity.password_reset.requested"
@@ -137,25 +126,20 @@ def test_forgot_reset_login_and_old_credentials_revoked(http_client, live_server
     assert forgot.json()["data"] is None
     assert secret["token"] not in json.dumps(forgot.json())
     reset_data = {**secret, "new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
-    reset = client.post(f"{base}/api/v1/auth/password-reset/confirm", json=reset_data, timeout=10)
+    reset = client.post(f"{base}/password-reset/confirm", json=reset_data, timeout=10)
     assert reset.status_code == 200, reset.json()
-    assert client.get(f"{base}/api/v1/users/me", timeout=10).status_code == 401
+    assert client.get(f"{base}/users/me", timeout=10).status_code == 401
     client.headers.pop("Authorization")
     assert (
-        client.post(
-            f"{base}/api/v1/auth/refresh", json={"refresh": old_refresh}, timeout=10
-        ).status_code
-        == 401
+        client.post(f"{base}/refresh", json={"refresh": old_refresh}, timeout=10).status_code == 401
     )
     assert (
-        client.post(
-            f"{base}/api/v1/auth/password-reset/confirm", json=reset_data, timeout=10
-        ).status_code
+        client.post(f"{base}/password-reset/confirm", json=reset_data, timeout=10).status_code
         == 400
     )
     assert (
         client.post(
-            f"{base}/api/v1/auth/login",
+            f"{base}/login",
             json={"email": user.email, "password": PASSWORD},
             timeout=10,
         ).status_code
@@ -175,9 +159,7 @@ def test_forgot_is_neutral_and_does_not_enqueue_ineligible_accounts(state):
         user.account_status = state
     user.save()
     email = "unknown@example.edu.vn" if state == "unknown" else user.email
-    response = APIClient().post(
-        "/api/v1/auth/password-reset/request", {"email": email}, format="json"
-    )
+    response = APIClient().post("/password-reset/request", {"email": email}, format="json")
     assert response.status_code == 200
     assert not OutboxEvent.objects.filter(event_type="identity.password_reset.requested").exists()
 
@@ -195,7 +177,7 @@ def test_change_password_revokes_current_and_other_devices(
         second_login = http_login(second, base, user)
         first.cookies.clear()
         response = first.post(
-            f"{base}/api/v1/auth/password-change",
+            f"{base}/password-change",
             json={
                 "old_password": PASSWORD,
                 "new_password1": NEW_PASSWORD,
@@ -205,12 +187,12 @@ def test_change_password_revokes_current_and_other_devices(
         )
         assert response.status_code == 200, response.json()
         for client, logged_in in [(first, first_login), (second, second_login)]:
-            assert client.get(f"{base}/api/v1/users/me", timeout=10).status_code == 401
+            assert client.get(f"{base}/users/me", timeout=10).status_code == 401
             client.headers.pop("Authorization")
             client.cookies.clear()
             assert (
                 client.post(
-                    f"{base}/api/v1/auth/refresh",
+                    f"{base}/refresh",
                     json={"refresh": logged_in.cookies["refresh_token"]},
                     timeout=10,
                 ).status_code
@@ -218,7 +200,7 @@ def test_change_password_revokes_current_and_other_devices(
             )
         assert (
             first.post(
-                f"{base}/api/v1/auth/login",
+                f"{base}/login",
                 json={"email": user.email, "password": PASSWORD},
                 timeout=10,
             ).status_code
@@ -237,7 +219,7 @@ def test_change_password_revokes_current_and_other_devices(
 )
 def test_register_rejects_identity_privilege_or_weak_password(updates, signup_data):
     data = {**signup_data, **updates}
-    response = APIClient().post("/api/v1/auth/register", data, format="json")
+    response = APIClient().post("/register", data, format="json")
     assert response.status_code == 400
     assert not User.objects.filter(email=data["email"]).exists()
 
@@ -251,21 +233,21 @@ def test_resend_invalidates_old_activation_and_imported_user_sets_password():
     )
     EmailAddress.objects.create(user=user, email=user.email, verified=False, primary=True)
     client = APIClient()
-    client.post("/api/v1/auth/activation/resend", {"email": user.email}, format="json")
+    client.post("/activation/resend", {"email": user.email}, format="json")
     old_key = mail_secret(OutboxEvent.objects.latest("created_at"))["key"]
-    client.post("/api/v1/auth/activation/resend", {"email": user.email}, format="json")
+    client.post("/activation/resend", {"email": user.email}, format="json")
     new_key = mail_secret(OutboxEvent.objects.latest("created_at"))["key"]
     assert old_key != new_key
     assert (
         client.post(
-            "/api/v1/auth/activate",
+            "/activate",
             {"key": old_key, "new_password1": PASSWORD, "new_password2": PASSWORD},
             format="json",
         ).status_code
         == 404
     )
     response = client.post(
-        "/api/v1/auth/activate",
+        "/activate",
         {"key": new_key, "new_password1": PASSWORD, "new_password2": PASSWORD},
         format="json",
     )
@@ -276,12 +258,12 @@ def test_resend_invalidates_old_activation_and_imported_user_sets_password():
 def test_missing_mail_key_rolls_back_signup_equally_for_recovery(settings, signup_data):
     settings.IDENTITY_MAIL_KEY = None
     client = APIClient()
-    response = client.post("/api/v1/auth/register", signup_data, format="json")
+    response = client.post("/register", signup_data, format="json")
     assert response.status_code == 503
     assert not User.objects.filter(email=signup_data["email"]).exists()
     assert (
         client.post(
-            "/api/v1/auth/password-reset/request",
+            "/password-reset/request",
             {"email": "unknown@example.edu.vn"},
             format="json",
         ).status_code
