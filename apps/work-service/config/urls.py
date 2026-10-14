@@ -1,6 +1,7 @@
 from django.db import connection
 from django.http import JsonResponse
 from django.urls import path
+from drf_spectacular.views import SpectacularAPIView
 
 
 def healthz(request):
@@ -14,4 +15,13 @@ def healthz(request):
 
 urlpatterns = [
     path("healthz", healthz),
+    path(
+        "api/v1/schema/",
+        SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]),
+    ),
 ]
+
+handler400 = "common.http_errors.bad_request"
+handler403 = "common.http_errors.forbidden"
+handler404 = "common.http_errors.not_found"
+handler500 = "common.http_errors.server_error"
