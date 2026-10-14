@@ -83,16 +83,38 @@ CLASSROOM_ADAPTER = os.environ.get(
     "WORK_CLASSROOM_ADAPTER", "infrastructure.classroom.UnavailableClassroom"
 )
 CLASSROOM_DEV_ENABLED = os.environ.get("WORK_CLASSROOM_DEV_ENABLED", "false").lower() == "true"
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+KAFKA_WORK_TOPIC = "utask.work.events"
+IDENTITY_KAFKA_TOPIC = os.environ.get("WORK_IDENTITY_KAFKA_TOPIC", "")
+CELERY_BROKER_URL = os.environ.get("WORK_REDIS_URL", "redis://redis:6379/2")
 CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_ROUTES = {"apps.messaging.tasks.drain_outbox": {"queue": "work-publisher"}}
+CELERY_BEAT_SCHEDULE = {"outbox": {"task": "apps.messaging.tasks.drain_outbox", "schedule": 5.0}}
 
 WORK_STORAGE_ADAPTER = os.environ.get("WORK_STORAGE_ADAPTER", "infrastructure.storage.R2Storage")
 WORK_R2_ENDPOINT = os.environ.get("WORK_R2_ENDPOINT", "")
 WORK_R2_ACCESS_KEY = os.environ.get("WORK_R2_ACCESS_KEY", "")
 WORK_R2_SECRET_KEY = os.environ.get("WORK_R2_SECRET_KEY", "")
 WORK_R2_BUCKET = os.environ.get("WORK_R2_BUCKET", "")
+CELERY_BEAT_SCHEDULE.update(
+    {
+        "deadline": {"task": "apps.tasks.tasks.scan_deadlines", "schedule": 300.0},
+        "attachment-cleanup": {
+            "task": "apps.collaboration.tasks.cleanup_attachments",
+            "schedule": 300.0,
+        },
+    }
+)
 
 WORK_AI_ADAPTER = os.environ.get("WORK_AI_ADAPTER", "infrastructure.ai.UnavailableProposals")
 
+
+CELERY_TASK_ROUTES.update(
+    {
+        "apps.tasks.tasks.scan_deadlines": {"queue": "work-publisher"},
+        "apps.collaboration.tasks.cleanup_attachments": {"queue": "work-publisher"},
+    }
+)
 
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
