@@ -77,6 +77,12 @@ IDENTITY_WORK_SERVICE_KEY = os.environ.get("IDENTITY_WORK_SERVICE_KEY", "")
 IDENTITY_JWT_ISSUER = os.environ.get("IDENTITY_JWT_ISSUER", "https://identity.utask.internal")
 IDENTITY_JWT_AUDIENCE = os.environ.get("IDENTITY_JWT_AUDIENCE", "utask-platform")
 BACKEND_HTTP_TIMEOUT = (2, 5)
+# No Classroom routes exist in this repository yet. Configure a verified adapter import
+# when the owner supplies its real route/schema; never use test fixtures in production.
+CLASSROOM_ADAPTER = os.environ.get(
+    "WORK_CLASSROOM_ADAPTER", "infrastructure.classroom.UnavailableClassroom"
+)
+CLASSROOM_DEV_ENABLED = os.environ.get("WORK_CLASSROOM_DEV_ENABLED", "false").lower() == "true"
 CELERY_TASK_IGNORE_RESULT = True
 
 
