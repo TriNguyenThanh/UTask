@@ -175,6 +175,9 @@ def test_transaction_failure_preserves_handoff_for_retry(repository, payload, ph
 
 
 def test_multiple_api_consumers_apply_failures_once(repository, payload):
+    # Test inbox cần 8 job pending; admission có bộ kiểm thử riêng.
+    repository.requests_per_minute = 8
+    repository.max_active_requests_per_user = 8
     for i in range(8):
         stored = running_request(repository, payload, str(i))
         response = failed_response(

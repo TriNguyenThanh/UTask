@@ -63,6 +63,8 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_BROKER_URL` | Redis broker; không dùng Redis làm result repository |
 | `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext xóa khi bàn giao kết quả hoặc terminal |
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
+| `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
+| `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
 | `AI_JWT_PUBLIC_KEY` hoặc `AI_JWT_JWKS_URL` | Public key PEM hoặc JWKS của Identity; chỉ chọn một |
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
@@ -154,7 +156,8 @@ PYTHONPATH=src uv run python -m jobs.dispatcher
 
 Settings tự đọc hai file dù cwd khác. URL DB/broker host phải cấu hình phù
 hợp. Mock đọc fixture trong package và không cần microservice/server khác.
-Chạy migration trước khi nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
+Chạy migration tới `head` (hiện gồm `0003`, hai index chống spam) trước khi
+nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
 POST trả `202`, request chỉ được xử lý khi pipeline hoạt động. JWT phải ký
 hợp lệ; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu
 hình sẽ từ chối request có target. `/healthz` kiểm tra process, không thay

@@ -96,6 +96,28 @@ không bắt buộc singleton. ADK session chỉ ở memory trong một job, kh�
 request repository. Nguồn schema là [migration](../../apps/ai-service/migrations/versions/0001_request_pipeline.py),
 không tạo bảng khi API startup.
 
+### Giới hạn tối thiểu chống spam
+
+**Đã triển khai trong source:** tiếp nhận tối đa 5 request mới/user trong
+cửa sổ trượt 60 giây và tối đa 2 request `queued`/`running`/user, chỉnh bằng
+config. PostgreSQL khóa transaction theo user; replay/conflict được xử lý
+trước giới hạn và request/delivery chỉ được tạo khi còn chỗ. Nhiều API process
+dùng chung giới hạn, không có bộ đếm riêng trong memory. Vượt giới hạn trả
+`429` và `Retry-After`; xem [API](api.md#giới-hạn-chống-spam).
+
+Budget model/tool/token và timeout mỗi lần chạy, reauthorization tại worker,
+domain tools cố định và proposal không tự ghi nghiệp vụ tiếp tục áp dụng.
+Không thêm quota theo ngày, framework bảo mật hoặc service mới.
+
+**Thiết kế mục tiêu, chưa triển khai:** khi có chatbot, dùng lại giới hạn
+tiếp nhận/budget/quyền; chatbot ban đầu đọc context và trả lời/đề xuất. Khi
+triển khai lịch kiểm tra tiến độ, chạy 06:00 và 22:00 theo `Asia/Ho_Chi_Minh`,
+mỗi project một job mỗi khung giờ. Lưu khóa occurrence để retry không tạo job
+mới, không chạy chồng cùng project hoặc chạy bù hàng loạt sau restart. Job
+chỉ phân tích/báo cáo, không tự sửa task. Thông báo cùng cảnh báo cần chống
+gửi lặp tại Notification khi có contract và luồng gửi thực tế. Chưa tạo
+scheduler, conversation hoặc notification runtime trong thay đổi này.
+
 ### Bàn giao kết quả worker cho API
 
 **Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**

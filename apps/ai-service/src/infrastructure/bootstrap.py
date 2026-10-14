@@ -24,5 +24,7 @@ def build_repository(settings: Settings):
         dispatch_lease=settings.dispatch_lease_seconds,
         redelivery=settings.redelivery_seconds,
         max_dispatch_attempts=settings.max_dispatch_attempts,
+        requests_per_minute=settings.requests_per_minute,
+        max_active_requests_per_user=settings.max_active_requests_per_user,
     )
     return repository, engine

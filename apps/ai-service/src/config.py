@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     poll_interval_seconds: float = Field(default=0.1, gt=0)
     completion_reconcile_seconds: float = Field(default=5, gt=0)
     queue_timeout_seconds: float = Field(default=300, gt=0)
+    requests_per_minute: int = Field(default=5, ge=1)
+    max_active_requests_per_user: int = Field(default=2, ge=1)
     max_model_calls: int = Field(default=4, ge=1)
     max_context_tool_calls: int = Field(default=5, ge=0)
     max_output_tokens: int = Field(default=4000, ge=1)

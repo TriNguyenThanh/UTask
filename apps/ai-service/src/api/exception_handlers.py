@@ -9,8 +9,19 @@ from errors import ServiceError, failure, public_error
 
 def error_response(request: Request, error: ServiceError) -> JSONResponse:
     error = public_error(error)
+    headers = {}
+    retry_after = error.details.get("retry_after_seconds")
+    if (
+        error.status_code == 429
+        and error.code == "RATE_LIMITED"
+        and error.details.get("reason") in {"REQUEST_RATE_LIMIT", "ACTIVE_REQUEST_LIMIT"}
+        and type(retry_after) is int
+        and retry_after > 0
+    ):
+        headers["Retry-After"] = str(retry_after)
     return JSONResponse(
         status_code=error.status_code,
+        headers=headers,
         content={
             "error": {
                 "code": error.code,
