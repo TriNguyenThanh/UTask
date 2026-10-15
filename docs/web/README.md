@@ -23,6 +23,9 @@ Xem thêm:
   lớp, tổng quan, sinh viên, nhóm) chạy trên dữ liệu Demo MSW; chưa có thao tác
   ghi, workspace Teacher hay backend. Giao diện theo thiết kế Stitch và màn Giám sát
   (tín hiệu theo quy tắc cố định): xem mục 14 của tài liệu này; dashboard nhóm và workspace chỉ xem cho giảng viên: mục 15; form tạo lớp, import CSV, nháp phản hồi, xem trước điều chỉnh nhóm và tín hiệu rủi ro (mức giao diện, chưa có hợp đồng ghi): mục 16.
+- [Board và Backlog: kéo thả](kanban-board.md) — cách đổi trạng thái, thứ tự và
+  Sprint của issue (Demo MSW), quyền theo vai trò, trợ năng, nhu cầu gửi Project
+  Service.
 - [Lộ trình frontend](frontend-roadmap.md) — hiện trạng backend và frontend,
   các mảng công việc, thứ tự các đợt từ mock sang tích hợp thật.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,

@@ -67,7 +67,7 @@ Toàn bộ dữ liệu của `apps/web` hiện đi qua MSW. Không trang nào g�
 | Đăng nhập, quên và đặt lại mật khẩu | **Demo MSW** | Login qua MSW; quên và đặt lại mật khẩu không gọi API | Chỉ login | SSO Google/GitHub, gửi email, đặt lại mật khẩu |
 | My Work, danh sách môn | **Demo MSW** | `my-work/*` | Không | Tham gia môn, duyệt PR, kết nối GitHub, tạo task |
 | Trang nhóm của môn | **Demo MSW** | `courses/:id` | Tạo nhóm | Xin tham gia, hủy yêu cầu, nộp đề tài |
-| Workspace (Backlog, Board, Code, Issue) | **Demo MSW** | `projects/*` | Không (checkbox subtask chỉ đổi state cục bộ) | Tạo Epic/issue, đổi trạng thái, hoàn thành Sprint, AI, đồng bộ |
+| Workspace (Backlog, Board, Code, Issue) | **Demo MSW** | `projects/*` | Board và Backlog: kéo thả, menu di chuyển, đổi trạng thái, cờ bị chặn ([kanban-board.md](kanban-board.md)); checkbox subtask vẫn chỉ đổi state cục bộ | Tạo Epic/issue, sửa nội dung, hoàn thành Sprint, AI, đồng bộ |
 | Settings dự án | **Demo MSW** | `projects/:id/settings` | Lưu khóa AI | Kiểm tra kết nối, xóa khóa |
 | Thông báo | **Demo MSW** | `notifications` | Đánh dấu đã đọc | — |
 | Settings tài khoản | **Demo MSW** | `me/settings` | Sửa hồ sơ, ngắt GitHub | Đổi mật khẩu (chỉ toast), đăng xuất thiết bị khác, OAuth |
@@ -98,8 +98,7 @@ bằng mã, màn cấu hình project, màn AI sinh backlog, màn kết nối rep
 - Không có test e2e. Không có `Dockerfile` hay bước deploy cho web.
 - Test `MyWork.test.tsx` "surfaces overdue tasks…" sai khi chạy trong khoảng
   00:00–12:00 giờ địa phương ([teacher-flow.md §16.10](teacher-flow.md#1610-sửa-sau-review)).
-- `@vitejs/plugin-react` nằm ở `dependencies`; `@atlaskit/pragmatic-drag-and-drop`
-  đã cài nhưng chưa được import (Board chưa kéo thả).
+- `@vitejs/plugin-react` nằm ở `dependencies`.
 - [HomeRoute.tsx](../../apps/web/src/app/routes/HomeRoute.tsx) không được tham
   chiếu ở đâu.
 - [enableMocking.ts](../../apps/web/src/mocks/enableMocking.ts) bật MSW trong cả
@@ -130,7 +129,9 @@ bằng mã, màn cấu hình project, màn AI sinh backlog, màn kết nối rep
    Classroom/Project quyết định. Frontend chỉ ẩn hoặc vô hiệu hóa; backend là
    nơi quyết định cuối. Giữ chính sách 404 cho tài nguyên ngoài quyền và 403 cho
    thiếu quyền hành động.
-6. **Không thành công giả**: nút ghi chỉ bật khi có hợp đồng; mọi mutation xử lý
+6. **Không thành công giả**: nút ghi chỉ bật khi có hợp đồng, **trừ** các thao tác ghi
+   của Board và Backlog chạy trên Demo MSW, chỉ bật khi `VITE_ENABLE_MOCKS=true` và
+   tắt với backend thật ([kanban-board.md §1](kanban-board.md#1-phạm-vi-và-nhãn-trạng-thái)); mọi mutation xử lý
    lỗi theo HTTP status và `error.code`, không theo `message`.
 7. **AI chỉ đề xuất**: mọi kết quả AI là bản nháp; chỉ API của service sở hữu dữ
    liệu mới tạo hoặc đổi dữ liệu thật, sau khi người dùng xác nhận.
@@ -203,11 +204,11 @@ service tương ứng nên giai đoạn đầu chỉ dựng giao diện trên De
 
 - **User story**: US-2.4, 3.1, 3.2, 3.3, 4.1 (P0); US-3.4 (P1).
 - **Backend**: **Chưa triển khai**.
-- **Hiện trạng frontend**: Backlog, Board, Code, IssuePanel đọc được trên MSW; Board không kéo thả; IssuePanel chỉ hiển thị comment; checkbox subtask chỉ đổi state cục bộ (R12 trong teacher-flow).
+- **Hiện trạng frontend**: Backlog, Board, Code, IssuePanel đọc được trên MSW; Board và Backlog đã kéo thả và đổi trạng thái trên Demo MSW ([kanban-board.md](kanban-board.md)); IssuePanel chỉ hiển thị comment; checkbox subtask chỉ đổi state cục bộ (R12 trong teacher-flow).
 - **Việc frontend**:
   - Cấu hình project (tên, mô tả, mục tiêu, tech stack, thời gian).
   - Leader tạo, sửa, sắp xếp, gán, lưu trữ task; Member cập nhật task được giao, đánh dấu blocked kèm lý do.
-  - Kanban kéo thả bằng `@atlaskit/pragmatic-drag-and-drop` (đã cài), cập nhật lạc quan và hoàn tác khi lỗi; có phương án dùng bàn phím.
+  - Kanban kéo thả bằng `@atlaskit/pragmatic-drag-and-drop`, cập nhật lạc quan và hoàn tác khi lỗi, có menu thay thế cho bàn phím: **Demo MSW**, xem [kanban-board.md](kanban-board.md).
   - Tìm kiếm, lọc theo trạng thái, assignee, priority, deadline; hiển thị rõ task quá hạn và blocked (cần `dueAt`, trạng thái blocked trong `Issue`).
   - Subtask lưu thật, bỏ state cục bộ.
   - Comment có mention; Teacher gửi phản hồi cấp task; lịch sử thay đổi.
@@ -301,10 +302,10 @@ Cột "UI" và "MSW" mô tả `apps/web` hiện tại; "Hợp đồng" và "Back
 | US-2.3 Quản lý thành viên nhóm | P0 | D | Chưa | Chưa | Không | Không | 2, 4 |
 | US-2.4 Cấu hình project | P0 | E | Chưa | Chưa | Không | Không | 2, 4 |
 | US-2.5 Teacher điều chỉnh nhóm | P1 | D | Một phần (xem trước) | Chỉ đọc | Không | Không | 5 |
-| US-3.1 Quản lý backlog | P0 | E | Chỉ đọc | Chỉ đọc | Không | Không | 2, 4 |
-| US-3.2 Backlog và Kanban | P0 | E | Một phần (không kéo thả) | Chỉ đọc | Không | Không | 2, 4 |
-| US-3.3 Cập nhật task | P0 | E | Chưa | Chưa | Không | Không | 2, 4 |
-| US-3.4 Sprint | P1 | E | Chỉ đọc | Chỉ đọc | Không | Không | 5 |
+| US-3.1 Quản lý backlog | P0 | E | Một phần (sắp thứ tự, đổi Sprint; chưa tạo/sửa) | Có (Demo) | Không | Không | 2, 4 |
+| US-3.2 Backlog và Kanban | P0 | E | Một phần (kéo thả, lọc trên URL, hiện bị chặn/quá hạn) | Có (Demo) | Không | Không | 2, 4 |
+| US-3.3 Cập nhật task | P0 | E | Một phần (đổi trạng thái, bị chặn kèm lý do; chưa sửa nội dung) | Có (Demo) | Không | Không | 2, 4 |
+| US-3.4 Sprint | P1 | E | Một phần (đổi phạm vi Sprint kèm lý do; chưa tạo/kết thúc Sprint) | Có (Demo) | Không | Không | 5 |
 | US-4.1 Comment, mention | P0 | E | Chỉ đọc | Chỉ đọc | Không | Không | 2, 4 |
 | US-4.2 Thông báo | P0 | G | Một phần | Có | Không | Không | 4 |
 | US-4.3 Dashboard nhóm | P1 | H | Một phần (Teacher) | Chỉ đọc | Không | Không | 5 |
