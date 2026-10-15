@@ -16,9 +16,9 @@ def test_same_value_mutation_keeps_field_audit_and_follows_resource_version_cont
     leader, task_route, create = task_api
     task = create()
     project_id = task["project_id"]
-    root = f"/api/v1/projects/{project_id}/"
+    root = f"/projects/{project_id}/"
     if resource == "task-links":
-        path = f"/api/v1/tasks/{task['id']}/"
+        path = f"/tasks/{task['id']}/"
         body = {
             "expected_version": 1,
             "assignee_ids": task["assignee_ids"],
@@ -45,7 +45,7 @@ def test_same_value_mutation_keeps_field_audit_and_follows_resource_version_cont
         body = {"expected_version": project.version, "name": project.name}
     else:
         row = Sprint.objects.create(project_id=project_id, name="Stable")
-        path = f"/api/v1/sprints/{row.pk}/"
+        path = f"/sprints/{row.pk}/"
         body = {"expected_version": 1, "name": row.name}
     before = effect_state(project_id)
     reply = (

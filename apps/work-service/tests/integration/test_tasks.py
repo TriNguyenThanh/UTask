@@ -37,7 +37,7 @@ def test_create_read_replay_and_scope(task_api, actors, client_for):
     assert listing["data"][0]["id"] == task["id"]
     assert listing["data"][0]["state"]["id"] == task["state_id"]
     assert listing["data"][0]["assignees"][0]["user_id"] == str(actors["member"])
-    detail_route = f"/api/v1/tasks/{task['id']}/"
+    detail_route = f"/tasks/{task['id']}/"
     assert client_for(actors["member"]).get(detail_route).json()["data"]["title"] == task["title"]
     assert client_for(actors["teacher"]).get(detail_route).status_code == 200
     assert client_for(actors["outsider"]).get(detail_route).status_code == 404
@@ -101,7 +101,7 @@ def test_create_audit_outbox_failure_rolls_back(task_api, reject_outbox_event):
 def test_member_patch_version_and_lifecycle(task_api, client_for, actors):
     leader, route, create = task_api
     task = create()
-    detail = f"/api/v1/tasks/{task['id']}/"
+    detail = f"/tasks/{task['id']}/"
     member = client_for(actors["member"])
     response = member.patch(detail, {"expected_version": 1, "story_points": 8}, format="json")
     assert response.status_code == 403

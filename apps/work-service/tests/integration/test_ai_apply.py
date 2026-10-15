@@ -31,7 +31,7 @@ def test_ai_batch_replay_mixed_old_new_and_immutable_hash(task_api, ai, settings
     original_hash = first.ai_payload_hash
     assert (
         leader.patch(
-            f"/api/v1/tasks/{first.pk}/",
+            f"/tasks/{first.pk}/",
             {"expected_version": first.version, "title": "User edit"},
             format="json",
         ).status_code
@@ -67,9 +67,7 @@ def test_ai_batch_replay_mixed_old_new_and_immutable_hash(task_api, ai, settings
         == 422
     )
     assert not IdempotencyRecord.objects.filter(idempotency_key="conflict").exists()
-    operation = leader.get(
-        f"/api/v1/projects/{project.pk}/ai-operations/{outcome['operation_id']}/"
-    )
+    operation = leader.get(f"/projects/{project.pk}/ai-operations/{outcome['operation_id']}/")
     assert operation.status_code == 200
     assert operation.json()["data"] == outcome
 
@@ -119,7 +117,7 @@ def test_ai_subtask_member_fields_parent_unchanged_and_unavailable(
             }
         ],
     }
-    subroute = f"/api/v1/tasks/{parent['id']}/subtasks/bulk-apply-ai/"
+    subroute = f"/tasks/{parent['id']}/subtasks/bulk-apply-ai/"
     denied = {**body, "subtasks": [{**body["subtasks"][0], "story_points": 3}]}
     assert (
         member.post(subroute, denied, format="json", HTTP_IDEMPOTENCY_KEY="denied").status_code

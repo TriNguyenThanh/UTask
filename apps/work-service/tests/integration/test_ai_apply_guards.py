@@ -29,7 +29,7 @@ def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
                 "priority": "HIGH",
             }
         )
-        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        route = f"/projects/{project.pk}/ai-actions/apply/"
         ai(project.pk, kind="ACTION", targets=[task["id"]])
     FixtureAI.proposals["proposal-1"] = object()
     before = effect_state(project.pk)
@@ -65,7 +65,7 @@ def test_ai_new_dependency_on_archived_applied_item_rolls_back_new_batch(task_ap
     source = next(row for row in first.json()["data"]["affected_tasks"] if row["local_id"] == "a")
     assert (
         leader.post(
-            f"/api/v1/tasks/{source['id']}/archive/",
+            f"/tasks/{source['id']}/archive/",
             {"expected_version": source["version"]},
             format="json",
         ).status_code
@@ -102,7 +102,7 @@ def test_ai_action_requires_authoritative_live_target_after_approval(task_api, a
     before = effect_state(project_id)
     tasks = list(Task.objects.order_by("id").values())
     reply = leader.post(
-        f"/api/v1/projects/{project_id}/ai-actions/apply/",
+        f"/projects/{project_id}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="dead-target",
@@ -120,7 +120,7 @@ def test_approved_action_input_requires_kind_specific_field_before_verifier(task
     before = effect_state(task["project_id"])
     body = action_payload({"kind": kind, "task_id": task["id"], "expected_version": 1})
     reply = leader.post(
-        f"/api/v1/projects/{task['project_id']}/ai-actions/apply/",
+        f"/projects/{task['project_id']}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="missing-action-field",
