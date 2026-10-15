@@ -26,13 +26,18 @@ Hạ tầng: PostgreSQL · Kafka · Redis · Cloudflare R2 ở production
 | Identity     | User, profile, global role, xác thực, access/refresh token và OAuth đăng nhập                                                         |
 | Work         | Project, ProjectMember, backlog, Epic/UserStory, Sprint, Task, assignment, label, Comment, Workflow, Activity và tiến độ task/project |
 | Classroom    | Môn học, lớp, giảng viên/sinh viên, Group/GroupMember, điểm danh, điểm số và liên kết nhóm–project                                    |
-| Integration  | GitHub App, repository, webhook, commit/branch/issue/PR và mapping task–GitHub                                                        |
+| Integration  | GitHub App, kết nối kỹ thuật repository, webhook, commit/branch/issue/PR và dữ kiện/ứng viên mapping task–GitHub |
 | Notification | Bản ghi thông báo, người nhận, kênh và trạng thái gửi                                                                                 |
 | AI           | Yêu cầu, context phục vụ phân tích và kết quả đề xuất; không sở hữu dữ liệu nghiệp vụ gốc                                             |
 
 Work Service có tên triển khai `work-service`. Tên Project Service trong tài
 liệu cũ chỉ cùng service này, không phải một microservice riêng. Giữ đường
 dẫn [docs/project-service/](../project-service/README.md) để bảo toàn liên kết.
+
+Work sở hữu liên kết Task–GitHub đã xác nhận và quyền thay đổi repository
+của Project. Integration thực hiện kết nối kỹ thuật theo Work command, cung
+cấp dữ kiện GitHub và không tự sửa Task. Ma trận quyền và phạm vi thu thập
+GitHub ở [Integration: phạm vi và quyền](../integration-service/scope-access.md).
 
 Tiến độ task/project thuộc Work; tính bằng công thức/quy tắc rõ ràng, không
 phụ thuộc AI. Không triển khai Progress Service riêng trong baseline ban đầu.
