@@ -1,0 +1,15 @@
+{
+  "intent": "backlog_generation",
+  "target": {
+    "type": "project",
+    "id": "11111111-1111-4111-8111-111111111111"
+  },
+  "input": {
+    "description": "Đề xuất backlog cho cổng quản lý bài tập nhóm theo context của project.",
+    "goals": [
+      "Mỗi task có acceptance criteria",
+      "Ưu tiên chức năng quản lý task và sprint"
+    ]
+  },
+  "output_schema_version": "current"
+}

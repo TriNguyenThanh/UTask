@@ -2,6 +2,7 @@ import { ChevronsDown, ChevronsUp, Clock, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { MyTask, TaskPriority } from "@/features/my-work/types";
+import { isOverdue as taskIsOverdue } from "@/features/my-work/taskFilters";
 import { cn } from "@/lib/utils";
 
 const priorityMeta: Record<TaskPriority, { label: string; icon: typeof ChevronsUp; classes: string; iconClasses: string }> = {
@@ -46,7 +47,8 @@ function formatDue(dueAt: string, now: Date): string {
 export function TaskRow({ task, now }: { task: MyTask; now: Date }) {
   const priority = priorityMeta[task.priority];
   const PriorityIcon = priority.icon;
-  const isOverdue = new Date(task.dueAt) < now;
+  // Done tasks are never flagged overdue.
+  const isOverdue = taskIsOverdue(task, now);
 
   return (
     <li className="group flex flex-col gap-3 px-2 py-3.5 transition-colors hover:bg-secondary/50 sm:flex-row sm:items-center sm:gap-4">
@@ -58,23 +60,18 @@ export function TaskRow({ task, now }: { task: MyTask; now: Date }) {
       </span>
 
       <div className="min-w-0 flex-1">
-        <Link
-          to={`/projects/${task.issueKey.split("-")[0].toLowerCase()}/board`}
-          className="block truncate text-sm font-semibold text-foreground transition-colors hover:text-primary"
-        >
-          {task.title}
-        </Link>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-          <span>
-            {task.courseCode} · {task.projectName}
+        {task.projectId ? (
+          <Link
+            to={`/projects/${encodeURIComponent(task.projectId)}/board?issue=${encodeURIComponent(task.issueKey)}`}
+            className="block truncate text-sm font-semibold text-foreground transition-colors hover:text-primary"
+          >
+            {task.title}
+          </Link>
+        ) : (
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {task.title}
           </span>
-          {task.subtasks ? (
-            <span aria-label={`${task.subtasks.completed} trên ${task.subtasks.total} subtask đã xong`}>
-              • {task.subtasks.completed}/{task.subtasks.total} subtask đã xong
-            </span>
-          ) : null}
-          {task.branchName ? <span className="font-mono">• {task.branchName}</span> : null}
-        </div>
+        )}
       </div>
 
       <span

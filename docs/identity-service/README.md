@@ -6,11 +6,32 @@ nằm trong [đặc tả API](../architecture/Identity_Service_API_Specification
 Schema OpenAPI local được cung cấp tại `/openapi/`; qua gateway staging là
 `/api/auth/openapi/`.
 
+Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>),
+mục 4.1 và 7, service dùng Python + Django + DRF, Django Authentication,
+JWT access token và refresh token; không dùng Keycloak ở giai đoạn hiện tại.
+
+Identity Service sở hữu tài khoản, hồ sơ, vai trò toàn hệ thống, xác thực,
+token và phiên/refresh token. Các service khác dùng `user_id` làm ID tham chiếu;
+chúng không đọc Identity DB.
 **Phạm vi:** API lõi có source và kiểm thử local. Google/GitHub OAuth và avatar R2 được
 mở bằng feature flags khi đủ cấu hình. Provider thật, gửi email, publisher Kafka và
 luồng tích hợp giữa các service chưa được nghiệm thu đầy đủ.
 
 <a id="trach-nhiem-va-du-lieu"></a>
+
+Phạm vi bao gồm password reset và OAuth mở rộng Google/GitHub nếu sản phẩm
+cần; có thể dùng `django-allauth`, chưa khẳng định dependency đã được cài.
+Mật khẩu dùng Django password hashing; login và endpoint nhạy cảm cần rate
+limit. API phải dùng HTTPS ngoài môi trường local phù hợp.
+
+Các service xác thực token nhưng không truy cập Identity DB. Phân quyền kết
+hợp global RBAC (Admin, Teacher, User) với quyền trên tài nguyên/project
+(Leader/Owner, Member). Identity cấp danh tính và vai trò toàn hệ thống;
+service sở hữu tài nguyên kiểm tra membership và quyền nghiệp vụ ở backend.
+Cơ chế key/token verification cụ thể cần hợp đồng xác thực, không suy ra từ
+identity header bootstrap.
+
+Xem thêm: [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md).
 
 ## Trách nhiệm và dữ liệu
 
@@ -58,22 +79,22 @@ trên mạng Compose; local là `http://localhost:8001`. Gateway bỏ tiền t�
 `/api/auth/login` được chuyển thành `/login`.
 Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `/api/v1/admin` không còn được đăng ký. Routes `/api/v1/internal/` dành cho backend và bị chặn ở gateway.
 
-| Nhóm | API | Quyền/đặc điểm |
-| --- | --- | --- |
-| Đăng ký | POST `/register` | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key |
-| Kích hoạt | POST `/activate`, `/activation/resend` | Anonymous; key dùng một lần, resend vô hiệu key cũ |
-| Login/refresh | POST `/login`, `/refresh` | Login email/username; refresh bằng body JWT hoặc cookie |
-| Password | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change` | Request/confirm anonymous; change cần Bearer và password cũ |
-| Logout | POST `/logout`, `/logout-all` | Bearer |
-| Thiết bị | GET `/sessions`; DELETE `/sessions/{session_id}` | Bearer; phiên thuộc user hiện tại |
-| Hồ sơ cá nhân | GET/PATCH `/users/me` | Bearer; không tự đổi role/email/MSSV qua PATCH |
-| Tra cứu | GET `/users/{user_id}`; POST `/users/batch` | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy |
-| Quản trị | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình |
-| Kiểm tra phiên | POST `/api/v1/internal/auth/session-status` | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai` |
-| Cấp sinh viên | POST `/api/v1/internal/users/provision-students` | Classroom key + actor Bearer TEACHER/SYSTEM_ADMIN + Idempotency-Key UUID |
-| Resend nội bộ | POST `/api/v1/internal/users/{user_id}/resend-activation` | Classroom key + actor Bearer; user pending đủ điều kiện |
-| GitHub mapping | GET `/api/v1/internal/users/{user_id}/oauth/GITHUB` | Integration key; mapping có thể là null |
-| Khóa công khai | GET `/.well-known/jwks.json` | Anonymous; `keys` ở root |
+| Nhóm           | API                                                                                                   | Quyền/đặc điểm                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Đăng ký        | POST `/register`                                                                                      | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key             |
+| Kích hoạt      | POST `/activate`, `/activation/resend`                                                                | Anonymous; key dùng một lần, resend vô hiệu key cũ                       |
+| Login/refresh  | POST `/login`, `/refresh`                                                                             | Login email/username; refresh bằng body JWT hoặc cookie                  |
+| Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`                         | Request/confirm anonymous; change cần Bearer và password cũ              |
+| Logout         | POST `/logout`, `/logout-all`                                                                         | Bearer                                                                   |
+| Thiết bị       | GET `/sessions`; DELETE `/sessions/{session_id}`                                                      | Bearer; phiên thuộc user hiện tại                                        |
+| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; không tự đổi role/email/MSSV qua PATCH                           |
+| Tra cứu        | GET `/users/{user_id}`; POST `/users/batch`                                                           | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy  |
+| Quản trị       | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình                 |
+| Kiểm tra phiên | POST `/api/v1/internal/auth/session-status`                                                           | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai`       |
+| Cấp sinh viên  | POST `/api/v1/internal/users/provision-students`                                                      | Classroom key + actor Bearer TEACHER/SYSTEM_ADMIN + Idempotency-Key UUID |
+| Resend nội bộ  | POST `/api/v1/internal/users/{user_id}/resend-activation`                                             | Classroom key + actor Bearer; user pending đủ điều kiện                  |
+| GitHub mapping | GET `/api/v1/internal/users/{user_id}/oauth/GITHUB`                                                   | Integration key; mapping có thể là null                                  |
+| Khóa công khai | GET `/.well-known/jwks.json`                                                                          | Anonymous; `keys` ở root                                                 |
 
 Tra cứu public/batch chỉ trả dữ liệu cho phép, không password/token/preferences của
 user khác. Provisioning nhận tối đa100 JSON rows và trả kết quả từng row. Cùng actor,
@@ -85,7 +106,7 @@ User mới từ provisioning chưa có password dùng được; khi activate c�
 Response nghiệp vụ có cùng envelope:
 
 ```json
-{"success":true,"message":"...","data":{},"meta":null,"error":null}
+{ "success": true, "message": "...", "data": {}, "meta": null, "error": null }
 ```
 
 Lỗi có `success=false`, `data=null`, `meta=null`, `error={"code":"...","details":[]}`.
@@ -125,12 +146,12 @@ Event được ghi vào outbox cùng thay đổi nghiệp vụ. Envelope v1 gồ
 `event_type`, `event_version`, `occurred_at`, `producer`, `aggregate_id`, `trace_id`, `data`.
 Nghiệp vụ ở `event.data`; consumer xử lý lặp bằng `event_id`.
 
-| Sự kiện | Mục đích |
-| --- | --- |
-| `identity.user.created`, `identity.user.updated` | Cập nhật bản sao thông tin user |
-| `identity.user.role_assigned`, `identity.user.role_revoked` | Thông báo đổi global role |
+| Sự kiện                                                                                           | Mục đích                                            |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `identity.user.created`, `identity.user.updated`                                                  | Cập nhật bản sao thông tin user                     |
+| `identity.user.role_assigned`, `identity.user.role_revoked`                                       | Thông báo đổi global role                           |
 | `identity.activation.requested`, `identity.student.imported`, `identity.password_reset.requested` | Notification gửi hướng dẫn; mail secret được mã hóa |
-| `identity.oauth.github_linked`, `identity.oauth.github_unlinked` | Thông báo liên kết GitHub cho Integration |
+| `identity.oauth.github_linked`, `identity.oauth.github_unlinked`                                  | Thông báo liên kết GitHub cho Integration           |
 
 Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tương ứng.
 Outbox có code ghi dữ liệu; publisher/ACK Kafka, gửi mail và consumer liên service cần

@@ -1,4 +1,6 @@
 import { Hourglass } from "lucide-react";
+import { Link } from "react-router-dom";
+
 import { Button } from "@/components/ui/button";
 import type { CourseSprint, SprintHealth } from "@/features/my-work/types";
 import { cn } from "@/lib/utils";
@@ -18,7 +20,11 @@ function daysUntil(iso: string, now: Date): number {
 export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: Date }) {
   const health = healthMeta[sprint.health];
   const daysLeft = daysUntil(sprint.deadline, now);
-  const percent = Math.round((sprint.completedPoints / sprint.totalPoints) * 100);
+  // totalPoints 0 → 0%; clamp so fixture drift can never show >100%.
+  const percent =
+    sprint.totalPoints > 0
+      ? Math.min(100, Math.max(0, Math.round((sprint.completedPoints / sprint.totalPoints) * 100)))
+      : 0;
 
   return (
     <li className="px-2 py-4 transition-colors hover:bg-secondary/50">
@@ -79,7 +85,9 @@ export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: D
                 )}
                 aria-hidden
               />
-              {daysLeft} ngày còn lại
+              {daysLeft < 0
+                ? `Quá hạn ${Math.abs(daysLeft)} ngày`
+                : `${daysLeft} ngày còn lại`}
             </span>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Hạn chót: {new Date(sprint.deadline).toLocaleDateString("vi-VN")}
@@ -97,19 +105,28 @@ export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: D
               </span>
             </p>
           </div>
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className="border-primary/30 bg-primary-subtle text-primary hover:bg-primary hover:text-primary-foreground"
-          >
-            <a
-              href={`#board-${sprint.courseCode.toLowerCase()}`}
-              aria-label={`Vào Board ${sprint.projectName} (sẽ khả dụng ở slice Board)`}
+          {sprint.projectId ? (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="border-primary/30 bg-primary-subtle text-primary hover:bg-primary hover:text-primary-foreground"
+            >
+              <Link to={`/projects/${sprint.projectId}/board`}>
+                Vào Board
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled
+              className="border-primary/30"
+              title="Workspace của nhóm chưa được khởi tạo"
             >
               Vào Board
-            </a>
-          </Button>
+            </Button>
+          )}
         </div>
       </div>
     </li>

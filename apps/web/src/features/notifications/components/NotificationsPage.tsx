@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import type {
   NotificationActionTarget,
   NotificationCategory,
@@ -73,13 +75,22 @@ function formatRelative(at: string, now: Date): string {
   return `${days} ngày trước`;
 }
 
-function targetUrl(target: NotificationActionTarget): string {
+/**
+ * Class-level notifications open the Student team page, which a teacher-only
+ * account cannot use (it answers "not found"). Such an account is sent to the
+ * class it manages instead. An account that is both teacher and student keeps
+ * the Student page: the notification does not say in which capacity it was
+ * delivered.
+ */
+function targetUrl(target: NotificationActionTarget, teacherOnly: boolean): string {
   switch (target.kind) {
     case "team-hub":
     case "team-formation":
     case "join-request":
     case "course-deadline":
-      return `/courses/${target.courseId}/team`;
+      return teacherOnly
+        ? `/teacher/courses/${target.courseId}`
+        : `/courses/${target.courseId}/team`;
     case "board-issue":
       return `/projects/${target.projectId}/board?issue=${target.issueKey}`;
     case "code":
@@ -108,6 +119,8 @@ function NotificationsSkeleton() {
 
 export function NotificationsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
   const notificationsQuery = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
@@ -156,7 +169,7 @@ export function NotificationsPage() {
       });
     }
     if (item.target) {
-      navigate(targetUrl(item.target));
+      navigate(targetUrl(item.target, teacherOnly));
     }
   }
 

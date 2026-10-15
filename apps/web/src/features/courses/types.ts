@@ -84,6 +84,8 @@ export interface CourseDetail {
     repository: string | null;
     /** Project key once the topic is approved and workspace provisioned. */
     projectKey: string | null;
+    /** Project workspace id once provisioned; null until the workspace exists. */
+    projectId: string | null;
   } | null;
   /** Present when membership.status === "none" — team formation data. */
   formation: {

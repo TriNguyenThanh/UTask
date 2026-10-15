@@ -1,85 +1,94 @@
 # Các luồng nghiệp vụ
 
-Các sơ đồ dưới đây mô tả **thiết kế mục tiêu**, không xác nhận các luồng đã
-được nối trong mã nguồn.
+**Trạng thái: Thiết kế mục tiêu.** Các luồng theo
+[baseline](../architecture/README.md), không xác nhận đã tích hợp runtime.
 
 ## Đăng ký và đăng nhập
 
 ```text
-Người dùng → Web → API Gateway → Identity Service → Identity DB
+User → Web → Nginx → Identity API → Identity DB
+                     ← JWT access token + refresh token
 ```
 
-Identity Service xác thực người dùng và quản lý token, phiên đăng nhập. Service
-khác dùng `user_id` làm tham chiếu, không đọc Identity DB.
+Service khác xác thực token, kiểm tra quyền tài nguyên và không đọc Identity DB.
 
-## Tạo lớp và nhóm
+## Tạo lớp, nhóm và project
 
 ```text
-Giảng viên → Classroom Service → Classroom DB → Kafka
-                                      └── sự kiện lớp/nhóm/thành viên
+Teacher → Classroom → Classroom DB + outbox → publisher → Kafka
+User → Work → Classroom API (nếu cần xác minh nhóm)
+            → Work DB + outbox → publisher → Kafka
 ```
 
-Classroom Service quản lý quan hệ lớp học và nhóm.
+Classroom sở hữu lớp/nhóm/GroupMember; Work sở hữu Project/ProjectMember.
+Liên kết nhóm–project chỉ dùng ID tham chiếu, không foreign key xuyên service.
 
-## Tạo project cho nhóm
+## Sprint, task và tiến độ
 
 ```text
-Người dùng → Project Service → Classroom Service (REST, nếu cần xác minh)
-                    │
-                    ├── lưu Project vào Project DB
-                    └── phát project.created qua Kafka
+User → Work API → Work DB + outbox → publisher → Kafka
+                  └── công thức/quy tắc tiến độ → dashboard qua Work API
 ```
 
-Project Service kiểm tra thông tin nhóm qua API đồng bộ khi cần câu trả lời
-ngay. Không dùng Kafka dạng hỏi-đáp cho việc kiểm tra đơn giản.
+Không tạo service riêng cho Project, Task, Sprint, Comment hoặc tiến độ trong
+baseline ban đầu. Dashboard không cần AI để tính và hiển thị chỉ số.
 
-## Quản lý sprint và task
+## GitHub
 
 ```text
-Người dùng → Project Service → Project DB
-                                  └── Kafka: project.*, sprint.*, task.*
+User → Integration → GitHub App installation / repository connection
+GitHub webhook → Integration: verify signature + chống lặp + chuẩn hóa
+               → Integration DB + outbox → publisher → Kafka
+Đồng bộ theo lịch / retry → Redis → Celery worker của Integration → GitHub
 ```
 
-Progress, AI và Notification có thể nhận các sự kiện cần thiết của mình.
+Integration là service duy nhất gọi GitHub API.
 
-## Kết nối GitHub và xử lý webhook
+## Yêu cầu AI
 
 ```text
-Người dùng → Integration Service ↔ GitHub
-GitHub → webhook → Integration Service → lưu dữ liệu → Kafka: github.*
+User → AI API / Application
+    → kiểm tra identity, input, quyền qua internal REST API và idempotency
+    → AI DB: request queued + bản ghi chờ giao job
+    → dispatcher → Redis → Celery worker của AI
+    → Application → Workflow/Agent → proposal có cấu trúc
+                      ↕
+              Context Tool Pool / Context Layer
+                      → internal REST API của Work / service sở hữu
+    → lưu succeeded/result hoặc failed/error vào AI DB
+
+User GET polling → AI API: kiểm tra ownership → đọc AI DB → status/result
+
+User xác nhận proposal → Work: kiểm tra quyền + business rule → áp dụng
 ```
 
-Integration Service xác minh, chuẩn hóa và lưu dữ liệu trước khi thông báo cho
-các service khác. Không service nào khác gọi GitHub API trực tiếp.
+Context nội bộ được lọc/tổng hợp trước khi đưa cho agent. Snapshot hoặc
+projection qua Kafka có thể bổ sung khi cần; AI không đọc database service khác.
 
-## Theo dõi tiến độ
+Pipeline này đã được chọn cho thiết kế AI, **chưa triển khai**. API và worker
+cùng thuộc AI Service, dùng chung persistence; worker không phải service mới
+và không cần phát event về API process để lưu kết quả. POST chờ tối đa 10 giây:
+thành công trả `200`, chưa xong trả `202`; workflow có hard timeout 30 giây.
+MVP dùng polling. Số worker/concurrency và SSE/WebSocket chưa chốt. Chi tiết
+nằm trong [pipeline AI](../ai-service/architecture.md),
+[API AI](../ai-service/api.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
+
+Kafka consumer của AI có thể nhận event Work/Integration để cập nhật context
+hoặc tạo job qua application và dispatcher khi có use case/contract; agent
+không consume event. Không dùng Kafka để hỏi quyền hoặc lấy context đồng bộ.
+Giao job, xử lý trùng, retry có giới hạn và dead-letter phải được thiết kế/test
+trước runtime; hết retry phải lưu `failed` cho client.
+
+Event hoàn tất AI có thể phục vụ Notification theo baseline; schema, topic
+và quy tắc phát phải được chốt trước khi triển khai. Không dùng event làm
+HTTP response cho client.
+
+## Thông báo
 
 ```text
-Sự kiện từ Project / Classroom / Integration → Kafka
-    → Progress Service → Progress DB → progress.* → Web dashboard
+Domain event → Kafka → Notification consumer → Notification DB
+                       └── Redis → Celery worker → email
 ```
 
-Progress Service áp dụng công thức và quy tắc có thể giải thích. Dashboard vẫn
-hoạt động khi AI Service lỗi.
-
-## Yêu cầu AI và cập nhật ngữ cảnh
-
-```text
-Người dùng → Web → AI Service API → ngữ cảnh nội bộ → tác tử → nhà cung cấp LLM
-                                      │
-Service nghiệp vụ → Kafka → AI nhận sự kiện → AI Context DB
-```
-
-API AI nhận ý định của người dùng, chẳng hạn phân rã task hoặc phân tích nguy
-cơ trễ. Ngữ cảnh nghiệp vụ được cập nhật độc lập từ Kafka. AI không gọi REST
-sang service nghiệp vụ để lấy ngữ cảnh, không đọc database của service khác và
-không tự ghi thay đổi vào dữ liệu nghiệp vụ.
-
-## Gửi thông báo
-
-```text
-Sự kiện → Kafka → Notification Service → Notification DB → in-app / email / push
-```
-
-Notification Service xử lý trạng thái gửi và kênh. Thông báo không liên quan AI
-vẫn phải hoạt động khi AI lỗi.
+In-app và email là kênh ban đầu; Web Push thuộc giai đoạn sau. Thông báo
+không liên quan AI vẫn hoạt động khi AI lỗi.

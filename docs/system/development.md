@@ -1,5 +1,44 @@
 # Hướng dẫn phát triển
 
+**Trạng thái: Thiết kế mục tiêu.** Quy ước chung theo
+[baseline](../architecture/README.md), mục 16–24 và 27–31. Các lựa chọn công
+nghệ không chứng minh dependency hoặc thiết lập GitHub đã được triển khai.
+
+## Công nghệ và tổ chức source
+
+- Backend nghiệp vụ dùng Python, Django, DRF; OpenAPI qua `drf-spectacular`.
+  Django app chia theo feature/domain trong mỗi service.
+- AI dùng FastAPI + Google ADK; provider đặt sau adapter, model cụ thể cần
+  được đánh giá. Không hard-code prompt rải rác trong logic nghiệp vụ.
+- Mỗi Python service có `pyproject.toml`, `uv.lock`, Dockerfile và dependency
+  riêng; dùng `uv`. API/worker cùng nghiệp vụ thuộc cùng service.
+- Web dùng React + Vite + TypeScript và `pnpm`; cấu trúc theo feature. Xem
+  [Web](../web/README.md) để phân biệt server state và client state.
+- Job nền dùng [Celery + Redis](../infrastructure/background-jobs.md); event
+  giữa service dùng [Kafka + outbox](../infrastructure/kafka.md).
+
+## Git và Pull Request
+
+Baseline dùng `main`, không dùng `develop`. Branch ngắn hạn có prefix như
+`feat/`, `fix/`, `docs/`, `chore/`, gắn mã issue khi có. Commit theo Conventional
+Commits; mở PR tập trung, chạy CI, review và squash merge vào `main`.
+Không direct push/force push; mục tiêu là ít nhất một approval và CI pass.
+Branch protection thực tế trên GitHub chưa được xác minh.
+
+## Kiểm thử và quan sát vận hành
+
+Backend cần unit, integration, API và contract test; ưu tiên auth/permission,
+membership, vòng đời task/sprint, webhook, outbox và consumer idempotency.
+AI cần fake provider cho unit test, đánh giá trên dataset chuẩn (golden
+dataset), structured output và regression evaluation. Web dùng Vitest/React
+Testing Library; E2E dùng Playwright khi được triển khai.
+
+Baseline yêu cầu JSON log có service, request/trace ID, error log và
+healthcheck; trace ID được truyền qua API, job và event. Không log secret,
+token hoặc mật khẩu. OpenTelemetry là hướng mở rộng; không bắt buộc dựng
+toàn bộ hệ thống metrics/tracing trong MVP. Hướng dẫn vận hành nằm trong
+[CI/CD](../infrastructure/ci-cd.md).
+
 ## Trước khi thay đổi
 
 1. Đọc tài liệu service liên quan và [quy tắc agent](../../AGENTS.md).

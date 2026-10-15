@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-
+import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -35,7 +35,7 @@ function NoTeamCard({ enrollment }: { enrollment: CourseEnrollment & { membershi
     enrollment.teamFormation.mode === "self-select" ? "Tạo nhóm" : null,
     enrollment.teamFormation.mode === "join-code" ? "Tham gia bằng mã" : null,
     enrollment.teamFormation.mode === "instructor-assigned"
-      ? "Chờ hệ thống phân nhóm"
+      ? "Chờ giảng viên phân nhóm"
       : "Tìm nhóm",
   ].filter((label): label is string => label !== null);
 
@@ -48,6 +48,12 @@ function NoTeamCard({ enrollment }: { enrollment: CourseEnrollment & { membershi
         Hành động khả dụng: {actions.join(" · ")}. Bạn vẫn có thể xem thông báo môn học, lịch chung
         và điểm danh.
       </p>
+      <Link
+        to={`/courses/${encodeURIComponent(enrollment.courseId)}/team`}
+        className="mt-2 inline-flex font-semibold text-primary hover:underline"
+      >
+        Lập nhóm ngay →
+      </Link>
     </div>
   );
 }
@@ -67,17 +73,31 @@ function PendingCard({
         {new Date(enrollment.membership.requestedAt).toLocaleString("vi-VN")}. Board, backlog và
         repository của nhóm sẽ mở sau khi Leader duyệt.
       </p>
-      <Button
-        size="sm"
-        variant="outline"
-        className="mt-2"
-        disabled
-        title="Hủy yêu cầu sẽ khả dụng ở slice Teams"
-      >
-        Hủy yêu cầu
-      </Button>
+      <div className="mt-2 flex items-center gap-3">
+        <Link
+          to={`/courses/${encodeURIComponent(enrollment.courseId)}/team`}
+          className="font-semibold text-primary hover:underline"
+        >
+          Theo dõi yêu cầu →
+        </Link>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled
+          title="Hủy yêu cầu sẽ khả dụng ở slice Teams"
+        >
+          Hủy yêu cầu
+        </Button>
+      </div>
     </div>
   );
+}
+
+function githubSyncMessageFor(isError: boolean, state: string | undefined): string {
+  if (isError) return "Không thể tải trạng thái đồng bộ GitHub";
+  if (state === "connected") return "Đồng bộ GitHub đang hoạt động";
+  if (state === "disconnected") return "Kết nối GitHub để đồng bộ hoạt động đồ án";
+  return "Đang tải trạng thái đồng bộ GitHub";
 }
 
 export function MyWorkPage() {
@@ -129,6 +149,7 @@ export function MyWorkPage() {
   );
 
   const firstName = user?.display_name.split(" ").at(-1) ?? "";
+  const githubSyncMessage = githubSyncMessageFor(githubQuery.isError, githubQuery.data?.sync.state);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 sm:px-6 lg:px-8">
@@ -186,11 +207,8 @@ export function MyWorkPage() {
 
       <footer className="flex flex-col items-center justify-between gap-4 border-t pt-6 text-xs text-muted-foreground sm:flex-row">
         <span>
-          {enrollments.some((enrollment) => canOpenTeamWorkspace(enrollment.membership))
-            ? "Đồng bộ GitHub đang hoạt động"
-            : "Kết nối GitHub để đồng bộ hoạt động đồ án"}
+          {githubSyncMessage}
         </span>
-        <span className="font-mono text-[11px]">Phím tắt: [C] Tạo task nhanh • [/] Tìm kiếm</span>
       </footer>
     </div>
   );

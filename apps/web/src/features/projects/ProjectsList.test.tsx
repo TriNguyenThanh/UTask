@@ -17,7 +17,7 @@ import { createMockHandlers } from "@/mocks/handlers";
 import { createMemoryRepository } from "@/mocks/data/storage";
 import type { MockScenario } from "@/mocks/scenarios";
 import { server } from "@/mocks/server";
-import { renderApp, studentTestSession } from "@/test/render";
+import { renderApp, memberTestSession, studentTestSession } from "@/test/render";
 
 function useScenario(scenario: MockScenario) {
   server.use(...createMockHandlers(scenario, createMemoryRepository(scenario)));
@@ -116,8 +116,11 @@ describe("projects list route", () => {
   });
 
   it("lists NEXUS and DELI from mock data", async () => {
+    // Account-bound default scenario: the member belongs to both demo
+    // workspaces (DELI roster + NEXUS roster).
     renderApp(<ProjectsRoute />, {
       route: "/projects",
+      session: memberTestSession,
       routes: routesWithProjectsList(),
     });
 
@@ -169,8 +172,10 @@ describe("projects list route", () => {
 
   it("clicking DELI navigates to its backlog", async () => {
     const user = userEvent.setup();
+    // Account-bound default scenario: DELI belongs to the member account.
     const result = renderApp(<ProjectsRoute />, {
       route: "/projects",
+      session: memberTestSession,
       routes: fullRoutes(),
     });
 
