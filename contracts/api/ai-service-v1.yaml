@@ -168,7 +168,19 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     RateLimited:
-      description: Vượt rate limit.
+      description: >-
+        Vượt giới hạn yêu cầu mới theo user, số request queued/running hoặc budget
+        thực thi. Giới hạn tiếp nhận trả reason REQUEST_RATE_LIMIT hoặc
+        ACTIVE_REQUEST_LIMIT, retryable=true và details.retry_after_seconds.
+        Replay cùng user/key/payload không tính là yêu cầu mới.
+      headers:
+        Retry-After:
+          description: >-
+            Số giây nên chờ trước khi thử lại khi vượt giới hạn tiếp nhận.
+            Không bảo đảm có slot sau thời gian này; lỗi budget không có header này.
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:

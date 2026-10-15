@@ -3,17 +3,18 @@
 import hashlib
 import json
 from datetime import datetime, timedelta
+from math import ceil
 from random import uniform
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import delete, or_, select, text, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
 from application.ports import Delivery, StoredRequest
 from application.responses import failed_response
-from errors import failure
+from errors import ServiceError, failure
 from models import AiResponse, CreateAiRequest, QueuedAiResponse, RunningAiResponse
 from models.validation import validate_result
 
@@ -22,6 +23,35 @@ from .db.tables import CompletionRow, DeadLetterRow, DeliveryRow, RequestRow
 REQUEST_ADAPTER = TypeAdapter(CreateAiRequest)
 RESPONSE_ADAPTER = TypeAdapter(AiResponse)
 COMPLETION_CHANNEL = "utask_ai_completed"
+# Hai-int advisory lock namespace dành riêng cho admission trong AI database.
+ADMISSION_LOCK_NAMESPACE = 0x41495251
+
+
+def admission_error(
+    *,
+    now: datetime,
+    recent_count: int,
+    oldest_recent: datetime | None,
+    active_count: int,
+    requests_per_minute: int,
+    max_active_requests_per_user: int,
+) -> ServiceError | None:
+    """Quyết định admission; replay/conflict đã được xử lý trước bước này."""
+    if recent_count >= requests_per_minute:
+        retry_after = max(1, ceil((oldest_recent + timedelta(seconds=60) - now).total_seconds()))
+        reason = "REQUEST_RATE_LIMIT"
+    elif active_count >= max_active_requests_per_user:
+        retry_after = 5
+        reason = "ACTIVE_REQUEST_LIMIT"
+    else:
+        return None
+    return ServiceError(
+        "RATE_LIMITED",
+        "Đã vượt giới hạn yêu cầu AI. Vui lòng thử lại sau.",
+        429,
+        retryable=True,
+        details={"reason": reason, "retry_after_seconds": retry_after},
+    )
 
 
 def fingerprint(payload: CreateAiRequest) -> str:
@@ -53,13 +83,19 @@ class PostgresRequestRepository:
         dispatch_lease: float = 10,
         redelivery: float = 15,
         max_dispatch_attempts: int = 8,
+        requests_per_minute: int = 5,
+        max_active_requests_per_user: int = 2,
     ):
+        if requests_per_minute < 1 or max_active_requests_per_user < 1:
+            raise ValueError("Giới hạn admission phải dương")
         self.sessions = sessions
         self.queue_timeout = queue_timeout
         self.workflow_timeout = workflow_timeout
         self.dispatch_lease = dispatch_lease
         self.redelivery = redelivery
         self.max_dispatch_attempts = max_dispatch_attempts
+        self.requests_per_minute = requests_per_minute
+        self.max_active_requests_per_user = max_active_requests_per_user
 
     def enqueue(
         self, payload: CreateAiRequest, user_id: str, key: str, credential: str, now: datetime
@@ -74,14 +110,54 @@ class PostgresRequestRepository:
             updated_at=now,
             status_url=f"/api/ai/v1/requests/{request_id}",
         )
+        payload_fingerprint = fingerprint(payload)
         with self.sessions.begin() as session:
+            # Hash ổn định giữa process; collision chỉ làm hai user chờ nhau.
+            lock_key = int.from_bytes(hashlib.sha256(user_id.encode()).digest()[:4], signed=True)
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(:namespace, :user_key)"),
+                {"namespace": ADMISSION_LOCK_NAMESPACE, "user_key": lock_key},
+            )
+            existing = session.scalars(
+                select(RequestRow).where(
+                    RequestRow.user_id == user_id, RequestRow.idempotency_key == key
+                )
+            ).one_or_none()
+            if existing is not None:
+                if existing.fingerprint != payload_fingerprint:
+                    raise failure("IDEMPOTENCY_CONFLICT", 409)
+                return record(existing)
+            recent_count, oldest_recent = session.execute(
+                select(func.count(), func.min(RequestRow.created_at)).where(
+                    RequestRow.user_id == user_id,
+                    RequestRow.created_at > now - timedelta(seconds=60),
+                )
+            ).one()
+            active_count = session.scalar(
+                select(func.count())
+                .select_from(RequestRow)
+                .where(
+                    RequestRow.user_id == user_id,
+                    RequestRow.status.in_(("queued", "running")),
+                )
+            )
+            error = admission_error(
+                now=now,
+                recent_count=recent_count,
+                oldest_recent=oldest_recent,
+                active_count=active_count,
+                requests_per_minute=self.requests_per_minute,
+                max_active_requests_per_user=self.max_active_requests_per_user,
+            )
+            if error:
+                raise error
             created = session.execute(
                 insert(RequestRow)
                 .values(
                     id=request_id,
                     user_id=user_id,
                     idempotency_key=key,
-                    fingerprint=fingerprint(payload),
+                    fingerprint=payload_fingerprint,
                     payload=payload.model_dump(mode="json", by_alias=True),
                     response=response.model_dump(mode="json"),
                     status="queued",
@@ -104,7 +180,7 @@ class PostgresRequestRepository:
                     RequestRow.user_id == user_id, RequestRow.idempotency_key == key
                 )
             ).one()
-            if row.fingerprint != fingerprint(payload):
+            if row.fingerprint != payload_fingerprint:
                 raise failure("IDEMPOTENCY_CONFLICT", 409)
             return record(row)
 

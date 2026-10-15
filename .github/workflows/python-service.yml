@@ -81,6 +81,17 @@ jobs:
         run: uv run ruff check .
       - name: Check formatting
         run: uv run ruff format --check .
+      - name: Create isolated test database when requested
+        if: inputs.postgres
+        env:
+          TEST_DATABASE_NAME: ${{ fromJSON(inputs.test_env).TEST_DATABASE_NAME }}
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$TEST_DATABASE_NAME" ]]; then
+            [[ "$TEST_DATABASE_NAME" =~ ^[a-z][a-z0-9_]*_test$ ]] || { echo "Invalid isolated test database name" >&2; exit 1; }
+            docker exec "$POSTGRES_CONTAINER" createdb -U utask_ci -- "$TEST_DATABASE_NAME"
+          fi
       - name: Django system and migration checks
         if: inputs.django
         env: ${{ fromJSON(inputs.test_env) }}

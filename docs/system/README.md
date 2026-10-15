@@ -16,6 +16,7 @@ từ baseline. AI Service hiện có bootstrap, xem [code map](../ai-service/cod
 - [Quyền sở hữu dữ liệu](data-ownership.md)
 - [Danh mục sự kiện Kafka](kafka-events.md)
 - [Hướng dẫn phát triển](development.md)
+- [Thiết lập và sử dụng subagent Codex](subagents.md)
 - [Identity Service](../identity-service/README.md)
 - [Work Service](../project-service/README.md)
 - [Classroom Service](../classroom-service/README.md)

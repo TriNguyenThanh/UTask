@@ -13,8 +13,9 @@ AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ ch�
 và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
 không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
-export secret ra terminal. Compose chỉ inject AI_CREDENTIAL_KEY,
-AI_JWT_PUBLIC_KEY và GOOGLE_API_KEY vào AI; DB local nhận AI_DB_PASSWORD.
+export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY`
+vào các process AI; PostgreSQL AI nhận `AI_DB_PASSWORD`. Compose root ghi đè
+URL DB sang `ai-postgres` và broker sang Redis DB1, tránh `localhost` trong container.
 CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
 [cấu hình AI](../ai-service/README.md#cấu-hình) và
 [mock data](../ai-service/mock-data.md).
@@ -40,14 +41,14 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
   Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
 
-**Một phần:** cấu hình local/staging hiện dùng chung `POSTGRES_USER` và
+**Một phần:** các service Django local/staging hiện dùng chung `POSTGRES_USER` và
 `POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
 yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
 hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
 khoảng trống triển khai, không phải lựa chọn bảo mật production.
 
-Celery broker, Kafka client và R2 là công nghệ mục tiêu theo baseline; biến
-môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
+AI đã có Celery broker qua Redis; Kafka client và R2 tùy service vẫn là
+công nghệ mục tiêu theo baseline; biến môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
 triển khai. Không xem URL service trong file env là bằng chứng client đã gọi
 service đó. Xem [job nền](background-jobs.md), [Kafka](kafka.md) và
 [lưu trữ file](storage.md).
@@ -91,6 +92,8 @@ hai biến nội suy image prefix/tag và giữ file `staging-images.json` của
 Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
 `up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
 
+Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
+
 Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
 publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
 `WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
@@ -124,3 +127,21 @@ khi có đủ credential và callback theo [tài liệu Identity](../identity-se
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
 chủ đích. Script khởi tạo chỉ chạy khi volume còn trống; sửa `.env` không tự đổi tên
 database hoặc chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
+
+## Cấu hình AI trong Compose root
+
+Local giữ cờ và biến thường trong `infra/env/ai-service.env`. Staging mặc định
+`AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; dùng giá trị cấu hình staging trong
+`.env` server theo các override được khai báo ở Compose. Không bật mock ở staging.
+
+`AI_DB_PASSWORD` bắt buộc khi khởi động PostgreSQL AI lần đầu. Password phải dùng
+được trong URL, hoặc cung cấp `AI_DATABASE_URL` với password percent-encode.
+`AI_CREDENTIAL_KEY` phải giống nhau cho các process; JWT chọn public key hoặc
+JWKS, cùng issuer/audience đúng từ Identity; LLM cần model/base URL/key và REST
+adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
+Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
+
+Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volume
+`ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
+volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
+Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.

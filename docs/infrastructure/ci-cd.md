@@ -24,20 +24,23 @@ thì CI dừng. Đây là cấu hình runtime vốn phải khai báo khi thêm s
 sách bật CI thứ hai. Web chưa có source thì không chạy; khi có thư mục Web, thiếu
 manifest/lockfile cũng là lỗi.
 
-Service được nhận diện phải có `healthcheck` bật trong Compose và khai báo
+Service được nhận diện phải khai báo
 `x-deploy.gateway_health_path`: path health qua gateway, ví dụ Identity dùng
 `/api/auth/healthz`. Service chỉ dùng nội bộ khai báo giá trị `null`; workflow vẫn
 chờ healthcheck của container nhưng không gọi nó qua gateway. Discovery cũng kiểm tra
-healthcheck của mọi container được profile ứng dụng kích hoạt, gồm worker, scheduler,
-Nginx và dependency; thiếu healthcheck hoặc dùng `NONE`/`disable: true` thì dừng.
+healthcheck của mọi container runtime được profile ứng dụng kích hoạt, gồm app, worker,
+scheduler, Nginx và dependency; migration một lần được kiểm tra bằng exit status.
+Thiếu healthcheck hoặc dùng `NONE`/`disable: true` ở container runtime thì dừng.
 Metadata này nằm ngay trong cấu hình Compose của service, không phải danh sách service thứ hai
 trong workflow. Thiếu metadata, path không hợp lệ hoặc trùng path thì discovery
 dừng trước khi phát hành. Thêm service không cần sửa workflow nghiệm thu.
 
 Container ngoài app khai báo `x-deploy.role`: `infrastructure` cho database/cache/broker,
-`gateway` cho Nginx, `worker` cho tiến trình dùng image app. Worker khai báo thêm
-`x-deploy.application` là app sở hữu image. Discovery kiểm tra quan hệ này, không
-đoán vai trò từ chuỗi image. Stack staging có một gateway; tên lấy từ Compose.
+`gateway` cho Nginx, `worker` cho tiến trình dùng image app và `migration` cho tiến trình
+migration một lần. Worker/migration khai báo thêm `x-deploy.application` là app sở hữu
+image. Discovery kiểm tra quan hệ này, không đoán vai trò từ chuỗi image. App nội bộ
+khai báo `x-deploy.gateway_health_path: null`; app có route health qua gateway khai báo
+path tuyệt đối. Stack staging có một gateway; tên lấy từ Compose.
 Trong Compose, `x-work-runtime` dùng YAML anchor để chia sẻ image, env mappings
 và dependency giữa API/worker Work. Mỗi tiến trình vẫn khai báo command, healthcheck
 và phần dependency riêng; cấu hình này được Compose resolve trước khi chạy.
@@ -98,11 +101,13 @@ Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME
 pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một bước
 `uv run pytest`, không rẽ nhánh theo tên service.
 
-Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Nếu cần biến test
-khác với quy ước chung, khai báo `x-ci.test_env` cạnh service, không cần sao chép workflow
-hoặc tạo môi trường staging cho test.
-Bộ lọc `shared` kiểm tra các service được nhận diện từ source hiện tại; không dùng
-source thiếu của service chưa bật để chặn Identity.
+Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Discovery nhận diện
+PostgreSQL từ image của dependency, không dựa vào tên service; service dùng database
+riêng có thể khai báo tên database test trong `x-ci.test_env`, workflow tạo database cô
+lập trước pytest. Nếu cần biến test khác với quy ước chung, khai báo `x-ci.test_env` cạnh
+service, không cần sao chép workflow hoặc tạo môi trường staging cho test. Bộ lọc `shared`
+kiểm tra các service được nhận diện từ source hiện tại; không dùng source thiếu của service
+chưa bật để chặn service khác.
 
 Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
 Không so với `contracts/api/identity.openapi.json` khi artifact này không được lưu trong
@@ -305,8 +310,15 @@ Workflow chạy `manage.py migrate --noinput` cho app có dependency Django đư
 bằng `/app/.venv/bin/python`. App không có Django không bị ép chạy lệnh Django.
 Dependency hạ tầng được lấy từ Compose đang bật, gồm cả dependency của worker;
 workflow chờ chúng healthy trước migration, không cố định PostgreSQL/Redis.
-Migration lỗi dừng trước bước khởi động app mới. Cơ chế migration hiện hỗ trợ Django;
-service dùng framework khác cần bổ sung cơ chế migration tương ứng khi có nhu cầu.
+Migration Django và Alembic của AI được chạy trước khi khởi động stack app; lỗi migration
+dừng deploy trước bước `up` toàn stack. Các service dùng framework/lệnh khác cần khai báo
+cơ chế migration riêng khi được đưa vào release.
+Riêng AI, deploy chờ PostgreSQL AI và Redis healthy rồi chạy migration bằng `compose up`
+với `--force-recreate --exit-code-from ai-migrate` trước app stack. Lệnh trả lỗi sẽ dừng
+deploy. Sau đó script khởi động rõ các process runtime bằng `--no-deps`, nên Compose không
+duyệt lại dependency và chạy migration lần nữa; các dependency hạ tầng và migration đã
+được kiểm tra ở bước trước. Container migration thành công vẫn được giữ lại để
+`service_completed_successfully` tiếp tục làm dependency gate khi chạy Compose thủ công.
 Nginx config được upload dưới tên `nginx.deployment.conf`, kiểm tra bằng container
 chạy `nginx -t` trước migration; file đang dùng được giữ nguyên khi validation lỗi.
 Sau khi app/worker healthy, script ghi nội dung mới vào đúng bind mount hiện có,
@@ -357,3 +369,42 @@ Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ d�
 Baseline yêu cầu production từ release/tag hoặc workflow được kiểm soát, với PostgreSQL,
 Redis/Kafka bên ngoài và secrets của nền tảng production. Compose local/staging không thay thế quyết
 định hạ tầng đó. Khi có production cần Environment/quy trình triển khai riêng và image SHA.
+
+## Pipeline AI trong CI/CD
+
+**Một phần (cấu hình và regression test có trong repository; staging thực tế chưa xác minh):** CI vẫn build/publish một image
+`ai-service`; staging dùng cùng tag SHA cho `ai-service`, `ai-worker`,
+`ai-dispatcher`, `ai-migrate`. Bốn process và `ai-postgres` cùng profile
+`ai-service`. Nhận diện app dựa trên thư mục source; các process phụ không tạo
+thêm entry build. `ai-service` là app nội bộ, khai báo
+`x-deploy.gateway_health_path: null`; `ai-worker`, `ai-dispatcher` và
+`ai-migrate` dùng chung image AI. `ai-postgres` có vai trò `infrastructure`;
+`ai-migrate` có vai trò migration của `ai-service`. API không chờ Work/Integration
+tại Compose; REST adapter vẫn kiểm tra quyền/context và từ chối khi domain chưa sẵn sàng.
+
+AI phụ thuộc PostgreSQL 17 riêng với volume `ai_database`, không đổi dữ liệu
+PostgreSQL Django. Broker dùng Redis chung DB1. API, worker và dispatcher chờ
+`ai-migrate` hoàn tất thành công; migration chạy một lần bằng Alembic trước khi
+khởi động app stack và lỗi migration làm deploy dừng. `x-ci.test_env` của AI cấp
+`TEST_DATABASE_NAME=ai_test`, `TEST_DATABASE_URL`, `TEST_REDIS_URL`; workflow
+Python tạo database test theo tên được validate rồi chạy pytest. Script nhận
+diện PostgreSQL theo image của dependency, nên `ai-postgres` cũng bật PostgreSQL
+cho CI. Bộ workflow hiện khai báo PostgreSQL 16 cho runner; runtime AI dùng 17.
+
+`depends_on: service_completed_successfully` cũng bảo vệ thứ tự khi chạy Compose
+thủ công. Migration chạy tới `head`; nếu không bật AI thì không chạy bước Alembic
+hoặc khởi động PostgreSQL AI. Không có chuyển dữ liệu tự động từ Compose AI riêng.
+
+Trên VPS, điền password DB, khóa Fernet, JWT issuer/audience và public key hoặc
+JWKS, URL REST quyền/context, model/base URL/API key trong `.env` server theo
+[biến môi trường](environment.md#cấu-hình-ai-trong-compose-root). Staging mặc
+định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; không dùng mock development
+hoặc endpoint proxy local làm cấu hình staging mặc định.
+
+`--wait` kiểm tra health của API, Celery ping của worker và process liveness của
+dispatcher; kiểm tra liveness chưa chứng minh dispatcher đã phát job. Probe gateway
+cuối workflow kiểm tra các path health của service đang bật; AI nội bộ không có path
+gateway để probe. CI test
+pipeline dùng model giả, không xác nhận LLM thật hoặc domain production. Triển
+khai trên GitHub/VPS **Chưa xác minh**; thay đổi này không bảo đảm zero downtime
+hoặc rollback database tự động.

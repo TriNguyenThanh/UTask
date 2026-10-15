@@ -38,6 +38,11 @@ read -r -a infrastructure <<< "$infrastructure_names"
 if (( ${#infrastructure[@]} )); then
   "${compose[@]}" up -d --no-build --wait --wait-timeout 120 "${infrastructure[@]}" < /dev/null
 fi
+if [[ " $service_names " == *" ai-service "* ]]; then
+  # Keep the successful one-shot container for service_completed_successfully.
+  # Force a fresh migration for each release, and stop before updating any app.
+  "${compose[@]}" up --no-build --no-deps --force-recreate --exit-code-from ai-migrate ai-migrate < /dev/null
+fi
 for service in "${services[@]}"; do
   if [[ " $migration_names " == *" $service "* ]]; then
     "${compose[@]}" run --rm --no-deps --interactive=false "$service" /app/.venv/bin/python manage.py migrate --noinput < /dev/null
@@ -46,10 +51,14 @@ done
 runtime_services=()
 runtime_names=$("${compose[@]}" config --services < /dev/null)
 while IFS= read -r runtime_service; do
-  [[ "$runtime_service" == "$gateway_service" ]] || runtime_services+=("$runtime_service")
+  if [[ "$runtime_service" != "$gateway_service" && "$runtime_service" != "ai-migrate" ]]; then
+    runtime_services+=("$runtime_service")
+  fi
 done <<< "$runtime_names"
 
-"${compose[@]}" up -d --no-build --wait --wait-timeout 120 "${runtime_services[@]}" < /dev/null
+# Every active runtime is explicit here; dependencies and migrations were gated
+# above. Do not restart the completed migration through dependency traversal.
+"${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 "${runtime_services[@]}" < /dev/null
 if [[ -f "$nginx_active" ]]; then
   cat "$nginx_config" > "$nginx_active"
 else

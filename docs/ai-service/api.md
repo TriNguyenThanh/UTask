@@ -90,6 +90,27 @@ Quy ước dữ liệu:
   tạo job mới. Cần bảo vệ request đồng thời bằng persistence và chống xử lý
   trùng ở worker khi task được giao lại.
 
+### Giới hạn chống spam
+
+**Đã triển khai trong source:** mỗi user được tạo tối đa 5 request trong cửa
+sổ trượt 60 giây và có tối đa 2 request `queued`/`running`. Cấu hình bằng
+`AI_REQUESTS_PER_MINUTE` và `AI_MAX_ACTIVE_REQUESTS_PER_USER`, đều phải lớn
+hơn 0. Đổi key hoặc target không bỏ qua giới hạn theo user.
+
+Sau kiểm tra quyền, repository khóa theo user trong PostgreSQL, kiểm tra
+idempotency rồi mới kiểm tra giới hạn và tạo request/delivery trong cùng
+transaction. Replay đúng payload không tính lượt mới; key cũ với payload
+khác vẫn trả `409`. Request đã failed vẫn tính vào giới hạn 60 giây; slot
+đang xử lý chỉ được trả lại khi request chuyển terminal, kể cả completion
+đã bàn giao nhưng API chưa tiếp nhận. GET/polling không tính lượt tạo job.
+
+Vượt giới hạn trả `429 RATE_LIMITED`, `retryable: true`, header `Retry-After`
+và `details.retry_after_seconds`. `details.reason` là `REQUEST_RATE_LIMIT`
+hoặc `ACTIVE_REQUEST_LIMIT`. Không tạo request/delivery cho lần bị từ chối.
+`Retry-After` là thời gian nên chờ, không bảo đảm slot đã rảnh khi thử lại.
+Lỗi hết budget của một workflow vẫn dùng `reason: BUDGET_EXCEEDED` và không
+có header này. Đây là giới hạn tạo job, chưa phải giới hạn mọi HTTP request.
+
 ## 4. Tạo yêu cầu AI
 
 ### `POST /api/ai/v1/requests`

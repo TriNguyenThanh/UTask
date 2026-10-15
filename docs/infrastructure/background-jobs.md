@@ -1,10 +1,12 @@
 # Job nền, Celery và Redis
 
-**Trạng thái: Thiết kế mục tiêu.** Theo baseline, mục 10–11, job nội bộ dùng
+**Trạng thái: Một phần.** Theo baseline, mục 10–11, job nội bộ dùng
 Celery + Redis; sự kiện giữa service dùng Kafka. Xem
 [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>).
-Compose có Redis nhưng chưa khai báo Celery worker, scheduler hoặc outbox
-publisher. Có broker trong hạ tầng không chứng minh job đã được triển khai.
+Compose root local/staging đã khai báo Celery worker và dispatcher của AI,
+cùng migration Alembic trước startup. Worker/scheduler của các domain khác
+chưa được khai báo. Có broker trong hạ tầng không chứng minh job của mọi
+service đã được triển khai. Xem [cách chạy AI local](local-development.md#chạy-riêng-pipeline-ai-từ-root).
 
 ## Quyền sở hữu job
 

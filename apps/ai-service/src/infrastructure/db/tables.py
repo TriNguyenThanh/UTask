@@ -3,7 +3,16 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -21,6 +30,12 @@ class RequestRow(Base):
             "model_calls >= 0 AND tool_calls >= 0 AND output_tokens >= 0", name="ck_ai_budget"
         ),
         Index("ix_ai_request_expiry", "status", "queue_expires_at", "execution_deadline"),
+        Index("ix_ai_request_user_created", "user_id", "created_at"),
+        Index(
+            "ix_ai_request_user_active",
+            "user_id",
+            postgresql_where=text("status IN ('queued','running')"),
+        ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(Text)

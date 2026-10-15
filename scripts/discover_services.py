@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import tomllib
 from pathlib import Path
 
+import tomllib
 import yaml
 
 
@@ -100,25 +100,26 @@ def validate_runtime(compose: dict, services: dict):
         if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
             raise ValueError(f"Invalid Compose service name: {name}")
         runtime = compose[name]
-        require_healthcheck(name, runtime)
+        role = runtime.get("x-deploy", {}).get("role")
+        if role != "migration" or name in services:
+            require_healthcheck(name, runtime)
         if name in services:
             continue
-        role = runtime.get("x-deploy", {}).get("role")
         if role == "infrastructure":
             infrastructure_services.append(name)
         elif role == "gateway":
             gateways.append(name)
-        elif role == "worker":
+        elif role in ("worker", "migration"):
             application = runtime["x-deploy"].get("application")
             if application not in services or runtime.get("image") != compose[
                 application
             ].get("image"):
                 raise ValueError(
-                    f"{name}: worker must use the image of a discovered application"
+                    f"{name}: {role} must use the image of a discovered application"
                 )
         else:
             raise ValueError(
-                f"{name}: declare x-deploy.role (infrastructure, gateway or worker)"
+                f"{name}: declare x-deploy.role (infrastructure, gateway, worker or migration)"
             )
     if len(gateways) != 1:
         raise ValueError("Staging requires exactly one active gateway")
@@ -162,8 +163,12 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
                 raise ValueError(f"Duplicate gateway_health_path: {health_path}")
             gateway_health_paths.append(health_path)
         deps = dependencies[name]
+        needs_postgres = any(
+            compose[dependency].get("image", "").split(":")[0] == "postgres"
+            for dependency in deps
+        )
         test_env = {}
-        if "postgres" in deps:
+        if needs_postgres:
             test_env.update(
                 POSTGRES_HOST="127.0.0.1",
                 POSTGRES_PORT="5432",
@@ -192,7 +197,7 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
             checks.append(
                 {
                     "service": name,
-                    "postgres": "postgres" in deps,
+                    "postgres": needs_postgres,
                     "redis": "redis" in deps,
                     "test_env": json.dumps(test_env),
                     "django": service["django"],

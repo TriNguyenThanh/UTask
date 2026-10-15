@@ -9,6 +9,9 @@ Kafka, specialist và retention tự động **Chưa triển khai**.
 API, event, provider hoặc agent là deployment production đã hoàn chỉnh chỉ
 từ thiết kế. [Code map](code-map.md) giữ bằng chứng implementation và kiểm thử.
 
+[Checkpoint 15/10/2026](checkpoint.md) tổng hợp phần đã chạy, inference LLM
+thật, kiểm thử và việc còn lại để tiếp tục triển khai.
+
 ## Baseline và phạm vi
 
 Thiết kế mục tiêu theo [baseline](../architecture/README.md), mục 4.6, 9–11
@@ -63,6 +66,8 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_BROKER_URL` | Redis broker; không dùng Redis làm result repository |
 | `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext xóa khi bàn giao kết quả hoặc terminal |
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
+| `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
+| `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
 | `AI_JWT_PUBLIC_KEY` hoặc `AI_JWT_JWKS_URL` | Public key PEM hoặc JWKS của Identity; chỉ chọn một |
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
@@ -89,6 +94,43 @@ test; HTTP chỉ được phép trong development/test. Timeout lấy từ deadl
 request và LiteLLM không tự retry. Cách gọi này giữ nguyên pipeline request,
 context và budget; nó không xác nhận endpoint hay model cụ thể của nhà cung cấp.
 
+Adapter yêu cầu JSON mode (`response_format: {type: json_object}`); endpoint
+phải hỗ trợ JSON mode cùng tool calling. Workflow vẫn kiểm tra schema riêng
+theo intent và revise trong giới hạn. Một số proxy vẫn trả khối Markdown dù
+đã yêu cầu JSON mode: workflow chỉ gỡ một khối JSON bao trọn output rồi
+validate schema; văn bản thừa, JSON lỗi, field thừa hoặc sai intent bị từ chối.
+LiteLLM và SDK OpenAI đều tắt retry ẩn;
+lỗi 429/5xx, kết nối hoặc timeout provider được workflow retry trong budget
+và deadline chung. `completion_tokens` đã gồm reasoning, chỉ trừ một lần.
+
+Để chọn model nhanh hơn cho stack local, từ `apps/ai-service/`:
+
+```sh
+AI_MODEL=gemini-3.5-flash-lite docker compose --project-name ai-mock \
+  --env-file ../../.env --env-file ../../infra/env/ai-service.env \
+  up --build -d --wait --wait-timeout 60
+```
+
+Compose riêng AI truyền model/base URL từ cấu hình đã resolve cho cả API,
+worker và dispatcher; biến process có ưu tiên cao nhất. Giữ override model
+trong lệnh khởi động tiếp theo nếu muốn dùng lại model này. Model
+`gemini-3.8-flash-high` đã vượt hard deadline 30 giây trong smoke local ngày
+2026-10-15; không tăng deadline ngoài hợp đồng API v1 để che lỗi đó.
+
+LLM local qua CLIProxyAPI đã được gọi thật; quyền/context vẫn là fixture
+`MOCK_TEST=true`, không chứng minh integration domain hoặc production.
+Smoke ngày 2026-10-15 với `gemini-3.5-flash-lite` qua API → PostgreSQL →
+dispatcher → Redis/Celery → ADK → completion → API:
+
+| Intent | Kết quả đã xác minh | Thời gian quan sát |
+| --- | --- | --- |
+| task_decomposition | succeeded, 3 subtasks, context task | 13,1 giây |
+| backlog_generation | succeeded, 2 items, context project | 5,3 giây |
+| risk_analysis | succeeded, 1 risk, context progress/team/project/github_activity | 4,9 giây |
+
+Đây là smoke với fixture local, không là benchmark chất lượng hay cam kết
+latency. JWT local đã được refresh; token owner/outsider giữ tại `.env.mock/`.
+
 Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY` nằm trong
 `.env` root. Chỉ `AI_CREDENTIAL_KEY` là khóa Fernet bí mật; public key là
 credential xác minh JWT, lưu cùng bộ credential để không commit key local.
@@ -107,6 +149,17 @@ MOCK_TEST chọn fixture tại adapter cho quyền/context của Work/Integratio
 luồng API, job và LLM giữ nguyên. Xem [hướng dẫn mock data](mock-data.md) để
 chạy cùng Compose và gửi request mẫu. Không cần server mock hoặc launcher;
 fixture không xác nhận contract domain production.
+
+## Chạy từ Compose root
+
+Compose root local/staging giữ tên `ai-service` cho API và tách `ai-worker`,
+`ai-dispatcher`, `ai-migrate`, dùng chung image/tag. AI có PostgreSQL 17 riêng
+(`ai-postgres`, volume `ai_database`) và dùng Redis chung DB1 làm broker.
+API/worker/dispatcher chờ migration Alembic thành công; worker còn có Celery ping.
+Hướng dẫn và giới hạn kiểm tra nằm tại
+[chạy AI local từ root](../infrastructure/local-development.md#chạy-riêng-pipeline-ai-từ-root)
+và [CI/CD](../infrastructure/ci-cd.md). Compose riêng dưới đây vẫn dành cho môi
+trường AI độc lập, có network/volume và cổng host riêng; không dùng chung dữ liệu tự động.
 
 ## Chạy bằng Compose riêng của AI
 
@@ -154,7 +207,8 @@ PYTHONPATH=src uv run python -m jobs.dispatcher
 
 Settings tự đọc hai file dù cwd khác. URL DB/broker host phải cấu hình phù
 hợp. Mock đọc fixture trong package và không cần microservice/server khác.
-Chạy migration trước khi nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
+Chạy migration tới `head` (hiện gồm `0003`, hai index chống spam) trước khi
+nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
 POST trả `202`, request chỉ được xử lý khi pipeline hoạt động. JWT phải ký
 hợp lệ; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu
 hình sẽ từ chối request có target. `/healthz` kiểm tra process, không thay
