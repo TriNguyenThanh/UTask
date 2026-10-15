@@ -450,8 +450,10 @@ function buildCourseSe330WithTopic(
 
 import { generateNKeysBetween } from "fractional-indexing";
 
+import type { MockIssueState } from "@/mocks/data/database";
 import type {
   CodeContributor,
+  IssueHistoryEntry,
   Issue,
   IssueDetail,
   ProjectCode,
@@ -629,6 +631,45 @@ function buildWorkspaceData(projectId: string, now: Date): WorkspaceData | null 
   return null;
 }
 
+/** Runtime changes to a project's issues, applied on top of the fixtures. */
+export interface ProjectIssueOverlay {
+  states: Record<string, MockIssueState>;
+  history: Record<string, IssueHistoryEntry[]>;
+}
+
+function compareRank(a: Issue, b: Issue): number {
+  if (a.rank === b.rank) return a.key.localeCompare(b.key);
+  return a.rank < b.rank ? -1 : 1;
+}
+
+/**
+ * Applies changed issue state and returns issues in rank order. Sprint point
+ * totals in the fixtures are hand-written, so they move by the difference
+ * each change makes instead of being recomputed.
+ */
+function applyIssueOverlay(data: WorkspaceData, overlay?: ProjectIssueOverlay): WorkspaceData {
+  if (!overlay) {
+    return { ...data, issues: [...data.issues].sort(compareRank) };
+  }
+  const totals = new Map(data.sprints.map((sprint) => [sprint.id, { ...sprint }]));
+  const issues = data.issues.map((base) => {
+    const state = overlay.states[base.id];
+    if (!state) return base;
+    const from = base.sprintId ? totals.get(base.sprintId) : undefined;
+    if (from) {
+      from.totalPoints = Math.max(0, from.totalPoints - base.storyPoints);
+      if (base.status === "done") from.completedPoints = Math.max(0, from.completedPoints - base.storyPoints);
+    }
+    const to = state.sprintId ? totals.get(state.sprintId) : undefined;
+    if (to) {
+      to.totalPoints += base.storyPoints;
+      if (state.status === "done") to.completedPoints += base.storyPoints;
+    }
+    return { ...base, ...state };
+  });
+  return { ...data, sprints: data.sprints.map((sprint) => totals.get(sprint.id) ?? sprint), issues: issues.sort(compareRank) };
+}
+
 /** `isMine` follows the signed-in user; with no user nothing is "mine". */
 function markMine(data: WorkspaceData, userId: string | null): WorkspaceData {
   return {
@@ -644,9 +685,13 @@ function markMine(data: WorkspaceData, userId: string | null): WorkspaceData {
  * Viewer-independent project facts for read models (Teacher dashboards).
  * Nothing in it belongs to a particular user, so no issue is "mine".
  */
-export function projectDataFor(projectId: string, now: Date): WorkspaceData | null {
+export function projectDataFor(
+  projectId: string,
+  now: Date,
+  overlay?: ProjectIssueOverlay,
+): WorkspaceData | null {
   const data = buildWorkspaceData(projectId, now);
-  return data ? markMine(data, null) : null;
+  return data ? markMine(applyIssueOverlay(data, overlay), null) : null;
 }
 
 /**
@@ -659,13 +704,14 @@ export function projectWorkspaceFor(
   scenario: string,
   userId: string,
   now: Date = new Date(),
+  overlay?: ProjectIssueOverlay,
 ): ProjectWorkspace | null {
   const viewer = projectViewerFor(userId, projectId);
   const data = buildWorkspaceData(projectId, now);
   const teamId = teamOfProject(projectId);
   if (!viewer || !data || !teamId) return null;
   return {
-    ...markMine(data, userId),
+    ...markMine(applyIssueOverlay(data, overlay), userId),
     courseId: MOCK_TEAM_COURSES[teamId],
     teamId,
     viewer,
@@ -678,8 +724,9 @@ export function issueDetailFor(
   issueKey: string,
   userId: string,
   now: Date = new Date(),
+  overlay?: ProjectIssueOverlay,
 ): IssueDetail | null {
-  const workspace = projectWorkspaceFor(projectId, "default", userId, now);
+  const workspace = projectWorkspaceFor(projectId, "default", userId, now, overlay);
   if (!workspace) return null;
   const issue = workspace.issues.find((candidate) => candidate.key === issueKey);
   if (!issue) return null;
@@ -719,6 +766,7 @@ export function issueDetailFor(
       { id: "h1", actorName: "Nguyễn Hoàng Nam", summary: "tạo issue", at: daysFrom(now, -5, 9, 0) },
       { id: "h2", actorName: "Nguyễn Hoàng Nam", summary: "chuyển trạng thái sang In Progress", at: daysFrom(now, -2, 10, 15) },
       { id: "h3", actorName: "Nguyễn Hoàng Nam", summary: "liên kết pull request PR #12", at: daysFrom(now, 0, 10, 0) },
+      ...(overlay?.history[issue.key] ?? []),
     ],
     subtasks:
       issue.key === "NEXUS-104"
