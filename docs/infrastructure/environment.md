@@ -88,15 +88,33 @@ mẫu cho script khởi tạo PostgreSQL. Xem [phạm vi staging và biến cầ
 
 Sau khi sửa `.env`, phải tạo lại container của service để áp dụng biến mới, không chỉ
 `restart`. Workflow deploy lần tiếp theo sẽ áp dụng; nếu thao tác thủ công, cấp đúng
-image prefix/SHA đã phát hành rồi dùng `up -d --no-build --force-recreate <service>`.
+hai biến nội suy image prefix/tag và giữ file `staging-images.json` của lần phát hành.
+Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
+`up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
 
 Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
 
+Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
+publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
+`WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
+có placeholder trống trong `.env.example`; chỉ điền credentials của môi trường
+được phép dùng. `WORK_STORAGE_ADAPTER` mặc định tại mapping là
+`infrastructure.storage.R2Storage`. `WORK_AI_ADAPTER` và
+`WORK_INTEGRATION_ADAPTER` mặc định vẫn là `UnavailableProposals` và
+`UnavailableIntegration`: thêm mapping không tự nối service thật. Giữ
+`WORK_CLASSROOM_DEV_ENABLED=false` ở staging; không đưa fixture test vào adapter
+runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
+
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
-Image prefix/tag và đường dẫn khóa RSA trên server là bắt buộc trong Compose staging.
-Workflow cấp image theo SHA; deploy thủ công cần đặt UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG.
-Khóa phải có trước khi startup và user container đọc được; workflow không vận chuyển PEM.
+Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
+Workflow cấp image app/worker theo digest qua `staging-images.json`;
+deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và
+phải dùng kèm file ghi đè image. Khóa phải có trước khi startup và user container
+đọc được; workflow không vận chuyển PEM. Nginx hiện chỉ nghe HTTP trong container
+trên port 80; port trên host lấy từ `UTASK_HTTP_PORT` (mặc định 8080). Compose hiện
+không publish HTTPS 443, mount chứng chỉ hoặc chạy Certbot. TLS trên VPS thực tế
+chưa được xác minh; xem [cấu hình staging](ci-cd.md#chuẩn-bị-máy-staging).
 Các giá trị OAuth/R2/caller keys nằm trong `.env` của từng máy; file ánh xạ chỉ
 chứa `${...}` hoặc hằng cấu hình container không bí mật. Không điền credential hoặc
 flags trực tiếp vào `infra/env/identity-service.env`.
