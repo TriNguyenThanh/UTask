@@ -36,7 +36,7 @@ def test_candidate_confirm_and_merge_never_complete_task(github, actors, client_
     effects = OutboxEvent.objects.count()
     assert not ingest_reference(task.pk, fact)[1]
     assert OutboxEvent.objects.count() == effects
-    route = f"/api/v1/tasks/{task.pk}/github-links/{candidate.pk}/confirm/"
+    route = f"/tasks/{task.pk}/github-links/{candidate.pk}/confirm/"
     member = client_for(actors["member"])
     first = member.post(route, {}, format="json", HTTP_IDEMPOTENCY_KEY="confirm")
     assert first.status_code == 200 and first.json()["data"]["confirmation_status"] == "CONFIRMED"
@@ -58,7 +58,7 @@ def test_candidate_confirm_and_merge_never_complete_task(github, actors, client_
 def test_manual_ref_is_canonical_and_client_cannot_forge_metadata(github, actors, client_for):
     _, _, _, task = github
     member = client_for(actors["member"])
-    route = f"/api/v1/tasks/{task.pk}/github-links/"
+    route = f"/tasks/{task.pk}/github-links/"
     denied = member.post(
         route,
         {"link_type": "PULL_REQUEST", "github_ref_id": "#24", "github_title": "forged"},
@@ -112,7 +112,7 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
     )
     member = client_for(actors["member"])
     confirmation = member.post(
-        f"/api/v1/tasks/{task.pk}/github-links/{candidate.pk}/confirm/",
+        f"/tasks/{task.pk}/github-links/{candidate.pk}/confirm/",
         {},
         format="json",
         HTTP_IDEMPOTENCY_KEY="stale",
@@ -127,7 +127,7 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
 
 
 def test_provider_unavailable_does_not_make_local_connection(created_project, actors, client_for):
-    route = f"/api/v1/projects/{created_project['id']}/github/repository/"
+    route = f"/projects/{created_project['id']}/github/repository/"
     result = client_for(actors["leader"]).post(
         route,
         {"github_repo_id": "1", "operation_id": "op", "expected_connection_generation": 0},

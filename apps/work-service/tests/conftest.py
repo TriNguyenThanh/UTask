@@ -124,7 +124,7 @@ def project_payload(group):
 @pytest.fixture
 def created_project(db, client_for, actors, project_payload):
     response = client_for(actors["leader"]).post(
-        "/api/v1/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="project-create"
+        "/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="project-create"
     )
     assert response.status_code == 201, response.content
     return response.json()["data"]
@@ -133,7 +133,7 @@ def created_project(db, client_for, actors, project_payload):
 @pytest.fixture
 def task_api(created_project, client_for, actors):
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/tasks/"
+    route = f"/projects/{created_project['id']}/tasks/"
 
     def create(**changes):
         key = changes.pop("key", str(uuid4()))

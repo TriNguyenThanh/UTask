@@ -30,8 +30,8 @@ def test_sprint_invalid_lifecycle_and_scope_preserve_snapshot_and_effects(task_a
     leader, _, create = task_api
     task = create()
     sprint = draft(leader, task["project_id"], "Guard")
-    root = f"/api/v1/sprints/{sprint['id']}/"
-    project_start = f"/api/v1/projects/{task['project_id']}/sprints/{sprint['id']}/start/"
+    root = f"/sprints/{sprint['id']}/"
+    project_start = f"/projects/{task['project_id']}/sprints/{sprint['id']}/start/"
     if guard == "no-dates":
         Sprint.objects.filter(pk=sprint["id"]).update(start_date=None)
     if guard == "archived":
@@ -109,7 +109,7 @@ def test_sprint_scope_no_change_keeps_versions_events_and_saves_replay_receipt(t
     leader, _, create = task_api
     task = create()
     sprint = draft(leader, task["project_id"], "No change")
-    route = f"/api/v1/sprints/{sprint['id']}/tasks/"
+    route = f"/sprints/{sprint['id']}/tasks/"
     if action == "ADD":
         reply = leader.post(
             route,
@@ -149,7 +149,7 @@ def test_task_cannot_enter_another_sprint_until_prior_scope_is_removed(task_api)
     body = {"expected_version": 1, "action": "ADD", "task_ids": [task["id"]]}
     assert (
         leader.post(
-            f"/api/v1/sprints/{first['id']}/tasks/",
+            f"/sprints/{first['id']}/tasks/",
             body,
             format="json",
             HTTP_IDEMPOTENCY_KEY="first-scope",
@@ -158,7 +158,7 @@ def test_task_cannot_enter_another_sprint_until_prior_scope_is_removed(task_api)
     )
     before = effect_state(task["project_id"])
     reply = leader.post(
-        f"/api/v1/sprints/{second['id']}/tasks/",
+        f"/sprints/{second['id']}/tasks/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="second-scope",

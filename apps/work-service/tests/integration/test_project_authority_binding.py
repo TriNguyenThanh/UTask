@@ -13,7 +13,7 @@ def test_project_creation_rejects_well_formed_snapshot_for_different_group(
     classroom.groups[group.group_id] = replace(group, group_id="other-group")
     before = Project.objects.count()
     reply = client_for(actors["leader"]).post(
-        "/api/v1/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="wrong-binding"
+        "/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="wrong-binding"
     )
     assert reply.status_code == 503 and reply.json()["error"]["code"] == "CLASSROOM_UNAVAILABLE"
     assert Project.objects.count() == before == 0

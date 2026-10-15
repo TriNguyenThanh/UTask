@@ -10,7 +10,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 def test_declared_username_is_not_proof_source_verifies_and_stale_unlink_ignored(
     created_project, actors, client_for
 ):
-    route = f"/api/v1/projects/{created_project['id']}/members/{actors['member']}/github/"
+    route = f"/projects/{created_project['id']}/members/{actors['member']}/github/"
     client = client_for(actors["member"])
     assert client.patch(route, {"github_username": "student"}, format="json").status_code == 200
     member = ProjectMember.objects.get(user_id=actors["member"])
@@ -40,8 +40,7 @@ def test_verification_notification_intent_replay_notifies_once(created_project, 
     from apps.messaging.models import OutboxEvent
 
     route = (
-        f"/api/v1/projects/{created_project['id']}/members/{actors['member']}/"
-        "github/request-verification/"
+        f"/projects/{created_project['id']}/members/{actors['member']}/github/request-verification/"
     )
     client = client_for(actors["leader"])
     first = client.post(route, {}, format="json", HTTP_IDEMPOTENCY_KEY="remind")

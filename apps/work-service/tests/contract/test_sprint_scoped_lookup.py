@@ -32,11 +32,11 @@ def test_denied_and_missing_sprint_have_identical_response_before_write_validati
     before = effect_state(created_project["id"])
 
     def request(sprint_id):
-        route = f"/api/v1/sprints/{sprint_id}/"
+        route = f"/sprints/{sprint_id}/"
         if operation in {"progress", "burndown"}:
             route += operation + "/"
         if operation == "start":
-            route = f"/api/v1/projects/{created_project['id']}/sprints/{sprint_id}/start/"
+            route = f"/projects/{created_project['id']}/sprints/{sprint_id}/start/"
         elif operation in {"scope", "close"}:
             route += "tasks/" if operation == "scope" else "close/"
         if operation in {"detail", "progress", "burndown"}:
@@ -56,10 +56,10 @@ def test_teacher_has_scoped_reads_and_members_read_without_classroom(
     created_project, actors, client_for, classroom, monkeypatch, operation
 ):
     sprint = Sprint.objects.create(project_id=created_project["id"], name="Visible sprint")
-    route = f"/api/v1/sprints/{sprint.pk}/" + ("" if operation == "detail" else operation + "/")
+    route = f"/sprints/{sprint.pk}/" + ("" if operation == "detail" else operation + "/")
     teacher = client_for(actors["teacher"])
     assert teacher.get(route).status_code == 200
-    denied = teacher.patch(f"/api/v1/sprints/{sprint.pk}/", {}, format="json")
+    denied = teacher.patch(f"/sprints/{sprint.pk}/", {}, format="json")
     assert (
         denied.status_code == 403
         and denied.json()["error"]["code"] == "TEACHER_MUTATION_RESTRICTED"

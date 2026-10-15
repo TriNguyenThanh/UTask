@@ -26,7 +26,7 @@ def test_access_token_key_id_must_match_identity_key(
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION="Bearer " + token)
     before = effect_state(created_project["id"])
-    response = client.get("/api/v1/projects/")
+    response = client.get("/projects/")
     assert response.status_code == expected, response.content
     if expected == 200:
         assert response.json()["data"][0]["id"] == created_project["id"]
@@ -43,6 +43,6 @@ def test_access_token_algorithm_is_rejected_before_identity_session_call(identit
     )
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION="Bearer " + token)
-    response = client.get("/api/v1/projects/")
+    response = client.get("/projects/")
     assert response.status_code == 401 and response["WWW-Authenticate"] == "Bearer"
     assert identity["calls"] == []

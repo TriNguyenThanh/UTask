@@ -14,7 +14,7 @@ def test_oversized_request_is_rejected_without_saved_changes(
     created_project, client_for, actors, settings, content_type
 ):
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/"
+    route = f"/projects/{created_project['id']}/"
     settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 1024
     payload = {"expected_version": 1, "description": "x" * 1025}
     body = json.dumps(payload) if content_type == "application/json" else urlencode(payload)
@@ -38,7 +38,7 @@ def test_deeply_nested_json_returns_validation_error_without_mutation(
     before = effect_state(created_project["id"])
     body = '{"expected_version":1,"tech_stack":{"nested":' + "[" * 1500 + "0" + "]" * 1500 + "}}"
     reply = client_for(actors["leader"]).patch(
-        f"/api/v1/projects/{created_project['id']}/", body, content_type="application/json"
+        f"/projects/{created_project['id']}/", body, content_type="application/json"
     )
     assert reply.status_code == 400
     assert reply.json()["error"]["code"] == "VALIDATION_ERROR"

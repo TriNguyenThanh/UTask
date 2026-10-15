@@ -31,7 +31,7 @@ def test_inactive_assignee_create_and_reassignment_leave_no_effect(task_api, act
     )
     assert response.status_code == 422, response.content
     response = leader.patch(
-        f"/api/v1/tasks/{task['id']}/",
+        f"/tasks/{task['id']}/",
         {"expected_version": 1, "assignee_ids": [str(actors["member"])]},
         format="json",
     )
@@ -75,7 +75,7 @@ def test_relation_self_foreign_and_duplicate_canonicalization(task_api, foreign_
     leader, _, create = task_api
     _, foreign = foreign_scope
     a, b = create(), create()
-    path = f"/api/v1/tasks/{a['id']}/relations/"
+    path = f"/tasks/{a['id']}/relations/"
     before = OutboxEvent.objects.count()
     for target in [a["id"], foreign["id"]]:
         response = leader.post(
@@ -91,7 +91,7 @@ def test_relation_self_foreign_and_duplicate_canonicalization(task_api, foreign_
     row = reply.json()["data"]
     assert UUID(row["task_id"]) < UUID(row["related_task_id"])
     inverse = leader.post(
-        f"/api/v1/tasks/{b['id']}/relations/",
+        f"/tasks/{b['id']}/relations/",
         {"related_task_id": a["id"], "relation_type": "DUPLICATE"},
         format="json",
     )
@@ -110,7 +110,7 @@ def test_non_assignee_cannot_change_workflow(task_api, actors, client_for, actio
     if action == "block":
         payload["blocked_reason"] = "Not assigned"
     reply = client_for(actors["member"]).patch(
-        f"/api/v1/tasks/{task['id']}/{action}/", payload, format="json"
+        f"/tasks/{task['id']}/{action}/", payload, format="json"
     )
     assert reply.status_code == 403, reply.content
     row = Task.objects.get(pk=task["id"])
@@ -135,7 +135,7 @@ def test_concurrent_rebalance_preserves_cards_and_rejects_stale_writer(
             client = client_for(actors["leader"])
             barrier.wait(timeout=10)
             return client.patch(
-                f"/api/v1/tasks/{task['id']}/transition/",
+                f"/tasks/{task['id']}/transition/",
                 {
                     "expected_version": 1,
                     "target_state_id": left["state_id"],
@@ -156,8 +156,6 @@ def test_concurrent_rebalance_preserves_cards_and_rejects_stale_writer(
     assert rows[0].pk == UUID(left["id"])
     assert rows[2].pk == UUID(right["id"])
     board = (
-        client_for(actors["leader"])
-        .get(f"/api/v1/projects/{left['project_id']}/kanban/")
-        .json()["data"]
+        client_for(actors["leader"]).get(f"/projects/{left['project_id']}/kanban/").json()["data"]
     )
     assert board["total_tasks"] == 4
