@@ -85,8 +85,13 @@ issue. Handler mock cũng từ chối (422) nếu thiếu lý do.
 - **Cách thay thế cho kéo** (WCAG 2.2, tiêu chí 2.5.7): mỗi thẻ/hàng có nút
   "Thao tác cho `<key>`" mở menu: chuyển sang từng cột, lên đầu/xuống cuối,
   chuyển vào Sprint hoặc về Product Backlog, đánh dấu bị chặn. Menu chỉ liệt kê
-  những gì người xem được phép. Tay nắm kéo ẩn với trình đọc màn hình vì đã có
-  menu này. Atlassian khuyến nghị dùng menu/nút thay cho phím mũi tên.
+  những gì người xem được phép. Atlassian khuyến nghị dùng menu/nút thay cho
+  phím mũi tên.
+- **Vùng kéo:** nhấn giữ rồi kéo ở bất kỳ đâu trên thẻ/hàng (không có tay nắm
+  riêng); con trỏ đổi thành bàn tay nắm trên thẻ kéo được. Nhấn rồi thả không kéo
+  vẫn mở chi tiết. Riêng nút menu bị loại khỏi vùng kéo (`data-drag-ignore`). Nút
+  "mở chi tiết" là phần tử `role="button"` chứ không phải `<button>`, vì Firefox
+  không bắt đầu kéo từ một `<button>`; bàn phím (Enter, Space) vẫn dùng được.
 - **Thông báo** qua live region
   (`@atlaskit/pragmatic-drag-and-drop-live-region`), ví dụ "NEXUS-101 đã chuyển
   từ Cần làm sang Đang làm" hoặc "… đã chuyển lên vị trí 2".

@@ -1,6 +1,7 @@
 import { AlertTriangle, Ban } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { PressableText } from "@/features/projects/components/PressableText";
 import type { Issue } from "@/features/projects/types";
 import {
   isOverdue,
@@ -18,15 +19,12 @@ import { cn } from "@/lib/utils";
 export function IssueCard({
   issue,
   onOpen,
-  handle,
   actions,
   highlighted = false,
   closestEdge = null,
 }: Readonly<{
   issue: Issue;
   onOpen: (key: string) => void;
-  /** Drag handle; rendered only when the viewer may drag this card. */
-  handle?: ReactNode;
   /** Per-card actions menu (the non-drag alternative to moving a card). */
   actions?: ReactNode;
   /** Briefly true right after a move, so the card flashes where it landed. */
@@ -57,7 +55,6 @@ export function IssueCard({
       ) : null}
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          {handle}
           <span
             className={cn(
               "shrink-0 rounded border px-1 py-0.5 text-[10px] font-semibold",
@@ -93,14 +90,13 @@ export function IssueCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onOpen(issue.key)}
+      <PressableText
+        onActivate={() => onOpen(issue.key)}
+        label={`Mở chi tiết issue ${issue.key}: ${issue.title}`}
         className="mb-3 block w-full rounded text-left text-xs font-medium leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        aria-label={`Mở chi tiết issue ${issue.key}: ${issue.title}`}
       >
         <span className={cn(done && "text-muted-foreground")}>{issue.title}</span>
-      </button>
+      </PressableText>
 
       {issue.blocked || overdue ? (
         <div className="mb-2 flex flex-wrap gap-1.5">

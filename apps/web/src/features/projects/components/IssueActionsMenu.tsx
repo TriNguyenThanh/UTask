@@ -44,6 +44,7 @@ export function IssueActionsMenu({
           size="icon-sm"
           className="size-6"
           data-issue-trigger={issueKey}
+          data-drag-ignore
           aria-label={`Thao tác cho ${issueKey}`}
         >
           <MoreHorizontal aria-hidden />

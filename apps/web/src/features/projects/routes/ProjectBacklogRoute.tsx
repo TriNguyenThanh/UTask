@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
-import { DragGrip } from "@/features/projects/dnd/DraggableIssueCard";
+import { PressableText } from "@/features/projects/components/PressableText";
 import { useDraggableIssue } from "@/features/projects/dnd/useDraggableIssue";
 import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
 import { daysLeft, STATUS_LABELS } from "@/features/projects/issueMeta";
@@ -97,14 +97,11 @@ function IssueRow({
   projectId,
   issue,
   onOpenIssue,
-  handle,
   actions,
 }: {
   projectId: string;
   issue: Issue;
   onOpenIssue: (projectId: string, issueKey: string) => void;
-  /** Drag grip, when the viewer may drag this row. */
-  handle?: ReactNode;
   /** Per-row actions menu, the non-drag way to move it. */
   actions?: ReactNode;
 }) {
@@ -114,7 +111,6 @@ function IssueRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-muted/50">
       <div className="flex min-w-0 items-center gap-3 pr-4">
-        {handle}
         <span
           className={cn(
             "flex size-3.5 shrink-0 items-center justify-center rounded text-white",
@@ -124,22 +120,20 @@ function IssueRow({
         >
           <TypeIcon className="size-2.5" aria-hidden />
         </span>
-        <button
-          type="button"
-          onClick={() => onOpenIssue(projectId, issue.key)}
+        <PressableText
+          onActivate={() => onOpenIssue(projectId, issue.key)}
+          label={`Mở issue ${issue.key}: ${issue.title}`}
           className="shrink-0 text-xs font-semibold text-primary hover:underline focus-visible:underline focus-visible:outline-none"
-          aria-label={`Mở issue ${issue.key}: ${issue.title}`}
         >
           {issue.key}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenIssue(projectId, issue.key)}
+        </PressableText>
+        <PressableText
+          onActivate={() => onOpenIssue(projectId, issue.key)}
+          label={`Mở issue ${issue.key}: ${issue.title}`}
           className="min-w-0 truncate text-left text-xs font-medium hover:text-primary focus-visible:underline focus-visible:outline-none"
-          aria-label={`Mở issue ${issue.key}: ${issue.title}`}
         >
           {issue.title}
-        </button>
+        </PressableText>
         {issue.hasPullRequest ? (
           <span
             className="inline-flex shrink-0 items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"
@@ -211,12 +205,10 @@ function BacklogRow({
   destination: readonly Issue[];
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const gripRef = useRef<HTMLSpanElement | null>(null);
   const isLeader = mover.role === "leader";
   const canDrag = isLeader && mover.canDragIssue(issue);
   const { dragging, closestEdge } = useDraggableIssue({
     elementRef: wrapperRef,
-    handleRef: gripRef,
     issueKey: issue.key,
     canDrag,
     canReorder: isLeader,
@@ -227,6 +219,7 @@ function BacklogRow({
       data-issue-key={issue.key}
       className={cn(
         "relative transition-colors",
+        canDrag && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
         mover.flashKey === issue.key && "bg-primary/10",
       )}
@@ -244,7 +237,6 @@ function BacklogRow({
         projectId={projectId}
         issue={issue}
         onOpenIssue={onOpenIssue}
-        handle={canDrag ? <DragGrip gripRef={gripRef} /> : null}
         actions={
           <IssueActionsMenu
             issueKey={issue.key}
