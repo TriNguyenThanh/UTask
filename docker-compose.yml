@@ -1,5 +1,22 @@
 name: utask
 
+# Một image cho các process thuộc AI Service.
+x-ai: &ai
+  image: ${UTASK_IMAGE_PREFIX:-utask}/ai-service:${UTASK_IMAGE_TAG:-local}
+  build: ./apps/ai-service
+  restart: unless-stopped
+  init: true
+  env_file:
+    - ./infra/env/ai-service.env
+  environment:
+    AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://ai_service:${AI_DB_PASSWORD:-}@ai-postgres:5432/ai_context_db}
+    AI_BROKER_URL: redis://redis:6379/1
+    AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
+    AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
+    AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+  extra_hosts:
+    - host.docker.internal:host-gateway
+
 services:
 
   postgres:
@@ -122,31 +139,68 @@ services:
         condition: service_healthy
     healthcheck: *django_healthcheck
 
-  ai-service:
-    image: ${UTASK_IMAGE_PREFIX:-utask}/ai-service:${UTASK_IMAGE_TAG:-local}
-    build: ./apps/ai-service
+  ai-postgres:
+    image: postgres:17-alpine
     restart: unless-stopped
-    env_file:
-      - ./infra/env/ai-service.env
     environment:
-      AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
-      AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
-      AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
-    extra_hosts:
-      - host.docker.internal:host-gateway
+      POSTGRES_USER: ai_service
+      POSTGRES_DB: ai_context_db
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-}
+    volumes:
+      - ai_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_service -d ai_context_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-migrate:
+    <<: *ai
+    restart: "no"
+    command: [alembic, upgrade, head]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+
+  ai-service:
+    <<: *ai
     volumes:
       - ./datasets:/app/datasets:ro
     depends_on:
-      work-service:
-        condition: service_healthy
-      integration-service:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 15s
+
+  ai-worker:
+    <<: *ai
+    command: [celery, -A, jobs.celery_app:celery_app, worker, --loglevel=INFO, --concurrency=2]
+    depends_on:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A jobs.celery_app:celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ai-dispatcher:
+    <<: *ai
+    command: [python, -m, jobs.dispatcher]
+    depends_on:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.27-alpine
@@ -170,6 +224,7 @@ services:
         condition: service_healthy
 
 volumes:
+  ai_database:
   postgres_data:
   redis_data:
   kafka_data:

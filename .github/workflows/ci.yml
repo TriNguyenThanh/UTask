@@ -38,7 +38,7 @@ jobs:
           filters: |
             shared:
               - '.github/workflows/**'
-              - 'scripts/tests/test_staging_deployment.py'
+              - 'scripts/tests/**'
               - 'scripts/discover_services.py'
               - 'scripts/ci_local.py'
               - 'docker-compose.yml'
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Test deployment configuration and failure handling
-        run: uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
+        run: uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p 'test_*.py'
       - run: cp .env.example .env
       - run: docker compose config --quiet
       - name: Validate staging Compose

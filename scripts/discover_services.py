@@ -66,8 +66,12 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
     checks, release, django_services = [], [], []
     for name, service in services.items():
         deps = dependencies(name)
+        needs_postgres = any(
+            compose[dependency].get("image", "").split(":")[0] == "postgres"
+            for dependency in deps
+        )
         test_env = {}
-        if "postgres" in deps:
+        if needs_postgres:
             test_env.update(
                 POSTGRES_HOST="127.0.0.1",
                 POSTGRES_PORT="5432",
@@ -89,7 +93,7 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
             checks.append(
                 {
                     "service": name,
-                    "postgres": "postgres" in deps,
+                    "postgres": needs_postgres,
                     "redis": "redis" in deps,
                     "test_env": json.dumps(test_env),
                 }

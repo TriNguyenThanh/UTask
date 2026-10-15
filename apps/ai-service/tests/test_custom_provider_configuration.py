@@ -31,6 +31,8 @@ def test_custom_openai_compatible_provider_is_configured_explicitly(monkeypatch)
         "api_base": "https://llm.example.test/v1",
         "api_key": "test-api-key",
         "num_retries": 0,
+        "max_retries": 0,
+        "response_format": {"type": "json_object"},
     }
     assert "test-api-key" not in repr(model)
 

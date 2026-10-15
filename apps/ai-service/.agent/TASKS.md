@@ -14,6 +14,52 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-15 — Chạy pipeline với LLM thật qua CLIProxyAPI
+
+- Trạng thái: Đã triển khai và xác minh local. API/dispatcher/worker, AI
+  PostgreSQL và Redis đang chạy bằng Compose riêng AI tại port 8000.
+  Domain quyền/context vẫn dùng fixture MOCK_TEST=true; chưa xác minh production.
+- Reuse adapter LiteLLM/ADK hiện có, không thêm provider/framework/service.
+  Provider bật JSON mode, tắt retry cả LiteLLM và SDK OpenAI. Workflow bắt
+  lỗi OpenAI/LiteLLM 429/5xx/kết nối/timeout để retry trong budget/deadline.
+  Output usage completion đã gồm reasoning nên không cộng thoughts lần nữa.
+- Proxy vẫn có thể bọc Markdown dù yêu cầu JSON mode. Workflow chỉ gỡ một
+  JSON fence bao trọn output trước typed validation; không trích JSON từ
+  văn bản tùy ý. Prose, JSON lỗi, field thừa và sai intent vẫn bị từ chối.
+  Text `thought=True` không được ghép vào JSON proposal; HTTP reasoning case
+  có regression test. Fixture HTTP đặt LITELLM_MODE=PROD trước import để SDK
+  không tự nạp `.env` developer, dùng model cost map local và đóng logging worker.
+- Files: `src/infrastructure/providers.py`, `src/workflow/bounded.py`,
+  `compose.yaml`, tests `test_custom_provider_configuration.py`,
+  `test_workflow.py`, `test_provider_http.py`; docs AI README/code-map/checkpoint.
+  Compose truyền model/base URL đã resolve và hỗ trợ override qua process.
+  JWT local refresh bằng utility hiện có, giữ DB/Fernet/LLM key; không ghi secret.
+- Kiểm tra: **281 passed, 0 skipped** với PostgreSQL 17/Redis 7 test riêng;
+  Ruff check/format **86 files pass**, Docker build/Compose health pass,
+  config override model/base cùng giá trị ở API/worker/dispatcher/migrate.
+  HTTP boundary tests dùng LiteLlm/LiteLLM/OpenAI thật, chỉ thay HTTPX transport:
+  tool roundtrip/call ID/JSON mode, 503 retry, 401 không retry, timeout retry.
+  Logging worker test được flush/stop; chỉ còn warning experimental ADK sẵn có.
+  Review độc lập phát hiện hai vấn đề dotenv/reasoning đã sửa; ba module liên
+  quan trên host **51 passed**, xác nhận không nạp credential developer.
+- Inference thật với `gemini-3.5-flash-lite`: task decomposition 3 subtasks
+  (14,1s, request `3e0eaa68-9f96-4890-8de7-fd7a96e364c7`), backlog 2 items
+  (5,1s, `b3d8eaf3-b057-457e-b04e-f99931bedb7f`), risk 2 risks
+  (5,2s, `10e0d18e-c352-411a-87ae-008138cb3386`); schema và required context
+  pass qua API → dispatcher → Redis/Celery → ADK → completion/API.
+  Model high cũ vượt hard deadline 30s; giữ hợp đồng deadline hiện có.
+  Smoke lại bản cuối: task 3 subtasks/13,1s (`368fdcc8-c80d-4349-b889-76cf514698f5`),
+  backlog 2 items/5,3s (`8e0c1d2c-a40a-4364-a49c-07ddd4fb737b`),
+  risk 1 risk/4,9s (`cde35f26-5126-467e-92d8-825aaadcf922`), đều succeeded.
+- GitNexus: impact provider LOW, workflow UNKNOWN được đối chiếu source/ADK
+  tests. Reindex incremental và detect_changes(all) đã chạy; báo CRITICAL trên
+  toàn worktree gồm thay đổi hạ tầng có sẵn. Mapping gán build_litellm_model
+  cho nhiều flow frontend không liên quan, nên chưa có verdict graph đáng tin
+  cho phạm vi cuối; không coi kiểm tra này là sạch. Không commit/push.
+- Lệnh tái khởi động local có override model được ghi trong docs README;
+  config model mặc định tại infra/env không đổi. Không benchmark chất lượng
+  hoặc triển khai staging/production. Không tự áp dụng proposal vào nghiệp vụ.
+
 ### 2026-10-14 — Giới hạn chống spam tối thiểu cho request AI
 
 - Trạng thái: Đã hoàn thành trong source và kiểm thử local; không deploy hoặc

@@ -209,6 +209,10 @@ jobs:
           "${compose[@]}" config --quiet
           "${compose[@]}" pull --quiet
           "${compose[@]}" up -d --no-build --wait --wait-timeout 120 postgres redis
+          if [[ " $service_names " == *" ai-service "* ]]; then
+            "${compose[@]}" up -d --no-build --wait --wait-timeout 120 ai-postgres redis
+            "${compose[@]}" run --rm --no-deps --interactive=false ai-migrate < /dev/null
+          fi
           for service in "${services[@]}"; do
             if [[ " $migration_names " == *" $service "* ]]; then
               "${compose[@]}" run --rm --no-deps --interactive=false "$service" /app/.venv/bin/python manage.py migrate --noinput < /dev/null

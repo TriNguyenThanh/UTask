@@ -42,6 +42,31 @@ async def test_adk_workflow_returns_validated_proposal(payload, principal):
     assert calls == {"model": 1, "tool": 0, "output": 10}
 
 
+@pytest.mark.parametrize("language", ["json", ""])
+async def test_complete_json_fence_is_validated(payload, principal, language):
+    response, calls = await run(
+        payload, principal, [f'```{language}\n{{"items":[],"warnings":[]}}\n```']
+    )
+    assert response.status == "succeeded"
+    assert calls["model"] == 1
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        'Explanation\n```json\n{"items":[],"warnings":[]}\n```',
+        '```json\n{"items":[],"warnings":[]}\n```\nExplanation',
+        '```json\n{"items":[],"warnings":[],"extra":true}\n```',
+        '```json\n{"subtasks":[],"warnings":[]}\n```',
+        "```json\ninvalid\n```",
+    ],
+)
+async def test_wrapped_output_does_not_bypass_json_or_intent_schema(payload, principal, raw):
+    with pytest.raises(ServiceError) as error:
+        await run(payload, principal, [raw, raw])
+    assert error.value.code == "OUTPUT_VALIDATION_FAILED"
+
+
 @pytest.mark.asyncio
 async def test_adk_workflow_revises_wrong_schema_once(payload, principal):
     response, calls = await run(
@@ -171,3 +196,93 @@ async def test_custom_provider_uses_key_from_settings_without_exporting_secret(
     import os
 
     assert "AI_LLM_API_KEY" not in os.environ
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+async def test_litellm_transient_error_retries_with_shared_budget(payload, principal, status):
+    from litellm import APIError
+
+    error = APIError(status, "provider secret", "openai", "test-model")
+    response, calls = await run(payload, principal, [error, '{"items":[],"warnings":[]}'])
+    assert response.status == "succeeded"
+    assert calls["model"] == 2
+    with pytest.raises(ServiceError) as exhausted:
+        await run(payload, principal, [error, error])
+    assert exhausted.value.retryable
+    assert "provider secret" not in str(exhausted.value)
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+async def test_litellm_permanent_error_does_not_retry(payload, principal, status):
+    from litellm import APIError
+
+    calls = []
+
+    async def charge(kind, limit, amount=1):
+        calls.append(kind)
+        return limit - amount
+
+    with pytest.raises(ServiceError) as failure:
+        await run(
+            payload, principal, [APIError(status, "secret", "openai", "test-model")], charge=charge
+        )
+    assert not failure.value.retryable
+    assert calls.count("model") == 1
+
+
+async def test_litellm_timeout_retries_within_model_budget(payload, principal):
+    from litellm import Timeout
+
+    response, calls = await run(
+        payload,
+        principal,
+        [Timeout("secret", "test-model", "openai"), '{"items":[],"warnings":[]}'],
+    )
+    assert response.status == "succeeded"
+    assert calls["model"] == 2
+
+
+@pytest.mark.parametrize(
+    "usage,expected",
+    [
+        (
+            types.GenerateContentResponseUsageMetadata(
+                candidates_token_count=10, thoughts_token_count=6
+            ),
+            10,
+        ),
+        (None, 20),
+    ],
+)
+async def test_litellm_reasoning_is_included_once_and_missing_usage_uses_cap(
+    payload,
+    principal,
+    usage,
+    expected,
+):
+    class UsageModel(ScriptedModel):
+        async def generate_content_async(self, llm_request, stream=False):
+            async for response in super().generate_content_async(llm_request, stream):
+                response.usage_metadata = usage
+                yield response
+
+    charged = []
+
+    async def charge(kind, limit, amount=1):
+        if kind == "output" and amount:
+            charged.append(amount)
+        return limit - amount
+
+    settings = Settings(_env_file=None, max_output_tokens=20)
+    pool = ContextToolPool(FakeGateway(), principal, payload, charge, 5)
+    now = datetime.now(UTC)
+    response = await AdkRuntime(settings, UsageModel(['{"items":[],"warnings":[]}'])).run(
+        uuid4(),
+        payload,
+        now,
+        pool,
+        charge,
+        now + timedelta(seconds=1),
+    )
+    assert response.status == "succeeded"
+    assert charged == [expected]
