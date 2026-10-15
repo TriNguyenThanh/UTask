@@ -104,6 +104,17 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
 
 ## LLM providers
 
+- `infrastructure/providers.py`: endpoint OpenAI-compatible qua LiteLLM,
+  JSON mode, tắt retry ở cả LiteLLM và SDK, deadline/budget callback.
+  Usage completion đã gồm reasoning nên không cộng thoughts lần nữa.
+- `workflow/bounded.py`: retry lỗi Google và OpenAI/LiteLLM có thể phục hồi
+  trong cùng model/output budget và số vòng revise; gỡ một JSON fence bao
+  trọn output trước validation, không trích JSON từ văn bản tùy ý.
+- `tests/test_provider_http.py`: ADK/LiteLLM/OpenAI thật với HTTP transport
+  fake; kiểm tra JSON mode, tool roundtrip, HTTP 503/401 và timeout.
+  Test không cần credential/provider ngoài. LLM local đã gọi thật ngày
+  2026-10-15; domain context và production vẫn **Chưa xác minh**.
+
 Lock hiện dùng Google ADK 2.11, LiteLLM, Celery 5.6, SQLAlchemy 2.1,
 Psycopg 3 và Alembic; phiên bản cụ thể nằm trong `uv.lock`. Không có model mặc định
 trong code; `build_litellm_model` yêu cầu `AI_MODEL` theo ID gốc hoặc route `openai/<id>`,

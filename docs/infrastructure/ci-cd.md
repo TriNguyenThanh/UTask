@@ -14,7 +14,7 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 
 CI và script local dùng `scripts/discover_services.py` để tự nhận diện thư mục trực
 tiếp trong `apps/` có đủ `pyproject.toml`, `uv.lock` và Dockerfile. Hiện nhận diện
-Identity; không còn danh sách `STAGING_SERVICES` phải sửa tay trong workflow. Thư mục
+Identity và AI; không còn danh sách `STAGING_SERVICES` phải sửa tay trong workflow. Thư mục
 chỉ có README được bỏ qua. Có một phần đầu vào thì báo lỗi thiếu file, không bỏ qua để
 báo xanh. Kết quả nhận diện là đầu vào build/test, chưa phải xác nhận tính năng hoàn thiện.
 
@@ -69,7 +69,7 @@ pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một
 Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Nếu cần biến test
 khác với quy ước chung, khai báo `x-ci.test_env` cạnh service, không cần sao chép workflow
 hoặc tạo môi trường staging cho test.
-Hiện chỉ Identity có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` kiểm tra
+Hiện Identity và AI có `pyproject.toml`, `uv.lock` và Dockerfile. Bộ lọc `shared` kiểm tra
 các service đang bật; không dùng source thiếu của service chưa bật để chặn Identity.
 
 Schema tests xuất OpenAPI từ URLconf/serializers thật và kiểm response của các API.
@@ -92,7 +92,7 @@ Script không đẩy image hoặc triển khai staging. `--skip-images` bỏ bư
 Kiểm tra regression của cấu hình lựa chọn service và việc dừng deploy khi migration lỗi:
 
 ```bash
-uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p test_staging_deployment.py
+uv run --project apps/identity-service --locked python -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
 Test shell deploy chạy trên Linux (cùng nền tảng runner). Kiểm tra cú pháp workflow bằng
@@ -229,8 +229,10 @@ Workflow đóng stdin cho các lệnh Docker chạy bên trong script SSH truy�
 lệnh migration và nghiệm thu không được tiêu thụ phần script deploy còn lại.
 Workflow chạy `manage.py migrate --noinput` cho app có dependency Django được nhận diện,
 bằng `/app/.venv/bin/python`. App không có Django không bị ép chạy lệnh Django.
-Migration lỗi dừng trước bước khởi động app mới. Khi thêm
-service dùng framework hoặc lệnh khác, cập nhật bước chuẩn bị runtime tương ứng.
+Với AI đang bật, workflow khởi động `ai-postgres`, chờ healthy rồi chạy
+`ai-migrate` bằng Alembic trước bước `up` toàn stack. Migration lỗi dừng trước
+bước khởi động app mới. Khi thêm service dùng framework hoặc lệnh khác,
+cập nhật bước chuẩn bị runtime tương ứng.
 Đây không phải bảo đảm zero downtime hay rollback database tự động. Bước cuối kiểm tra
 migration Identity và health qua gateway, không thay thế nghiệm thu mọi API.
 
@@ -251,3 +253,37 @@ Nếu chưa cấu hình Environment hoặc secrets, bước triển khai sẽ d�
 Baseline yêu cầu production từ release/tag hoặc workflow được kiểm soát, với PostgreSQL,
 Redis/Kafka bên ngoài và secrets của nền tảng production. Compose local/staging không thay thế quyết
 định hạ tầng đó. Khi có production cần Environment/quy trình triển khai riêng và image SHA.
+
+## Pipeline AI trong CI/CD
+
+**Đã triển khai trong cấu hình và kiểm thử:** CI vẫn build/publish một image
+`ai-service`; staging dùng cùng tag SHA cho `ai-service`, `ai-worker`,
+`ai-dispatcher`, `ai-migrate`. Bốn process và `ai-postgres` cùng profile
+`ai-service`. Nhận diện app dựa trên thư mục source; các process phụ không tạo
+thêm entry build. API không chờ Work/Integration tại Compose; REST adapter
+vẫn kiểm tra quyền/context và từ chối khi domain chưa sẵn sàng.
+
+AI phụ thuộc PostgreSQL 17 riêng với volume `ai_database`, không đổi dữ liệu
+PostgreSQL Django. Broker dùng Redis chung DB1. `x-ci.test_env` của AI cấp
+`TEST_DATABASE_NAME=ai_test`, `TEST_DATABASE_URL`, `TEST_REDIS_URL`; workflow
+Python tạo database test theo tên được validate rồi chạy pytest. Script nhận
+diện PostgreSQL theo image của dependency, nên `ai-postgres` cũng bật PostgreSQL
+cho CI. Runner hiện dùng PostgreSQL 16 để test, còn runtime AI dùng 17.
+
+Deploy AI chờ PostgreSQL AI/Redis rồi chạy Alembic trước khi khởi động các
+process; `depends_on: service_completed_successfully` vẫn bảo vệ khi chạy
+Compose thủ công. Migration là lệnh idempotent tới `head`, có thể chạy lại khi
+Compose tạo container migration. Nếu không bật AI thì không chạy bước Alembic
+hoặc khởi động PostgreSQL AI. Không có chuyển dữ liệu tự động từ Compose AI riêng.
+
+Trên VPS, điền password DB, khóa Fernet, JWT issuer/audience và public key hoặc
+JWKS, URL REST quyền/context, model/base URL/API key trong `.env` server theo
+[biến môi trường](environment.md#cấu-hình-ai-trong-compose-root). Staging mặc
+định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; không dùng mock development
+hoặc endpoint proxy local làm cấu hình staging mặc định.
+
+`--wait` kiểm tra API health và Celery ping; dispatcher hiện chưa có healthcheck.
+Bước nghiệm thu cuối workflow vẫn chỉ kiểm tra Identity qua gateway. CI test
+pipeline dùng model giả, không xác nhận LLM thật hoặc domain production. Triển
+khai trên GitHub/VPS **Chưa xác minh**; thay đổi này không bảo đảm zero downtime
+hoặc rollback database tự động.

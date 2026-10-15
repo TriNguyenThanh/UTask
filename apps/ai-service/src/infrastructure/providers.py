@@ -69,6 +69,8 @@ def build_litellm_model(settings: Settings) -> LiteLlm:
         api_base=settings.llm_api_base,
         api_key=settings.llm_api_key.get_secret_value(),
         num_retries=0,
+        max_retries=0,
+        response_format={"type": "json_object"},
     )
 
 
@@ -105,7 +107,8 @@ class AdkRuntime:
             usage = llm_response.usage_metadata
             # Khi SDK thiếu usage, trừ toàn bộ cap; không cho budget trở thành vô hạn.
             tokens = (
-                (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+                # LiteLlm maps completion_tokens (including reasoning) to candidates.
+                usage.candidates_token_count
                 if usage and usage.candidates_token_count is not None
                 else output_allowance
             )
