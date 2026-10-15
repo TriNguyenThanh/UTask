@@ -79,6 +79,11 @@ export function canAssignTask(ctx: ProjectPermissionContext): boolean {
   return ctx.role === "leader";
 }
 
+/** Ordering the backlog and changing sprint scope belong to the leader (US-3.1). */
+export function canReorderIssues(ctx: ProjectPermissionContext): boolean {
+  return ctx.role === "leader";
+}
+
 export function canManageSprint(ctx: ProjectPermissionContext): boolean {
   return ctx.role === "leader";
 }
