@@ -111,7 +111,7 @@ describe("Backlog: who may do what", () => {
     await screen.findByText("NEXUS-110", {}, { timeout: 5000 });
     expect(row("NEXUS-110").getAttribute("draggable")).not.toBe("true");
     expect(row("NEXUS-101").getAttribute("draggable")).not.toBe("true");
-    expect(screen.queryByTitle("Kéo để di chuyển")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("[draggable='true']")).toHaveLength(0);
   });
 
   it("gives a member a menu only on their own issues, without sprint or ordering items", async () => {
@@ -132,6 +132,6 @@ describe("Backlog: who may do what", () => {
 
     await screen.findByText("NEXUS-110", {}, { timeout: 5000 });
     expect(screen.queryByRole("button", { name: /^Thao tác cho/ })).not.toBeInTheDocument();
-    expect(screen.queryByTitle("Kéo để di chuyển")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("[draggable='true']")).toHaveLength(0);
   });
 });

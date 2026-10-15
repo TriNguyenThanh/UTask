@@ -175,14 +175,16 @@ function isDraggable(key: string) {
 }
 
 describe("Kanban board: drag registration follows the permissions", () => {
-  it("makes every card draggable for the leader, with a grip on each", async () => {
+  it("makes every card draggable for the leader", async () => {
     renderAppRoutes(BOARD, leaderTestSession);
 
     await screen.findByText("NEXUS-104");
     for (const key of ["NEXUS-101", "NEXUS-104", "NEXUS-98"]) expect(isDraggable(key)).toBe(true);
-    expect(screen.getAllByTitle("Kéo để di chuyển").length).toBe(
+    // The whole card is the drag source: one draggable per card, no grip.
+    expect(document.querySelectorAll("[draggable='true']")).toHaveLength(
       screen.getAllByRole("article").length,
     );
+    expect(screen.queryByTitle("Kéo để di chuyển")).not.toBeInTheDocument();
   });
 
   it("makes only a member's own cards draggable", async () => {
@@ -192,14 +194,14 @@ describe("Kanban board: drag registration follows the permissions", () => {
     expect(isDraggable("NEXUS-101")).toBe(true);
     expect(isDraggable("NEXUS-105")).toBe(true);
     expect(isDraggable("NEXUS-104")).toBe(false);
-    expect(screen.getAllByTitle("Kéo để di chuyển")).toHaveLength(2);
+    expect(document.querySelectorAll("[draggable='true']")).toHaveLength(2);
   });
 
   it("makes nothing draggable for an instructor or when the demo writes are off", async () => {
     const { unmount } = renderAppRoutes(BOARD, teacherTestSession);
     await screen.findByText("NEXUS-104");
     expect(isDraggable("NEXUS-104")).toBe(false);
-    expect(screen.queryByTitle("Kéo để di chuyển")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("[draggable='true']")).toHaveLength(0);
     unmount();
 
     vi.stubEnv("VITE_ENABLE_MOCKS", "false");
@@ -257,5 +259,34 @@ describe("Issue panel status", () => {
 
     const select = await screen.findByLabelText("Trạng thái");
     expect(select).toBeDisabled();
+  });
+});
+
+describe("Kanban board: pressing anywhere on a card", () => {
+  it("still opens the issue on a click and from the keyboard", async () => {
+    const user = userEvent.setup();
+    const { router } = renderAppRoutes(BOARD, leaderTestSession);
+
+    const open = await screen.findByRole(
+      "button",
+      { name: /Mở chi tiết issue NEXUS-101/ },
+      { timeout: 5000 },
+    );
+    await user.click(open);
+    await waitFor(() => expect(router.state.location.search).toContain("issue=NEXUS-101"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(router.state.location.search).not.toContain("issue="));
+
+    open.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(router.state.location.search).toContain("issue=NEXUS-101"));
+  });
+
+  it("keeps the actions menu out of the drag area", async () => {
+    renderAppRoutes(BOARD, leaderTestSession);
+
+    const menu = await screen.findByRole("button", { name: "Thao tác cho NEXUS-101" }, { timeout: 5000 });
+    expect(menu).toHaveAttribute("data-drag-ignore");
+    expect(menu.closest("[draggable='true']")).not.toBeNull();
   });
 });

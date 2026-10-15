@@ -7,6 +7,9 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useEffect, useState, type RefObject } from "react";
 
+/** Elements inside a card that must never start a drag (the actions menu). */
+const DRAG_IGNORE = "[data-drag-ignore]";
+
 /** What every issue drag carries, so a drop target can tell what was dropped. */
 export const ISSUE_DRAG = "issue" as const;
 
@@ -15,8 +18,8 @@ export function isIssueDrag(data: Record<string | symbol, unknown>): boolean {
 }
 
 /**
- * Makes one issue element a drag source (from its grip only) and a drop
- * target for other issues. Returns whether it is being dragged and, while
+ * Makes one issue element a drag source (pressing anywhere on it, except on
+ * controls marked `data-drag-ignore`) and a drop target for other issues. Returns whether it is being dragged and, while
  * another issue hovers over it, the edge that issue would land on.
  *
  * `canDrag` false registers no drag source at all. `canReorder` false (a
@@ -25,13 +28,11 @@ export function isIssueDrag(data: Record<string | symbol, unknown>): boolean {
  */
 export function useDraggableIssue({
   elementRef,
-  handleRef,
   issueKey,
   canDrag,
   canReorder,
 }: Readonly<{
   elementRef: RefObject<HTMLElement | null>;
-  handleRef: RefObject<HTMLElement | null>;
   issueKey: string;
   canDrag: boolean;
   canReorder: boolean;
@@ -61,10 +62,18 @@ export function useDraggableIssue({
       }),
     ];
     if (canDrag) {
+      // `canDrag` runs at dragstart and only sees the element; remember what
+      // was pressed so a press on the menu button can be refused.
+      let pressed: EventTarget | null = null;
+      const remember = (event: Event) => {
+        pressed = event.target;
+      };
+      element.addEventListener("pointerdown", remember, true);
+      cleanups.push(() => element.removeEventListener("pointerdown", remember, true));
       cleanups.push(
         draggable({
           element,
-          dragHandle: handleRef.current ?? undefined,
+          canDrag: () => !(pressed instanceof Element && pressed.closest(DRAG_IGNORE)),
           getInitialData: () => ({ type: ISSUE_DRAG, key: issueKey }),
           onDragStart: () => setDragging(true),
           onDrop: () => setDragging(false),
@@ -72,7 +81,7 @@ export function useDraggableIssue({
       );
     }
     return combine(...cleanups);
-  }, [canDrag, canReorder, elementRef, handleRef, issueKey]);
+  }, [canDrag, canReorder, elementRef, issueKey]);
 
   return { dragging, closestEdge };
 }
