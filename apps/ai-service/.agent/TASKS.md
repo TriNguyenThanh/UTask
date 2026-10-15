@@ -14,6 +14,94 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-15 — Chạy pipeline với LLM thật qua CLIProxyAPI
+
+- Trạng thái: Đã triển khai và xác minh local. API/dispatcher/worker, AI
+  PostgreSQL và Redis đang chạy bằng Compose riêng AI tại port 8000.
+  Domain quyền/context vẫn dùng fixture MOCK_TEST=true; chưa xác minh production.
+- Reuse adapter LiteLLM/ADK hiện có, không thêm provider/framework/service.
+  Provider bật JSON mode, tắt retry cả LiteLLM và SDK OpenAI. Workflow bắt
+  lỗi OpenAI/LiteLLM 429/5xx/kết nối/timeout để retry trong budget/deadline.
+  Output usage completion đã gồm reasoning nên không cộng thoughts lần nữa.
+- Proxy vẫn có thể bọc Markdown dù yêu cầu JSON mode. Workflow chỉ gỡ một
+  JSON fence bao trọn output trước typed validation; không trích JSON từ
+  văn bản tùy ý. Prose, JSON lỗi, field thừa và sai intent vẫn bị từ chối.
+  Text `thought=True` không được ghép vào JSON proposal; HTTP reasoning case
+  có regression test. Fixture HTTP đặt LITELLM_MODE=PROD trước import để SDK
+  không tự nạp `.env` developer, dùng model cost map local và đóng logging worker.
+- Files: `src/infrastructure/providers.py`, `src/workflow/bounded.py`,
+  `compose.yaml`, tests `test_custom_provider_configuration.py`,
+  `test_workflow.py`, `test_provider_http.py`; docs AI README/code-map/checkpoint.
+  Compose truyền model/base URL đã resolve và hỗ trợ override qua process.
+  JWT local refresh bằng utility hiện có, giữ DB/Fernet/LLM key; không ghi secret.
+- Kiểm tra: **281 passed, 0 skipped** với PostgreSQL 17/Redis 7 test riêng;
+  Ruff check/format **86 files pass**, Docker build/Compose health pass,
+  config override model/base cùng giá trị ở API/worker/dispatcher/migrate.
+  HTTP boundary tests dùng LiteLlm/LiteLLM/OpenAI thật, chỉ thay HTTPX transport:
+  tool roundtrip/call ID/JSON mode, 503 retry, 401 không retry, timeout retry.
+  Logging worker test được flush/stop; chỉ còn warning experimental ADK sẵn có.
+  Review độc lập phát hiện hai vấn đề dotenv/reasoning đã sửa; ba module liên
+  quan trên host **51 passed**, xác nhận không nạp credential developer.
+- Inference thật với `gemini-3.5-flash-lite`: task decomposition 3 subtasks
+  (14,1s, request `3e0eaa68-9f96-4890-8de7-fd7a96e364c7`), backlog 2 items
+  (5,1s, `b3d8eaf3-b057-457e-b04e-f99931bedb7f`), risk 2 risks
+  (5,2s, `10e0d18e-c352-411a-87ae-008138cb3386`); schema và required context
+  pass qua API → dispatcher → Redis/Celery → ADK → completion/API.
+  Model high cũ vượt hard deadline 30s; giữ hợp đồng deadline hiện có.
+  Smoke lại bản cuối: task 3 subtasks/13,1s (`368fdcc8-c80d-4349-b889-76cf514698f5`),
+  backlog 2 items/5,3s (`8e0c1d2c-a40a-4364-a49c-07ddd4fb737b`),
+  risk 1 risk/4,9s (`cde35f26-5126-467e-92d8-825aaadcf922`), đều succeeded.
+- GitNexus: impact provider LOW, workflow UNKNOWN được đối chiếu source/ADK
+  tests. Reindex incremental và detect_changes(all) đã chạy; báo CRITICAL trên
+  toàn worktree gồm thay đổi hạ tầng có sẵn. Mapping gán build_litellm_model
+  cho nhiều flow frontend không liên quan, nên chưa có verdict graph đáng tin
+  cho phạm vi cuối; không coi kiểm tra này là sạch. Không commit/push.
+- Lệnh tái khởi động local có override model được ghi trong docs README;
+  config model mặc định tại infra/env không đổi. Không benchmark chất lượng
+  hoặc triển khai staging/production. Không tự áp dụng proposal vào nghiệp vụ.
+
+### 2026-10-14 — Giới hạn chống spam tối thiểu cho request AI
+
+- Trạng thái: Đã hoàn thành trong source và kiểm thử local; không deploy hoặc
+  chạy migration trên database nghiệp vụ.
+- Phạm vi: tối đa 5 request mới/user trong cửa sổ trượt 60 giây và 2 request
+  queued/running/user. Cấu hình `AI_REQUESTS_PER_MINUTE` và
+  `AI_MAX_ACTIVE_REQUESTS_PER_USER`, không chấp nhận giá trị nhỏ hơn 1.
+- Enqueue dùng advisory transaction lock theo user trong PostgreSQL hiện có;
+  kiểm tra replay/conflict trước giới hạn. Không tạo request/delivery khi
+  từ chối; completion chưa được API tiếp nhận vẫn giữ slot. Đổi key/target
+  không vượt giới hạn. Không thêm bảng bộ đếm hoặc hạ tầng mới.
+- API trả `429 RATE_LIMITED`, reason `REQUEST_RATE_LIMIT` hoặc
+  `ACTIVE_REQUEST_LIMIT`, `retryable=true`, `Retry-After` và số giây trong
+  details. Lỗi budget giữ mapping/envelope cũ, không có header admission.
+- Files: `src/config.py`, `src/infrastructure/{bootstrap,repositories}.py`,
+  `src/infrastructure/db/tables.py`, `src/api/exception_handlers.py`,
+  migration `0003_request_admission.py`, tests `test_admission.py`,
+  `test_admission_transport.py` và quota riêng test completion 8 job pending.
+  Cập nhật env thường, contract API v1 và docs AI README/API/architecture/ERD/code-map.
+- Tests: toàn suite **257 passed, 0 skipped**, PostgreSQL 17 và Redis 7 test
+  riêng; ADK thật với model fake. Bao phủ cửa sổ đúng 60 giây, replay/conflict,
+  user isolation, queued/running/completion, terminal release, rollback và
+  tranh chấp qua 6 engine độc lập. Migration upgrade/downgrade và ORM parity pass.
+  Hai regression test HTTP thất bại đúng tại expected 429 khi thay enqueue
+  bằng implementation HEAD cũ, pass trên implementation mới.
+- Validation: Ruff check/format **85 file pass**, Docker build
+  `utask/ai-service:admission-check` pass. Smoke image mới với JWT ký thật và
+  PostgreSQL test: health, POST 202, 429/Retry-After, replay và polling pass,
+  không gọi LLM. Kiểm tra 66 link file nội bộ không hỏng; `git diff --check` pass.
+  Host thiếu uv/Python 3.12 nên suite chạy trong container, mount source hiện tại.
+- Review/GitNexus: review độc lập không có finding cần sửa. Reindex source và
+  detect_changes(all) nhận diện 28 symbol/5 flow/14 file tracked, risk MEDIUM,
+  response không partial/truncated. Pre-edit HTTP error helper HIGH với 4
+  caller đã cảnh báo và kiểm thử. Constructor/enqueue UNKNOWN được đối chiếu
+  source/tests; graph diff không bao phủ file untracked, inventory và suite
+  kiểm tra migration/hai file test mới. Flow enumeration có giới hạn và chưa
+  có PDG, không kết luận mọi flow hoặc taint đều đã được graph kiểm chứng.
+- Giới hạn: đây là giới hạn tạo job, không chặn mọi HTTP flood/polling. Budget,
+  reauthorization, tool scope và proposal boundary hiện có được giữ nguyên.
+  Chatbot, lịch 06:00/22:00 chống trùng và chống lặp thông báo chỉ ghi rõ
+  thiết kế tối thiểu; chưa tạo runtime hoặc tuyên bố đã triển khai.
+
 ### 2026-10-09 — Chọn rõ Gemini Developer API và bỏ model fallback
 
 - Trạng thái: Đã hoàn thành; user xác nhận Gemini Developer API, model chỉ

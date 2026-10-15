@@ -31,6 +31,7 @@ src/
 - `api/dependencies.py`: Bearer → authenticator protocol; bỏ header identity.
 - `api/middleware.py`, `exception_handlers.py`: UUID trace, error envelope
   v1, không đưa raw validation input/exception vào response/log.
+  Lỗi giới hạn tiếp nhận trả `Retry-After`, không thêm header cho lỗi budget.
 - `models/requests.py`: intent/target/input/version; kiểm tra analysis window.
 - `models/validation.py`: output schema riêng theo intent.
 
@@ -87,6 +88,8 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
 - `infrastructure/repositories.py`: transaction enqueue + delivery,
   unique user/key, claim, budget, fencing, retry/redelivery/expiry/dead-letter
   và completion inbox.
+  Advisory lock theo user bảo vệ giới hạn 5 request mới/60 giây và 2 request
+  queued/running; replay/conflict được kiểm tra trước giới hạn. Ngưỡng qua config.
 - `infrastructure/completions.py`: listener trong API lifespan; LISTEN trước
   khi đọc inbox, nhận NOTIFY, reconnect và phục hồi định kỳ; không chạy model.
 - `infrastructure/db/tables.py`: ORM metadata của bốn bảng AI.
@@ -94,10 +97,23 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
   không tạo schema khi startup. Test so sánh migration với ORM trên PostgreSQL.
 - `migrations/versions/0002_completion_handoff.py`: completion inbox và index;
   migration bắt buộc trước API/worker dùng bàn giao kết quả.
+- `migrations/versions/0003_request_admission.py`: hai index đếm request theo
+  user/thời gian và user/trạng thái active; không thêm bảng hay broker.
 - `infrastructure/security.py`: JWT và Fernet credential vault; xóa ciphertext
   khi bàn giao completion hoặc terminal. `infrastructure/bootstrap.py`: SQLAlchemy connection pool.
 
 ## LLM providers
+
+- `infrastructure/providers.py`: endpoint OpenAI-compatible qua LiteLLM,
+  JSON mode, tắt retry ở cả LiteLLM và SDK, deadline/budget callback.
+  Usage completion đã gồm reasoning nên không cộng thoughts lần nữa.
+- `workflow/bounded.py`: retry lỗi Google và OpenAI/LiteLLM có thể phục hồi
+  trong cùng model/output budget và số vòng revise; gỡ một JSON fence bao
+  trọn output trước validation, không trích JSON từ văn bản tùy ý.
+- `tests/test_provider_http.py`: ADK/LiteLLM/OpenAI thật với HTTP transport
+  fake; kiểm tra JSON mode, tool roundtrip, HTTP 503/401 và timeout.
+  Test không cần credential/provider ngoài. LLM local đã gọi thật ngày
+  2026-10-15; domain context và production vẫn **Chưa xác minh**.
 
 Lock hiện dùng Google ADK 2.11, LiteLLM, Celery 5.6, SQLAlchemy 2.1,
 Psycopg 3 và Alembic; phiên bản cụ thể nằm trong `uv.lock`. Không có model mặc định
@@ -108,6 +124,11 @@ cung cấp cụ thể hoặc chạy evaluation production.
 
 ## Tests và tooling
 
+- `test_admission.py`: quyết định giới hạn, cấu hình, replay/conflict, cửa sổ
+  60 giây, queued/running/completion, giải phóng slot và POST đồng thời qua
+  nhiều connection PostgreSQL.
+- `test_admission_transport.py`: lỗi 429/Retry-After và wire schema v1, không
+  đổi lỗi budget; API từ chối key mới nhưng vẫn cho replay/polling.
 - `test_completion_unit.py`: application tiếp nhận, listener reconnect khi
   connect/LISTEN/accept/notify lỗi, thứ tự LISTEN/read, cancellation và cleanup.
 - `test_completion_postgres.py`: handoff bền vững, NOTIFY thật, API lifespan

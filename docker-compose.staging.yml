@@ -195,19 +195,118 @@ services:
     healthcheck: *django_healthcheck
 
   ai-service:
+    x-deploy:
+      gateway_health_path: null
+    init: true
+    x-ci:
+      test_env:
+        TEST_DATABASE_NAME: ai_test
+        TEST_DATABASE_URL: postgresql+psycopg://utask_ci:ci-only-postgres-password@127.0.0.1:5432/ai_test
+        TEST_REDIS_URL: redis://127.0.0.1:6379/15
     profiles: [ai-service]
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/ai-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    image: &ai_image ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/ai-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
     restart: unless-stopped
-    env_file:
+    env_file: &ai_env_files
       - ./infra/env/ai-service.env
-    volumes:
+    environment: &ai_environment
+      AI_ENVIRONMENT: ${AI_ENVIRONMENT:-staging}
+      MOCK_TEST: ${MOCK_TEST:-false}
+      AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://ai_service:${AI_DB_PASSWORD:-}@ai-postgres:5432/ai_context_db}
+      AI_BROKER_URL: ${AI_BROKER_URL:-redis://redis:6379/1}
+      AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
+      AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
+      AI_JWT_JWKS_URL: ${AI_JWT_JWKS_URL:-}
+      AI_JWT_ISSUER: ${AI_JWT_ISSUER:-}
+      AI_JWT_AUDIENCE: ${AI_JWT_AUDIENCE:-utask-ai}
+      AI_JWT_ALGORITHM: ${AI_JWT_ALGORITHM:-RS256}
+      AI_AUTHORIZATION_URLS: ${AI_AUTHORIZATION_URLS:-{}}
+      AI_CONTEXT_URLS: ${AI_CONTEXT_URLS:-{}}
+      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-litellm}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+      AI_LLM_API_BASE: ${AI_LLM_API_BASE:-}
+    volumes: &ai_volumes
       - ./datasets:/app/datasets:ro
-    depends_on:
-      work-service:
+    depends_on: &ai_dependencies
+      ai-postgres:
         condition: service_healthy
-      integration-service:
+      redis:
         condition: service_healthy
+      ai-migrate:
+        condition: service_completed_successfully
     healthcheck: *django_healthcheck
+
+  ai-worker:
+    x-deploy: &ai_worker
+      role: worker
+      application: ai-service
+    init: true
+    profiles: [ai-service]
+    image: *ai_image
+    restart: unless-stopped
+    env_file: *ai_env_files
+    environment: *ai_environment
+    volumes: *ai_volumes
+    command: ["celery", "-A", "jobs.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${AI_WORKER_CONCURRENCY:-2}"]
+    depends_on: *ai_dependencies
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A jobs.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout=5"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 15s
+
+  ai-dispatcher:
+    x-deploy: *ai_worker
+    init: true
+    profiles: [ai-service]
+    image: *ai_image
+    restart: unless-stopped
+    env_file: *ai_env_files
+    environment: *ai_environment
+    volumes: *ai_volumes
+    command: ["python", "-m", "jobs.dispatcher"]
+    depends_on: *ai_dependencies
+    # Process liveness only; delivery readiness requires an end-to-end check.
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(p.read_bytes().split(b'\\0')[1:3] == [b'-m', b'jobs.dispatcher'] for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  ai-migrate:
+    x-deploy:
+      role: migration
+      application: ai-service
+    init: true
+    profiles: [ai-service]
+    image: *ai_image
+    restart: "no"
+    env_file: *ai_env_files
+    environment: *ai_environment
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+
+  ai-postgres:
+    x-deploy:
+      role: infrastructure
+    profiles: [ai-service]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ai_service
+      POSTGRES_DB: ai_context_db
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-}
+    volumes:
+      - ai_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   nginx:
     x-deploy:
@@ -232,3 +331,4 @@ volumes:
   postgres_data:
   redis_data:
   kafka_data:
+  ai_database:
