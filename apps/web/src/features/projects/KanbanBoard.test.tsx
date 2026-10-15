@@ -18,7 +18,10 @@ function column(name: string) {
 }
 
 async function openMenu(user: ReturnType<typeof userEvent.setup>, key: string) {
-  await user.click(await screen.findByRole("button", { name: `Thao tác cho ${key}` }));
+  // The first render pulls in the lazy routes, which can take longer than the 1s default.
+  await user.click(
+    await screen.findByRole("button", { name: `Thao tác cho ${key}` }, { timeout: 5000 }),
+  );
 }
 
 describe("Kanban board: moving a card without dragging", () => {
@@ -164,6 +167,45 @@ describe("Kanban board: who may do what", () => {
 
     await screen.findByText("NEXUS-104");
     expect(screen.queryByRole("button", { name: /^Thao tác cho/ })).not.toBeInTheDocument();
+  });
+});
+
+function isDraggable(key: string) {
+  return screen.getByText(key).closest("article")!.parentElement!.getAttribute("draggable") === "true";
+}
+
+describe("Kanban board: drag registration follows the permissions", () => {
+  it("makes every card draggable for the leader, with a grip on each", async () => {
+    renderAppRoutes(BOARD, leaderTestSession);
+
+    await screen.findByText("NEXUS-104");
+    for (const key of ["NEXUS-101", "NEXUS-104", "NEXUS-98"]) expect(isDraggable(key)).toBe(true);
+    expect(screen.getAllByTitle("Kéo để di chuyển").length).toBe(
+      screen.getAllByRole("article").length,
+    );
+  });
+
+  it("makes only a member's own cards draggable", async () => {
+    renderAppRoutes(BOARD, memberTestSession);
+
+    await screen.findByText("NEXUS-104");
+    expect(isDraggable("NEXUS-101")).toBe(true);
+    expect(isDraggable("NEXUS-105")).toBe(true);
+    expect(isDraggable("NEXUS-104")).toBe(false);
+    expect(screen.getAllByTitle("Kéo để di chuyển")).toHaveLength(2);
+  });
+
+  it("makes nothing draggable for an instructor or when the demo writes are off", async () => {
+    const { unmount } = renderAppRoutes(BOARD, teacherTestSession);
+    await screen.findByText("NEXUS-104");
+    expect(isDraggable("NEXUS-104")).toBe(false);
+    expect(screen.queryByTitle("Kéo để di chuyển")).not.toBeInTheDocument();
+    unmount();
+
+    vi.stubEnv("VITE_ENABLE_MOCKS", "false");
+    renderAppRoutes(BOARD, leaderTestSession);
+    await screen.findByText("NEXUS-104");
+    expect(isDraggable("NEXUS-104")).toBe(false);
   });
 });
 
