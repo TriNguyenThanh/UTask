@@ -4,6 +4,8 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
+import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
+import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
 import { IssueCard } from "@/features/projects/components/IssueCard";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
@@ -20,7 +22,9 @@ import {
   aiRequiresKey,
   canBreakdownTaskWithAI,
   canCreateTask,
+  canUpdateTask,
   projectPermissionContext,
+  viewerRole,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import {
@@ -39,10 +43,12 @@ function BoardColumn({
   column,
   issues,
   onOpenIssue,
+  mover,
 }: Readonly<{
   column: (typeof COLUMNS)[number];
   issues: Issue[];
   onOpenIssue: (key: string) => void;
+  mover: ReturnType<typeof useIssueMover>;
 }>) {
   const points = issues.reduce((sum, issue) => sum + issue.storyPoints, 0);
   return (
@@ -69,7 +75,18 @@ function BoardColumn({
           </p>
         ) : (
           issues.map((issue) => (
-            <IssueCard key={issue.id} issue={issue} onOpen={onOpenIssue} />
+            <IssueCard
+              key={issue.id}
+              issue={issue}
+              onOpen={onOpenIssue}
+              highlighted={mover.flashKey === issue.key}
+              actions={
+                <IssueActionsMenu
+                  issueKey={issue.key}
+                  groups={mover.menuFor(issue, { kind: "board", destination: issues })}
+                />
+              }
+            />
           ))
         )}
       </div>
@@ -182,6 +199,8 @@ export function Component() {
     return workspace.issues.filter((issue) => issue.sprintId === sprintId);
   }, [workspace, sprint]);
 
+  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+
   const visibleIssues = useMemo(
     () => sprintIssues.filter((issue) => matchesFilters(issue, filters)),
     [sprintIssues, filters],
@@ -244,11 +263,14 @@ export function Component() {
                 column={column}
                 issues={visibleIssues.filter((issue) => issue.status === column.status)}
                 onOpenIssue={openIssue}
+                mover={mover}
               />
             ))}
           </div>
         </div>
       )}
+
+      {mover.dialog}
 
       {/* Panel is a sibling overlay: the board above never remounts, so
           filter and scroll state survive panel open/close. */}
@@ -269,6 +291,16 @@ export function Component() {
             permissionCtx !== null && aiRequiresKey(permissionCtx)
           }
           readOnly={readOnly}
+          onChangeStatus={
+            issueQuery.data && mover.enabled && canUpdateTask(permissionCtx, issueQuery.data.issue.isMine)
+              ? (status) =>
+                  mover.requestMove({
+                    issue: issueQuery.data.issue,
+                    toStatus: status,
+                    destination: [],
+                  })
+              : undefined
+          }
           onClose={closeIssue}
         />
       ) : null}

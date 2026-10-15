@@ -14,7 +14,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { COLUMNS } from "@/features/projects/issueMeta";
-import type { Epic, IssueDetail, Sprint } from "@/features/projects/types";
+import type { Epic, IssueDetail, IssueStatus, Sprint } from "@/features/projects/types";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
@@ -258,7 +258,15 @@ function IssueTitleBlock({ issue, sprint }: Readonly<{ issue: IssueDetail["issue
   );
 }
 
-function IssueStatusField({ status }: Readonly<{ status: IssueDetail["issue"]["status"] }>) {
+function IssueStatusField({
+  status,
+  onChange,
+}: Readonly<{
+  status: IssueDetail["issue"]["status"];
+  /** Present only when the viewer may change the status; otherwise the field is read-only. */
+  onChange?: (status: IssueStatus) => void;
+}>) {
+  const editable = onChange !== undefined;
   return (
     <div>
       <label
@@ -270,9 +278,13 @@ function IssueStatusField({ status }: Readonly<{ status: IssueDetail["issue"]["s
       <select
         id="issue-status-select"
         value={status}
-        disabled
-        title="Cập nhật trạng thái sẽ khả dụng khi API hỗ trợ"
-        className="mt-1.5 w-full max-w-xs cursor-not-allowed rounded-md border border-outline-subtle bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
+        disabled={!editable}
+        onChange={(event) => onChange?.(event.target.value as IssueStatus)}
+        title={editable ? undefined : "Bạn không thể đổi trạng thái của issue này"}
+        className={cn(
+          "mt-1.5 w-full max-w-xs rounded-md border border-outline-subtle px-3 py-1.5 text-xs font-medium",
+          editable ? "bg-card" : "cursor-not-allowed bg-muted text-muted-foreground",
+        )}
       >
         {STATUS_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -467,6 +479,14 @@ function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: I
             )}
           </dd>
         </div>
+        {issue.blocked ? (
+          <div className="flex items-start justify-between gap-2 border-b border-outline-subtle/60 pb-2">
+            <dt className="shrink-0 text-muted-foreground">Bị chặn</dt>
+            <dd className="min-w-0 text-right font-medium text-rose-700">
+              {issue.blockedReason ?? "Không rõ lý do"}
+            </dd>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-2">
           <dt className="shrink-0 text-muted-foreground">Sprint</dt>
           <dd className="min-w-0 truncate font-medium">
@@ -510,6 +530,7 @@ function IssueDetailBody({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly,
+  onChangeStatus,
   onClose,
 }: Readonly<{
   detail: IssueDetail;
@@ -523,6 +544,7 @@ function IssueDetailBody({
   canBreakdownWithAI: boolean;
   aiKeyMissing: boolean;
   readOnly: boolean;
+  onChangeStatus?: (status: IssueStatus) => void;
   onClose: () => void;
 }>) {
   return (
@@ -531,7 +553,7 @@ function IssueDetailBody({
 
       <div className="grid items-start gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
-          <IssueStatusField status={issue.status} />
+          <IssueStatusField status={issue.status} onChange={onChangeStatus} />
           <IssueDescription detail={detail} />
           <SubtasksSection
             subtasks={subtasks}
@@ -567,6 +589,7 @@ export function IssuePanel({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly = false,
+  onChangeStatus,
   onClose,
 }: Readonly<{
   projectId: string;
@@ -583,6 +606,8 @@ export function IssuePanel({
   aiKeyMissing: boolean;
   /** Instructor view: no subtask toggling, and a note that comments are view-only. */
   readOnly?: boolean;
+  /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
+  onChangeStatus?: (status: IssueStatus) => void;
   onClose: () => void;
 }>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -688,6 +713,7 @@ export function IssuePanel({
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
             readOnly={readOnly}
+            onChangeStatus={onChangeStatus}
             onClose={onClose}
           />
         ) : null}
