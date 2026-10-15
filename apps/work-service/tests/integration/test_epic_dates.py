@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 @pytest.fixture
 def dated_epic(created_project, client_for, actors):
     leader = client_for(actors["leader"])
-    root = f"/api/v1/projects/{created_project['id']}/epics/"
+    root = f"/projects/{created_project['id']}/epics/"
     reply = leader.post(
         root,
         {"name": "Schedule", "start_date": "2027-01-10", "target_date": "2027-01-20"},

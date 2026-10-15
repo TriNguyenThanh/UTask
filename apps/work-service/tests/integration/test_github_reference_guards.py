@@ -40,7 +40,7 @@ def test_reference_source_versions_conflict_update_and_tombstone_have_exact_effe
     assert OutboxEvent.objects.filter(event_type="task.github_link.updated").count() == 1
     after = effect_state(task.project_id)
     assert ingest_reference(task.pk, changed)[1] is False and effect_state(task.project_id) == after
-    path = f"/api/v1/tasks/{task.pk}/github-links/{row.pk}/"
+    path = f"/tasks/{task.pk}/github-links/{row.pk}/"
     assert leader.delete(path).status_code == 200
     after = effect_state(task.project_id)
     tombstone, changed_again = ingest_reference(task.pk, changed)
@@ -75,7 +75,7 @@ def test_github_confirm_rejects_invalid_candidate_or_writer_without_effect(
     candidate_id = uuid4() if guard == "missing-candidate" else row.pk
     client = client_for(actors["outsider"]) if guard == "outsider" else leader
     reply = client.post(
-        f"/api/v1/tasks/{task.pk}/github-links/{candidate_id}/confirm/",
+        f"/tasks/{task.pk}/github-links/{candidate_id}/confirm/",
         {},
         format="json",
         HTTP_IDEMPOTENCY_KEY="denied-reference",

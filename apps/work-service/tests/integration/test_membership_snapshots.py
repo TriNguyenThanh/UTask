@@ -58,5 +58,5 @@ def test_full_membership_snapshot_removes_omitted_slot_adds_member_and_preserves
     after = effect_state(project.pk)
     assert synchronize_membership(project.pk, source) is False
     assert effect_state(project.pk) == after
-    assert client_for(actors["member"]).get(f"/api/v1/projects/{project.pk}/").status_code == 404
-    assert client_for(new_user).get(f"/api/v1/projects/{project.pk}/").status_code == 200
+    assert client_for(actors["member"]).get(f"/projects/{project.pk}/").status_code == 404
+    assert client_for(new_user).get(f"/projects/{project.pk}/").status_code == 200

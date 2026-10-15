@@ -69,8 +69,8 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "UTask Work API",
     "OAS_VERSION": "3.1.0",
     "VERSION": "1.4",
+    "SERVERS": [{"url": "/api/work", "description": "Work API qua gateway"}],
     "SERVE_INCLUDE_SCHEMA": False,
-    "SCHEMA_PATH_PREFIX": "/api/v1",
 }
 IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")
 IDENTITY_WORK_SERVICE_KEY = os.environ.get("IDENTITY_WORK_SERVICE_KEY", "")

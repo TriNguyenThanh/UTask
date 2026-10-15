@@ -56,7 +56,7 @@ def test_dashboard_scope_estimate_coverage_parent_child_and_fanout(
         label = Label.objects.create(project_id=project_id, name=str(i), color="#123456")
         TaskLabel.objects.create(task=parent, label=label)
     TaskRelation.objects.create(task=parent, related_task=unknown, relation_type="BLOCKS")
-    path = f"/api/v1/projects/{project_id}/dashboard/"
+    path = f"/projects/{project_id}/dashboard/"
     with CaptureQueriesContext(connection) as queries:
         reply = client_for(actors["teacher"]).get(path)
     assert reply.status_code == 200, reply.content
@@ -85,7 +85,7 @@ def test_dashboard_scope_estimate_coverage_parent_child_and_fanout(
 def test_empty_dashboard_and_fractional_allocation(created_project, actors, client_for):
     data = (
         client_for(actors["leader"])
-        .get(f"/api/v1/projects/{created_project['id']}/dashboard/")
+        .get(f"/projects/{created_project['id']}/dashboard/")
         .json()["data"]
     )
     assert data["totals"]["completion_percent"] is None
@@ -106,17 +106,17 @@ def test_dashboard_excludes_archived_deleted_and_denies_teacher_outside_class(
     unknown = create()
     assert (
         leader.post(
-            f"/api/v1/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
+            f"/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
     assert (
         leader.delete(
-            f"/api/v1/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
+            f"/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
-    route = f"/api/v1/projects/{created_project['id']}/dashboard/"
+    route = f"/projects/{created_project['id']}/dashboard/"
     response = client_for(actors["teacher"]).get(route)
     assert response.status_code == 200, response.content
     data = response.json()["data"]

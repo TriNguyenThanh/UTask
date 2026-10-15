@@ -44,7 +44,7 @@ def test_unfinished_receipt_cannot_commit(actors):
             {
                 "user_id": actors["leader"],
                 "http_method": "POST",
-                "endpoint_path": "/api/v1/projects/",
+                "endpoint_path": "/projects/",
                 "idempotency_key": "incomplete",
             },
             {},

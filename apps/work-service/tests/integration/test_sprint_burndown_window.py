@@ -28,7 +28,7 @@ def test_burndown_window_boundary_dates_totals_and_read_only_effects(
     )
     monkeypatch.setattr("apps.sprints.queries.scope.timezone.now", lambda: captured)
     before = effect_state(created_project["id"])
-    reply = client_for(actors["leader"]).get(f"/api/v1/sprints/{sprint.pk}/burndown/")
+    reply = client_for(actors["leader"]).get(f"/sprints/{sprint.pk}/burndown/")
     assert reply.status_code == 200, reply.content
     data = reply.json()["data"]
     assert data["window_truncated"] is truncated
@@ -55,7 +55,7 @@ def test_burndown_draft_without_start_has_empty_window_and_no_effect(
 ):
     sprint = Sprint.objects.create(project_id=created_project["id"], name="Draft")
     before = effect_state(created_project["id"])
-    reply = client_for(actors["leader"]).get(f"/api/v1/sprints/{sprint.pk}/burndown/")
+    reply = client_for(actors["leader"]).get(f"/sprints/{sprint.pk}/burndown/")
     assert reply.status_code == 200, reply.content
     data = reply.json()["data"]
     assert data == {

@@ -19,13 +19,13 @@ def test_close_and_task_writer_share_one_project_cut(task_api, created_project, 
     leader, _, create = task_api
     task = create(story_points=5)
     sprint = leader.post(
-        f"/api/v1/projects/{created_project['id']}/sprints/",
+        f"/projects/{created_project['id']}/sprints/",
         {"name": "Race", "start_date": "2026-10-01", "end_date": "2026-10-14"},
         format="json",
     ).json()["data"]
     assert (
         leader.post(
-            f"/api/v1/sprints/{sprint['id']}/tasks/",
+            f"/sprints/{sprint['id']}/tasks/",
             {"action": "ADD", "task_ids": [task["id"]], "expected_version": 1},
             format="json",
             HTTP_IDEMPOTENCY_KEY="scope",
@@ -34,7 +34,7 @@ def test_close_and_task_writer_share_one_project_cut(task_api, created_project, 
     )
     assert (
         leader.post(
-            f"/api/v1/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
+            f"/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
             {"expected_version": 2},
             format="json",
             HTTP_IDEMPOTENCY_KEY="start",
@@ -52,14 +52,14 @@ def test_close_and_task_writer_share_one_project_cut(task_api, created_project, 
             barrier.wait(timeout=10)
             if close:
                 response = client.post(
-                    f"/api/v1/sprints/{sprint['id']}/close/",
+                    f"/sprints/{sprint['id']}/close/",
                     {"expected_version": 3},
                     format="json",
                     HTTP_IDEMPOTENCY_KEY="close",
                 )
             else:
                 response = client.patch(
-                    f"/api/v1/tasks/{task['id']}/",
+                    f"/tasks/{task['id']}/",
                     {"expected_version": 1, "story_points": 10},
                     format="json",
                 )
@@ -88,7 +88,7 @@ def test_close_and_scope_writer_conflict_then_retry_preserves_final_scope(
     sprint = draft(leader, created_project["id"], "Scope race")
     assert (
         leader.post(
-            f"/api/v1/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
+            f"/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
             {"expected_version": 1},
             format="json",
             HTTP_IDEMPOTENCY_KEY="scope-race-start",
@@ -113,7 +113,7 @@ def test_close_and_scope_writer_conflict_then_retry_preserves_final_scope(
                     "scope_change_reason": "Race ADD",
                 }
             response = client.post(
-                f"/api/v1/sprints/{sprint['id']}/{action}/",
+                f"/sprints/{sprint['id']}/{action}/",
                 body,
                 format="json",
                 HTTP_IDEMPOTENCY_KEY="scope-race-" + action,
@@ -130,7 +130,7 @@ def test_close_and_scope_writer_conflict_then_retry_preserves_final_scope(
         assert row.status == "ACTIVE" and row.version == 3
         assert not IdempotencyRecord.objects.filter(idempotency_key="scope-race-close").exists()
         retry = leader.post(
-            f"/api/v1/sprints/{sprint['id']}/close/",
+            f"/sprints/{sprint['id']}/close/",
             {"expected_version": 3},
             format="json",
             HTTP_IDEMPOTENCY_KEY="scope-race-close",
@@ -168,7 +168,7 @@ def test_two_start_commands_cannot_create_two_active_sprints(
             client.credentials(HTTP_AUTHORIZATION="Bearer " + credential)
             barrier.wait(timeout=10)
             response = client.post(
-                f"/api/v1/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
+                f"/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
                 {"expected_version": 1},
                 format="json",
                 HTTP_IDEMPOTENCY_KEY=sprint["id"],
@@ -194,7 +194,7 @@ def test_concurrent_close_with_same_key_replays_one_snapshot(
     sprint = draft(leader, created_project["id"], "Close replay race")
     assert (
         leader.post(
-            f"/api/v1/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
+            f"/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
             {"expected_version": 1},
             format="json",
             HTTP_IDEMPOTENCY_KEY="double-start",
@@ -211,7 +211,7 @@ def test_concurrent_close_with_same_key_replays_one_snapshot(
             client.credentials(HTTP_AUTHORIZATION="Bearer " + credential)
             barrier.wait(timeout=10)
             response = client.post(
-                f"/api/v1/sprints/{sprint['id']}/close/",
+                f"/sprints/{sprint['id']}/close/",
                 {"expected_version": 2},
                 format="json",
                 HTTP_IDEMPOTENCY_KEY="double-close",
