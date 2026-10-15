@@ -7,7 +7,6 @@ import {
   CircleDot,
   GitPullRequest,
   Plus,
-  Search,
   Sparkles,
   SquareCheckBig,
   UserRound,
@@ -19,8 +18,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
+import { daysLeft, STATUS_LABELS } from "@/features/projects/issueMeta";
+import {
+  hasActiveFilters,
+  matchesFilters,
+  useIssueFilters,
+  type FlagFilter,
+} from "@/features/projects/lib/issueFilters";
 import type {
   Issue,
   IssueType,
@@ -65,13 +71,6 @@ const priorityConfig: Record<Issue["priority"], { label: string; badge: string }
   low: { label: "Ưu tiên Thấp", badge: "bg-slate-100 text-slate-600 border-slate-200" },
 };
 
-const statusLabels: Record<Issue["status"], string> = {
-  todo: "Cần làm",
-  "in-progress": "Đang làm",
-  review: "Chờ Review",
-  done: "Hoàn thành",
-};
-
 function sprintDateRange(sprint: Sprint): string {
   const start = new Date(sprint.startDate).toLocaleDateString("vi-VN", {
     day: "2-digit",
@@ -82,12 +81,6 @@ function sprintDateRange(sprint: Sprint): string {
     month: "2-digit",
   });
   return `${start} - ${end}`;
-}
-
-function sprintDaysLeft(sprint: Sprint): number {
-  const end = new Date(sprint.endDate);
-  const now = new Date();
-  return Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -175,7 +168,7 @@ function IssueRow({
           </span>
         )}
         <span className="hidden w-20 text-center text-[11px] font-medium text-muted-foreground md:inline-flex md:items-center">
-          {statusLabels[issue.status]}
+          {STATUS_LABELS[issue.status]}
           {issue.status === "done" ? (
             <CheckCircle2 className="ml-1 size-3 text-emerald-600" aria-hidden />
           ) : null}
@@ -207,7 +200,7 @@ function SprintSection({
     sprint.totalPoints > 0
       ? Math.round((sprint.completedPoints / sprint.totalPoints) * 100)
       : 0;
-  const daysLeft = sprintDaysLeft(sprint);
+  const remaining = daysLeft(sprint.endDate);
   const isActive = sprint.state === "active";
 
   return (
@@ -243,9 +236,9 @@ function SprintSection({
               Kế hoạch
             </Badge>
           )}
-          {isActive && daysLeft >= 0 ? (
+          {isActive && remaining >= 0 ? (
             <Badge variant="secondary" className="text-[11px] font-medium">
-              Còn {daysLeft} ngày
+              Còn {remaining} ngày
             </Badge>
           ) : null}
           {sprint.goal ? (
@@ -314,13 +307,13 @@ function SprintSection({
 /* Backlog route                                                       */
 /* ------------------------------------------------------------------ */
 
-type FilterChip = "mine" | "unassigned" | "pull-request" | "bug";
-
-const filterChips: { id: FilterChip; label: string }[] = [
-  { id: "mine", label: "Chỉ việc của tôi" },
-  { id: "unassigned", label: "Chưa phân công" },
-  { id: "pull-request", label: "Có Pull Request" },
-  { id: "bug", label: "Bugs" },
+const BACKLOG_FLAGS: readonly FlagFilter[] = [
+  "mine",
+  "unassigned",
+  "pr",
+  "bug",
+  "blocked",
+  "overdue",
 ];
 
 function emptyBacklogDescription(hasActiveFilters: boolean, readOnly: boolean): string {
@@ -356,20 +349,6 @@ function BacklogSkeleton() {
   );
 }
 
-function issueMatches(
-  issue: Issue,
-  epicFilter: string | null,
-  query: string,
-  chips: FilterChip[],
-): boolean {
-  if (epicFilter !== null && issue.epicId !== epicFilter) return false;
-  if (query && !`${issue.key} ${issue.title}`.toLowerCase().includes(query)) return false;
-  if (chips.includes("mine") && !issue.isMine) return false;
-  if (chips.includes("unassigned") && issue.assignee !== null) return false;
-  if (chips.includes("pull-request") && !issue.hasPullRequest) return false;
-  return !(chips.includes("bug") && issue.type !== "bug");
-}
-
 export default function ProjectBacklogRoute() {
   const navigate = useNavigate();
   const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
@@ -379,36 +358,20 @@ export default function ProjectBacklogRoute() {
     viewer.kind === "team-member" && viewer.role === "leader",
   );
 
-  const [epicFilter, setEpicFilter] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [chips, setChips] = useState<FilterChip[]>([]);
+  const { filters, setFilters, toggleFlag, clear: clearFilters } = useIssueFilters();
+  const epicFilter = filters.epic;
+  const setEpicFilter = (epic: string | null) => setFilters({ ...filters, epic });
 
   const openIssue = (pid: string, key: string) => {
     navigate(`/projects/${pid}/board?issue=${key}`);
   };
 
-  const toggleChip = (chip: FilterChip) => {
-    setChips((current) =>
-      current.includes(chip)
-        ? current.filter((item) => item !== chip)
-        : [...current, chip],
-    );
-  };
+  const filtersActive = hasActiveFilters(filters);
 
-  const hasActiveFilters =
-    epicFilter !== null || search.trim() !== "" || chips.length > 0;
-
-  const clearFilters = () => {
-    setEpicFilter(null);
-    setSearch("");
-    setChips([]);
-  };
-
-  const filteredIssues = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    return data.issues.filter((issue) => issueMatches(issue, epicFilter, q, chips));
-  }, [data, epicFilter, search, chips]);
+  const filteredIssues = useMemo(
+    () => data.issues.filter((issue) => matchesFilters(issue, filters)),
+    [data, filters],
+  );
 
   const workspace = data;
   const permCtx: ProjectPermissionContext = projectPermissionContext(
@@ -552,54 +515,15 @@ export default function ProjectBacklogRoute() {
 
         {/* Sprints + backlog */}
         <div className="min-w-0 flex-1 bg-background p-4 md:p-5">
-          {/* Search + chips */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-72 max-w-full">
-              <Search
-                className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Tìm kiếm issue trong backlog..."
-                aria-label="Tìm kiếm issue theo key hoặc tiêu đề"
-                className="h-8 pl-8 text-xs"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {filterChips
-                .filter((chip) => !(readOnly && chip.id === "mine"))
-                .map((chip) => {
-                const active = chips.includes(chip.id);
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => toggleChip(chip.id)}
-                    aria-pressed={active}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-muted text-foreground hover:bg-muted/60",
-                    )}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
-              {hasActiveFilters ? (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="ml-1 text-xs font-semibold text-primary hover:underline focus-visible:underline"
-                >
-                  Xóa bộ lọc
-                </button>
-              ) : null}
-            </div>
+          <div className="mb-4">
+            <IssueFilterBar
+              issues={workspace.issues}
+              filters={filters}
+              flags={BACKLOG_FLAGS.filter((flag) => !(readOnly && flag === "mine"))}
+              onChange={setFilters}
+              onToggleFlag={toggleFlag}
+              onClear={clearFilters}
+            />
           </div>
 
           {/* Leader-only toolbar */}
@@ -618,10 +542,10 @@ export default function ProjectBacklogRoute() {
 
           {filteredIssues.length === 0 ? (
             <EmptyState
-              title={hasActiveFilters ? "Không có issue khớp bộ lọc" : "Backlog trống"}
-              description={emptyBacklogDescription(hasActiveFilters, readOnly)}
+              title={filtersActive ? "Không có issue khớp bộ lọc" : "Backlog trống"}
+              description={emptyBacklogDescription(filtersActive, readOnly)}
               action={
-                hasActiveFilters ? (
+                filtersActive ? (
                   <Button size="sm" variant="outline" onClick={clearFilters}>
                     Xóa bộ lọc
                   </Button>

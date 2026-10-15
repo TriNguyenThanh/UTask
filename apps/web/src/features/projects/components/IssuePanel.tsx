@@ -13,7 +13,8 @@ import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Epic, IssueDetail, IssueStatus, Sprint } from "@/features/projects/types";
+import { COLUMNS } from "@/features/projects/issueMeta";
+import type { Epic, IssueDetail, Sprint } from "@/features/projects/types";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
@@ -21,12 +22,7 @@ import { cn } from "@/lib/utils";
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
-  { value: "todo", label: "Cần làm (To Do)" },
-  { value: "in-progress", label: "Đang làm (In Progress)" },
-  { value: "review", label: "Chờ Review (In Review)" },
-  { value: "done", label: "Hoàn thành (Done)" },
-];
+const STATUS_OPTIONS = COLUMNS.map((column) => ({ value: column.status, label: column.label }));
 
 const PRIORITY_LABELS: Record<string, string> = {
   high: "Cao (High)",
