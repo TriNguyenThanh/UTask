@@ -23,6 +23,8 @@ Xem thêm:
   lớp, tổng quan, sinh viên, nhóm) chạy trên dữ liệu Demo MSW; chưa có thao tác
   ghi, workspace Teacher hay backend. Giao diện theo thiết kế Stitch và màn Giám sát
   (tín hiệu theo quy tắc cố định): xem mục 14 của tài liệu này; dashboard nhóm và workspace chỉ xem cho giảng viên: mục 15; form tạo lớp, import CSV, nháp phản hồi, xem trước điều chỉnh nhóm và tín hiệu rủi ro (mức giao diện, chưa có hợp đồng ghi): mục 16.
+- [Lộ trình frontend](frontend-roadmap.md) — hiện trạng backend và frontend,
+  các mảng công việc, thứ tự các đợt từ mock sang tích hợp thật.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,
   ma trận quyền và user story.
 - Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.
