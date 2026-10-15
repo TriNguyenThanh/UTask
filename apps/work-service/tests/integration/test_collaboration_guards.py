@@ -21,27 +21,27 @@ def test_foreign_epic_label_and_metadata_routes_are_rejected(task_api, foreign_s
     leader, _, create = task_api
     project, _ = foreign_scope
     task = create()
-    root = f"/api/v1/projects/{project['id']}/"
+    root = f"/projects/{project['id']}/"
     label = leader.post(
         root + "labels/", {"name": "Foreign label", "color": "#123456"}, format="json"
     ).json()["data"]
     epic = leader.post(root + "epics/", {"name": "Foreign epic"}, format="json").json()["data"]
     before = OutboxEvent.objects.count()
     reply = leader.patch(
-        f"/api/v1/tasks/{task['id']}/",
+        f"/tasks/{task['id']}/",
         {"expected_version": 1, "epic_id": epic["id"]},
         format="json",
     )
     assert reply.status_code == 422
     reply = leader.post(
-        f"/api/v1/tasks/{task['id']}/labels/",
+        f"/tasks/{task['id']}/labels/",
         {"expected_version": 1, "action": "ADD", "label_ids": [label["id"]]},
         format="json",
     )
     assert reply.status_code == 422
     for kind, row in [("labels", label), ("epics", epic)]:
         reply = leader.patch(
-            f"/api/v1/projects/{task['project_id']}/{kind}/{row['id']}/",
+            f"/projects/{task['project_id']}/{kind}/{row['id']}/",
             {"name": "Wrong scope"},
             format="json",
         )
@@ -58,16 +58,14 @@ def test_wrong_class_feedback_author_scope_loss_and_sanitized_mentions(
     teacher = client_for(actors["teacher"])
     classroom.teachers[actors["teacher"]] = ["other-group"]
     body = {"task_id": task["id"], "content_html": "Wrong class"}
-    assert teacher.post("/api/v1/comments/", body, format="json").status_code == 404
+    assert teacher.post("/comments/", body, format="json").status_code == 404
     assert not Comment.objects.exists()
     member = client_for(actors["member"])
     safe = (
         f'<script><mention-component data-id="{actors["outsider"]}">'
         'Fake</mention-component></script><p onclick="evil()">Safe</p>'
     )
-    reply = member.post(
-        "/api/v1/comments/", {"task_id": task["id"], "content_html": safe}, format="json"
-    )
+    reply = member.post("/comments/", {"task_id": task["id"], "content_html": safe}, format="json")
     assert reply.status_code == 201, reply.content
     data = reply.json()["data"]
     assert data["content_html"] == "<p>Safe</p>" and data["mentioned_user_ids"] == []
@@ -78,7 +76,7 @@ def test_wrong_class_feedback_author_scope_loss_and_sanitized_mentions(
     for method in ["patch", "delete"]:
         call = getattr(member, method)
         reply = call(
-            f"/api/v1/comments/{data['id']}/",
+            f"/comments/{data['id']}/",
             {"content_html": "Revoked"} if method == "patch" else {},
             format="json",
         )
@@ -94,7 +92,7 @@ def test_wrong_class_feedback_author_scope_loss_and_sanitized_mentions(
 def test_attachment_metadata_mismatch_does_not_confirm(task_api, storage, facts):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     row = pending(leader, route)
     storage.objects[row.storage_key] = facts
     before = OutboxEvent.objects.count()
@@ -112,7 +110,7 @@ def test_attachment_metadata_mismatch_does_not_confirm(task_api, storage, facts)
 def test_attachment_expiry_after_inspect_is_rechecked_under_lock(task_api, storage, monkeypatch):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     row = pending(leader, route)
     clock = {"now": timezone.now()}
     monkeypatch.setattr("django.utils.timezone.now", lambda: clock["now"])
@@ -139,7 +137,7 @@ def test_cleanup_storage_failure_commits_expiry_and_retries_without_duplicate_ev
 ):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     row = pending(leader, route)
     future = row.expires_at + timedelta(seconds=1)
     monkeypatch.setattr("django.utils.timezone.now", lambda: future)
@@ -167,7 +165,7 @@ def test_confirm_rejects_forged_owner_key_and_wrong_download_scope(
 ):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     row = pending(leader, route)
     reply = leader.post(
         route,

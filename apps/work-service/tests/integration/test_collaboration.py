@@ -22,7 +22,7 @@ def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, acto
     leader, task_route, create = task_api
     project_id = task_route.split("/")[4]
     member = client_for(actors["member"])
-    labels = f"/api/v1/projects/{project_id}/labels/"
+    labels = f"/projects/{project_id}/labels/"
     label = member.post(labels, {"name": "Backend", "color": "#123456"}, format="json").json()[
         "data"
     ]
@@ -56,7 +56,7 @@ def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, acto
         == 409
     )
     task = create()
-    task_url = f"/api/v1/tasks/{task['id']}/"
+    task_url = f"/tasks/{task['id']}/"
     response = member.post(
         task_url + "labels/",
         {"expected_version": 1, "action": "ADD", "label_ids": [label["id"]]},
@@ -76,7 +76,7 @@ def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, acto
     assert member.get(labels).json()["data"] == []
     assert member.get(labels).json()["meta"]["pagination"]["total_count"] == 0
     assert leader.get(task_route, {"label_id": label["id"]}).json()["data"] == []
-    epics = f"/api/v1/projects/{project_id}/epics/"
+    epics = f"/projects/{project_id}/epics/"
     epic = leader.post(
         epics, {"name": "Auth", "lead_user_id": str(actors["member"])}, format="json"
     ).json()["data"]
@@ -102,7 +102,7 @@ def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, acto
     unrelated = create(assignee_ids=[], epic_id=epic["id"])
     assert (
         member.patch(
-            f"/api/v1/tasks/{unrelated['id']}/",
+            f"/tasks/{unrelated['id']}/",
             {"expected_version": 1, "description_html": "Forbidden"},
             format="json",
         ).status_code
@@ -114,7 +114,7 @@ def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, acto
     assert Task.objects.get(pk=unrelated["id"]).epic_id == UUID(epic["id"])
     assert (
         leader.patch(
-            f"/api/v1/tasks/{unrelated['id']}/",
+            f"/tasks/{unrelated['id']}/",
             {"expected_version": 1, "title": "History preserved"},
             format="json",
         ).status_code
@@ -143,13 +143,13 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
             f'entity_identifier="{actors["member"]}">Bạn</mention-component></p>'
         ),
     }
-    response = teacher.post("/api/v1/comments/", body, format="json")
+    response = teacher.post("/comments/", body, format="json")
     assert response.status_code == 201, response.content
     comment = response.json()["data"]
     assert comment["is_teacher_feedback"] is True
     assert Task.objects.get(pk=task["id"]).version == 1
     assert Comment.objects.get(pk=comment["id"]).project_id is None
-    route = f"/api/v1/comments/{comment['id']}/"
+    route = f"/comments/{comment['id']}/"
     assert leader.patch(route, {"content_html": "Other author"}, format="json").status_code == 403
     assert (
         teacher.patch(route, {"content_html": body["content_html"]}, format="json").status_code
@@ -173,7 +173,7 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
     )
     member = client_for(actors["member"])
     project_reply = member.post(
-        "/api/v1/comments/",
+        "/comments/",
         {
             "project_id": task["project_id"],
             "content_html": "Mention teacher",
@@ -187,7 +187,7 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
     assert project_row.project_id == project.pk and project_row.task_id is None
     assert project_row.is_teacher_feedback is False
     assert project_row.mentions.get().user_id == teacher_id
-    project_route = f"/api/v1/projects/{project.pk}/comments/"
+    project_route = f"/projects/{project.pk}/comments/"
     receipt_count = IdempotencyRecord.objects.count()
     for actor in ["leader", "member", "teacher"]:
         listed = client_for(actors[actor]).get(project_route)
@@ -197,7 +197,7 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
     # Task comments use a different XOR subject and cannot enter the Project list.
     assert comment["id"] not in [row["id"] for row in listed.json()["data"]]
     assert client_for(actors["outsider"]).get(project_route).status_code == 404
-    project_comment_route = f"/api/v1/comments/{project_comment['id']}/"
+    project_comment_route = f"/comments/{project_comment['id']}/"
     edited = member.patch(project_comment_route, {"content_html": "<p>Đã sửa</p>"}, format="json")
     assert edited.status_code == 200, edited.content
     project_row.refresh_from_db()
@@ -217,17 +217,14 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
     assert Task.objects.get(pk=task["id"]).version == 1
     assert (
         teacher.post(
-            "/api/v1/comments/", {**body, "project_id": task["project_id"]}, format="json"
+            "/comments/", {**body, "project_id": task["project_id"]}, format="json"
         ).status_code
         == 400
     )
-    assert (
-        client_for(actors["outsider"]).get(f"/api/v1/tasks/{task['id']}/comments/").status_code
-        == 404
-    )
+    assert client_for(actors["outsider"]).get(f"/tasks/{task['id']}/comments/").status_code == 404
     assert leader.delete(route).status_code == 200
-    assert leader.get(f"/api/v1/tasks/{task['id']}/comments/").json()["data"] == []
-    timeline = leader.get(f"/api/v1/tasks/{task['id']}/activities/").json()["data"]
+    assert leader.get(f"/tasks/{task['id']}/comments/").json()["data"] == []
+    timeline = leader.get(f"/tasks/{task['id']}/activities/").json()["data"]
     assert any(row["verb"] == "deleted" for row in timeline)
     assert Task.objects.get(pk=task["id"]).version == 1
 
@@ -242,7 +239,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     assert scan_deadlines() == 1
     assert scan_deadlines() == 0
     reply = leader.patch(
-        f"/api/v1/tasks/{task['id']}/",
+        f"/tasks/{task['id']}/",
         {"expected_version": 1, "due_date": (day + timedelta(days=1)).isoformat()},
         format="json",
     )
@@ -252,7 +249,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     # Equal timestamps and a return to the original date still create a new deadline revision.
     assert (
         leader.patch(
-            f"/api/v1/tasks/{task['id']}/",
+            f"/tasks/{task['id']}/",
             {"expected_version": 2, "due_date": day.isoformat()},
             format="json",
         ).status_code
@@ -261,7 +258,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     assert scan_deadlines() == 1
     assert (
         leader.patch(
-            f"/api/v1/tasks/{task['id']}/",
+            f"/tasks/{task['id']}/",
             {"expected_version": 3, "description_html": "Content only"},
             format="json",
         ).status_code
@@ -272,7 +269,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     done = row.project.states.get(group="COMPLETED")
     assert (
         leader.patch(
-            f"/api/v1/tasks/{row.pk}/transition/",
+            f"/tasks/{row.pk}/transition/",
             {"expected_version": 4, "target_state_id": str(done.pk)},
             format="json",
         ).status_code
@@ -280,7 +277,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     )
     assert scan_deadlines() == 0
     cancelled_state = leader.post(
-        f"/api/v1/projects/{task['project_id']}/states/",
+        f"/projects/{task['project_id']}/states/",
         {"name": "Cancelled", "color": "#123456", "sequence": 60000, "group": "CANCELLED"},
         format="json",
     )
@@ -288,7 +285,7 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     cancelled = create(due_date=day.isoformat())
     assert (
         leader.patch(
-            f"/api/v1/tasks/{cancelled['id']}/transition/",
+            f"/tasks/{cancelled['id']}/transition/",
             {"expected_version": 1, "target_state_id": cancelled_state.json()["data"]["id"]},
             format="json",
         ).status_code
@@ -298,13 +295,13 @@ def test_deadline_retry_change_and_terminal_exclusion(task_api, monkeypatch):
     archived, deleted = create(due_date=day.isoformat()), create(due_date=day.isoformat())
     assert (
         leader.post(
-            f"/api/v1/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
+            f"/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
     assert (
         leader.delete(
-            f"/api/v1/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
+            f"/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
@@ -318,7 +315,7 @@ def test_attachment_subject_owner_content_confirm_replay_download_and_cleanup(
     leader, _, create = task_api
     task = create()
     member = client_for(actors["member"])
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     response = member.post(
         route + "presigned-url/",
         {"file_name": "../notes.txt", "file_size": 10, "content_type": "text/plain"},
@@ -366,7 +363,7 @@ def test_attachment_subject_owner_content_confirm_replay_download_and_cleanup(
         ).status_code
         == 403
     )
-    project_route = f"/api/v1/projects/{task['project_id']}/attachments/"
+    project_route = f"/projects/{task['project_id']}/attachments/"
     assert (
         member.post(
             project_route,
@@ -376,7 +373,7 @@ def test_attachment_subject_owner_content_confirm_replay_download_and_cleanup(
         ).status_code
         == 404
     )
-    assert leader.get(f"/api/v1/tasks/{task['id']}/").json()["data"]["attachments_count"] == 1
+    assert leader.get(f"/tasks/{task['id']}/").json()["data"]["attachments_count"] == 1
     assert member.delete(route + attachment_id + "/").status_code == 200
     assert leader.get(route).json()["data"] == []
     assert cleanup_attachments() == 1
@@ -444,7 +441,7 @@ def test_feedback_proof_expiry_and_presign_failure_leave_correct_state(
         classroom, "teacher_feedback_scope", staticmethod(lambda project, actor: expired)
     )
     response = client_for(actors["teacher"]).post(
-        "/api/v1/comments/", {"task_id": task["id"], "content_html": "Stale proof"}, format="json"
+        "/comments/", {"task_id": task["id"], "content_html": "Stale proof"}, format="json"
     )
     assert response.status_code == 503
     assert not Comment.objects.exists()
@@ -454,7 +451,7 @@ def test_feedback_proof_expiry_and_presign_failure_leave_correct_state(
 
     monkeypatch.setattr(storage, "presign", fail)
     response = leader.post(
-        f"/api/v1/tasks/{task['id']}/attachments/presigned-url/",
+        f"/tasks/{task['id']}/attachments/presigned-url/",
         {"file_name": "x.txt", "file_size": 1, "content_type": "text/plain"},
         format="json",
     )

@@ -25,7 +25,7 @@ def test_committed_confirm_replays_but_new_key_rechecks_current_connection(
         github_ref_id="24",
     )
     link, _ = ingest_reference(task.pk, fact)
-    route = f"/api/v1/tasks/{task.pk}/github-links/{link.pk}/confirm/"
+    route = f"/tasks/{task.pk}/github-links/{link.pk}/confirm/"
     first = client.post(route, {}, format="json", HTTP_IDEMPOTENCY_KEY="original-confirm")
     assert first.status_code == 200
     current = ConnectionFact(

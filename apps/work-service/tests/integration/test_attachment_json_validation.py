@@ -33,7 +33,7 @@ def test_deep_json_upload_remains_pending_without_receipt_or_audit(
     settings.WORK_R2_BUCKET = "test-bucket"
     monkeypatch.setattr("infrastructure.storage.boto3.client", lambda *a, **k: StorageClient())
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/attachments/"
+    route = f"/projects/{created_project['id']}/attachments/"
     allocated = leader.post(
         route + "presigned-url/",
         {"file_name": "nested.json", "file_size": len(body), "content_type": "application/json"},

@@ -12,7 +12,7 @@ def test_presign_rejects_invalid_sanitized_filename_without_allocation(task_api,
     task = create()
     before = effect_state(task["project_id"])
     reply = leader.post(
-        f"/api/v1/tasks/{task['id']}/attachments/presigned-url/",
+        f"/tasks/{task['id']}/attachments/presigned-url/",
         {"file_name": name, "file_size": 10, "content_type": "text/plain"},
         format="json",
     )
@@ -25,7 +25,7 @@ def test_teacher_external_recipient_requires_recipient_scope_adapter(task_api, a
     task = create()
     before = effect_state(task["project_id"])
     reply = client_for(actors["teacher"]).post(
-        "/api/v1/comments/",
+        "/comments/",
         {
             "task_id": task["id"],
             "content_html": "<p>Teacher</p>",
@@ -50,7 +50,7 @@ def test_github_reference_input_canonicalization_by_ref_kind(github, kind, ref):
     _, leader, _, task = github
     before = effect_state(task.project_id)
     reply = leader.post(
-        f"/api/v1/tasks/{task.pk}/github-links/",
+        f"/tasks/{task.pk}/github-links/",
         {"link_type": kind, "github_ref_id": ref},
         format="json",
         HTTP_IDEMPOTENCY_KEY="kind-reference",

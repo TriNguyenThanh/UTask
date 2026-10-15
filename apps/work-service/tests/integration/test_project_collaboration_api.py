@@ -140,8 +140,8 @@ def test_project_file_wrong_subject_pending_download_and_receipt_conflict(
     body = {"attachment_id": str(row.pk)}
     before = effect_state(row.project_id)
     for wrong_route in [
-        f"/api/v1/tasks/{task['id']}/attachments/",
-        f"/api/v1/projects/{other['id']}/attachments/",
+        f"/tasks/{task['id']}/attachments/",
+        f"/projects/{other['id']}/attachments/",
     ]:
         client = uploader if "/tasks/" in wrong_route else leader
         assert (
@@ -198,7 +198,7 @@ def test_project_presign_validation_has_no_allocation(created_project, client_fo
     client = client_for(actors["member"])
     before = effect_state(created_project["id"])
     response = client.post(
-        f"/api/v1/projects/{created_project['id']}/attachments/presigned-url/",
+        f"/projects/{created_project['id']}/attachments/presigned-url/",
         {"file_name": "x.txt", "file_size": 1, "content_type": "text/plain", **payload},
         format="json",
     )
@@ -210,7 +210,7 @@ def test_project_presign_validation_has_no_allocation(created_project, client_fo
 @pytest.mark.parametrize("kind", ["labels", "epics"])
 def test_metadata_paging_and_cursor_scope(created_project, client_for, actors, foreign_scope, kind):
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/{kind}/"
+    route = f"/projects/{created_project['id']}/{kind}/"
     records = []
     for number in range(3):
         body = {"name": f"Item {number}"}
@@ -229,7 +229,7 @@ def test_metadata_paging_and_cursor_scope(created_project, client_for, actors, f
     assert second["meta"]["pagination"]["has_next"] is False
     for target, client in [
         (route, client_for(actors["teacher"])),
-        (f"/api/v1/projects/{foreign_scope[0]['id']}/{kind}/", leader),
+        (f"/projects/{foreign_scope[0]['id']}/{kind}/", leader),
         (route.replace("/" + kind + "/", "/epics/" if kind == "labels" else "/labels/"), leader),
     ]:
         response = client.get(target, {"cursor": cursor})
@@ -243,7 +243,7 @@ def test_metadata_mutations_require_current_member(
     created_project, client_for, actors, kind, actor
 ):
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/{kind}/"
+    route = f"/projects/{created_project['id']}/{kind}/"
     body = {"name": "Original", **({"color": "#123456"} if kind == "labels" else {})}
     created = leader.post(route, body, format="json")
     assert created.status_code == 201, created.content
@@ -267,7 +267,7 @@ def test_metadata_unique_conflict_rolls_back_changes_and_audit(
     created_project, actors, client_for, kind
 ):
     leader = client_for(actors["leader"])
-    route = f"/api/v1/projects/{created_project['id']}/{kind}/"
+    route = f"/projects/{created_project['id']}/{kind}/"
     body = {"name": "Original", **({"color": "#123456"} if kind == "labels" else {})}
     original = leader.post(route, body, format="json").json()["data"]
     assert leader.post(route, {**body, "name": "Taken"}, format="json").status_code == 201
@@ -303,7 +303,7 @@ def test_project_read_routes_recheck_scope(
         )
         client = client_for(actors["member"])
     before = effect_state(project_id)
-    response = client.get(f"/api/v1/projects/{project_id}/{resource}/")
+    response = client.get(f"/projects/{project_id}/{resource}/")
     assert response.status_code == 404, response.content
     assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
     assert effect_state(project_id) == before
@@ -319,14 +319,14 @@ def test_project_write_outbox_failure_rolls_back_subject_audit_and_receipt(
 ):
     uploader, file_route, attachment = project_upload
     project_id = str(attachment.project_id)
-    comments = "/api/v1/comments/"
+    comments = "/comments/"
     content = {
         "project_id": project_id,
         "content_html": "Original",
         "mentioned_user_ids": [str(actors["member"])],
     }
     if operation == "label-update":
-        labels = f"/api/v1/projects/{project_id}/labels/"
+        labels = f"/projects/{project_id}/labels/"
         row = uploader.post(labels, {"name": "Original", "color": "#123456"}, format="json").json()[
             "data"
         ]
@@ -340,7 +340,7 @@ def test_project_write_outbox_failure_rolls_back_subject_audit_and_receipt(
         route, method, payload, event_type = comments, "post", content, "comment.created"
     elif operation == "comment-update":
         row = uploader.post(comments, content, format="json").json()["data"]
-        route, method = f"/api/v1/comments/{row['id']}/", "patch"
+        route, method = f"/comments/{row['id']}/", "patch"
         payload = {"content_html": "Changed", "mentioned_user_ids": [str(actors["leader"])]}
         event_type = "comment.updated"
     else:
@@ -383,7 +383,7 @@ def test_project_teacher_feedback_is_readable_without_mutating_task(task_api, cl
     task_before = Task.objects.filter(pk=task["id"]).values().get()
     teacher = client_for(actors["teacher"])
     created = teacher.post(
-        "/api/v1/comments/",
+        "/comments/",
         {
             "project_id": task["project_id"],
             "content_html": "<script>x</script><p>Hướng dẫn</p>",
@@ -398,10 +398,10 @@ def test_project_teacher_feedback_is_readable_without_mutating_task(task_api, cl
     assert comment.is_teacher_feedback and data["is_teacher_feedback"]
     assert data["content_html"] == "<p>Hướng dẫn</p>" and data["content_stripped"] == "Hướng dẫn"
     assert comment.mentions.get().user_id == actors["member"]
-    assert client_for(actors["member"]).get(
-        f"/api/v1/projects/{task['project_id']}/comments/"
-    ).json()["data"] == [data]
-    assert teacher.get(f"/api/v1/tasks/{task['id']}/comments/").json()["data"] == []
+    assert client_for(actors["member"]).get(f"/projects/{task['project_id']}/comments/").json()[
+        "data"
+    ] == [data]
+    assert teacher.get(f"/tasks/{task['id']}/comments/").json()["data"] == []
     feedback = OutboxEvent.objects.get(event_type="teacher.feedback.added")
     assert feedback.data["data"]["id"] == data["id"]
     assert feedback.data["data"]["task_id"] is None
@@ -428,7 +428,7 @@ def test_comment_subject_and_actor_fields_validation_has_no_effect(
     else:
         body["is_teacher_feedback"] = True
     before = effect_state(task["project_id"])
-    response = client_for(actors["member"]).post("/api/v1/comments/", body, format="json")
+    response = client_for(actors["member"]).post("/comments/", body, format="json")
     assert response.status_code == 400, response.content
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     assert not Comment.objects.exists() and not CommentMention.objects.exists()
@@ -487,10 +487,8 @@ def test_project_file_list_pages_only_current_confirmed_subjects(
     )
     assert first_response.status_code == 200, first_response.content
     second = upload(uploader, route, "second.txt")
-    task_file = upload(uploader, f"/api/v1/tasks/{task['id']}/attachments/", "task.txt")
-    foreign_file = upload(
-        leader, f"/api/v1/projects/{other_project['id']}/attachments/", "foreign.txt"
-    )
+    task_file = upload(uploader, f"/tasks/{task['id']}/attachments/", "task.txt")
+    foreign_file = upload(leader, f"/projects/{other_project['id']}/attachments/", "foreign.txt")
     pending = uploader.post(
         route + "presigned-url/",
         {"file_name": "pending.txt", "file_size": 1, "content_type": "text/plain"},
@@ -515,7 +513,7 @@ def test_active_member_cannot_create_epic_or_edit_another_lead_epic(
     created_project, actors, client_for
 ):
     leader, member = client_for(actors["leader"]), client_for(actors["member"])
-    route = f"/api/v1/projects/{created_project['id']}/epics/"
+    route = f"/projects/{created_project['id']}/epics/"
     created = leader.post(
         route, {"name": "Leader epic", "lead_user_id": str(actors["leader"])}, format="json"
     )
@@ -560,7 +558,7 @@ def test_metadata_input_validation_never_writes_subject_or_side_effect(
         }[invalid]
     )
     before = effect_state(created_project["id"])
-    response = leader.post(f"/api/v1/projects/{created_project['id']}/{kind}/", body, format="json")
+    response = leader.post(f"/projects/{created_project['id']}/{kind}/", body, format="json")
     assert response.status_code == status, response.content
     assert response.json()["error"]["code"] == code
     assert not Label.objects.exists() and not Epic.objects.exists()

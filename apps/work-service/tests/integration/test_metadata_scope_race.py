@@ -24,7 +24,7 @@ def test_metadata_command_rechecks_scope_after_preflight_and_project_lock(
     created_project, actors, client_for, group, kind, revocation
 ):
     project_id = created_project["id"]
-    path = f"/api/v1/projects/{project_id}/{kind}/"
+    path = f"/projects/{project_id}/{kind}/"
     payload = {"name": "Race", **({"color": "#123456"} if kind == "labels" else {})}
 
     def write():

@@ -30,7 +30,7 @@ def test_concurrent_github_confirmation_persists_one_owner_and_one_effect(
         github_ref_id="24",
     )
     candidate, _ = ingest_reference(task.pk, fact)
-    route = f"/api/v1/tasks/{task.pk}/github-links/{candidate.pk}/confirm/"
+    route = f"/tasks/{task.pk}/github-links/{candidate.pk}/confirm/"
     before_task = Task.objects.filter(pk=task.pk).values().get()
     before_project = Project.objects.filter(pk=task.project_id).values().get()
     barrier = Barrier(2)

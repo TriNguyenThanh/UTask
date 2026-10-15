@@ -23,7 +23,7 @@ def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api
     source = State.objects.get(project_id=first["project_id"], group="REVIEW")
     target = State.objects.get(project_id=first["project_id"], group="COMPLETED")
     label = leader.post(
-        f"/api/v1/projects/{source.project_id}/labels/",
+        f"/projects/{source.project_id}/labels/",
         {"name": "Migration", "color": "#123456"},
         format="json",
     ).json()["data"]
@@ -38,7 +38,7 @@ def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api
     receipts = IdempotencyRecord.objects.count()
     with CaptureQueriesContext(connection) as captured:
         reply = leader.delete(
-            f"/api/v1/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}",
+            f"/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}",
         )
     assert reply.status_code == 200, reply.content
     assert reply.json()["data"]["migrated_tasks_count"] == count
@@ -76,7 +76,7 @@ def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api
         assert event.event_type == "task.transitioned"
         assert event.aggregate_id == str(saved.pk)
         assert event.data["entity_version"] == saved.version
-        assert event.data["data"] == leader.get(f"/api/v1/tasks/{saved.pk}/").json()["data"]
+        assert event.data["data"] == leader.get(f"/tasks/{saved.pk}/").json()["data"]
         history = {
             activity.field: activity
             for activity in Activity.objects.filter(task=saved, verb="updated")
@@ -132,9 +132,7 @@ def test_state_migration_preserves_completion_rank_versions_and_unrelated_column
         row["id"]: row
         for row in Task.objects.filter(pk__in=[task["id"] for task in tasks]).values()
     }
-    reply = leader.delete(
-        f"/api/v1/projects/{project_id}/states/{source.pk}/?target_state_id={target.pk}"
-    )
+    reply = leader.delete(f"/projects/{project_id}/states/{source.pk}/?target_state_id={target.pk}")
     assert reply.status_code == 200, reply.content
     for index, saved in enumerate(Task.objects.filter(pk__in=before).order_by("id"), start=2):
         original = before[saved.pk]
@@ -187,7 +185,7 @@ def test_outbox_failure_in_middle_of_migration_rolls_back_entire_batch(task_api)
     try:
         with CaptureQueriesContext(connection) as captured:
             reply = leader.delete(
-                f"/api/v1/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}"
+                f"/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}"
             )
         assert reply.status_code == 500
         assert any(query["sql"].startswith('UPDATE "tasks"') for query in captured)
@@ -200,7 +198,7 @@ def test_outbox_failure_in_middle_of_migration_rolls_back_entire_batch(task_api)
             editor.remove_constraint(OutboxEvent, constraint)
     # The same operation succeeds after the transient DB fault is removed.
     reply = leader.delete(
-        f"/api/v1/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}"
+        f"/projects/{source.project_id}/states/{source.pk}/?target_state_id={target.pk}"
     )
     assert reply.status_code == 200
     assert (

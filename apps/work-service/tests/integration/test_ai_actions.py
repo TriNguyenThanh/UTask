@@ -24,7 +24,7 @@ def test_action_multi_entity_replay_actor_transfer_and_operation_lookup(
             "due_date": "2027-01-01",
         },
     )
-    route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+    route = f"/projects/{project.pk}/ai-actions/apply/"
     response = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="action-1")
     assert response.status_code == 200, response.content
     outcome = response.json()["data"]
@@ -34,9 +34,9 @@ def test_action_multi_entity_replay_actor_transfer_and_operation_lookup(
     receipt = IdempotencyRecord.objects.get(ai_item_id="action")
     assert receipt.expires_at is None
     assert (
-        leader.get(
-            f"/api/v1/projects/{project.pk}/ai-operations/{outcome['operation_id']}/"
-        ).json()["data"]
+        leader.get(f"/projects/{project.pk}/ai-operations/{outcome['operation_id']}/").json()[
+            "data"
+        ]
         == outcome
     )
     project.members.filter(user_id=actors["leader"]).update(role="MEMBER")
@@ -92,7 +92,7 @@ def test_action_batch_failure_rolls_back_all_mutations(task_api, ai, failure):
         change,
     )
     response = leader.post(
-        f"/api/v1/projects/{first['project_id']}/ai-actions/apply/",
+        f"/projects/{first['project_id']}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="failure",
@@ -110,7 +110,7 @@ def test_action_batch_failure_rolls_back_all_mutations(task_api, ai, failure):
 def test_teacher_action_denied_and_kind_whitelist(task_api, client_for, actors):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/projects/{task['project_id']}/ai-actions/apply/"
+    route = f"/projects/{task['project_id']}/ai-actions/apply/"
     body = action_payload(
         {"kind": "SET_PRIORITY", "task_id": task["id"], "expected_version": 1, "priority": "HIGH"}
     )

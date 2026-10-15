@@ -74,13 +74,13 @@ def test_receipted_success_message_is_persisted_and_replayed_without_mutation(
     if kind == "task":
         body, message, status = {"title": "Created"}, "Đã tạo công việc.", 201
     elif kind == "subtask":
-        route = f"/api/v1/tasks/{task['id']}/subtasks/"
+        route = f"/tasks/{task['id']}/subtasks/"
         body, message, status = {"title": "Child"}, "Đã tạo công việc con.", 201
     elif kind in {"backlog", "ai-subtask"}:
         body = backlog_payload(project)
         if kind == "ai-subtask":
             ai(project.pk, kind="SUBTASK", parent_id=task["id"])
-            route = f"/api/v1/tasks/{task['id']}/subtasks/bulk-apply-ai/"
+            route = f"/tasks/{task['id']}/subtasks/bulk-apply-ai/"
             body["subtasks"] = body.pop("tasks")
             body["expected_parent_version"] = 1
             body.pop("expected_project_version")
@@ -90,7 +90,7 @@ def test_receipted_success_message_is_persisted_and_replayed_without_mutation(
         message, status = "Đã tạo các công việc từ đề xuất đã duyệt.", 201
     elif kind == "action":
         ai(project.pk, kind="ACTION", targets=[task["id"]])
-        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        route = f"/projects/{project.pk}/ai-actions/apply/"
         body = action_payload(
             {
                 "kind": "SET_PRIORITY",
@@ -129,7 +129,7 @@ def test_list_length_validation_is_vietnamese_without_writes(task_api, kind):
             "Danh sách người phụ trách không được vượt quá 100 mục.",
         )
     elif kind == "comment":
-        route = "/api/v1/comments/"
+        route = "/comments/"
         body = {
             "task_id": task["id"],
             "content_html": "Hi",
@@ -165,7 +165,7 @@ def test_task_comment_and_file_messages_describe_saved_outcome_and_business_erro
 ):
     leader, route, create = task_api
     task = create()
-    detail = f"/api/v1/tasks/{task['id']}/"
+    detail = f"/tasks/{task['id']}/"
     changed = leader.patch(detail, {"expected_version": 1, "title": "Updated"}, format="json")
     assert changed.status_code == 200 and changed.json()["message"] == "Đã cập nhật công việc."
     assert Task.objects.get(pk=task["id"]).title == "Updated"
@@ -192,10 +192,10 @@ def test_task_comment_and_file_messages_describe_saved_outcome_and_business_erro
         reply = leader.get(url)
         assert reply.status_code == 200 and reply.json()["message"] == message
     comment = leader.post(
-        "/api/v1/comments/", {"task_id": task["id"], "content_html": "Comment"}, format="json"
+        "/comments/", {"task_id": task["id"], "content_html": "Comment"}, format="json"
     )
     assert comment.status_code == 201 and comment.json()["message"] == "Đã gửi bình luận."
-    comment_route = f"/api/v1/comments/{comment.json()['data']['id']}/"
+    comment_route = f"/comments/{comment.json()['data']['id']}/"
     edited = leader.patch(comment_route, {"content_html": "Edited"}, format="json")
     assert edited.status_code == 200 and edited.json()["message"] == "Đã cập nhật bình luận."
     removed = leader.delete(comment_route)
@@ -222,7 +222,7 @@ def test_collaboration_verification_error_explains_outcome_without_dependency_di
             "mentioned_user_ids": [str(uuid4())],
         }
         message = "Chưa thể xác minh người được nhắc tên có quyền xem nội dung này."
-    reply = client.post("/api/v1/comments/", body, format="json")
+    reply = client.post("/comments/", body, format="json")
     assert reply.status_code == 503 and reply.json()["error"]["code"] == "CLASSROOM_UNAVAILABLE"
     assert reply.json()["message"] == message and reply.json()["error"]["details"] == []
     assert effect_state(task["project_id"]) == before

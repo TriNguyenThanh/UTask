@@ -41,7 +41,7 @@ def bulk_sprint_scope(
     scope = {
         "user_id": actor.id,
         "http_method": "POST",
-        "endpoint_path": f"/api/v1/sprints/{sprint_id}/tasks/",
+        "endpoint_path": f"/sprints/{sprint_id}/tasks/",
         "idempotency_key": f"work-ai:{operation_id}:{payload_hash(payload)[:16]}",
     }
     return change_scope(actor, sprint_id, payload, scope)
