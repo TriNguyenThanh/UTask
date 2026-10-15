@@ -12,14 +12,19 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
+import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
+import { DragGrip } from "@/features/projects/dnd/DraggableIssueCard";
+import { useDraggableIssue } from "@/features/projects/dnd/useDraggableIssue";
+import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
 import { daysLeft, STATUS_LABELS } from "@/features/projects/issueMeta";
 import {
   hasActiveFilters,
@@ -38,6 +43,7 @@ import {
   canCreateTask,
   canManageSprint,
   projectPermissionContext,
+  viewerRole,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
@@ -91,10 +97,16 @@ function IssueRow({
   projectId,
   issue,
   onOpenIssue,
+  handle,
+  actions,
 }: {
   projectId: string;
   issue: Issue;
   onOpenIssue: (projectId: string, issueKey: string) => void;
+  /** Drag grip, when the viewer may drag this row. */
+  handle?: ReactNode;
+  /** Per-row actions menu, the non-drag way to move it. */
+  actions?: ReactNode;
 }) {
   const TypeIcon = typeIcons[issue.type];
   const priority = priorityConfig[issue.priority];
@@ -102,6 +114,7 @@ function IssueRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded px-3 py-2.5 text-sm transition-colors hover:bg-muted/50">
       <div className="flex min-w-0 items-center gap-3 pr-4">
+        {handle}
         <span
           className={cn(
             "flex size-3.5 shrink-0 items-center justify-center rounded text-white",
@@ -173,7 +186,72 @@ function IssueRow({
             <CheckCircle2 className="ml-1 size-3 text-emerald-600" aria-hidden />
           ) : null}
         </span>
+        {actions}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One backlog row that can be dragged (leader only) and dropped on. Position
+ * comes from the row under the pointer, the sprint from the section around it.
+ */
+function BacklogRow({
+  projectId,
+  issue,
+  onOpenIssue,
+  mover,
+  destination,
+}: {
+  projectId: string;
+  issue: Issue;
+  onOpenIssue: (projectId: string, issueKey: string) => void;
+  mover: ReturnType<typeof useIssueMover>;
+  /** Rows shown in the section this row sits in. */
+  destination: readonly Issue[];
+}) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const gripRef = useRef<HTMLSpanElement | null>(null);
+  const isLeader = mover.role === "leader";
+  const canDrag = isLeader && mover.canDragIssue(issue);
+  const { dragging, closestEdge } = useDraggableIssue({
+    elementRef: wrapperRef,
+    handleRef: gripRef,
+    issueKey: issue.key,
+    canDrag,
+    canReorder: isLeader,
+  });
+  return (
+    <div
+      ref={wrapperRef}
+      data-issue-key={issue.key}
+      className={cn(
+        "relative transition-colors",
+        dragging && "opacity-40",
+        mover.flashKey === issue.key && "bg-primary/10",
+      )}
+    >
+      {closestEdge ? (
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary",
+            closestEdge === "top" ? "-top-px" : "-bottom-px",
+          )}
+        />
+      ) : null}
+      <IssueRow
+        projectId={projectId}
+        issue={issue}
+        onOpenIssue={onOpenIssue}
+        handle={canDrag ? <DragGrip gripRef={gripRef} /> : null}
+        actions={
+          <IssueActionsMenu
+            issueKey={issue.key}
+            groups={mover.menuFor(issue, { kind: "backlog", destination })}
+          />
+        }
+      />
     </div>
   );
 }
@@ -188,14 +266,18 @@ function SprintSection({
   issues,
   onOpenIssue,
   canComplete,
+  mover,
 }: {
   projectId: string;
   sprint: Sprint;
   issues: Issue[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
   canComplete: boolean;
+  mover: ReturnType<typeof useIssueMover>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const isOver = useSectionDropTarget(sectionRef, sprint.id, mover.enabled && mover.role === "leader");
   const percent =
     sprint.totalPoints > 0
       ? Math.round((sprint.completedPoints / sprint.totalPoints) * 100)
@@ -204,7 +286,10 @@ function SprintSection({
   const isActive = sprint.state === "active";
 
   return (
-    <section className="mb-6">
+    <section
+      ref={sectionRef}
+      className={cn("mb-6 rounded transition-colors", isOver && "bg-primary/5 ring-2 ring-primary/30")}
+    >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -288,11 +373,13 @@ function SprintSection({
           ) : (
             <div className="divide-y border-b">
               {issues.map((issue) => (
-                <IssueRow
+                <BacklogRow
                   key={issue.id}
                   projectId={projectId}
                   issue={issue}
                   onOpenIssue={onOpenIssue}
+                  mover={mover}
+                  destination={issues}
                 />
               ))}
             </div>
@@ -383,6 +470,20 @@ export default function ProjectBacklogRoute() {
   const canCompleteSprint = canManageSprint(permCtx);
   const showCreateEpic = canCreateTask(permCtx);
 
+  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+  const backlogSectionRef = useRef<HTMLElement | null>(null);
+  const backlogOver = useSectionDropTarget(
+    backlogSectionRef,
+    null,
+    mover.enabled && mover.role === "leader",
+  );
+  useBacklogDropMonitor({
+    enabled: mover.enabled && mover.role === "leader",
+    issues: workspace.issues,
+    issuesIn: (sprintId) => filteredIssues.filter((issue) => issue.sprintId === sprintId),
+    onMove: mover.requestMove,
+  });
+
   const activeSprints = workspace.sprints.filter(
     (sprint) => sprint.state === "active",
   );
@@ -435,6 +536,7 @@ export default function ProjectBacklogRoute() {
 
   return (
     <div className="flex min-h-0 flex-col">
+      {mover.dialog}
       {/* 2-column workspace */}
       <div className="flex flex-1 min-h-0 flex-col md:flex-row">
 
@@ -564,6 +666,7 @@ export default function ProjectBacklogRoute() {
                   )}
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
+                  mover={mover}
                 />
               ))}
               {upcomingSprints.map((sprint) => (
@@ -576,11 +679,18 @@ export default function ProjectBacklogRoute() {
                   )}
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
+                  mover={mover}
                 />
               ))}
 
               {/* Product Backlog */}
-              <section className="mb-10">
+              <section
+                ref={backlogSectionRef}
+                className={cn(
+                  "mb-10 rounded transition-colors",
+                  backlogOver && "bg-primary/5 ring-2 ring-primary/30",
+                )}
+              >
                 <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                   <div className="flex items-center gap-2.5">
                     <h2 className="text-sm font-bold">Product Backlog</h2>
@@ -602,11 +712,13 @@ export default function ProjectBacklogRoute() {
                 ) : (
                   <div className="divide-y border-b">
                     {backlogIssues.map((issue) => (
-                      <IssueRow
+                      <BacklogRow
                         key={issue.id}
                         projectId={projectId}
                         issue={issue}
                         onOpenIssue={openIssue}
+                        mover={mover}
+                        destination={backlogIssues}
                       />
                     ))}
                   </div>

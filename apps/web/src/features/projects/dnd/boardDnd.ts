@@ -6,7 +6,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
-import { isIssueDrag } from "@/features/projects/dnd/DraggableIssueCard";
+import { isIssueDrag } from "@/features/projects/dnd/useDraggableIssue";
 import type { MoveDrop } from "@/features/projects/hooks/useIssueMover";
 import type { Issue, IssueStatus } from "@/features/projects/types";
 
