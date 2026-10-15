@@ -261,5 +261,14 @@ export function useIssueMover({
     />
   );
 
-  return { enabled, role, flashKey, requestMove, toggleBlocked, menuFor, dialog };
+  return {
+    enabled,
+    role,
+    flashKey,
+    canDragIssue: canTouch,
+    requestMove,
+    toggleBlocked,
+    menuFor,
+    dialog,
+  };
 }

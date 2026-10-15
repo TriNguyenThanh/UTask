@@ -1,12 +1,17 @@
 import { Plus, Zap } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
-import { IssueCard } from "@/features/projects/components/IssueCard";
+import { DraggableIssueCard } from "@/features/projects/dnd/DraggableIssueCard";
+import {
+  useBoardAutoScroll,
+  useBoardDropMonitor,
+  useColumnDropTarget,
+} from "@/features/projects/dnd/boardDnd";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
 import { COLUMNS, daysLeft, formatShortDate } from "@/features/projects/issueMeta";
@@ -51,9 +56,16 @@ function BoardColumn({
   mover: ReturnType<typeof useIssueMover>;
 }>) {
   const points = issues.reduce((sum, issue) => sum + issue.storyPoints, 0);
+  const columnRef = useRef<HTMLElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const isOver = useColumnDropTarget(columnRef, listRef, column.status, mover.enabled);
   return (
     <section
-      className="flex max-h-full w-72 min-w-[18rem] flex-1 flex-col rounded-lg border border-outline-subtle/60 bg-muted/50 p-3"
+      ref={columnRef}
+      className={cn(
+        "flex max-h-full w-72 min-w-[18rem] flex-1 flex-col rounded-lg border border-outline-subtle/60 bg-muted/50 p-3 transition-colors",
+        isOver && "border-primary/50 bg-primary/10",
+      )}
       aria-label={column.label}
     >
       <div className="mb-2 flex shrink-0 items-center justify-between border-b border-outline-subtle/60 pb-2.5">
@@ -68,18 +80,20 @@ function BoardColumn({
           {points} pts
         </span>
       </div>
-      <div className="flex-1 space-y-2.5 overflow-y-auto">
+      <div ref={listRef} className="flex-1 space-y-2.5 overflow-y-auto">
         {issues.length === 0 ? (
           <p className="rounded-md border border-dashed border-outline-subtle px-2 py-4 text-center text-[11px] text-muted-foreground">
             Không có issue
           </p>
         ) : (
           issues.map((issue) => (
-            <IssueCard
+            <DraggableIssueCard
               key={issue.id}
               issue={issue}
               onOpen={onOpenIssue}
               highlighted={mover.flashKey === issue.key}
+              canDrag={mover.canDragIssue(issue)}
+              canReorder={mover.role === "leader"}
               actions={
                 <IssueActionsMenu
                   issueKey={issue.key}
@@ -201,10 +215,21 @@ export function Component() {
 
   const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
 
+  const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
+
   const visibleIssues = useMemo(
     () => sprintIssues.filter((issue) => matchesFilters(issue, filters)),
     [sprintIssues, filters],
   );
+
+  useBoardAutoScroll(boardElement, mover.enabled);
+  useBoardDropMonitor({
+    enabled: mover.enabled,
+    isLeader: mover.role === "leader",
+    issues: workspace.issues,
+    visibleIssuesFor: (status) => visibleIssues.filter((issue) => issue.status === status),
+    onMove: mover.requestMove,
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -255,7 +280,7 @@ export function Component() {
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-x-auto bg-background p-6">
+        <div ref={setBoardElement} className="min-h-0 flex-1 overflow-x-auto bg-background p-6">
           <div className="flex h-full items-start gap-4">
             {COLUMNS.map((column) => (
               <BoardColumn
