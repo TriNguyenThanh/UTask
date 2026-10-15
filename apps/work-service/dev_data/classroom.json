@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "group_id": "group-example",
+      "class_id": "class-dev-01",
+      "source_version": 1,
+      "members": [
+        {
+          "user_id": "24e76a06-0401-4e90-a2f5-1d38d993e6e9",
+          "role": "LEADER",
+          "status": "ACTIVE"
+        }
+      ]
+    }
+  ],
+  "teachers": {}
+}

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import yaml
 
@@ -72,12 +73,54 @@ class AIComposeTests(unittest.TestCase):
                     "jobs.celery_app:celery_app", services["ai-worker"]["command"]
                 )
                 self.assertIn("healthcheck", services["ai-worker"])
+                if "staging" in filename:
+                    self.assertIn("healthcheck", services["ai-dispatcher"])
+                    self.assertEqual(api["x-deploy"]["gateway_health_path"], None)
+                    for name in ("ai-worker", "ai-dispatcher", "ai-migrate"):
+                        self.assertEqual(
+                            services[name]["x-deploy"]["application"], "ai-service"
+                        )
+                    self.assertEqual(
+                        services["ai-migrate"]["x-deploy"]["role"], "migration"
+                    )
+                    self.assertEqual(
+                        services["ai-postgres"]["x-deploy"]["role"], "infrastructure"
+                    )
                 database = services["ai-postgres"]
                 self.assertEqual(database["image"], "postgres:17-alpine")
                 self.assertIn(
                     "ai_database:/var/lib/postgresql/data", database["volumes"]
                 )
                 self.assertNotIn("ports", database)
+
+    def test_dispatcher_liveness_accepts_only_matching_process_arguments(self):
+        services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
+            "services"
+        ]
+        probe = services["ai-dispatcher"]["healthcheck"]["test"]
+        self.assertEqual(probe[:3], ["CMD", "python", "-c"])
+        for arguments, healthy in (
+            ([], False),
+            ([b"python\0-m\0jobs.worker\0"], False),
+            ([b"python\0-c\0probe mentions jobs.dispatcher\0"], False),
+            ([b"python\0-m\0jobs.dispatcher\0"], True),
+            ([b"tini\0--\0python\0", b"python\0-m\0jobs.dispatcher\0"], True),
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                patch.object(
+                    Path,
+                    "glob",
+                    return_value=[
+                        Mock(read_bytes=Mock(return_value=a)) for a in arguments
+                    ],
+                ),
+            ):
+                if healthy:
+                    exec(compile(probe[3], "dispatcher-health", "exec"), {})  # noqa: S102 - execute trusted Compose probe with mocked process files
+                else:
+                    with self.assertRaises(AssertionError):
+                        exec(compile(probe[3], "dispatcher-health", "exec"), {})  # noqa: S102 - execute trusted Compose probe with mocked process files
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
     def test_resolved_urls_use_docker_dns_and_staging_profiles_enable_all_processes(
