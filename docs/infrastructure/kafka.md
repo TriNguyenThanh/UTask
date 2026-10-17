@@ -1,6 +1,6 @@
 # Kafka và transactional outbox
 
-**Trạng thái: Thiết kế mục tiêu; đã có cấu hình broker trong Compose.** Theo
+**Trạng thái: Một phần; đã có broker Compose và client Work/Classroom trong source.** Theo
 [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
 mục 9–11, Kafka truyền domain/integration event giữa service. REST vẫn dùng
 cho command/query cần phản hồi trực tiếp; job nội bộ dùng
@@ -10,7 +10,8 @@ cho command/query cần phản hồi trực tiếp; job nội bộ dùng
 
 Python service ưu tiên `confluent-kafka` theo baseline. Client có thể đổi nếu
 có quyết định phù hợp, nhưng không làm thay đổi event contract. Đây là lựa
-chọn mục tiêu, chưa xác nhận SDK đã được cài ở từng service.
+chọn đã có trong manifest và client Work/Classroom; không suy ra các service
+khác đã dùng Kafka.
 
 Danh mục sự kiện nằm trong [tài liệu hệ thống](../system/kafka-events.md).
 Schema máy đọc được thuộc [`contracts/events/`](../../contracts/events/);
@@ -64,23 +65,21 @@ context không thay quyết định quyền hiện hành. Pipeline chuẩn nằm
 
 ## Hiện trạng và vận hành
 
-Backend Classroom–Work đã dùng `confluent-kafka`, Outbox và consumer thực tế:
+Phạm vi source đã kiểm tra gồm publisher Work, publisher Classroom và consumer
+`consume_work` của Classroom. Các client dùng `confluent-kafka`; kiểm thử cấu
+hình dùng client giả, không thay cho nghiệm thu broker thật.
 
 | Luồng | Topic mặc định | Partition key | Consumer / DLQ |
 | --- | --- | --- | --- |
 | Work tạo dự án | `utask.work.events` | Project UUID | Classroom `consume_work` / `utask.classroom.work.dlq` |
-| Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Work `consume_classroom` / `utask.work.classroom.dlq` |
+| Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Chưa có `consume_classroom` trong source Work của checkout này |
 
 Publisher chỉ ghi `published_at` sau delivery callback thành công, lỗi thử
 lại tăng dần tối đa 300 giây và không gửi vượt đầu hàng lỗi cùng aggregate.
 Consumer tắt auto commit/offset store; sự kiện không áp dụng được vào DLQ
 và phải ACK trước commit offset. Lỗi dữ liệu/quyền không được đổi thành thành
-công. Work lưu receipt riêng từng dự án để nhận lại không bỏ sót phần đã lỗi.
-Nếu cùng một sự kiện gặp xung đột cố định ở một dự án và lỗi tạm thời ở dự án
-khác, Work ưu tiên thử lại lỗi tạm thời theo giới hạn consumer. Lần nhận lại
-bỏ qua receipt đã hoàn tất; chỉ phân loại sang DLQ sau khi không còn lỗi cần
-thử lại hoặc đã hết giới hạn. Thứ tự dự án không được quyết định phân loại lỗi.
-Giới hạn retry nhận từ mapping; chưa có công cụ tự động replay DLQ. Khi xử
+công. Consumer Work của Classroom nhận giới hạn retry từ mapping;
+chưa có công cụ tự động replay DLQ. Khi xử
 lý lại, sửa nguyên nhân, giữ event ID/nội dung nghiệp vụ và đưa qua cùng
 validation/chống lặp; không ghi thẳng database hoặc bỏ qua quyền.
 
@@ -95,3 +94,38 @@ phạm vi Classroom–Work nêu trên, chưa xác minh producer/consumer runtime
 có Kafka client. Production dùng Kafka bên ngoài theo baseline. Topic,
 partition, consumer group, retention, replay và SLA cần quyết định/kiểm tra
 riêng, không suy ra từ việc broker local khởi động được.
+
+## Kafka bên ngoài
+
+**Đã triển khai:** client Kafka của Work và Classroom nhận địa chỉ cùng các
+tùy chọn kết nối qua biến môi trường. Mọi client gửi sự kiện, nhận sự kiện và
+gửi thông điệp lỗi (DLQ) trong hai service dùng cùng cấu hình kết nối của service.
+**Chưa xác minh:** kết nối và gửi/nhận với Kafka cloud thật.
+
+Bỏ `kafka` khỏi `COMPOSE_PROFILES` trong `.env` của máy triển khai và điền
+địa chỉ `KAFKA_BOOTSTRAP_SERVERS`. Khi đó Compose không khởi động broker Docker
+và worker không bắt buộc chờ broker này. Chạy bằng lệnh Docker Compose thông
+thường; deploy staging giữ cùng lựa chọn profile. Để dùng lại broker Docker,
+thêm `kafka` vào `COMPOSE_PROFILES` và đặt địa chỉ `kafka:9092`.
+Cách điền tài khoản/mật khẩu nếu cần nằm tại
+[cấu hình môi trường](environment.md#chọn-kafka-docker-hoặc-kafka-bên-ngoài).
+
+Trước khi chuyển, chuẩn bị các topic đang dùng trên broker bên ngoài:
+
+- `utask.work.events`, `utask.classroom.events` cho sự kiện nghiệp vụ.
+- `utask.classroom.work.dlq` cho thông điệp lỗi phía Classroom.
+- `utask.work.profile.dlq` nếu bật consumer Identity của Work; topic nguồn
+  phải được thống nhất và cấu hình bằng `WORK_IDENTITY_KAFKA_TOPIC`.
+
+Danh sách trên theo client có trong checkout; cấu hình topic riêng phải khớp
+giữa bên gửi và bên nhận. Thay đổi kết nối này không thêm consumer nghiệp vụ.
+
+Cấp quyền gửi/nhận trên topic, ghi DLQ và sử dụng consumer group tương ứng.
+Producer hiện bật gửi chống trùng (`enable.idempotence`), nên quyền phía
+broker cũng phải cho phép cấu hình này. Cấu hình thời gian lưu trên nhà cung cấp;
+`KAFKA_LOG_RETENTION_MS` chỉ cấu hình broker Docker, không thay được broker cloud.
+Các địa chỉ broker trả về khi client lấy metadata cũng phải truy cập được từ VPS.
+
+Chuyển địa chỉ không tự chuyển sự kiện cũ, consumer offset (vị trí đã đọc)
+hoặc các tùy chọn topic. Nếu cần giữ lịch sử, lập kế hoạch chuyển dữ liệu riêng
+trước khi đổi. Không xóa volume Kafka Docker để đổi sang cloud.

@@ -36,7 +36,6 @@ class LocalComposeTests(unittest.TestCase):
             {
                 "postgres",
                 "redis",
-                "kafka",
                 "nginx",
                 "identity-service",
                 "work-service",
@@ -52,8 +51,16 @@ class LocalComposeTests(unittest.TestCase):
         for name in default:
             with self.subTest(process=name):
                 self.assertLessEqual(
-                    set(self.services[name].get("depends_on", {})), default
+                    {
+                        dependency
+                        for dependency, options in self.services[name]
+                        .get("depends_on", {})
+                        .items()
+                        if options.get("required", True)
+                    },
+                    default,
                 )
+        self.assertEqual(self.services["kafka"]["profiles"], ["kafka"])
         for name in (
             "ai-service",
             "ai-worker",
