@@ -1,0 +1,96 @@
+from datetime import timedelta
+from uuid import uuid4
+
+import pytest
+from django.utils import timezone
+
+from apps.courses.models import ClassTeacher, Enrollment
+from apps.groups.models import GroupMember
+from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
+from common.access_codes import code_hash
+
+pytestmark = [pytest.mark.contract, pytest.mark.django_db]
+
+
+@pytest.mark.parametrize("role", ["TEACHER", "SYSTEM_ADMIN"])
+@pytest.mark.parametrize("command", ["join_class", "create_group", "join_group"])
+def test_completed_membership_command_replays_after_role_change_without_new_writes(
+    group, client_for, post_command, identity, role, command
+):
+    actor_id = uuid4()
+    section = group.class_section
+    section.join_code_hash = code_hash("CLASSCODE")
+    section.join_code_expires_at = timezone.now() + timedelta(days=1)
+    section.save()
+    group.invite_code_hash = code_hash("GROUPCODE")
+    group.invite_expires_at = timezone.now() + timedelta(days=1)
+    group.save()
+    if command != "join_class":
+        Enrollment.objects.create(class_section=section, user_id=actor_id)
+    path, payload = {
+        "join_class": ("/classes/join/", {"code": "CLASSCODE"}),
+        "create_group": ("/groups/", {"class_id": str(section.pk), "name": "Nhóm học tập"}),
+        "join_group": ("/groups/join/", {"code": "GROUPCODE"}),
+    }[command]
+    client = client_for(actor_id)
+    key = uuid4()
+    original = post_command(client, path, payload, key)
+    assert original.status_code == 201, original.content
+    receipt = IdempotencyRecord.objects.get(idempotency_key=key)
+    saved_body = receipt.response_body
+    counts = (
+        Activity.objects.count(),
+        OutboxEvent.objects.count(),
+        IdempotencyRecord.objects.count(),
+    )
+
+    identity["roles"][str(actor_id)] = [role]
+    replay = post_command(client, path, payload, key)
+    assert replay.status_code == original.status_code
+    assert replay.json() == original.json()
+    assert "code" not in replay.json()["data"]
+
+    fresh = post_command(client, path, payload)
+    assert fresh.status_code == 403
+    assert fresh.json()["error"]["code"] == "PERMISSION_DENIED"
+    changed = {**payload, "name": "Tên khác"} if command == "create_group" else {"code": "OTHER"}
+    conflict = post_command(client, path, changed, key)
+    assert conflict.status_code == 422
+    assert conflict.json()["error"]["code"] == "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD"
+
+    section.status = "CLOSED"
+    section.join_code_hash = None
+    section.save()
+    group.invite_code_hash = None
+    group.save()
+    assert post_command(client, path, payload, key).json() == original.json()
+
+    identity["active"] = False
+    assert post_command(client, path, payload, key).status_code == 401
+    identity["active"] = True
+    # An Admin still has class-read authority. Revoke the relationships under Teacher
+    # to check actual loss of read access rather than only a change of global role.
+    identity["roles"][str(actor_id)] = ["TEACHER"]
+    left_at = timezone.now()
+    Enrollment.objects.filter(class_section=section, user_id=actor_id).update(
+        status="LEFT", left_at=left_at
+    )
+    GroupMember.objects.filter(enrollment__user_id=actor_id).update(status="LEFT", left_at=left_at)
+    if role == "TEACHER":
+        assignment = ClassTeacher.objects.create(class_section=section, user_id=actor_id)
+        teacher_replay = post_command(client, path, payload, key)
+        assert teacher_replay.status_code == original.status_code
+        assert teacher_replay.json() == original.json()
+        assignment.status = "LEFT"
+        assignment.left_at = timezone.now()
+        assignment.save(update_fields=["status", "left_at"])
+    denied = post_command(client, path, payload, key)
+    assert denied.status_code == 404
+    assert denied.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    receipt.refresh_from_db()
+    assert receipt.response_body == saved_body
+    assert counts == (
+        Activity.objects.count(),
+        OutboxEvent.objects.count(),
+        IdempotencyRecord.objects.count(),
+    )
