@@ -26,15 +26,21 @@ const priorityMeta: Record<TaskPriority, { label: string; icon: typeof ChevronsU
   },
 };
 
-function formatDue(dueAt: string, now: Date): string {
+/** Exported for direct unit testing of the day-count math; not part of the UI. */
+export function formatDue(dueAt: string, now: Date): string {
   const due = new Date(dueAt);
   const sameDay = due.toDateString() === now.toDateString();
   const time = `${String(due.getHours()).padStart(2, "0")}:${String(due.getMinutes()).padStart(2, "0")}`;
   if (sameDay) {
     return `Hôm nay, ${time}`;
   }
-  const diffMs = due.getTime() - now.getTime();
-  const diffDays = Math.round(diffMs / 86_400_000);
+  // Calendar-day difference, not a raw ms diff: comparing full timestamps
+  // (due at a fixed hour vs. "now" at whatever hour the clock shows) made the
+  // day count sensitive to the time of day, rounding a task due "yesterday"
+  // to 0 days whenever now and due were under 12h apart on the clock.
+  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((dueMidnight.getTime() - nowMidnight.getTime()) / 86_400_000);
   if (diffDays < 0) {
     return `Quá hạn ${Math.abs(diffDays)} ngày`;
   }
