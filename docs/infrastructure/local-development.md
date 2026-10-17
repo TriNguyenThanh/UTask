@@ -62,3 +62,7 @@ docker compose down
 Môi trường local không đại diện cho cấu hình production. Cách triển khai
 production cần được ghi riêng khi nền tảng và cách quản lý thông tin bí mật đã
 được quyết định.
+
+Khi PostgreSQL chấp nhận
+kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
+được khai báo tồn tại, kể cả khi volume đã có dữ liệu.

@@ -181,3 +181,6 @@ Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` �
 publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
 `CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
 `IDENTITY_CLASSROOM_SERVICE_KEY` và khóa
+
+Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
+sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
