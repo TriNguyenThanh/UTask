@@ -12,9 +12,7 @@
 | `github.commit.received`, `github.pull_request.opened`, `github.pull_request.merged`, `github.issue.updated` | Integration  | Work, AI, Notification khi cần                    | Chia sẻ hoạt động GitHub đã chuẩn hóa  |
 | `ai.analysis.completed`, `ai.project.risk.detected`                                                          | AI           | Notification hoặc service đã đăng ký nhận         | Thông báo phân tích/rủi ro đã hoàn tất |
 
-Classroom có thể cần event nhóm/thành viên; tên, payload và service nhận phải
-chốt theo use case, không suy ra schema từ wildcard. Baseline dùng cả ví dụ
-`comment.created` và `task.comment.created`; tên cuối cùng cần event contract.
+Work c\u00f4ng b\u1ed1 s\u1ef1 ki\u1ec7n `work.project.created`; xem [h\u1ee3p \u0111\u1ed3ng JSON Schema](../../contracts/events/work.project.created.v1.json).\nBaseline d\u00f9ng c\u1ea3 v\u00ed d\u1ee5\n`comment.created` và `task.comment.created`; tên cuối cùng cần event contract.
 
 ## Envelope và version
 
