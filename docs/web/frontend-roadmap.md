@@ -1,345 +1,717 @@
-# Lộ trình frontend (Frontend Roadmap) — từ hiện trạng tới MVP
+# Lộ trình frontend (Frontend Roadmap): tích hợp Identity trước
 
-**Trạng thái tài liệu: Thiết kế mục tiêu (kế hoạch). Phần "hiện trạng" ở §2 đã đối chiếu với mã nguồn nhánh `dev`, HEAD `83af5e7`, ngày 13/10/2026. Các đợt ở §5 và các mảng ở §4 chưa được triển khai; không đọc chúng như tính năng đã chạy.**
+**Trạng thái tài liệu: Kế hoạch (Thiết kế mục tiêu).** Phần hiện trạng (§2–§4)
+đã đối chiếu với mã nguồn nhánh `dev`, HEAD `933f785` (merge PR #20
+`feat/web-kanban-dnd`), ngày 17/10/2026. Các đợt ở §5 **chưa được triển khai**.
+Lần rà soát này chỉ đọc mã, cấu hình và test; **không chạy test hay service nào**.
+Số test ghi trong tài liệu là số hàm/khối test đếm được trong mã, không phải kết
+quả chạy.
 
-Tài liệu này trả lời ba câu hỏi: backend đang có gì, frontend đang đứng ở đâu so
-với backend đó, và nên làm gì tiếp theo theo thứ tự nào. Chi tiết từng màn đã làm
-nằm ở [student-flow.md](student-flow.md) và [teacher-flow.md](teacher-flow.md);
-tài liệu này chỉ trỏ tới, không chép lại.
+**Quyết định ưu tiên (17/10/2026):** đội ưu tiên nối **Identity Service** vào
+frontend trước. Work, AI, Classroom, Integration, Notification **làm sau**. Trong
+lúc đó các màn của những service này tiếp tục chạy **Demo MSW**. Hiện trạng của
+chúng được giữ ở [Phụ lục A](#phụ-lục-a-hiện-trạng-các-service-làm-sau) để
+không phải khảo sát lại.
 
-## 1. Mục đích và cách đọc
+Chi tiết màn hình nằm ở [student-flow.md](student-flow.md),
+[teacher-flow.md](teacher-flow.md) và [kanban-board.md](kanban-board.md); tài liệu
+này chỉ trỏ tới.
 
-- **Phạm vi**: đưa `apps/web` từ trạng thái "toàn bộ chạy trên mock" tới MVP P0,
-  rồi P1, theo [phân tích vai trò §8](utask-role-analysis.md#8-phạm-vi-mvp-nên-ưu-tiên).
+## 1. Cách đọc
+
 - **Nguồn ranh giới service**: [kiến trúc](../system/architecture.md),
   [quyền sở hữu dữ liệu](../system/data-ownership.md),
-  [giao tiếp REST và Kafka](../system/communication.md).
-- **Nhãn trạng thái** theo [quy ước chung](../system/README.md#quy-ước-trạng-thái):
-  `Đã triển khai`, `Một phần`, `Chưa triển khai`, `Thiết kế mục tiêu`,
-  `Chưa xác minh`. Thêm nhãn **Demo MSW** như [student-flow.md](student-flow.md):
-  chạy được với mock (MSW — Mock Service Worker, thư viện chặn request ngay trong
-  trình duyệt), chưa có backend thật.
-- **Thuật ngữ**: *adapter* = lớp mã đứng giữa component và API, đổi dữ liệu của
-  backend sang kiểu dữ liệu mà giao diện dùng; *envelope* = lớp bọc chung quanh
-  mọi phản hồi của Identity; *viewer context* = tư cách của người xem đối với một
-  project (thành viên nhóm hay giảng viên của lớp).
-- **Nhu cầu API** ở §4 là yêu cầu của frontend gửi cho backend, **không phải
-  schema và không phải hợp đồng**. Không đưa chúng vào `contracts/`.
+  [giao tiếp REST và Kafka](../system/communication.md). Nguồn nghiệp vụ tài khoản:
+  [đặc tả API Identity](../architecture/Identity_Service_API_Specification.md) (đối
+  chiếu với mã; khi lệch, mã nguồn là sự thật hiện tại).
+- **Nhãn trạng thái** theo [quy ước chung](../system/README.md): `Đã triển khai`,
+  `Một phần`, `Chưa triển khai`, `Thiết kế mục tiêu`, `Chưa xác minh`; thêm
+  **Demo MSW** = chạy được với mock (MSW — Mock Service Worker, chặn request ngay
+  trong trình duyệt), chưa có backend thật.
+- **Ba loại câu**: **Sự thật** (có dẫn file trong repo), **Khuyến nghị** (đề xuất
+  của roadmap), **Câu hỏi mở** (cần đội khác quyết định, gom ở §6 và §9).
+- **Thuật ngữ**:
+  - *Envelope*: lớp bọc chung của phản hồi JSON `{success, message, data, meta, error}`.
+  - *DTO* (Data Transfer Object): kiểu dữ liệu đúng hình dạng backend trả về.
+  - *Adapter*: lớp mã đổi DTO sang kiểu dữ liệu giao diện (UI model).
+  - *Access token*: JWT ngắn hạn gửi trong header `Authorization: Bearer`.
+  - *Refresh token*: token dài hạn để lấy access token mới; ở đây nằm trong cookie
+    HttpOnly mà JavaScript không đọc được.
+  - *CSRF*: tấn công giả mạo request; Django đòi token CSRF khi xác thực bằng cookie.
+  - *Single-flight refresh*: nhiều request cùng gặp 401 chỉ gây **một** lần refresh.
+  - *Persona demo*: tài khoản giả trong dữ liệu MSW (Leader, Member, Teacher…).
+- **Hợp đồng**: Identity sinh OpenAPI lúc chạy (`GET /api/auth/openapi/`), **chưa
+  commit file spec** vào `contracts/`
+  ([contracts/api/README.md](../../contracts/api/README.md)). Nhu cầu gửi backend ở
+  §6 là yêu cầu, **không phải schema**.
 
-## 2. Ảnh chụp hiện trạng
+### 1.1 Thay đổi so với bản trước
 
-### 2.1 Backend
-
-| Service | Trạng thái | Nơi có mã | Tiền tố gateway | Hợp đồng | Ảnh hưởng tới frontend |
-| --- | --- | --- | --- | --- | --- |
-| Identity | **Đã triển khai** (auth, hồ sơ, phiên, admin; 35 module test) | `apps/identity-service` trên `dev` | `/api/auth/` | [Đặc tả API v1.8](../architecture/Identity_Service_API_Specification.md) (trạng thái tự ghi "Một phần"); chưa có artifact OpenAPI trong `contracts/` | Là backend duy nhất nối được ngay |
-| Classroom | **Một phần**: chỉ có khung và `/healthz` | `feat/classroom-service`, chưa merge | `/api/classroom/` | Không (tài liệu ở [classroom-service](../classroom-service/README.md) là thiết kế mục tiêu) | Dữ liệu lớp/nhóm chưa nối được |
-| Project (`work-service`) | **Chưa triển khai** | Không có mã ở nhánh nào | `/api/work/` | Không | Backlog, Kanban, Sprint, task, comment chưa nối được |
-| Integration | **Chưa triển khai** | Không có mã | `/api/integrations/` | Không | GitHub chưa nối được |
-| Notification | **Chưa triển khai** | Không có mã | `/api/notifications/` | Không | Thông báo chưa nối được |
-| Progress | **Chưa triển khai** | Không có mã, không có trong compose và nginx | Chưa có | Không | Chỉ số, rủi ro chưa nối được |
-| AI | **Một phần**: có API và worker, 97 test | `origin/feat/ai-service`, chưa merge | `/api/ai/` | `contracts/api/ai-service-v1.yaml` trên nhánh đó ghi `designed-not-implemented` | Chưa nối được |
-
-Ghi chú:
-
-- `contracts/` hiện chỉ có hai file README; không có hợp đồng máy đọc được.
-- **Kafka**: Identity mới ghi sự kiện vào bảng outbox, chưa có producer, relay
-  hay consumer nào chạy. Frontend không nên giả định thông báo hay đồng bộ dữ
-  liệu liên service đã hoạt động.
-- Gateway (`infra/nginx/nginx.conf`) cắt tiền tố rồi chuyển vào service, chặn
-  `/api/auth/api/v1/internal` bằng 404, **không cấu hình CORS**. Trình duyệt
-  phải gọi cùng origin với gateway.
-- `docker-compose.yml` ở gốc build các thư mục `apps/work-service`,
-  `classroom-service`, `integration-service`, `notification-service`,
-  `ai-service` không tồn tại trên `dev`, và nginx phụ thuộc vào chúng. Môi
-  trường staging (`docker-compose.staging.yml`) chỉ chạy PostgreSQL, Redis,
-  Identity và nginx.
-- AI: gateway biến `/api/ai/v1/requests` thành `/v1/requests`, trong khi route
-  của service là `/api/ai/v1/requests`, nên gọi qua gateway sẽ 404. Phản hồi lỗi
-  của AI cũng có dạng khác envelope của Identity.
-
-### 2.2 Frontend
-
-Toàn bộ dữ liệu của `apps/web` hiện đi qua MSW. Không trang nào gọi backend thật.
-
-| Nhóm màn | Trạng thái | Dữ liệu | Thao tác ghi | Còn disabled |
-| --- | --- | --- | --- | --- |
-| Đăng nhập, quên và đặt lại mật khẩu | **Demo MSW** | Login qua MSW; quên và đặt lại mật khẩu không gọi API | Chỉ login | SSO Google/GitHub, gửi email, đặt lại mật khẩu |
-| My Work, danh sách môn | **Demo MSW** | `my-work/*` | Không | Tham gia môn, duyệt PR, kết nối GitHub, tạo task |
-| Trang nhóm của môn | **Demo MSW** | `courses/:id` | Tạo nhóm | Xin tham gia, hủy yêu cầu, nộp đề tài |
-| Workspace (Backlog, Board, Code, Issue) | **Demo MSW** | `projects/*` | Board và Backlog: kéo thả, menu di chuyển, đổi trạng thái, cờ bị chặn ([kanban-board.md](kanban-board.md)); checkbox subtask vẫn chỉ đổi state cục bộ | Tạo Epic/issue, sửa nội dung, hoàn thành Sprint, AI, đồng bộ |
-| Settings dự án | **Demo MSW** | `projects/:id/settings` | Lưu khóa AI | Kiểm tra kết nối, xóa khóa |
-| Thông báo | **Demo MSW** | `notifications` | Đánh dấu đã đọc | — |
-| Settings tài khoản | **Demo MSW** | `me/settings` | Sửa hồ sơ, ngắt GitHub | Đổi mật khẩu (chỉ toast), đăng xuất thiết bị khác, OAuth |
-| Teacher T01–T10, Giám sát | **Demo MSW**, chỉ đọc | `teacher/*` | Không | Tạo lớp, thêm và import sinh viên, đổi mã, điều chỉnh nhóm, gửi phản hồi |
-
-Chi tiết từng màn: [student-flow.md](student-flow.md),
-[teacher-flow.md](teacher-flow.md). Frontend chưa có: màn đăng ký, màn kích hoạt
-tài khoản, danh sách thiết bị đăng nhập, khu quản trị Admin, màn tham gia lớp
-bằng mã, màn cấu hình project, màn AI sinh backlog, màn kết nối repository.
-
-### 2.3 Những chỗ frontend lệch với backend thật
-
-| # | Điểm lệch | Frontend | Backend (Identity) |
-| --- | --- | --- | --- |
-| L1 | Đường dẫn | `/api/auth/api/v1/auth/login\|refresh\|logout` ([auth.ts](../../apps/web/src/features/auth/api/auth.ts)) | `/api/auth/login\|refresh\|logout` (commit `a824187` đã bỏ phiên bản khỏi route công khai) |
-| L2 | Hình dạng phản hồi | Đọc `access_token`, `refresh_token`, `expires_in`, `user` ở gốc | Envelope `{success, message, data, meta, error}`; token ở `data.access` |
-| L3 | Chuyển refresh token | Gửi `{refresh_token}` trong body, lưu ở `sessionStorage` khi bật mock | Cookie `refresh_token` HttpOnly, path `/api/auth`; body `refresh` luôn rỗng |
-| L4 | Hình dạng `user` | `global_role`, `capabilities`, `roles?` ([types.ts](../../apps/web/src/features/auth/types.ts)) | `roles[]` cùng nhiều trường hồ sơ; JWT **không** chứa roles |
-| L5 | CSRF | Chưa có | Refresh và logout dùng cookie phải qua `enforce_csrf` (cần header `X-CSRFToken`), nhưng không endpoint nào cấp cookie `csrftoken` |
-| L6 | Link email | Dùng `/reset-password`; chưa có trang kích hoạt | Email trỏ tới `${IDENTITY_FRONTEND_URL}/auth/activate?key=` và `/auth/reset?uid=&token=` |
-| L7 | Cùng origin | Vite chưa có proxy; `VITE_API_BASE_URL` mặc định rỗng | Không có CORS |
-| L8 | Dữ liệu lớp học | Gọi `/api/work/api/v1/courses/...` và `/teacher/...` | Theo kiến trúc, lớp/nhóm thuộc Classroom (`/api/classroom/`) |
-| L9 | Phiên | Không khôi phục được phiên khi tải lại nếu tắt mock; không có refresh chủ động | Access token sống 15 phút |
-
-### 2.4 Nợ kỹ thuật
-
-- Không có ESLint, Prettier hay `.editorconfig`; `pnpm lint` chỉ là `tsc --noEmit`.
-- Không có test e2e. Không có `Dockerfile` hay bước deploy cho web.
-- `@vitejs/plugin-react` nằm ở `dependencies`.
-- [HomeRoute.tsx](../../apps/web/src/app/routes/HomeRoute.tsx) không được tham
-  chiếu ở đâu.
-- [enableMocking.ts](../../apps/web/src/mocks/enableMocking.ts) bật MSW trong cả
-  bản build production khi `VITE_ENABLE_MOCKS=true`, trái với câu "Production builds
-  never register MSW" trong `apps/web/README.md`. Phải thống nhất một trong hai.
-- Tài liệu lỗi thời: [teacher-flow.md](teacher-flow.md) §1–2 mô tả HEAD `c9df96b`
-  khi `apps/` chưa có Identity; một số số liệu test (328) lệch với số đếm hiện tại
-  (khoảng 316 khối `it(`).
-
-## 3. Nguyên tắc cho giai đoạn tích hợp
-
-1. **Một adapter cho mỗi service**: thêm `lib/api/<service>/` chứa DTO đúng shape
-   backend và hàm đổi sang kiểu dữ liệu của giao diện. Chuyển từ mock sang thật
-   chỉ chạm adapter và handler, không chạm component.
-2. **Mock bám backend thật** nơi backend đã có: handler MSW của Identity trả đúng
-   envelope, path và cookie như Identity. Mock của service chưa có hợp đồng giữ
-   nhãn Demo MSW và không đưa vào `contracts/`.
-3. **Tiền tố đúng service**: `/api/auth`, `/api/classroom`, `/api/work`,
-   `/api/integrations`, `/api/notifications`, `/api/ai`. Dữ liệu lớp/nhóm tách
-   dần khỏi `/api/work` (L8).
-4. **Chế độ lai**: cho phép chọn service nào dùng mock (ví dụ Identity thật,
-   phần còn lại MSW; MSW đã bỏ qua request không có handler qua
-   `onUnhandledFrame: "bypass"`). Cách một tài khoản Identity thật ánh xạ vào
-   graph mock dựa trên tài khoản demo là **Thiết kế mục tiêu** và cần thử nghiệm
-   ở Đợt 0.
-5. **Hai lớp quyền** giữ nguyên như [teacher-flow.md §6](teacher-flow.md#6-ma-trận-quyền-theo-tài-nguyên):
-   role toàn cục chỉ quyết định hiển thị khu vực; quyền theo lớp/project do
-   Classroom/Project quyết định. Frontend chỉ ẩn hoặc vô hiệu hóa; backend là
-   nơi quyết định cuối. Giữ chính sách 404 cho tài nguyên ngoài quyền và 403 cho
-   thiếu quyền hành động.
-6. **Không thành công giả**: nút ghi chỉ bật khi có hợp đồng, **trừ** các thao tác ghi
-   của Board và Backlog chạy trên Demo MSW, chỉ bật khi `VITE_ENABLE_MOCKS=true` và
-   tắt với backend thật ([kanban-board.md §1](kanban-board.md#1-phạm-vi-và-nhãn-trạng-thái)); mọi mutation xử lý
-   lỗi theo HTTP status và `error.code`, không theo `message`.
-7. **AI chỉ đề xuất**: mọi kết quả AI là bản nháp; chỉ API của service sở hữu dữ
-   liệu mới tạo hoặc đổi dữ liệu thật, sau khi người dùng xác nhận.
-
-## 4. Các mảng công việc
-
-Mỗi mảng ghi: user story, hiện trạng, việc frontend, nhu cầu API, tiêu chí hoàn
-tất và kiểm thử. Mảng A–C làm được ngay với Identity; D–I cần hợp đồng từ
-service tương ứng nên giai đoạn đầu chỉ dựng giao diện trên Demo MSW.
-
-### A. Nền tảng và chất lượng
-
-- **Hiện trạng**: xem §2.3 (L7), §2.4.
-- **Việc frontend**:
-  - Thêm proxy `/api` tới gateway (`:8080`) trong `vite.config.ts` để giữ cùng origin khi phát triển.
-  - Viết hướng dẫn chạy gateway cùng Identity bằng cấu hình staging (hoặc profile) vì compose gốc không dùng được; cập nhật `apps/web/README.md`.
-  - Quyết định và ghi rõ chính sách MSW trong bản build production; sửa README hoặc mã cho khớp.
-  - Thêm ESLint và Prettier (hoặc công cụ tương đương) và đưa vào CI; sửa test phụ thuộc giờ; dọn `HomeRoute.tsx`; chuyển `@vitejs/plugin-react` sang `devDependencies`.
-  - Thêm Playwright smoke test chạy trên MSW cho đường đăng nhập → Home → mở workspace.
-  - Quyết định cách deploy web (ví dụ build tĩnh do nginx phục vụ cùng origin). **Chưa quyết định.**
-  - Cập nhật tài liệu lỗi thời ở §2.4.
-- **Nhu cầu backend**: không.
-- **Hoàn tất khi**: `pnpm lint`, `typecheck`, `test`, `build` và e2e smoke đạt trong CI; chạy được web với Identity thật bằng một lệnh được tài liệu hóa.
-
-### B. Xác thực và tài khoản (Identity, nối thật)
-
-- **User story**: US-1.1; phần đăng ký, kích hoạt, khôi phục tài khoản của [phân tích vai trò §3](utask-role-analysis.md#3-epic-1-account-and-class-access) và [đặc tả Identity](../architecture/Identity_Service_API_Specification.md).
-- **Backend**: **Đã triển khai** (endpoint ở bảng dưới). Một số phần phụ thuộc cấu hình: đăng ký, gửi lại kích hoạt, đặt lại mật khẩu trả 503 nếu thiếu `IDENTITY_MAIL_KEY`; OAuth và avatar chỉ có khi bật feature flag; việc gửi email thật **Chưa xác minh** vì chưa có consumer.
-- **Việc frontend**:
-  - `ApiClient` bóc envelope, đổi `error.code` thành `ApiError`, xử lý 429 kèm `Retry-After`, gửi `credentials: "include"`.
-  - Adapter auth mới theo path và shape thật (L1–L4). Bỏ `global_role`, `capabilities`; dùng `roles`.
-  - Khôi phục phiên bằng cookie khi tải lại trang; refresh trước khi access token hết hạn; chỉ một refresh chạy tại một thời điểm khi nhiều request cùng gặp 401.
-  - Trang mới: đăng ký; kích hoạt `/auth/activate?key=` (nhánh tài khoản được import phải đặt mật khẩu); gửi lại email kích hoạt; quên mật khẩu; đặt lại mật khẩu ở `/auth/reset?uid=&token=` (giữ `/reset-password` làm alias).
-  - Hồ sơ: đọc và sửa `users/me` (không đổi được email và MSSV). Đổi mật khẩu: sau khi thành công mọi phiên bị thu hồi, đưa người dùng về trang đăng nhập. Danh sách thiết bị, thu hồi từng thiết bị, đăng xuất mọi thiết bị.
-  - Thông báo lỗi riêng cho tài khoản chưa kích hoạt, bị khóa, bị khóa tạm do đăng nhập sai nhiều lần, phiên bị thu hồi do dùng lại refresh token. Thông báo lỗi đăng nhập không tiết lộ email có tồn tại hay không.
-  - Liên kết GitHub qua OAuth và upload avatar: chỉ bật khi feature flag bật; nếu không thì ẩn hoặc vô hiệu hóa kèm lý do.
-  - Đổi handler MSW auth sang đúng shape thật để test và demo không lệch.
-- **Endpoint dùng** (qua gateway, tiền tố `/api/auth`): `POST /login`, `/refresh`, `/logout`, `/logout-all`, `/register`, `/activate`, `/activation/resend`, `/password-reset/request`, `/password-reset/confirm`, `/password-change`; `GET /sessions`, `DELETE /sessions/{id}`; `GET`/`PATCH /users/me`; `GET /users/{id}`; `POST /users/batch`.
-- **Nhu cầu gửi Identity**:
-  - Cách SPA lấy CSRF token để refresh và logout bằng cookie (L5): cấp cookie `csrftoken` hoặc một endpoint.
-  - Cấu hình `CSRF_TRUSTED_ORIGINS` cho origin của web.
-  - Xác nhận cách chạy cookie `Secure` khi phát triển trên `http://localhost`.
-  - Xác nhận `IDENTITY_FRONTEND_URL` và các đường `/auth/activate`, `/auth/reset` là đường chuẩn của web.
-- **Hoàn tất khi**: đăng ký → kích hoạt → đăng nhập → tải lại trang vẫn còn phiên → đổi mật khẩu → đăng xuất chạy với Identity thật qua gateway; test tự động phủ các `error.code` chính.
-
-### C. Khu quản trị System Admin (Identity, nối thật; làm ở đợt sau)
-
-- **Backend**: **Đã triển khai** (`GET /admin/users`, `PATCH /admin/users/{id}/status`, `POST`/`DELETE /admin/users/{id}/roles`).
-- **Việc frontend**:
-  - Route `/admin/users`, chỉ mở cho role `SYSTEM_ADMIN`; sidebar riêng cho Admin.
-  - Bảng người dùng: tìm kiếm, lọc theo role và trạng thái, phân trang theo `meta`.
-  - Khóa, mở khóa (kèm lý do), khôi phục tài khoản đã xóa mềm, gán và gỡ role. Mỗi thao tác có hộp thoại xác nhận, nói rõ phiên của người dùng đó sẽ bị thu hồi.
-  - Admin **không** đọc nội dung project của sinh viên ([phân tích vai trò §1.3](utask-role-analysis.md#13-quy-tắc-vai-trò)).
-- **Nhu cầu backend**: không. Cần nghiệp vụ chốt mâu thuẫn Admin ở §7.
-- **Hoàn tất khi**: Admin thực hiện đủ các thao tác trên với Identity thật; tài khoản không phải Admin vào `/admin` thấy trang bị chặn.
-
-### D. Lớp học, ghi danh và nhóm (Classroom)
-
-- **User story**: US-1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.5 (US-2.5 thuộc P1).
-- **Backend**: **Một phần** (khung); không có endpoint nghiệp vụ.
-- **Hiện trạng frontend**: Teacher T01–T10 chỉ đọc, các form tạo lớp, import, thêm sinh viên, điều chỉnh nhóm đã có giao diện nhưng nút gửi bị vô hiệu hóa ([teacher-flow.md §16](teacher-flow.md#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro)). Student tạo nhóm đã có trên MSW.
-- **Việc frontend**:
-  - Làm mới trên MSW: Student tham gia lớp bằng mã; tham gia nhóm bằng mã hoặc lời mời; Leader mời, tạo hóa mã mời, kick thành viên, chuyển quyền Leader; rời nhóm kèm điều kiện.
-  - Khi có hợp đồng: bật T03 (tạo lớp), T06 (import), T10 (đổi và vô hiệu mã), thêm sinh viên, điều chỉnh nhóm; mở rộng `ApiClient` gửi `FormData` cho import và gửi `Idempotency-Key`.
-  - Chuyển các lời gọi lớp/nhóm từ `/api/work` sang `/api/classroom` (L8) trong adapter.
-- **Nhu cầu API** (yêu cầu, chưa phải hợp đồng): danh sách lớp phụ trách và lớp đã ghi danh; chi tiết lớp; tạo và sửa lớp; mã tham gia (xem, đổi, vô hiệu); tham gia lớp bằng mã; roster sinh viên; thêm từng sinh viên và import CSV/XLSX (đối chiếu mô tả ở [Identity spec §3.5.1](../architecture/Identity_Service_API_Specification.md): `Idempotency-Key`, `summary` và `results[]` theo dòng); nhóm và thành viên; mã/lời mời nhóm; chuyển Leader; mutation membership của Teacher kèm chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm; tên tầng Course/Class (§7).
-- **Hoàn tất khi**: luồng Teacher tạo lớp → Student tham gia → tạo hoặc vào nhóm chạy với backend thật; kết quả import phân biệt tạo mới, có sẵn, trùng, cần kiểm tra, lỗi theo dòng.
-
-### E. Project workspace: backlog, Kanban, Sprint, task, comment (Project Service)
-
-- **User story**: US-2.4, 3.1, 3.2, 3.3, 4.1 (P0); US-3.4 (P1).
-- **Backend**: **Chưa triển khai**.
-- **Hiện trạng frontend**: Backlog, Board, Code, IssuePanel đọc được trên MSW; Board và Backlog đã kéo thả và đổi trạng thái trên Demo MSW ([kanban-board.md](kanban-board.md)); IssuePanel chỉ hiển thị comment; checkbox subtask chỉ đổi state cục bộ (R12 trong teacher-flow).
-- **Việc frontend**:
-  - Cấu hình project (tên, mô tả, mục tiêu, tech stack, thời gian).
-  - Leader tạo, sửa, sắp xếp, gán, lưu trữ task; Member cập nhật task được giao, đánh dấu blocked kèm lý do.
-  - Kanban kéo thả bằng `@atlaskit/pragmatic-drag-and-drop`, cập nhật lạc quan và hoàn tác khi lỗi, có menu thay thế cho bàn phím: **Demo MSW**, xem [kanban-board.md](kanban-board.md).
-  - Tìm kiếm, lọc theo trạng thái, assignee, priority, deadline; hiển thị rõ task quá hạn và blocked (cần `dueAt`, trạng thái blocked trong `Issue`).
-  - Subtask lưu thật, bỏ state cục bộ.
-  - Comment có mention; Teacher gửi phản hồi cấp task; lịch sử thay đổi.
-  - Sprint (P1): tạo, bắt đầu, kết thúc, chuyển task chưa xong, ghi lý do khi đổi phạm vi.
-  - Giữ chế độ chỉ xem cho giảng viên theo `ProjectViewer`.
-- **Nhu cầu API**: workspace kèm viewer context (`courseId`, `teamId`); danh sách issue có phân trang và lọc; tạo, sửa, đổi trạng thái, sắp xếp, gán, lưu trữ; subtask; comment và mention; lịch sử; Sprint (chỉ một Sprint active trong MVP); `dueAt`, blocked, archived.
-- **Hoàn tất khi**: nhóm dùng được backlog và Kanban end-to-end; quyền Leader/Member/Teacher bị backend enforce, UI chỉ phản ánh.
-
-### F. GitHub (Integration Service)
-
-- **User story**: US-5.1, 5.2, 5.3.
-- **Backend**: **Chưa triển khai**. Chỉ Integration được gọi GitHub API. Identity có liên kết GitHub username ở mức tài khoản (khi bật OAuth), chưa đủ cho repository.
-- **Hiện trạng frontend**: tab Code đọc trên MSW; kết nối và đồng bộ bị vô hiệu hóa.
-- **Việc frontend**:
-  - Leader kết nối, đổi, ngắt repository chính (cảnh báo khi đổi repo vì liên kết cũ có thể không còn cập nhật).
-  - Member xác nhận GitHub username.
-  - Liên kết, hủy liên kết PR/commit/branch với task; xác nhận liên kết được đề xuất.
-  - Hiển thị repository đang cấp dữ liệu và `lastSyncedAt`; phân biệt riêng: chưa ánh xạ tài khoản, mất kết nối, dữ liệu cũ, không có dữ liệu. Không suy ra mức đóng góp từ số commit.
-- **Nhu cầu API**: kết nối repo, danh sách repo được phép, trạng thái webhook và đồng bộ, liên kết task–GitHub, ánh xạ tài khoản GitHub–thành viên.
-
-### G. Thông báo (Notification)
-
-- **User story**: US-4.2.
-- **Backend**: **Chưa triển khai**.
-- **Hiện trạng frontend**: trang `/notifications` chạy trên MSW.
-- **Việc frontend**: chuông trên thanh trên cùng kèm số chưa đọc; điều hướng tới tài nguyên liên quan; chọn kênh nhận; cơ chế cập nhật (polling hay đẩy) **Chưa xác minh**, cần quyết định; thông báo cấp project cho giảng viên chờ quy tắc (§7).
-- **Nhu cầu API**: danh sách có phân trang, đánh dấu đã đọc từng cái và tất cả, số chưa đọc, tùy chọn kênh.
-
-### H. Tiến độ và rủi ro (Progress)
-
-- **User story**: US-4.3, 4.4, 5.7 (P1).
-- **Backend**: **Chưa triển khai**. Progress tính bằng quy tắc xác định, không phụ thuộc AI.
-- **Hiện trạng frontend**: tín hiệu rủi ro Teacher chạy theo quy tắc cố định ở `signalsFor`, nhãn Demo MSW.
-- **Việc frontend**: dashboard nhóm cho Leader (phân bổ task và story point, không xếp hạng); thay `signalsFor` bằng dữ liệu Progress; luôn hiển thị nguồn dữ liệu và thời điểm tính; không chấm điểm.
-- **Nhu cầu API**: chỉ số theo lớp, nhóm, Sprint; tín hiệu rủi ro có nguyên nhân, dữ liệu nguồn và thời điểm; ngưỡng chính thức thay giá trị demo 7 ngày.
-
-### I. Trợ lý AI (AI Service)
-
-- **User story**: US-5.4, 5.5 (P0); US-5.6 (P1).
-- **Backend**: **Một phần**, ở nhánh chưa merge. API: `POST /api/ai/v1/requests` (cần `Idempotency-Key`, trả 200 hoặc 202 kèm `status_url`), `GET /api/ai/v1/requests/{id}`; ba `intent`: `backlog_generation`, `task_decomposition`, `risk_analysis`.
-- **Việc frontend**:
-  - Màn nhập ngữ cảnh để sinh backlog; bảng bản nháp cho sửa, chọn, loại từng mục; chỉ khi Leader xác nhận mới gọi API Project để tạo task; chống xác nhận lặp.
-  - Phân rã task thành subtask.
-  - Xử lý trạng thái `queued`/`running`/`succeeded`/`failed`; polling `status_url`; hiển thị lỗi có thể thử lại.
-  - Lỗi hoặc chậm của AI không chặn các chức năng khác; đánh dấu task có nguồn từ AI.
-  - Quyết định về BYOK (khóa AI của nhóm) hiện có ở Settings dự án: giữ hay bỏ khi AI Service chốt hợp đồng.
-- **Nhu cầu và điều kiện**: merge nhánh AI; sửa rewrite gateway; thống nhất envelope lỗi; đồng bộ issuer/audience JWT với Identity; ngữ cảnh đi qua Kafka nên phụ thuộc Project và Kafka chạy thật.
-
-### J. Trải nghiệm chung
-
-- Kiểm tra truy cập thật bằng bàn phím và trình đọc màn hình (chưa làm ở các phase trước).
-- Tìm kiếm toàn cục và command palette (`cmdk` đã có trong dependency).
-- Trạng thái loading, empty, error, forbidden thống nhất; hiệu năng với lớp lớn (đã có fixture 100 sinh viên).
-- Quyết định: **không làm i18n** trong lộ trình này; toàn bộ giao diện giữ tiếng Việt.
-- Chưa có chủ đề tối (dark mode); có khai báo biến thể `dark` nhưng không có nút chuyển. Ngoài phạm vi lộ trình này.
-
-## 5. Lộ trình theo đợt
-
-Thứ tự theo phụ thuộc. Đợt 2 chạy trên Demo MSW vì backend chưa có; đợt 4 mới
-thay mock bằng service thật, từng service một khi hợp đồng đã chốt.
-
-| Đợt | Nội dung | Mảng | Phụ thuộc backend |
-| --- | --- | --- | --- |
-| 0 | Nền tích hợp: proxy, chế độ lai, adapter và envelope, lint/format, e2e smoke, dọn nợ | A | Không |
-| 1 | Identity thật end-to-end | B | Identity có sẵn; cần giải pháp CSRF cho SPA |
-| 2 | Hoàn thiện giao diện P0 còn thiếu trên MSW: tham gia lớp và nhóm, cấu hình project, backlog CRUD, Kanban kéo thả, comment, kết nối và liên kết GitHub, duyệt bản nháp AI | D, E, F, I | Không; mock bám nhu cầu API |
-| 3 | Khu quản trị Admin | C | Identity có sẵn |
-| 4 | Nối từng service khi có hợp đồng: Classroom → Project → Integration → Notification → AI → Progress | D–I | Hợp đồng và mã từng service |
-| 5 | P1: Sprint đầy đủ, dashboard nhóm, phản hồi của Teacher, điều chỉnh nhóm, rủi ro có nguồn | E, H, D | Project, Progress, Classroom |
-
-Mảng J chạy xuyên suốt, chốt từng phần ở cuối mỗi đợt.
-
-Mỗi đợt có:
-
-- **Tiêu chí vào**: đợt trước đã xong; hợp đồng liên quan có trong `contracts/` (với đợt 4).
-- **Tiêu chí hoàn tất**: nút thao tác ghi chỉ bật khi có hợp đồng; test cho luồng mới; tài liệu và nhãn trạng thái được cập nhật.
-- **Kiểm tra bắt buộc** (theo [AGENTS.md](../../AGENTS.md)): formatter, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, cộng e2e smoke khi đã có; kiểm tra link trong tài liệu.
-- **Commit gợi ý**: nhỏ, theo phần review được, dạng `feat(web): …`, `fix(web): …`, `docs(web): …`.
-
-## 6. Ma trận sẵn sàng theo user story
-
-Cột "UI" và "MSW" mô tả `apps/web` hiện tại; "Hợp đồng" và "Backend" mô tả trạng thái ở §2.1.
-
-| Story | Mức | Mảng | UI | MSW | Hợp đồng | Backend | Đợt |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| US-1.1 Đăng nhập, tài khoản | P0 | B | Một phần | Có (lệch shape) | Có (Identity) | Có | 1 |
-| US-1.2 Tạo lớp, mã tham gia | P0 | D | Một phần (nút gửi tắt) | Chỉ đọc | Không | Không | 2, 4 |
-| US-1.3 Tham gia lớp bằng mã | P0 | D | Chưa | Chưa | Không | Không | 2, 4 |
-| US-1.4 Thêm và import sinh viên | P0 | D | Một phần (xem trước CSV) | Không | Chỉ mô tả ở Identity spec | Không (Identity nội bộ có) | 2, 4 |
-| US-2.1, 2.2 Tạo và tham gia nhóm | P0 | D | Một phần (tạo nhóm) | Một phần | Không | Không | 2, 4 |
-| US-2.3 Quản lý thành viên nhóm | P0 | D | Chưa | Chưa | Không | Không | 2, 4 |
-| US-2.4 Cấu hình project | P0 | E | Chưa | Chưa | Không | Không | 2, 4 |
-| US-2.5 Teacher điều chỉnh nhóm | P1 | D | Một phần (xem trước) | Chỉ đọc | Không | Không | 5 |
-| US-3.1 Quản lý backlog | P0 | E | Một phần (sắp thứ tự, đổi Sprint; chưa tạo/sửa) | Có (Demo) | Không | Không | 2, 4 |
-| US-3.2 Backlog và Kanban | P0 | E | Một phần (kéo thả, lọc trên URL, hiện bị chặn/quá hạn) | Có (Demo) | Không | Không | 2, 4 |
-| US-3.3 Cập nhật task | P0 | E | Một phần (đổi trạng thái, bị chặn kèm lý do; chưa sửa nội dung) | Có (Demo) | Không | Không | 2, 4 |
-| US-3.4 Sprint | P1 | E | Một phần (đổi phạm vi Sprint kèm lý do; chưa tạo/kết thúc Sprint) | Có (Demo) | Không | Không | 5 |
-| US-4.1 Comment, mention | P0 | E | Chỉ đọc | Chỉ đọc | Không | Không | 2, 4 |
-| US-4.2 Thông báo | P0 | G | Một phần | Có | Không | Không | 4 |
-| US-4.3 Dashboard nhóm | P1 | H | Một phần (Teacher) | Chỉ đọc | Không | Không | 5 |
-| US-4.4 Dashboard lớp | P0 | H | Một phần (Teacher) | Chỉ đọc | Không | Không | 4 |
-| US-4.5 Teacher phản hồi | P1 | E | Chỉ nháp | Không | Không | Không | 5 |
-| US-5.1 Kết nối repository | P0 | F | Chưa (nút tắt) | Chưa | Không | Không | 2, 4 |
-| US-5.2 Liên kết task–GitHub | P0 | F | Chưa | Chưa | Không | Không | 2, 4 |
-| US-5.3 Xem hoạt động GitHub | P0 | F | Có (tab Code) | Có | Không | Không | 4 |
-| US-5.4, 5.5 AI backlog, phân rã | P0 | I | Chưa | Chưa | Chưa chốt (nhánh chưa merge) | Một phần | 2, 4 |
-| US-5.6 AI phân tích rủi ro | P1 | I, H | Chưa | Chưa | Chưa chốt | Một phần | 5 |
-| US-5.7 Teacher xem rủi ro | P1 | H | Có (quy tắc demo) | Có | Không | Không | 5 |
-| Admin quản trị tài khoản | Ngoài MVP trong phân tích | C | Chưa | Chưa | Có (Identity) | Có | 3 |
-
-## 7. Rủi ro và vấn đề còn mở
-
-| Vấn đề | Chặn gì | Người quyết định |
+| Bản trước | Bản này | Lý do |
 | --- | --- | --- |
-| CSRF và cookie refresh cho SPA (L5), `CSRF_TRUSTED_ORIGINS`, cookie `Secure` khi chạy `http://localhost` | Đợt 1 | Identity + Frontend |
-| Tên và số tầng Course/Class/Classroom; hợp đồng REST Classroom | D, đợt 4 | Backend Classroom |
-| Hợp đồng Project: viewer context cho giảng viên, `dueAt`, blocked, comment; tên `work-service` hay `project-service` | E, đợt 4 | Backend Project |
-| Cách web nhận cập nhật thông báo (polling hay đẩy) | G | Backend Notification + Frontend |
-| Cách deploy web và chính sách MSW ở production | A | Đội phát triển |
-| `docker-compose.yml` gốc không chạy được vì thiếu service | A | Hạ tầng |
-| Nhánh `feat/ai-service` và `feat/classroom-service` chưa merge; rewrite gateway AI; envelope lỗi AI khác Identity | I, D | Backend |
-| Mâu thuẫn trong phân tích vai trò: §2.2 cho Admin mọi quyền nhưng §1.3 nói Admin không mặc định đọc project; §2.1 không cho Member yêu cầu AI phân rã nhưng US-5.5 cho Member | C, I | Nghiệp vụ |
-| Quyền thấy thông báo cấp project của giảng viên; chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm | G, D | Nghiệp vụ |
-| Mock lệch hợp đồng thật khi hợp đồng ra đời | Đợt 4 | Frontend: đối chiếu và sửa adapter khi hợp đồng chốt |
-| Ánh xạ tài khoản Identity thật vào graph mock trong chế độ lai | Đợt 0–1 | Frontend |
-| Kafka chưa có producer/consumer nên chưa có luồng sự kiện nào để UI dựa vào | G, H, I | Hạ tầng + Backend |
+| HEAD `83af5e7`; Work, AI "chưa có mã" | HEAD `933f785`; Work và AI đã merge (Phụ lục A) | PR #17, #19 |
+| Identity là một trong nhiều mảng; Đợt 2 dựng P0 trên MSW | Identity là trọng tâm duy nhất của giai đoạn này; các service khác làm sau | Quyết định ưu tiên của đội |
+| "Chế độ lai" ghi là cần thử nghiệm | Có thiết kế cụ thể: cầu nối persona (§5, Đợt 0) | Handler MSW chỉ nhận token `mock-access:<id>:`; token Identity thật làm mọi trang mock trả 401 |
+| Đăng xuất phải chờ giải pháp CSRF | Đăng xuất thật bằng `DELETE /api/auth/sessions/{id}`, không cần CSRF | [views/devices.py](../../apps/identity-service/authentication/views/devices.py) |
+| Đăng ký → kích hoạt "chạy với Identity thật" | Chưa làm được end-to-end vì email chỉ ghi vào outbox mã hóa, không có bên gửi | [messaging/outbox.py](../../apps/identity-service/messaging/outbox.py) |
 
-## 8. Cách cập nhật tài liệu này
+Giữ lại: adapter riêng cho Identity, tách DTO khỏi UI model, MSW cho phần chưa
+nối, không thành công giả, backend quyết định quyền, test hồi quy theo từng bước.
 
-- Khi hoàn tất một đợt: cập nhật nhãn ở §2 và bảng §6.
+## 2. Hiện trạng backend
+
+### 2.1 Bảng service
+
+Đường dẫn trình duyệt = tiền tố gateway + route của service, vì
+[nginx.conf](../../infra/nginx/nginx.conf) cắt tiền tố (`rewrite ^/api/<svc>/(.*)$ /$1`).
+
+| Service | Mức sẵn sàng | Mã nguồn | URL trình duyệt (ví dụ) | Test (đếm `def test_`) | Trong giai đoạn này |
+| --- | --- | --- | --- | --- | --- |
+| **Identity** | **Đã triển khai, có test** (chưa chạy lại) | [apps/identity-service](../../apps/identity-service) | `POST /api/auth/login` | 134 | **Nối thật** |
+| Work | Đã triển khai, xác minh một phần | [apps/work-service](../../apps/work-service) | `GET /api/work/projects/` | 276 | Làm sau, giữ Demo MSW |
+| AI | Một phần | [apps/ai-service](../../apps/ai-service) | — (gateway lệch path) | 122 | Làm sau |
+| Classroom, Integration, Notification | Chưa triển khai (không có thư mục mã) | — | — | — | Làm sau, giữ Demo MSW |
+
+### 2.2 Identity — route và hợp đồng thực tế
+
+Service không thêm tiền tố;
+[authentication/urls.py](../../apps/identity-service/authentication/urls.py),
+[accounts/urls.py](../../apps/identity-service/accounts/urls.py). Bảng dưới ghi
+đường dẫn trình duyệt.
+
+| Nhóm | Endpoint | Body/tham số chính | Xác thực |
+| --- | --- | --- | --- |
+| Đăng nhập | `POST /api/auth/login` | `email` **hoặc** `username` (đúng một), `password`, `device_name?` | Không (`authentication_classes = []`) |
+| Phiên | `POST /api/auth/refresh` | Body rỗng; refresh token từ cookie | Cookie + **CSRF** |
+| | `POST /api/auth/logout` | `refresh?` (hoặc cookie) | Bearer; **CSRF nếu có cookie** |
+| | `POST /api/auth/logout-all` | — ; trả `revoked_sessions_count` | Bearer; **CSRF nếu có cookie** |
+| | `GET /api/auth/sessions` | Trả `id, token_family, device_name, ip_address, is_current, created_at, expires_at` | Bearer |
+| | `DELETE /api/auth/sessions/{id}` | Thu hồi một thiết bị; nếu là phiên hiện tại thì xóa cookie | Bearer, **không cần CSRF** |
+| Đăng ký | `POST /api/auth/register` | `email`, `username`, `password1`, `password2`, `first_name`, `last_name` | Không; cần khóa mail |
+| | `POST /api/auth/activate` | `key`; thêm `new_password1/2` với tài khoản được import | Không |
+| | `POST /api/auth/activation/resend` | `email` | Không; cần khóa mail |
+| Mật khẩu | `POST /api/auth/password-reset/request` | `email` | Không; cần khóa mail |
+| | `POST /api/auth/password-reset/confirm` | `uid`, `token`, `new_password1`, `new_password2` | Không |
+| | `POST /api/auth/password-change` | `old_password`, `new_password1`, `new_password2`; sau đó mọi phiên bị thu hồi | Bearer |
+| Hồ sơ | `GET /api/auth/users/me` | Trả `id, email, username, student_id, display_name, avatar_url, roles, first_name, last_name, phone_number, bio, github_username, academic_year, faculty, timezone, preferences, created_at` | Bearer |
+| | `PATCH /api/auth/users/me` | Sửa được `first_name, last_name, phone_number, bio, academic_year, faculty, timezone, preferences`; không sửa email, MSSV | Bearer |
+| | `GET /api/auth/users/{id}`, `POST /api/auth/users/batch` | Hồ sơ công khai của người khác | Bearer |
+| Admin | `GET /api/auth/admin/users` | `search`, `role`, `status`, phân trang `limit` | Bearer, `SYSTEM_ADMIN` |
+| | `PATCH /api/auth/admin/users/{id}/status` | Đổi `account_status` (kèm lý do) | như trên |
+| | `POST`/`DELETE /api/auth/admin/users/{id}/roles` | `role_code` | như trên |
+| Khác | `GET /api/auth/healthz`, `/.well-known/jwks.json`, `/openapi/`, `/docs/` | — | Không |
+
+Quy tắc đã có trong mã:
+
+- **Envelope**: `{success, message, data, meta, error}`; lỗi có
+  `error: {code, details: [{field, issue}]}`, `data` và `meta` bằng `null`
+  ([responses.py](../../apps/identity-service/common/responses.py),
+  [exception_handler.py](../../apps/identity-service/common/exception_handler.py)).
+  Phân trang theo trang: `meta: {page, limit, total_count, total_pages, has_next}`,
+  `limit` mặc định 20, tối đa 100
+  ([pagination.py](../../apps/identity-service/common/pagination.py)).
+- **Mã lỗi frontend cần xử lý**:
+  - Đăng nhập:
+    - `INVALID_CREDENTIALS` (401).
+    - `ACCOUNT_PENDING_ACTIVATION` (403), `ACCOUNT_SUSPENDED` (403).
+    - `RATE_LIMIT_EXCEEDED` (429): khóa sau 5 lần sai, trong 15 phút (django-axes,
+      [settings.py](../../apps/identity-service/config/settings.py)).
+  - Token và quyền: `TOKEN_EXPIRED`, `INVALID_TOKEN`, `TOKEN_REVOKED`,
+    `AUTHENTICATION_REQUIRED`, `PERMISSION_DENIED`, `RESOURCE_NOT_FOUND`,
+    `SESSION_NOT_FOUND`.
+  - Dữ liệu: `VALIDATION_ERROR` (kèm `details[].field`).
+  - Kích hoạt: `INVALID_ACTIVATION_TOKEN`, `ACCOUNT_ALREADY_ACTIVE`.
+  - Hạ tầng: `IDENTITY_UNAVAILABLE` (503).
+  - Admin: `CANNOT_REVOKE_OWN_ADMIN_ROLE`, `ACCOUNT_UNAVAILABLE`.
+  - Header `Retry-After` trên 429 **Chưa xác minh**.
+- **Token**:
+  - Login trả `data.access`, còn `data.refresh` là chuỗi rỗng. Refresh token chỉ nằm
+    trong cookie `refresh_token` (HttpOnly, `Secure` cố định, SameSite=Lax, path
+    `/api/auth`).
+  - Access token sống 15 phút, refresh 7 ngày, có xoay vòng; dùng lại refresh token
+    cũ sẽ thu hồi cả họ token.
+  - JWT ký RS256, **không chứa roles** (roles lấy từ `users/me`); có claim
+    `session_id`, `token_family`.
+- **CSRF**:
+  - `refresh` luôn đòi CSRF; `logout` và `logout-all` đòi CSRF khi request mang
+    cookie ([serializers/auth.py](../../apps/identity-service/authentication/serializers/auth.py),
+    [views/devices.py](../../apps/identity-service/authentication/views/devices.py)).
+  - Không endpoint nào cấp cookie `csrftoken`; `CSRF_TRUSTED_ORIGINS` chưa đặt.
+  - Test của Identity tự gắn cookie CSRF, nên không phát hiện thiếu sót này.
+- **Email**:
+  - `register`, `activation/resend`, `password-reset/request` gọi `mail_key()`; thiếu
+    `IDENTITY_MAIL_KEY` thì trả 503 `IDENTITY_UNAVAILABLE`
+    ([mail_crypto.py](../../apps/identity-service/messaging/mail_crypto.py)).
+  - Nếu có khóa, nội dung email (link kích hoạt/đặt lại) được **mã hóa và ghi vào
+    outbox**. Repo không có relay hay service gửi mail, nên **không email nào được
+    gửi thật**.
+  - Link trong email: `{IDENTITY_FRONTEND_URL}/auth/activate?key=` và
+    `/auth/reset?uid=&token=`, mặc định `https://localhost`.
+- **Tài khoản dev**:
+  - Có lệnh `seed_global_roles` và `bootstrap_identity_admin` (tạo `SYSTEM_ADMIN`).
+  - **Không có lệnh** tạo sẵn tài khoản Student/Teacher đã kích hoạt.
+- **Cờ tính năng**: OAuth Google/GitHub và upload avatar tắt mặc định
+  (`IDENTITY_GOOGLE_ENABLED`, `IDENTITY_GITHUB_ENABLED`, `IDENTITY_AVATAR_ENABLED`).
+
+### 2.3 Hạ tầng liên quan Identity
+
+- **Gateway**:
+  - nginx chặn `/api/auth/api/v1/internal` bằng 404.
+  - Cho phép CORS kèm credentials với `http://localhost:*` và `127.0.0.1:*`; trả 204
+    cho preflight ở `/api/auth/`.
+  - Chuyển `Host` gốc tới service.
+- **Compose**:
+  - [docker-compose.yml](../../docker-compose.yml) gốc build cả các service chưa có
+    thư mục, và nginx chờ tất cả healthy, nên không dựng được gateway.
+  - [docker-compose.staging.yml](../../docker-compose.staging.yml) có nginx chỉ phụ
+    thuộc Identity (dùng image, không build).
+  - Lệnh chạy Identity + nginx ở máy dev **Chưa xác minh** (G2).
+  - Identity cũng mở `127.0.0.1:8001` trực tiếp.
+- **Cookie `Secure` trên `http://localhost`**: Chrome và Firefox thường chấp nhận vì
+  coi localhost là ngữ cảnh an toàn; **Chưa xác minh** với cấu hình của dự án và
+  Safari.
+- **CI**: [ci.yml](../../.github/workflows/ci.yml) chỉ chạy cho `main`; job web
+  chạy `pnpm lint`, `typecheck`, `test`, `build`.
+
+## 3. Hiện trạng frontend (phần xác thực)
+
+- **File liên quan**:
+  - API và trạng thái phiên: [auth.ts](../../apps/web/src/features/auth/api/auth.ts),
+    [AuthProvider.tsx](../../apps/web/src/features/auth/AuthProvider.tsx),
+    [types.ts](../../apps/web/src/features/auth/types.ts),
+    [utils.ts](../../apps/web/src/features/auth/utils.ts).
+  - Màn auth: `features/auth/routes/{Login,ForgotPassword,ResetPassword}Route.tsx`
+    và form tương ứng.
+  - Guard: [RequireAuth.tsx](../../apps/web/src/app/router/RequireAuth.tsx),
+    [RequireTeacherSpace.tsx](../../apps/web/src/app/router/RequireTeacherSpace.tsx).
+  - Màn cài đặt: `features/notifications/components/Settings{Profile,Security,Integrations}Page.tsx`.
+  - Client: [client.ts](../../apps/web/src/lib/api/client.ts),
+    [errors.ts](../../apps/web/src/lib/api/errors.ts),
+    [ApiClientProvider.tsx](../../apps/web/src/lib/api/ApiClientProvider.tsx).
+  - Mock: [mocks/handlers/auth.ts](../../apps/web/src/mocks/handlers/auth.ts).
+- **Hành vi hiện tại**:
+  - Gọi `/api/auth/api/v1/auth/{login,refresh,logout}`, đọc `access_token`,
+    `refresh_token`, `user` ở gốc JSON.
+  - Refresh token lưu ở `sessionStorage` chỉ khi bật mock; tắt mock thì tải lại
+    trang là mất phiên.
+  - User có `global_role`, `capabilities`, `roles?`; khoảng 25 file đọc user hoặc
+    `useAuth`.
+  - Client không đọc envelope, không có `error.code`, không gửi `credentials`, không
+    refresh khi gặp 401 (chỉ xóa phiên).
+  - Trang cài đặt đọc/ghi `/api/work/api/v1/me/settings` (MSW), không phải
+    `users/me`. Đổi mật khẩu chỉ hiện toast. "Quên mật khẩu" và "Đặt lại mật khẩu"
+    không gọi API.
+  - Chưa có màn đăng ký, kích hoạt, danh sách thiết bị, Admin.
+- **Ràng buộc của MSW** (quan trọng cho chế độ lai):
+  - Mọi handler domain xác định người dùng bằng regex
+    `^Bearer mock-access:([^:]+):`, viết lặp lại ở
+    [studentFlow.ts](../../apps/web/src/mocks/handlers/studentFlow.ts),
+    [myWork.ts](../../apps/web/src/mocks/handlers/myWork.ts),
+    [teacherFlow.ts](../../apps/web/src/mocks/handlers/teacherFlow.ts) và `auth.ts`.
+    Token JWT thật không khớp, nên mọi trang mock sẽ trả 401.
+  - Persona demo đăng nhập bằng `leader@utask.test`, `member@utask.test`,
+    `student@utask.test`… ([mocks/data/database.ts](../../apps/web/src/mocks/data/database.ts)).
+  - [enableMocking.ts](../../apps/web/src/mocks/enableMocking.ts) bật toàn bộ hoặc
+    tắt toàn bộ (`VITE_ENABLE_MOCKS`); request không có handler đi thẳng ra mạng.
+- **Kiểm thử**: Vitest, Testing Library, MSW node; 18 file, khoảng 375 khối
+  `it(`/`test(`. `pnpm lint` chỉ là `tsc --noEmit`; không có ESLint, Prettier,
+  Playwright, proxy Vite.
+- **Nợ kỹ thuật liên quan**:
+  - MSW có thể bật ở bản build production khi `VITE_ENABLE_MOCKS=true`, trái với
+    `apps/web/README.md`.
+  - [HomeRoute.tsx](../../apps/web/src/app/routes/HomeRoute.tsx) không được tham
+    chiếu.
+  - `@vitejs/plugin-react` nằm ở `dependencies`.
+
+## 4. Điểm lệch và ma trận năng lực
+
+### 4.1 Điểm lệch frontend ↔ Identity
+
+| # | Chủ đề | Frontend hiện tại | Identity thật | Xử lý ở |
+| --- | --- | --- | --- | --- |
+| M1 | Đường dẫn | `/api/auth/api/v1/auth/login` | `/api/auth/login` | Đợt 1 |
+| M2 | Envelope | Đọc JSON thô | `{success, message, data, meta, error}` | Đợt 0 |
+| M3 | Lỗi | `detail`, `non_field_errors` | `error.code`, `error.details[]` | Đợt 0 |
+| M4 | Body login | `{email, password}` | `email` hoặc `username`, `password`, `device_name?` | Đợt 1 |
+| M5 | Token | `access_token`, `refresh_token`, `expires_in` ở gốc | `data.access`; refresh trong cookie HttpOnly | Đợt 1, 3 |
+| M6 | User | `global_role`, `capabilities` | `roles[]` và hồ sơ trong `users/me` | Đợt 1 |
+| M7 | Refresh, khôi phục phiên | Body `{refresh_token}`, `sessionStorage` | Cookie path `/api/auth` + CSRF | Đợt 3 (chờ G1) |
+| M8 | Đăng xuất | Body `{refresh_token}` | `logout` cần CSRF khi có cookie; `DELETE sessions/{id}` thì không | Đợt 1 |
+| M9 | Cùng origin | Không có proxy Vite; `credentials` mặc định | Cookie path `/api/auth`; CORS chỉ localhost | Đợt 0 |
+| M10 | Hồ sơ | `/api/work/api/v1/me/settings` (MSW) | `GET`/`PATCH /api/auth/users/me` | Đợt 2 |
+| M11 | Link email | `/reset-password`; không có trang kích hoạt | `/auth/activate?key=`, `/auth/reset?uid=&token=` | Đợt 4 |
+| M12 | Mock dùng token giả | Handler chỉ nhận `mock-access:<id>:` | JWT RS256 thật | Đợt 0 (cầu nối persona) |
+
+### 4.2 Ma trận năng lực
+
+Phân loại: **Sẵn sàng** = nối thật được ngay; **Sau đổi nhỏ** = cần sửa client/adapter;
+**Chặn backend** = thiếu hoặc chưa đủ ở backend; **FE chưa có** = chưa có màn;
+**Làm sau** = ngoài giai đoạn Identity, giữ Demo MSW.
+
+| Năng lực | UI/route hiện có | Dữ liệu hiện tại | Endpoint Identity | Khoảng trống | Phân loại — Đợt |
+| --- | --- | --- | --- | --- | --- |
+| Đăng nhập, điều hướng theo role | `/login`, `HomeRedirect` | MSW | `POST login`, `GET users/me` | M1–M6 | **Sau đổi nhỏ** — 1 |
+| Thông báo lỗi đăng nhập | `LoginForm` | MSW | mã lỗi §2.2 | M3 | **Sau đổi nhỏ** — 1 |
+| Đăng xuất (thu hồi phiên) | Menu người dùng | MSW | `DELETE sessions/{id}` | M8 | **Sau đổi nhỏ** — 1 |
+| Trang khác khi đã đăng nhập thật | Mọi màn | MSW | — | M12 | **Sau đổi nhỏ** (cầu nối) — 0 |
+| Hồ sơ đọc/sửa | `/settings/profile` | MSW `me/settings` | `GET`/`PATCH users/me` | M10; trường khác nhau | **Sau đổi nhỏ** — 2 |
+| Đổi mật khẩu | `/settings/security` | Chỉ toast | `POST password-change` | — | **Sau đổi nhỏ** — 2 |
+| Thiết bị đăng nhập, thu hồi | — | — | `GET sessions`, `DELETE sessions/{id}` | — | **FE chưa có** — 2 |
+| Đăng xuất mọi thiết bị | — | — | `POST logout-all` | Cần CSRF khi có cookie (G1) | **FE chưa có** — 3 |
+| Khôi phục phiên khi tải lại, tự refresh | `RequireAuth` | MSW `sessionStorage` | `POST refresh` | G1 | **Chặn backend** — 3 |
+| Đăng ký, kích hoạt, gửi lại kích hoạt | — | — | `register`, `activate`, `activation/resend` | G3 (không gửi được email) | **FE chưa có** + **Chặn backend** — 4 |
+| Quên/đặt lại mật khẩu | `/forgot-password`, `/reset-password` | Không gọi API | `password-reset/request`, `confirm` | G3; M11 | **Sau đổi nhỏ** + **Chặn backend** — 4 |
+| Quản trị tài khoản | — | — | `admin/users`… | Quyết định nghiệp vụ Admin | **FE chưa có** — 5 |
+| Liên kết GitHub (OAuth), avatar | Nút ngắt GitHub (MSW) | MSW | OAuth/avatar sau cờ | Cờ tắt; cấu hình OAuth | **Chặn backend** (cấu hình) — 6 |
+| Project, Board, Backlog, task, Sprint, comment | Workspace | Demo MSW | — (Work) | Phụ lục A | **Làm sau** |
+| Lớp, nhóm, Teacher T01–T10 | `/courses`, `/teacher` | Demo MSW | — (Classroom) | Phụ lục A | **Làm sau** |
+| Thông báo, My Work, GitHub, AI, khóa AI dự án | Nhiều màn | Demo MSW | — | Phụ lục A | **Làm sau** |
+
+## 5. Lộ trình tích hợp Identity
+
+| Đợt | Nội dung | Bắt đầu được ngay? | Phụ thuộc backend |
+| --- | --- | --- | --- |
+| 0 | Nền API client, proxy, cầu nối persona cho MSW, môi trường Identity | **Có** | Không cho mã; G2 để thử với Identity thật |
+| 1 | Đăng nhập thật, user từ `users/me`, điều hướng theo role, đăng xuất | Sau 0 | Không |
+| 2 | Hồ sơ, đổi mật khẩu, thiết bị | Sau 1 | Không |
+| 3 | Khôi phục phiên, refresh tự động, đăng xuất mọi thiết bị | Sau 1 | **G1** |
+| 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Sau 1 | Khóa mail; **G3** |
+| 5 | Khu quản trị Admin | Sau 2 | Quyết định nghiệp vụ Admin (§9) |
+| 6 | Tùy chọn: OAuth GitHub/Google, avatar | Sau 2 | Bật cờ và cấu hình OAuth/lưu trữ |
+
+Đợt 2, 3, 4 độc lập với nhau sau Đợt 1. Có thể làm song song, nhưng chỉ một người
+sửa file hạ tầng dùng chung.
+
+**Quy tắc chung**
+
+- **File hạ tầng dùng chung** ([client.ts](../../apps/web/src/lib/api/client.ts),
+  [errors.ts](../../apps/web/src/lib/api/errors.ts),
+  [ApiClientProvider.tsx](../../apps/web/src/lib/api/ApiClientProvider.tsx),
+  `vite.config.ts`, [mocks/handlers.ts](../../apps/web/src/mocks/handlers.ts),
+  [AuthProvider.tsx](../../apps/web/src/features/auth/AuthProvider.tsx)) có một
+  người phụ trách. Không hai PR song song cùng sửa.
+- **Không thành công giả**: khi Identity là thật, lỗi ghi phải hiện lỗi, không bao
+  giờ rơi về MSW. Không hiển thị "đã gửi email" nếu backend trả 503.
+- **Phân quyền**: frontend dùng `roles` từ `users/me` chỉ để hiển thị khu vực.
+  Backend là nơi quyết định (403 `PERMISSION_DENIED`).
+- **Bảo mật**: access token chỉ giữ trong bộ nhớ. Không lưu token Identity vào
+  `localStorage`/`sessionStorage`. Thông báo lỗi đăng nhập không cho biết email có
+  tồn tại hay không.
+- **Kiểm tra bắt buộc** (theo [AGENTS.md](../../AGENTS.md)): `pnpm lint`,
+  `pnpm typecheck`, `pnpm test`, `pnpm build`; hàm mới có unit test cho đường thành
+  công và các nhánh lỗi; tài liệu và nhãn trạng thái cập nhật cùng thay đổi.
+- Commit nhỏ dạng `feat(web): …`, `fix(web): …`, `docs(web): …`.
+
+### Đợt 0 — Nền API client, cầu nối persona, môi trường
+
+1. **Mục tiêu và phạm vi**:
+   - Client hiểu envelope và mã lỗi của Identity.
+   - Web gọi Identity qua gateway cùng origin.
+   - Chọn được "Identity thật, phần còn lại MSW" mà các màn mock vẫn chạy.
+   - Chưa đổi màn auth nào.
+2. **Điều kiện vào**: không.
+3. **Việc frontend**:
+   - `vite.config.ts`: proxy `/api` tới gateway (mặc định `http://localhost:8080`);
+     không đổi `Host`, để Django so Origin với Host đúng.
+   - `client.ts`:
+     - Tùy chọn bóc envelope và trả `{data, meta}`.
+     - Gửi `credentials: "include"`; hỗ trợ header tùy chọn (dùng cho
+       `X-CSRFToken` ở Đợt 3).
+     - 429 thì đọc `Retry-After` nếu có.
+     - Hook `onUnauthorized` có thể trả "đã refresh, gọi lại" (bật ở Đợt 3).
+   - `errors.ts`: `ApiError` thêm `code` và `details[]` lấy từ `error`; vẫn đọc
+     `detail` để MSW cũ chạy trong thời gian chuyển.
+   - Chọn mock theo service:
+     - Thêm biến môi trường liệt kê service chạy thật, ví dụ
+       `VITE_REAL_SERVICES=auth`; tên biến chốt trong đợt này.
+     - Khi `auth` là thật, không đăng ký handler `mocks/handlers/auth.ts`.
+   - **Cầu nối persona** (khuyến nghị; chốt trong đợt này):
+     - Gom bốn bản regex nhận dạng người dùng trong handler MSW thành **một** helper
+       `resolveMockUserId(request)`.
+     - Helper vẫn nhận token `mock-access:<id>:` như cũ.
+     - Khi Identity là thật, helper dùng persona đã đăng ký sau đăng nhập. Persona
+       được chọn theo `users/me.email` khớp email của `MOCK_USERS`
+       (`leader@utask.test`…).
+     - Không khớp thì trả 403 với thông điệp rõ "tài khoản chưa ánh xạ dữ liệu demo",
+       không trả trang trắng.
+     - Mã cầu nối chỉ nằm trong `src/mocks/` và chỉ chạy khi MSW được bật; không vào
+       bản build production.
+   - Adapter `src/lib/api/identity/`: `dto.ts` (đúng shape §2.2), `mappers.ts`,
+     `endpoints.ts`.
+   - `apps/web/README.md`: cách chạy Identity + nginx và cách tạo tài khoản demo (G2),
+     ghi đúng lệnh sau khi đã chạy thử.
+   - Chính sách MSW ở production: chặn khi `import.meta.env.PROD`, hoặc sửa README
+     cho khớp mã.
+4. **Phụ thuộc backend**: không cho mã. G2 (đội Identity/hạ tầng) để thử với
+   Identity thật.
+5. **Ngoài phạm vi**: đổi màn sang API thật; ESLint/Prettier; Playwright; Work và
+   các service khác.
+6. **Tiêu chí chấp nhận**:
+   - Toàn bộ test hiện có đạt khi mọi service là mock.
+   - Unit test client:
+     - Bóc envelope thành công.
+     - Lỗi có `code`/`details`.
+     - 204 và phản hồi không phải JSON.
+     - Lỗi mạng (status 0).
+     - 429.
+     - Có gửi `credentials`.
+   - Unit test `resolveMockUserId`: token mock hợp lệ; persona đã đăng ký; không có
+     persona trả 403; không có header trả 401.
+   - Với `VITE_REAL_SERVICES=auth` và gateway đang chạy, `GET /api/auth/healthz` qua
+     proxy Vite trả 200, và MSW không chặn `/api/auth/*`.
+7. **Kiểm thử**: Vitest như trên; test hồi quy kéo thả và luồng sinh viên/giảng viên
+   phải đạt nguyên trạng.
+8. **Rủi ro và rollback**: client ảnh hưởng mọi màn. Giữ hành vi cũ làm mặc định
+   (envelope là tùy chọn theo adapter); revert một PR là quay lại được.
+9. **Hoàn tất khi**: `pnpm lint`, `typecheck`, `test`, `build` đạt; README có lệnh
+   chạy đã thử; tài liệu này cập nhật nhãn Đợt 0.
+
+### Đợt 1 — Đăng nhập, người dùng hiện tại, đăng xuất
+
+1. **Mục tiêu**:
+   - Đăng nhập bằng Identity thật, lấy user từ `users/me`, điều hướng theo `roles`.
+   - Đăng xuất thu hồi phiên thật.
+   - Tải lại trang thì mất phiên; điều này được chấp nhận đến Đợt 3.
+2. **Điều kiện vào**: Đợt 0.
+3. **Việc frontend**:
+   - `features/auth/api/auth.ts` dùng adapter Identity: `POST /api/auth/login` với
+     `{email, password, device_name}` (tên trình duyệt), rồi `GET /api/auth/users/me`.
+   - `features/auth/types.ts`: thay `global_role`, `capabilities` bằng `roles` và các
+     trường hồ sơ cần dùng. Cập nhật các file đọc `user`, gồm guard, sidebar,
+     top navigation và hook teacher.
+   - `AuthProvider`: giữ access token trong bộ nhớ; bỏ đọc `refresh_token` ở body.
+   - Lỗi đăng nhập theo `error.code`:
+     - `INVALID_CREDENTIALS`: "email hoặc mật khẩu không đúng".
+     - `ACCOUNT_PENDING_ACTIVATION`: hướng dẫn kích hoạt.
+     - `ACCOUNT_SUSPENDED`: liên hệ quản trị.
+     - `RATE_LIMIT_EXCEEDED`: báo thử lại sau.
+     - 503: Identity tạm không sẵn sàng.
+   - Đăng xuất (khuyến nghị):
+     - `GET /api/auth/sessions` lấy phiên `is_current`, rồi
+       `DELETE /api/auth/sessions/{id}`.
+     - Endpoint này thu hồi họ token và xóa cookie mà không cần CSRF.
+     - Lỗi mạng vẫn xóa phiên cục bộ nhưng báo "chưa thu hồi được trên máy chủ".
+   - 401 `TOKEN_EXPIRED`/`TOKEN_REVOKED` thì xóa phiên, về `/login?returnTo=…`
+     (chưa refresh).
+   - Handler MSW auth đổi sang đúng path và envelope thật, để chế độ full-mock và
+     test không lệch.
+4. **Phụ thuộc backend**: không.
+5. **Ngoài phạm vi**: khôi phục phiên và refresh (Đợt 3); hồ sơ (Đợt 2); đăng ký
+   (Đợt 4).
+6. **Tiêu chí chấp nhận** (với Identity thật qua gateway):
+   - Tài khoản `TEACHER` vào `/teacher`, tài khoản `STUDENT` vào `/my-work`.
+   - Sai mật khẩu 5 lần thì nhận thông báo khóa tạm.
+   - Đăng xuất xong, `GET /api/auth/sessions` từ thiết bị khác không còn phiên đó.
+   - Với cầu nối persona, đăng nhập bằng `leader@utask.test` thật vẫn mở workspace
+     demo.
+7. **Kiểm thử**:
+   - Unit test mapper `users/me` → user giao diện.
+   - Unit test map mã lỗi → thông điệp.
+   - Test `LoginForm` với MSW trả envelope và từng mã lỗi.
+   - Test guard theo role.
+   - Test đăng xuất (thành công, `SESSION_NOT_FOUND`, lỗi mạng).
+8. **Rủi ro và rollback**:
+   - Đổi kiểu `AuthUser` chạm khoảng 25 file; làm trong một PR có `tsc` bảo vệ.
+   - Rollback: bỏ `auth` khỏi `VITE_REAL_SERVICES`.
+9. **Hoàn tất khi**: kiểm tra bắt buộc đạt; đã thử thủ công với Identity thật và ghi
+   lại môi trường đã thử; [student-flow.md](student-flow.md) cập nhật nhãn đăng nhập.
+
+### Đợt 2 — Hồ sơ, đổi mật khẩu, thiết bị
+
+1. **Mục tiêu**:
+   - `/settings/profile` đọc/sửa `users/me`.
+   - `/settings/security` đổi mật khẩu thật, xem và thu hồi thiết bị.
+2. **Điều kiện vào**: Đợt 1.
+3. **Việc frontend**:
+   - Hồ sơ:
+     - Form dùng đúng trường sửa được (§2.2); email, MSSV, username chỉ đọc.
+     - `VALIDATION_ERROR` hiện lỗi theo `details[].field`.
+   - Đổi mật khẩu:
+     - Gửi `old_password`, `new_password1`, `new_password2`.
+     - Thành công thì mọi phiên bị thu hồi; báo cho người dùng và đưa về `/login`.
+   - Thiết bị:
+     - Danh sách `GET sessions` (tên thiết bị, IP, thời điểm, nhãn "thiết bị này").
+     - Thu hồi từng thiết bị bằng `DELETE sessions/{id}`; thu hồi thiết bị hiện tại
+       thì đăng xuất.
+   - Phần đang dựa trên `me/settings` mà Identity không có (ngắt GitHub, tùy chọn
+     thông báo) giữ Demo MSW và ghi nhãn rõ.
+   - `preferences` có ý nghĩa gì **Chưa xác minh**; chưa dùng cho đến khi Identity mô
+     tả.
+4. **Phụ thuộc backend**: không.
+5. **Ngoài phạm vi**: avatar, liên kết GitHub (Đợt 6); đăng xuất mọi thiết bị (Đợt 3).
+6. **Tiêu chí chấp nhận**:
+   - Sửa tên rồi tải lại dữ liệu thấy tên mới.
+   - Mật khẩu mới trùng mật khẩu cũ bị từ chối, lỗi hiện tại trường.
+   - Đổi mật khẩu xong, thiết bị khác bị đăng xuất ở request kế tiếp.
+   - Thu hồi một thiết bị thì danh sách cập nhật.
+7. **Kiểm thử**: unit test mapper và form (thành công, lỗi trường, 401, 503); test
+   danh sách thiết bị (rỗng, nhiều, thu hồi lỗi).
+8. **Rủi ro và rollback**: trang cài đặt đang lấy cả dữ liệu không thuộc Identity; tách
+   rõ nguồn từng khối, rollback theo `VITE_REAL_SERVICES`.
+9. **Hoàn tất khi**: như quy tắc chung.
+
+### Đợt 3 — Phiên bằng cookie: khôi phục, refresh, đăng xuất mọi thiết bị
+
+1. **Mục tiêu**:
+   - Tải lại trang vẫn còn phiên.
+   - Refresh chủ động trước khi access token hết hạn (15 phút).
+   - Single-flight refresh khi nhiều request cùng gặp 401.
+   - Đăng xuất mọi thiết bị.
+2. **Điều kiện vào**: Đợt 1; **G1 đã chốt và triển khai**.
+3. **Việc frontend**:
+   - `AuthProvider` gọi `POST /api/auth/refresh` khi khởi động, kèm `X-CSRFToken`
+     theo cách G1 quy định.
+   - Client giữ một promise refresh dùng chung; mỗi request chỉ được gọi lại tối đa
+     một lần.
+   - Bỏ hoàn toàn việc lưu refresh token phía JavaScript.
+   - `POST /api/auth/logout-all` hiện số phiên đã thu hồi.
+   - Có thể chuyển đăng xuất sang `POST logout` khi CSRF đã có (không bắt buộc).
+4. **Phụ thuộc backend** (Identity):
+   - Cách SPA lấy CSRF token.
+   - `CSRF_TRUSTED_ORIGINS` gồm origin web khi dev và staging.
+   - Xác nhận cookie `Secure` khi dev trên `http://localhost`.
+5. **Ngoài phạm vi**: OAuth.
+6. **Tiêu chí chấp nhận**:
+   - Đăng nhập → tải lại → vẫn đăng nhập.
+   - Để access token hết hạn → request kế tiếp tự refresh và thành công.
+   - Hai request đồng thời gặp 401 chỉ gây một lần refresh.
+   - Dùng lại refresh token cũ thì UI về `/login`.
+   - `logout-all` làm mọi thiết bị khác mất phiên.
+7. **Kiểm thử**: unit test single-flight (thành công; refresh lỗi; 401 lặp không vòng
+   vô hạn; request song song); test khởi động khi có hoặc không có cookie.
+8. **Rủi ro và rollback**:
+   - Vòng lặp refresh; giới hạn một lần thử lại.
+   - Lệch đồng hồ máy; refresh dựa trên 401, không chỉ dựa trên thời gian.
+   - Rollback: tắt refresh khi khởi động (quay về hành vi Đợt 1).
+9. **Hoàn tất khi**: như quy tắc chung; dòng M7 ở §4.1 chuyển thành "đã giải quyết".
+
+### Đợt 4 — Đăng ký, kích hoạt, quên và đặt lại mật khẩu
+
+1. **Mục tiêu**:
+   - Trang đăng ký.
+   - `/auth/activate?key=`: tài khoản được import phải đặt mật khẩu.
+   - Gửi lại email kích hoạt.
+   - Quên mật khẩu; `/auth/reset?uid=&token=` (giữ `/reset-password` làm alias).
+2. **Điều kiện vào**:
+   - Đợt 1.
+   - Môi trường Identity có `IDENTITY_MAIL_KEY`.
+   - Có cách lấy link kích hoạt/đặt lại khi dev (G3).
+3. **Việc frontend**:
+   - Form và adapter cho `register`, `activate`, `activation/resend`,
+     `password-reset/request`, `password-reset/confirm`.
+   - Báo "nếu email tồn tại, bạn sẽ nhận được hướng dẫn", không lộ email.
+   - 503 `IDENTITY_UNAVAILABLE` thì báo tính năng tạm không dùng được, **không** báo
+     đã gửi.
+   - Xử lý `INVALID_ACTIVATION_TOKEN`, `ACCOUNT_ALREADY_ACTIVE`, token đặt lại hết
+     hạn.
+4. **Phụ thuộc backend**:
+   - G3: không có bên gửi mail. Cần relay/Notification gửi email, hoặc cách dev lấy
+     link (ví dụ lệnh in link). Đội Identity/hạ tầng phụ trách.
+   - Xác nhận `IDENTITY_FRONTEND_URL` trỏ đúng origin web.
+5. **Ngoài phạm vi**: Notification Service đầy đủ.
+6. **Tiêu chí chấp nhận**:
+   - Khi đã có G3: đăng ký → nhận link → kích hoạt → đăng nhập.
+   - Tài khoản import kích hoạt kèm đặt mật khẩu.
+   - Quên mật khẩu → link → đặt lại → đăng nhập bằng mật khẩu mới.
+   - Chưa có G3: form gửi đúng request, xử lý đúng 503 và lỗi; ghi rõ phần
+     end-to-end **Chưa xác minh**.
+7. **Kiểm thử**: unit test form và mapper lỗi; test route đọc `key`, `uid`, `token` từ
+   URL (thiếu tham số, tham số sai).
+8. **Rủi ro**: email không bao giờ tới nếu G3 chưa xong. Không bật đăng ký công khai ở
+   môi trường demo khi chưa có G3.
+9. **Hoàn tất khi**: như quy tắc chung.
+
+### Đợt 5 — Khu quản trị Admin
+
+1. **Mục tiêu**: route `/admin/users` chỉ cho `SYSTEM_ADMIN`.
+   - Bảng người dùng: tìm kiếm, lọc theo role và trạng thái, phân trang theo `meta`.
+   - Đổi trạng thái tài khoản kèm lý do; gán và gỡ role.
+2. **Điều kiện vào**: Đợt 2; nghiệp vụ chốt quyền Admin (§9).
+3. **Việc frontend**:
+   - Route và sidebar Admin.
+   - Hộp thoại xác nhận nói rõ phiên của người dùng đó có thể bị thu hồi.
+   - Xử lý `CANNOT_REVOKE_OWN_ADMIN_ROLE`, `ACCOUNT_UNAVAILABLE`.
+4. **Phụ thuộc backend**: không (đã có); lệnh `bootstrap_identity_admin` để tạo Admin
+   đầu tiên.
+5. **Ngoài phạm vi**: Admin xem nội dung project
+   ([phân tích vai trò](utask-role-analysis.md) §1.3); import sinh viên (thuộc
+   Classroom).
+6. **Tiêu chí chấp nhận**:
+   - Admin khóa một tài khoản → tài khoản đó đăng nhập nhận `ACCOUNT_SUSPENDED`.
+   - Không phải Admin vào `/admin` thì thấy trang bị chặn, backend trả 403.
+7. **Kiểm thử**: test guard; bảng (rỗng, phân trang, lọc); hộp thoại và lỗi.
+8. **Rủi ro**: thao tác nhạy cảm; luôn xác nhận, không cập nhật lạc quan.
+9. **Hoàn tất khi**: như quy tắc chung.
+
+### Đợt 6 — Tùy chọn: OAuth và avatar
+
+- Chỉ làm khi đội bật `IDENTITY_GITHUB_ENABLED`/`IDENTITY_GOOGLE_ENABLED`/
+  `IDENTITY_AVATAR_ENABLED` và cung cấp cấu hình (client OAuth, lưu trữ avatar).
+- Khi cờ tắt, frontend ẩn nút hoặc vô hiệu hóa kèm lý do.
+- Phải có cách frontend biết cờ nào đang bật; hiện **chưa có** endpoint cấu hình công
+  khai. Khi cần, ghi vào G-list cho Identity.
+- Liên kết GitHub ở mức tài khoản **không** thay cho kết nối repository (thuộc
+  Integration, làm sau).
+
+## 6. Sổ khoảng trống backend
+
+### 6.1 Khoảng trống của Identity (giai đoạn này)
+
+| # | Ưu tiên | Use case | Thiếu gì | Bằng chứng | Vì sao frontend không tự làm được | Thay đổi tối thiểu | Tạm thời |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| G1 | Cao | Khôi phục phiên, refresh, `logout-all` | Cách SPA lấy CSRF token; `CSRF_TRUSTED_ORIGINS` | `enforce_csrf` ở `serializers/auth.py`, `views/devices.py`; không view nào cấp `csrftoken` | Token CSRF do Django phát | Một GET cấp cookie `csrftoken` (ví dụ `ensure_csrf_cookie`), cấu hình trusted origins, test với cookie thật | Đợt 1–2 chạy được; tải lại thì mất phiên |
+| G2 | Cao | Mọi thử nghiệm với Identity thật | Cách chạy Identity + nginx ở dev; tài khoản demo đã kích hoạt (gồm `leader@utask.test`, `member@utask.test`, `student@utask.test` và một Teacher) | Compose gốc không dựng được gateway; chỉ có `bootstrap_identity_admin` | Frontend không cấu hình được backend và DB | Profile compose hoặc override chạy Identity + nginx; lệnh seed tài khoản demo và role | Admin tạo bằng lệnh, role gán qua API Admin (**Chưa xác minh**) |
+| G3 | Cao cho Đợt 4 | Đăng ký, kích hoạt, đặt lại mật khẩu | Bên gửi email; cách lấy link khi dev | `messaging/outbox.py` chỉ ghi sự kiện mã hóa; không có relay/consumer | Frontend không nhận được `key`, `uid`, `token` | Relay gửi mail (hoặc Notification), hoặc lệnh dev in link | Form gửi được; end-to-end chờ |
+| G4 | Trung bình | Kiểm tra hợp đồng | File OpenAPI Identity trong `contracts/api/` | [contracts/api/README.md](../../contracts/api/README.md) | Không có nguồn shape ổn định để đối chiếu | Chạy `export_identity_api --output` và commit | Đối chiếu `/api/auth/openapi/` lúc chạy |
+| G5 | Thấp | Ẩn/hiện OAuth, avatar | Endpoint công khai cho biết cờ nào bật | Cờ chỉ trong settings | Frontend không biết cấu hình server | Endpoint cấu hình công khai hoặc biến build chung | Ẩn mặc định |
+| G6 | Thấp | Chất lượng | CI không chạy trên `dev` | `ci.yml` chỉ `main` | — | Thêm `dev` vào trigger | Chạy kiểm tra cục bộ |
+
+### 6.2 Khoảng trống của giai đoạn sau (chỉ ghi nhận)
+
+- Classroom Service chưa có. Nó chặn tạo project từ nhóm, lớp, nhóm và Teacher.
+- Work cần môi trường chạy (service key, Classroom adapter, seed dữ liệu). Card Board
+  thiếu trường, task không có `sprint_id`, chuyển Sprint không nguyên tử, tên người
+  phụ thuộc Kafka consumer.
+- AI lệch tiền tố gateway, lệch issuer/audience JWT, chưa có CORS `OPTIONS`, chưa nối
+  context với Work.
+- Integration và Notification chưa có. My Work chưa có endpoint tổng hợp. Khóa AI
+  (BYOK) chưa có service sở hữu.
+- Chi tiết bằng chứng: Phụ lục A.
+
+## 7. Chiến lược hợp đồng và kiểm thử
+
+- **Nguồn hợp đồng**:
+  - OpenAPI Identity lúc chạy (`/api/auth/openapi/`); file commit khi G4 xong.
+  - Mỗi DTO trong `lib/api/identity/dto.ts` ghi chú ngày và HEAD đã đối chiếu.
+- **DTO, envelope, lỗi**: unit test mapper với fixture JSON chép từ phản hồi thật
+  hoặc ví dụ OpenAPI:
+  - Thành công.
+  - Lỗi có `error.code`, lỗi trường `details[].field`.
+  - 429, 503.
+  - Danh sách phân trang (Admin).
+- **MSW**:
+  - Handler `auth.ts` trả đúng path, envelope, mã lỗi như Identity. Mỗi lần đổi DTO,
+    cập nhật fixture trong cùng PR.
+  - Cầu nối persona có test riêng (§5, Đợt 0).
+- **Xác thực và phân quyền**: test component cho 401 (`TOKEN_EXPIRED`,
+  `TOKEN_REVOKED`), 403 (`PERMISSION_DENIED`, tài khoản bị khóa), 429, 503. UI chỉ
+  ẩn hoặc vô hiệu hóa; backend quyết định.
+- **Tích hợp với Identity thật**: kịch bản thủ công có ghi lại cho mỗi đợt, chạy trên
+  môi trường G2. Không ghi "đã kiểm thử" nếu chưa chạy.
+- **E2E**:
+  - Hiện không có công cụ. Refresh bằng cookie HttpOnly và CSRF (Đợt 3) không kiểm
+    được trong jsdom.
+  - Đề xuất Playwright cho Đợt 3, sau khi đội đồng ý: một smoke "đăng nhập → tải lại
+    → vẫn đăng nhập → đăng xuất" chạy với Identity thật.
+- **Hồi quy bắt buộc giữ xanh** (vì cầu nối persona và đổi `AuthUser` chạm mọi màn):
+  - Kéo thả và cập nhật lạc quan (`projectIssues.test.ts`, test Board/Backlog).
+  - Luồng sinh viên (`StudentFlowRegression.test.tsx`).
+  - Luồng giảng viên (`TeacherFlow.test.tsx`, `teacherFlow.test.ts`).
+  - Dữ liệu mock (`graphConsistency.test.ts`).
+
+## 8. Thứ tự thực hiện
+
+**Đợt nên làm đầu tiên: Đợt 0.** Mọi đợt Identity đều cần client hiểu envelope và
+`error.code`, proxy cùng origin cho cookie, và cầu nối persona để các màn còn chạy
+MSW không vỡ khi đăng nhập thật. Đợt 0 không phụ thuộc backend.
+
+Checklist:
+
+1. [ ] Gửi đội Identity/hạ tầng ngay: G1 (CSRF), G2 (chạy dev + tài khoản demo),
+   G3 (gửi email hoặc lấy link khi dev), G4 (commit OpenAPI).
+2. [ ] Đợt 0. Đo bằng tiêu chí ở §5: test hiện có đạt, unit test client và cầu
+   nối, `healthz` qua proxy.
+3. [ ] Đợt 1 với Identity thật.
+4. [ ] Đợt 2; Đợt 3 khi G1 xong; Đợt 4 khi G3 xong.
+5. [ ] Đợt 5 sau khi nghiệp vụ chốt quyền Admin; Đợt 6 nếu bật cờ.
+6. [ ] Khi giai đoạn Identity xong: lập kế hoạch chi tiết cho Work dựa trên Phụ lục A.
+
+## 9. Rủi ro và câu hỏi mở
+
+| Câu hỏi hoặc rủi ro | Chặn gì | Người quyết định |
+| --- | --- | --- |
+| Cách cấp CSRF cho SPA; cookie `Secure` khi dev trên `http://localhost` | Đợt 3 | Identity + Frontend |
+| Lệnh chạy Identity + gateway và seed tài khoản demo | Thử nghiệm mọi đợt | Identity + hạ tầng |
+| Gửi email (relay/Notification) hay lệnh dev in link | Đợt 4 | Identity + hạ tầng |
+| Cầu nối persona: ánh xạ theo email hay cách khác | Đợt 0–1 | Frontend |
+| Ý nghĩa của `preferences` trong hồ sơ | Đợt 2 | Identity |
+| Mâu thuẫn trong [phân tích vai trò](utask-role-analysis.md): §2.2 cho Admin mọi quyền, §1.3 nói Admin không mặc định đọc project | Đợt 5 | Nghiệp vụ |
+| Cách deploy web (build tĩnh sau nginx cùng origin?) | Release | Đội phát triển |
+| Mock lệch khi Identity đổi shape | Mọi đợt | Frontend, đối chiếu OpenAPI mỗi PR |
+
+## 10. Cách cập nhật tài liệu này
+
+- Khi xong một đợt: cập nhật nhãn ở §3–§4 và checklist §8; ghi HEAD và ngày đối chiếu
+  ở đầu tài liệu.
+- Khi backend đóng một khoảng trống ở §6: xóa dòng đó, cập nhật ma trận §4.2.
+- Khi bắt đầu giai đoạn Work: chuyển phần liên quan ở Phụ lục A thành các đợt có đủ
+  mục tiêu, điều kiện vào, tiêu chí chấp nhận, kiểm thử như §5.
 - Chi tiết từng màn ghi vào [student-flow.md](student-flow.md),
-  [teacher-flow.md](teacher-flow.md) hoặc một tài liệu luồng mới (ví dụ
-  `admin-flow.md`), không để roadmap phình ra.
-- Khi một service có hợp đồng, chuyển phần "nhu cầu API" tương ứng thành tham
-  chiếu tới `contracts/` và xóa phần yêu cầu đã thỏa.
-- Kiểm tra lại hiện trạng ở §2 theo mã nguồn mỗi lần cập nhật; không suy ra từ thiết kế.
+  [teacher-flow.md](teacher-flow.md), [kanban-board.md](kanban-board.md) hoặc tài
+  liệu luồng mới (ví dụ `auth-flow.md`, `admin-flow.md`); không để roadmap phình ra.
+- Luôn kiểm tra lại hiện trạng theo mã nguồn; không suy ra từ thiết kế.
+
+## Phụ lục A. Hiện trạng các service làm sau
+
+Ghi lại để giai đoạn sau không phải khảo sát lại. Đối chiếu tại HEAD `933f785`;
+cần kiểm tra lại trước khi lập kế hoạch chi tiết.
+
+### A.1 Work
+
+- **Route**:
+  - Không có tiền tố trong service; trình duyệt gọi `/api/work/<route>`.
+  - Frontend hiện gọi `/api/work/api/v1/...`, và test
+    `tests/contract/test_auth_contract.py:63` khẳng định đường này trả 404.
+  - Danh mục chuẩn ở OpenAPI lúc chạy `/api/work/openapi/`, sinh từ
+    [config/urls.py](../../apps/work-service/config/urls.py) và:
+    - [projects/urls.py](../../apps/work-service/apps/projects/urls.py): project,
+      thành viên, state, `kanban/`, `dashboard/`.
+    - [tasks/urls.py](../../apps/work-service/apps/tasks/urls.py): task,
+      `transition/`, `block/`, subtask, epic/label, AI apply.
+    - [sprints/urls.py](../../apps/work-service/apps/sprints/urls.py): Sprint, scope,
+      `close/`, `progress/`, `burndown/`.
+    - [collaboration/urls.py](../../apps/work-service/apps/collaboration/urls.py):
+      comment, activity, attachment.
+    - [integrations/urls.py](../../apps/work-service/apps/integrations/urls.py):
+      dữ kiện GitHub.
+- **Envelope** giống Identity; phân trang theo cursor
+  (`meta.pagination.next_cursor`).
+- **Xác thực**: JWKS Identity cộng `internal/auth/session-status`; thiếu
+  `IDENTITY_WORK_SERVICE_KEY` thì mọi request trả 503.
+- **Quyền**:
+  - Leader/Member; Member chỉ thao tác task được giao.
+  - Ngoài project trả 404; thiếu quyền trả 403; giảng viên chỉ đọc qua Classroom.
+- **Mô hình**:
+  - State do từng project tự định nghĩa, có `group`.
+  - Task có UUID `id` và `code`; nhiều assignee; `due_date` là ngày.
+  - `sort_order` số thực; không có `sprint_id` trong task.
+  - Kéo thả bằng `PATCH tasks/{id}/transition/`
+    `{expected_version, target_state_id, previous_task_id, next_task_id}`.
+  - Scope Sprint bằng `POST sprints/{id}/tasks/` ADD/REMOVE; bắt buộc
+    `scope_change_reason` khi Sprint ACTIVE.
+  - `Idempotency-Key` bắt buộc ở các lệnh tạo.
+- **Chặn**:
+  - Classroom adapter mặc định `UnavailableClassroom` nên không tạo được project.
+    Dev dùng `LocalClassroom` +
+    [dev_data/classroom.json](../../apps/work-service/dev_data/classroom.json).
+  - GitHub và AI adapter mặc định trả 503 (`infra/env/work-service.env`).
+- **Test**: 29 unit, 218 integration, 27 contract, 2 external (Postgres).
+- **Tài liệu lệch**: [apps/work-service/README.md](../../apps/work-service/README.md)
+  trỏ tới ba file không tồn tại.
+
+### A.2 AI
+
+- Route `POST /api/ai/v1/requests` (bắt buộc `Idempotency-Key`; 202 kèm `Location`) và
+  `GET /api/ai/v1/requests/{id}` ([routes.py](../../apps/ai-service/src/api/routes.py)).
+- Gateway cắt `/api/ai/` nên gọi từ trình duyệt bị 404.
+- Issuer/audience `utask-local-mock`/`utask-ai` khác Identity
+  ([ai-service.env](../../infra/env/ai-service.env)).
+- Lỗi dạng `{"error": {...}}` riêng; context URL để trống.
+- Hợp đồng [ai-service-v1.yaml](../../contracts/api/ai-service-v1.yaml)
+  (`partially-implemented`); tài liệu [docs/ai-service/api.md](../ai-service/api.md).
+
+### A.3 Classroom, Integration, Notification
+
+- Không có thư mục mã trong `apps/`; nginx và compose vẫn tham chiếu.
+- Các màn lớp, nhóm, Teacher T01–T10, tab Code, thông báo, My Work giữ **Demo MSW**.
+  Lời gọi lớp/nhóm sau này đi qua `/api/classroom/`, không đặt dưới `/api/work/`.
