@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Work project.created v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "const": "project.created"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "producer": {
+      "const": "work-service"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entity_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "project_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "data": {
+      "$ref": "#/$defs/Project"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "aggregate_id",
+    "occurred_at",
+    "trace_id",
+    "producer",
+    "project_id",
+    "entity_version",
+    "project_sequence",
+    "data"
+  ],
+  "$defs": {
+    "Project": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "readOnly": true
+        },
+        "identifier": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string"
+        },
+        "target_goals": {
+          "type": "string"
+        },
+        "tech_stack": {},
+        "start_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "end_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "classroom_group_id": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "class_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "group_source_version": {
+          "type": "integer",
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "format": "int64"
+        },
+        "version": {
+          "type": "integer",
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "format": "int64"
+        },
+        "board_revision": {
+          "type": "integer",
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "format": "int64"
+        },
+        "github_repo_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        },
+        "github_repo_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "github_connection_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        },
+        "github_synced_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        },
+        "archived_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "classroom_group_id",
+        "created_at",
+        "id",
+        "identifier",
+        "name",
+        "updated_at"
+      ]
+    }
+  }
+}
