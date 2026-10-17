@@ -184,3 +184,6 @@ publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
 
 Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
 sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+
+`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
+`kafka-startup.env`.

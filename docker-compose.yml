@@ -57,14 +57,17 @@ services:
     restart: unless-stopped
     env_file:
       - ./infra/env/kafka.env
+      - ./infra/env/kafka-startup.env
+    command: ["/bin/sh", "/opt/kafka/start-kafka.sh"]
     volumes:
       - kafka_data:/var/lib/kafka/data
+      - ./infra/kafka/start-kafka.sh:/opt/kafka/start-kafka.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "test -f /tmp/utask-kafka-ready && /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 12
-      start_period: 15s
+      start_period: 120s
 
   identity-service:
     image: ${UTASK_IMAGE_PREFIX:-utask}/identity-service:${UTASK_IMAGE_TAG:-local}
