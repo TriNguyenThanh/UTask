@@ -11,6 +11,79 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `classroom-service.env`: cấu hình riêng Classroom Service, gồm
   `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
+## Chọn Kafka Docker hoặc Kafka bên ngoài
+
+**Đã triển khai ở cấu hình và client Work/Classroom; chưa xác minh kết nối
+Kafka cloud thật.** Dùng cùng một bộ biến trên local và staging:
+
+```dotenv
+# Local: bật profile kafka để chạy broker trong Docker.
+COMPOSE_PROFILES=kafka
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_SECURITY_PROTOCOL=PLAINTEXT
+```
+
+```dotenv
+# Staging: thay bằng địa chỉ do nhà cung cấp Kafka cấp.
+COMPOSE_PROFILES=
+KAFKA_BOOTSTRAP_SERVERS=broker.example.com:9092
+```
+
+Nếu nhà cung cấp yêu cầu đăng nhập, điền thêm đúng thông số họ cấp:
+
+```dotenv
+KAFKA_SECURITY_PROTOCOL=SASL_SSL
+KAFKA_SASL_MECHANISM=PLAIN
+KAFKA_SASL_USERNAME=...
+KAFKA_SASL_PASSWORD=...
+```
+
+`KAFKA_SECURITY_PROTOCOL` chọn kiểu kết nối: `PLAINTEXT` không mã hóa,
+`SSL` mã hóa đường truyền, `SASL_PLAINTEXT` đăng nhập không mã hóa,
+`SASL_SSL` đăng nhập qua đường truyền mã hóa. `KAFKA_SASL_MECHANISM` là
+cách đăng nhập, hỗ trợ `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`;
+chỉ cần điền theo nhà cung cấp, không tự đoán. Khi không dùng SASL, client
+không gửi thông tin đăng nhập. Giá trị không hợp lệ hoặc thiếu tài khoản/mật
+khẩu khi dùng SASL khiến client dừng với lỗi cấu hình, không tự hạ kiểu kết nối.
+
+`KAFKA_SSL_CA_LOCATION` để trống để dùng chứng chỉ tin cậy mặc định của client.
+Nếu nhà cung cấp cấp chứng chỉ CA riêng (chứng chỉ dùng để xác minh máy chủ),
+mount tệp chỉ đọc vào các container gửi/nhận Kafka và đặt đường dẫn **trong
+container** tại biến này. Biến không tự mount tệp và chỉ dùng với `SSL`/`SASL_SSL`.
+
+Chạy trực tiếp Docker Compose từ repository root. Compose tự đọc `.env`:
+
+```bash
+docker compose up --build -d
+
+# Trên VPS, dùng .env của staging cạnh file Compose.
+# Workflow deploy vẫn cấp image đã phát hành qua staging-images.json.
+docker compose -f docker-compose.staging.yml -f staging-images.json up -d
+```
+
+Nếu cần chạy app có profile khi thao tác staging thủ công, thêm
+`--profile work-service --profile classroom-service` trước `up`.
+Khi truyền `--profile` trên lệnh, Docker Compose ưu tiên danh sách đó thay cho
+`COMPOSE_PROFILES`; nếu vẫn dùng broker Docker, thêm cả `--profile kafka`.
+Deploy staging tự bật profile các app được phát hành và giữ lựa chọn profile
+`kafka` của máy chủ. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
+(giữ các profile khác nếu có) rồi điền địa chỉ broker.
+Không cần file Compose riêng hay script khởi động bổ sung.
+Worker chỉ chờ broker Docker khi profile `kafka` được bật; khi tắt, dependency
+này không bắt buộc. Docker Compose cần hỗ trợ `depends_on.required` (từ 2.20).
+Biến đã export trong shell được Compose ưu tiên hơn giá trị trong `.env`.
+
+Tắt profile `kafka` không tạo topic trên cloud, không chuyển dữ liệu/offset và không tự
+xóa container Kafka cũ. Chuẩn bị topic, quyền gửi/nhận, nhóm đọc và thời gian
+lưu theo [hướng dẫn Kafka](kafka.md#kafka-bên-ngoài). Giữ nguyên volume nếu
+cần quay lại broker Docker. Sau khi sửa cấu hình kết nối, tạo lại các container
+liên quan để nhận biến mới; chỉ restart không nạp lại giá trị.
+
+Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
+`infra/env/classroom-service.env` → Compose `env_file` → settings → client
+gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
+không thay đổi nội dung sự kiện.
+
 AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
 và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
