@@ -85,6 +85,9 @@ backend), **Chưa triển khai** (nút bị vô hiệu hóa hoặc chưa có).
 ## Chưa có backend — nút vô hiệu hóa kèm giải thích
 
 - Nộp đề tài, hủy yêu cầu tham gia nhóm, kết thúc sprint: chưa có endpoint.
+- Board và Backlog: kéo thả, menu di chuyển, đổi trạng thái và cờ bị chặn chạy trên
+  Demo MSW (chỉ khi `VITE_ENABLE_MOCKS=true`); xem [kanban-board.md](kanban-board.md).
+  Tạo và sửa nội dung issue, lưu subtask, comment: chưa có endpoint.
 - Phím tắt toàn cục, tự phân nhóm ngẫu nhiên, OAuth GitHub thật: chưa có.
 
 ## Kiểm thử

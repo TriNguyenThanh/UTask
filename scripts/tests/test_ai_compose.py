@@ -143,8 +143,7 @@ class AIComposeTests(unittest.TestCase):
                     "-f",
                     filename,
                 ]
-                if "staging" in filename:
-                    command.extend(["--profile", "ai-service"])
+                command.extend(["--profile", "ai-service"])
                 result = subprocess.run(
                     [*command, "config", "--format", "json"],
                     cwd=ROOT,
