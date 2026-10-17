@@ -24,10 +24,22 @@ Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo 
 theo mẫu repository rồi kiểm tra cấu hình Compose:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
-docker compose up --build
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+docker compose -p utask config --quiet
 ```
+
+Điền các giá trị local còn thiếu trước khi khởi động. Với Identity–Classroom–Work,
+dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
+Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
+sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
+`kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
+bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
+Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
+khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
+trước runtime theo [quy trình CI/CD](ci-cd.md).
 
 Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
 Django, token hoặc thông tin xác thực môi trường dùng chung.
@@ -107,6 +119,22 @@ runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/pr
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
+Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
+publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
+`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa Work `CLASSROOM_WORK_SERVICE_KEY`.
+Các secret để trống trong mẫu, phải điền riêng từng môi trường. Caller keys
+`classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp; không thay route
+Identity để nối Classroom. Work dùng `CLASSROOM_BASE_URL`, adapter
+`RemoteClassroom`, cùng khóa Work; staging giữ chế độ Classroom dev tắt.
+
+Classroom Celery dùng Redis DB3 (`CLASSROOM_REDIS_URL`); Work dùng DB2.
+`CLASSROOM_KAFKA_TOPIC`, `CLASSROOM_WORK_KAFKA_TOPIC`, nhóm đọc và DLQ có mapping
+riêng; phía Work nhận các biến `WORK_CLASSROOM_KAFKA_*`. `KAFKA_LOG_RETENTION_MS`
+mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp vụ và DLQ
+không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
+Chi tiết tại [Classroom backend](../classroom-service/README.md).
+
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
 deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và
@@ -125,8 +153,9 @@ giá trị không trống trong `.env` có thể thay các mặc định này. C
 khi có đủ credential và callback theo [tài liệu Identity](../identity-service/README.md).
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
-chủ đích. Script khởi tạo chỉ chạy khi volume còn trống; sửa `.env` không tự đổi tên
-database hoặc chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
+chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
+chạy script qua cơ chế khởi tạo volume mới. Sửa `.env` không tự đổi tên database hoặc
+chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
 
@@ -145,45 +174,3 @@ Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volu
 `ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
 volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
 Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.
-
-Classroom khi bật                                                |
-| `INTEGRATION_DB_NAME`, `INTEGRATION_DJANGO_SECRET_KEY`         | Integration khi bật                                              |
-| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
-
-Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
-Không tạo thêm `.env` trong từng container và không đưa nguyên `.env` chung vào tất cả
-app. Hiện chỉ cần điền secret runtime của Identity và PostgreSQL, cùng khóa mail nếu
-dùng đăng ký/reset; các app chưa bật chưa cần secret riêng. Giữ các tên database theo
-mẫu cho script khởi tạo PostgreSQL. Xem [phạm vi staging và biến cần có](ci-cd.md).
-
-Sau khi sửa `.env`, phải tạo lại container của service để áp dụng biến mới, không chỉ
-`restart`. Workflow deploy lần tiếp theo sẽ áp dụng; nếu thao tác thủ công, cấp đúng
-hai biến nội suy image prefix/tag và giữ file `staging-images.json` của lần phát hành.
-Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
-`up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
-
-Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
-
-Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
-publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
-`WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
-có placeholder trống trong `.env.example`; chỉ điền credentials của môi trường
-được phép dùng. `WORK_STORAGE_ADAPTER` mặc định tại mapping là
-`infrastructure.storage.R2Storage`. `WORK_AI_ADAPTER` và
-`WORK_INTEGRATION_ADAPTER` mặc định vẫn là `UnavailableProposals` và
-`UnavailableIntegration`: thêm mapping không tự nối service thật. Giữ
-`WORK_CLASSROOM_DEV_ENABLED=false` ở staging; không đưa fixture test vào adapter
-runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
-
-`env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
-
-Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
-publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
-`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
-`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa
-
-Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
-sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
-
-`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
-`kafka-startup.env`.

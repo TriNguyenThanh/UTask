@@ -1,18 +1,94 @@
 # Chạy môi trường local
 
-**Trạng thái: Một phần.** Theo [baseline](../architecture/README.md), local
-dùng Docker Compose cho Nginx, PostgreSQL, Redis, Kafka và sáu service.
-Checkout có package/Dockerfile của Identity và AI; các backend còn lại
-chưa có đầu vào build đầy đủ. Compose root đã khai báo API, dispatcher,
-Celery worker và migration AI, nhưng toàn bộ stack chưa được xác minh chạy được.
+**Trạng thái: Đã triển khai local cho Identity–Classroom–Work.** Compose khai báo PostgreSQL, Redis, Kafka,
+Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chuẩn từ
+repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
+kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
+được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
+`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
+còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
+có container chuẩn bị riêng. Compose chỉ báo hai service này healthy sau khi
+đã chuẩn bị xong và kiểm tra kết nối thực.
 
-Các lệnh dưới đây dùng PowerShell. Trước khi chạy lần đầu, tạo cấu hình cục bộ:
+Khi API container khởi động, entrypoint chạy migration Django rồi mới chạy
+Gunicorn. Worker dùng cùng image nhưng bỏ qua migration; Compose đợi API tương
+ứng healthy trước khi chạy worker. Đã kiểm build/khởi động, dừng/khởi động lại
+và luồng HTTP/Kafka trên volume local hiện có; xem
+[nghiệm thu startup không có container chuẩn bị](../classroom-service/backend-validation.md#khởi-động-không-có-container-chuẩn-bị-riêng).
+Kết quả local không xác nhận staging hoặc các provider bên ngoài.
+
+## Khởi động Identity, Classroom và Work
+
+Các lệnh dưới đây dùng PowerShell. Tạo `.env` từ mẫu nếu máy chưa có tệp này;
+giữ lại `.env` hiện có để không ghi đè cấu hình local:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
-docker compose up --build
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+New-Item -ItemType Directory -Force .local-secrets | Out-Null
 ```
+
+Trước lần chạy đầu, sửa `.env`: thay các giá trị local mẫu cho mật khẩu
+PostgreSQL và khóa Django; đặt các khóa caller nhất quán giữa Identity, Work
+và Classroom. `IDENTITY_SERVICE_KEYS` phải là JSON có caller `classroom` và
+`work`, lần lượt khớp với `IDENTITY_CLASSROOM_SERVICE_KEY` và
+`IDENTITY_WORK_SERVICE_KEY`; `CLASSROOM_WORK_SERVICE_KEY` phải khớp ở Work và
+Classroom. Ví dụ cấu trúc trong `.env` (thay placeholder bằng cùng giá trị ở
+các biến ghép cặp):
+
+```dotenv
+IDENTITY_SERVICE_KEYS={"classroom":"<classroom-key>","work":"<work-key>"}
+IDENTITY_CLASSROOM_SERVICE_KEY=<classroom-key>
+IDENTITY_WORK_SERVICE_KEY=<work-key>
+CLASSROOM_WORK_SERVICE_KEY=<shared-work-classroom-key>
+CLASSROOM_ACCESS_CODE_HMAC_KEY=<local-hmac-key>
+```
+
+Đặt `CLASSROOM_ACCESS_CODE_HMAC_KEY` trước khi dùng mã lớp hoặc mã mời. Không
+dùng các giá trị mẫu cho môi trường dùng chung.
+
+Identity cần khóa riêng RSA tại đường dẫn `IDENTITY_JWT_PRIVATE_KEY_HOST_PATH`
+(mặc định `./.local-secrets/identity-jwt-private.pem`). Có thể tạo khóa local
+bằng OpenSSL:
+
+```powershell
+if (-not (Test-Path -LiteralPath .local-secrets/identity-jwt-private.pem)) {
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .local-secrets/identity-jwt-private.pem
+}
+```
+
+Giữ PEM trong `.local-secrets`, không commit khóa. Sau khi hoàn tất các giá trị
+đầu vào, khởi động từ repository root:
+
+```powershell
+docker compose up --build -d
+```
+
+Lệnh này dùng Compose mặc định `utask`; không cần chọn tên service hoặc gọi
+migration riêng. Docker build chỉ chuẩn bị image, không kết nối PostgreSQL.
+Migration diễn ra lúc API container khởi động. Nếu migration lỗi, Gunicorn
+không chạy và API không đạt healthcheck, nên worker phụ thuộc API đó cũng chưa
+khởi chạy. Lần khởi động sau chạy lại migration; Django bỏ qua migration đã
+được ghi nhận là đã áp dụng. Các worker Classroom và Work chạy mặc định.
+Consumer hồ sơ Identity của Work vẫn là tùy chọn qua profile
+`work-profile-consumer`.
+
+Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoản là luồng Identity;
+xem các điều kiện trong [tài liệu Identity](../identity-service/README.md).
+Thông tin cấu hình, secret và luồng áp dụng biến được mô tả tại
+[biến môi trường](environment.md); hiện trạng kết quả kiểm tra nếu có
+được ghi riêng trong [nghiệm thu backend Classroom](../classroom-service/backend-validation.md).
+
+Staging tiếp tục chạy migration tuần tự trước khi cập nhật runtime theo
+[quy trình deploy](ci-cd.md). Khi API staging khởi động, entrypoint chạy
+migration lần nữa; Django bỏ qua migration đã áp dụng.
+
+Integration và Notification có profile riêng; khai báo profile không khẳng định
+các service đó đã hoàn thiện hoặc được khởi động mặc định. AI Service cũng nằm
+trong profile `ai-service` và cần cấu hình credential riêng; xem
+[cấu hình AI](../ai-service/README.md#cấu-hình). Các profile này không cần cho
+lệnh khởi động Identity–Classroom–Work.
 
 ## Chạy riêng pipeline AI từ root
 
@@ -62,11 +138,3 @@ docker compose down
 Môi trường local không đại diện cho cấu hình production. Cách triển khai
 production cần được ghi riêng khi nền tảng và cách quản lý thông tin bí mật đã
 được quyết định.
-
-Khi PostgreSQL chấp nhận
-kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
-được khai báo tồn tại, kể cả khi volume đã có dữ liệu.
-
-Kafka khởi động qua
-`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
-còn thiếu.
