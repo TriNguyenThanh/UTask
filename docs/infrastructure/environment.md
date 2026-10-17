@@ -145,3 +145,5 @@ Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volu
 `ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
 volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
 Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.
+
+Work `CLASSROOM_BASE_URL`, `WORK_KAFKA_TOPIC` và các biến `WORK_CLASSROOM_KAFKA_*` được ánh xạ qua `infra/env/work-service.env`.

@@ -103,8 +103,8 @@ services:
     healthcheck: *django_healthcheck
 
   work-publisher:
-    profiles: [work-service]
     image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/work-service
     restart: unless-stopped
     command: ["celery", "-A", "config", "worker", "-Q", "work-publisher", "--concurrency=1"]
     env_file:
@@ -112,6 +112,8 @@ services:
       - ./infra/env/django.env
       - ./infra/env/work-service.env
     depends_on:
+      work-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -120,8 +122,8 @@ services:
         condition: service_healthy
 
   work-beat:
-    profiles: [work-service]
     image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/work-service
     restart: unless-stopped
     command: ["celery", "-A", "config", "beat"]
     env_file:
@@ -129,6 +131,8 @@ services:
       - ./infra/env/django.env
       - ./infra/env/work-service.env
     depends_on:
+      work-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -137,6 +141,7 @@ services:
   work-profile-consumer:
     profiles: [work-profile-consumer]
     image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/work-service
     restart: unless-stopped
     command: ["python", "manage.py", "consume_identity"]
     env_file:
@@ -144,10 +149,36 @@ services:
       - ./infra/env/django.env
       - ./infra/env/work-service.env
     depends_on:
+      work-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+
+  work-group-consumer:
+    image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}
+    build: ./apps/work-service
+    restart: unless-stopped
+    env_file:
+      - ./infra/env/database.env
+      - ./infra/env/django.env
+      - ./infra/env/work-service.env
+    init: true
+    command: ["python", "manage.py", "consume_classroom"]
+    depends_on:
+      work-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(p.read_bytes().split(b'\\0')[1:3] == [b'manage.py', b'consume_classroom'] for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 15s
 
   classroom-service:
     image: ${UTASK_IMAGE_PREFIX:-utask}/classroom-service:${UTASK_IMAGE_TAG:-local}
