@@ -35,6 +35,8 @@ CELERY_BROKER_URL = os.environ.get('WORK_REDIS_URL', 'redis://redis:6379/2')
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_ROUTES = {'apps.messaging.tasks.drain_outbox': {'queue': 'work-publisher'}}
 CELERY_BEAT_SCHEDULE = {'outbox': {'task': 'apps.messaging.tasks.drain_outbox', 'schedule': 5.0}}
+CELERY_TASK_ROUTES.update({'apps.projects.tasks.recover_project_membership': {'queue': 'work-publisher'}, 'apps.projects.tasks.recover_active_memberships': {'queue': 'work-publisher'}})
+CELERY_BEAT_SCHEDULE['classroom-recovery'] = {'task': 'apps.projects.tasks.recover_active_memberships', 'schedule': 300.0}
 WORK_STORAGE_ADAPTER = os.environ.get('WORK_STORAGE_ADAPTER', 'infrastructure.storage.R2Storage')
 WORK_R2_ENDPOINT = os.environ.get('WORK_R2_ENDPOINT', '')
 WORK_R2_ACCESS_KEY = os.environ.get('WORK_R2_ACCESS_KEY', '')
