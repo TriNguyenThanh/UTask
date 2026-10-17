@@ -39,11 +39,6 @@ class Project(models.Model):
         db_table = "projects"
         constraints = [
             models.UniqueConstraint(fields=["identifier"], name="uq_projects_identifier"),
-            models.UniqueConstraint(
-                fields=["classroom_group_id"],
-                condition=Q(archived_at__isnull=True, deleted_at__isnull=True),
-                name="uq_one_primary_project_per_group",
-            ),
             models.CheckConstraint(
                 condition=Q(identifier__regex=r"^[A-Z0-9]{2,10}$"), name="chk_project_identifier"
             ),
@@ -64,7 +59,14 @@ class Project(models.Model):
                 name="chk_project_dates",
             ),
         ]
-        indexes = [models.Index(fields=["-created_at", "-id"], name="ix_project_list")]
+        indexes = [
+            models.Index(fields=["-created_at", "-id"], name="ix_project_list"),
+            models.Index(
+                fields=["classroom_group_id", "id"],
+                condition=Q(archived_at__isnull=True, deleted_at__isnull=True),
+                name="ix_project_active_group",
+            ),
+        ]
 
 
 class ProjectMember(models.Model):
