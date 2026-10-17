@@ -23,9 +23,13 @@ BACKEND_HTTP_TIMEOUT = (2, 5)
 CLASSROOM_ADAPTER = os.environ.get('WORK_CLASSROOM_ADAPTER', 'infrastructure.classroom.RemoteClassroom')
 CLASSROOM_BASE_URL = os.environ.get('CLASSROOM_BASE_URL', 'http://classroom-service:8000')
 CLASSROOM_WORK_SERVICE_KEY = os.environ.get('CLASSROOM_WORK_SERVICE_KEY', '')
+CLASSROOM_KAFKA_TOPIC = os.environ.get('WORK_CLASSROOM_KAFKA_TOPIC', 'utask.classroom.events')
+CLASSROOM_KAFKA_GROUP = os.environ.get('WORK_CLASSROOM_KAFKA_GROUP', 'work-classroom-groups-v1')
+CLASSROOM_KAFKA_DLQ_TOPIC = os.environ.get('WORK_CLASSROOM_KAFKA_DLQ_TOPIC', 'utask.work.classroom.dlq')
+CLASSROOM_CONSUMER_MAX_RETRIES = int(os.environ.get('WORK_CLASSROOM_CONSUMER_MAX_RETRIES', '5'))
 CLASSROOM_DEV_ENABLED = os.environ.get('WORK_CLASSROOM_DEV_ENABLED', 'false').lower() == 'true'
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
-KAFKA_WORK_TOPIC = 'utask.work.events'
+KAFKA_WORK_TOPIC = os.environ.get('WORK_KAFKA_TOPIC', 'utask.work.events')
 IDENTITY_KAFKA_TOPIC = os.environ.get('WORK_IDENTITY_KAFKA_TOPIC', '')
 CELERY_BROKER_URL = os.environ.get('WORK_REDIS_URL', 'redis://redis:6379/2')
 CELERY_TASK_IGNORE_RESULT = True

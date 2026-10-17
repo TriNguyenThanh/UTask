@@ -8,7 +8,8 @@ from apps.messaging.consumer import process_record
 
 
 class DeadLetterPublisher:
-    def __init__(self):
+    def __init__(self, *, topic="utask.work.profile.dlq"):
+        self.topic = topic
         self.producer = Producer(
             {
                 "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
@@ -20,7 +21,7 @@ class DeadLetterPublisher:
     def publish(self, record, *, reason):
         ack = []
         self.producer.produce(
-            "utask.work.profile.dlq",
+            self.topic,
             key=record.key(),
             value=record.value(),
             headers={"error-class": reason, "source-offset": str(record.offset())},

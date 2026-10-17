@@ -13,6 +13,8 @@ def synchronize_membership(project_id, snapshot):
     snapshot.validate()
     with transaction.atomic():
         project = lock_project(project_id)
+        if project.archived_at is not None:
+            return False
         if snapshot.group_id != project.classroom_group_id or snapshot.class_id != project.class_id:
             raise WorkError(
                 "CLASSROOM_UNAVAILABLE", "Dữ liệu thành viên không khớp với phạm vi của dự án.", 503
@@ -32,7 +34,13 @@ def synchronize_membership(project_id, snapshot):
             incoming = {
                 (m.user_id, m.role, m.status) for m in snapshot.members if m.status == "ACTIVE"
             }
-            if current != incoming:
+            incoming_facts_match = all(
+                fact.user_id in slots
+                and slots[fact.user_id].role == fact.role
+                and slots[fact.user_id].status == fact.status
+                for fact in snapshot.members
+            )
+            if current != incoming or not incoming_facts_match:
                 raise WorkError(
                     "SOURCE_VERSION_CONFLICT",
                     "Dữ liệu thành viên bị xung đột phiên bản với hệ thống đồng bộ.",
