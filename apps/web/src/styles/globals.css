@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
+/* Laptop thấp (vd. 1366x768 trừ thanh trình duyệt): thu gọn khoảng cách để trang không phải cuộn. */
+@custom-variant short (@media (max-height: 820px));
 
 :root {
   font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;

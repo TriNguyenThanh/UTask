@@ -16,7 +16,7 @@ import { GitHubActivitySection } from "@/features/my-work/components/GitHubActiv
 
 function NoCoursesHome() {
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <EmptyState
         title="Bạn chưa có môn học trong học kỳ hiện tại."
         description="Khi được đăng ký môn học, danh sách môn và nhiệm vụ đồ án sẽ xuất hiện tại đây. Liên hệ giảng viên hoặc phòng đào tạo nếu bạn cho rằng đây là nhầm lẫn."
@@ -122,7 +122,7 @@ export function MyWorkPage() {
 
   if (overviewQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <ErrorState
           error={overviewQuery.error}
           onRetry={() => void overviewQuery.refetch()}
@@ -152,7 +152,7 @@ export function MyWorkPage() {
   const githubSyncMessage = githubSyncMessageFor(githubQuery.isError, githubQuery.data?.sync.state);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <div className="space-y-4">
         <div className="flex flex-col justify-between gap-2 border-b pb-4 md:flex-row md:items-baseline">
           <div>

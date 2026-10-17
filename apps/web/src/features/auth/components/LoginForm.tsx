@@ -56,11 +56,11 @@ export function LoginForm() {
 
   return (
     <section className="flex w-full max-w-[400px] flex-col" aria-labelledby="login-title">
-      <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-4 grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
-          <Layers3 className="size-7" aria-hidden="true" />
+      <div className="mb-8 short:mb-4 flex flex-col items-center text-center">
+        <div className="mb-4 short:mb-2 grid size-12 short:size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
+          <Layers3 className="size-7 short:size-5" aria-hidden="true" />
         </div>
-        <h1 id="login-title" className="mb-2 text-2xl font-semibold leading-tight tracking-tight">
+        <h1 id="login-title" className="mb-2 short:mb-1 text-2xl short:text-xl font-semibold leading-tight tracking-tight">
           Đăng nhập vào UTask
         </h1>
         <p className="text-sm leading-relaxed text-[#787586]">
@@ -68,9 +68,9 @@ export function LoginForm() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 short:gap-2">
         <Button
-          className="h-11 w-full rounded-lg border-[#c8c4be] bg-white text-sm text-[#1a1c1c] shadow-none disabled:cursor-not-allowed disabled:opacity-100"
+          className="h-11 short:h-9 w-full rounded-lg border-[#c8c4be] bg-white text-sm text-[#1a1c1c] shadow-none disabled:cursor-not-allowed disabled:opacity-100"
           type="button"
           variant="outline"
           disabled
@@ -85,7 +85,7 @@ export function LoginForm() {
           Tiếp tục với Google
         </Button>
         <Button
-          className="h-11 w-full rounded-lg border-[#c8c4be] bg-white text-sm text-[#1a1c1c] shadow-none disabled:cursor-not-allowed disabled:opacity-100"
+          className="h-11 short:h-9 w-full rounded-lg border-[#c8c4be] bg-white text-sm text-[#1a1c1c] shadow-none disabled:cursor-not-allowed disabled:opacity-100"
           type="button"
           variant="outline"
           disabled
@@ -98,7 +98,7 @@ export function LoginForm() {
         </Button>
       </div>
 
-      <div className="relative my-6 flex items-center">
+      <div className="relative my-6 short:my-3 flex items-center">
         <div className="flex-grow border-t border-[#e5e3df]" />
         <span className="mx-3 flex-shrink-0 bg-[#faf9f8] px-1 text-xs text-[#787586]">
           hoặc đăng nhập bằng email
@@ -113,7 +113,7 @@ export function LoginForm() {
       ) : null}
 
       <Form {...form}>
-        <form className="space-y-4" onSubmit={form.handleSubmit(submit)} noValidate>
+        <form className="space-y-4 short:space-y-3" onSubmit={form.handleSubmit(submit)} noValidate>
           <FormField
             control={form.control}
             name="email"
@@ -122,7 +122,7 @@ export function LoginForm() {
                 <FormLabel className="text-[13px] font-semibold text-[#1a1c1c]">Email trường học</FormLabel>
                 <FormControl>
                   <Input
-                    className="h-11 rounded-lg border-[#c8c4be] bg-white px-3.5 shadow-none"
+                    className="h-11 short:h-9 rounded-lg border-[#c8c4be] bg-white px-3.5 shadow-none"
                     autoComplete="email"
                     inputMode="email"
                     placeholder="masv@st.edu.vn hoặc giangvien@edu.vn"
@@ -142,7 +142,7 @@ export function LoginForm() {
                 <div className="relative">
                   <FormControl>
                     <Input
-                      className="h-11 rounded-lg border-[#c8c4be] bg-white px-3.5 pr-11 shadow-none"
+                      className="h-11 short:h-9 rounded-lg border-[#c8c4be] bg-white px-3.5 pr-11 shadow-none"
                       autoComplete="current-password"
                       placeholder="Nhập mật khẩu học vụ"
                       type={showPassword ? "text" : "password"}
@@ -150,7 +150,7 @@ export function LoginForm() {
                     />
                   </FormControl>
                   <Button
-                    className="absolute right-1 top-1 size-9 text-[#787586] hover:bg-transparent hover:text-[#1a1c1c]"
+                    className="absolute right-1 top-1 size-9 short:top-0 text-[#787586] hover:bg-transparent hover:text-[#1a1c1c]"
                     type="button"
                     variant="ghost"
                     size="icon"
@@ -165,7 +165,7 @@ export function LoginForm() {
             )}
           />
 
-          <div className="flex items-center justify-between gap-4 pt-1">
+          <div className="flex items-center justify-between gap-4 pt-1 short:pt-0">
             {/* <span className="flex items-center gap-1.5 text-[13px] text-[#484649]">
               <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
               Phiên đăng nhập an toàn
@@ -175,8 +175,8 @@ export function LoginForm() {
             </Link>
           </div>
 
-          <div className="pt-2">
-            <Button className="h-11 w-full rounded-lg font-semibold" type="submit" disabled={form.formState.isSubmitting}>
+          <div className="pt-2 short:pt-1">
+            <Button className="h-11 short:h-9 w-full rounded-lg font-semibold" type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
               {form.formState.isSubmitting ? "Đang đăng nhập" : "Đăng nhập"}
               {!form.formState.isSubmitting ? <ArrowRight aria-hidden="true" /> : null}

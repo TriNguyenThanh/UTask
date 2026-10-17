@@ -18,7 +18,7 @@ const COURSE_SECTIONS = [
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+    "flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium transition-colors",
     isActive
       ? "bg-accent font-semibold text-accent-foreground"
       : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -34,7 +34,7 @@ export function TeacherSidebar() {
   const openCourseId = useMatch("/teacher/courses/:courseId/*")?.params.courseId;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto py-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 short:gap-3 overflow-y-auto py-3 short:py-2">
       <nav aria-label="Điều hướng giảng viên" className="space-y-0.5">
         <NavLink to="/teacher" end className={itemClass}>
           <Home className="size-4" aria-hidden />

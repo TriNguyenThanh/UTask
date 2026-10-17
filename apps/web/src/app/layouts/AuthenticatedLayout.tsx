@@ -1,5 +1,5 @@
 import { CheckSquare2, LogOut, Menu } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { AppSidebar } from "@/components/navigation/AppSidebar";
@@ -23,7 +23,7 @@ function UserSummary({ onLogout }: Readonly<{ onLogout: () => void }>) {
   const { user } = useAuth();
   return (
     <details className="group relative">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-lg px-2 hover:bg-muted">
+      <summary className="flex min-h-11 short:min-h-9 cursor-pointer list-none items-center gap-3 rounded-lg px-2 hover:bg-muted">
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-subtle text-xs font-bold text-primary">
           {user?.display_name.slice(0, 1).toUpperCase()}
         </span>
@@ -44,7 +44,7 @@ function UserSummary({ onLogout }: Readonly<{ onLogout: () => void }>) {
 function SidebarShell({ children, home }: Readonly<{ children: ReactNode; home: string }>) {
   return (
     <>
-      <div className="flex h-16 items-center border-b border-sidebar-border px-5">
+      <div className="flex h-16 short:h-12 shrink-0 items-center border-b border-sidebar-border px-5">
         <NavLink className="flex items-center gap-2.5" to={home} aria-label="UTask — Trang chủ">
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             UT
@@ -66,6 +66,7 @@ export function AuthenticatedLayout() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const [instructorProjectView, setInstructorProjectView] = useState(false);
   // The Teacher chrome (sidebar, top bar) is used only inside /teacher by an
@@ -88,13 +89,18 @@ export function AuthenticatedLayout() {
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname, location.search]);
+  // The page scrolls inside <main> on desktop, so a new route starts at the top.
+  useEffect(() => {
+    // jsdom has no Element.scrollTo.
+    mainRef.current?.scrollTo?.({ top: 0 });
+  }, [location.pathname]);
   function logout() {
     void auth.logout();
     navigate("/login", { replace: true });
   }
 
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]">
+    <div className="relative min-h-screen bg-background lg:grid lg:h-svh lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
@@ -103,22 +109,26 @@ export function AuthenticatedLayout() {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="hidden min-h-screen flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+      <aside className="hidden flex-col border-r border-sidebar-border bg-sidebar lg:flex lg:min-h-0">
         <SidebarShell home={inTeacherSpace ? "/teacher" : "/my-work"}>
           {sidebar}
         </SidebarShell>
-        <div className="border-t border-sidebar-border bg-secondary/70 p-3">
+        <div className="shrink-0 border-t border-sidebar-border bg-secondary/70 p-3 short:p-2">
           <UserSummary onLogout={logout} />
         </div>
       </aside>
 
-      <div className="min-w-0">
+      <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
         {inTeacherSpace ? (
           <TeacherTopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
         ) : (
           <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
         )}
-        <main className="min-w-0 pb-16" id="main-content">
+        <main
+          ref={mainRef}
+          className="min-w-0 pb-16 short:pb-8 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+          id="main-content"
+        >
           <TeacherChromeContext.Provider value={setInstructorProjectView}>
             <Outlet />
           </TeacherChromeContext.Provider>
