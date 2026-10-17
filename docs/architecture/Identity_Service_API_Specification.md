@@ -733,7 +733,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 * **Phương thức:** `GET`
 * **Đường dẫn:** `/users/{user_id}`
 * **Xác thực:** Bearer Token bắt buộc.
-* **Mô tả:** Cho phép các dịch vụ vệ tinh (`work-service`, `classroom-service`) hoặc thành viên trong hệ thống xem thông tin công khai (avatar, display name, roles, student_id) của một thành viên đồ án/lớp học.
+* **Mô tả:** Cho phép các dịch vụ vệ tinh (`work-service`, `classroom-service`) hoặc thành viên trong hệ thống xem thông tin công khai (avatar, display name, roles, student_id, account_status) của một thành viên đồ án/lớp học. `account_status` chỉ đọc, phản ánh trạng thái tài khoản hiện tại; Classroom dùng cùng `roles` để xác minh Giảng viên đang hoạt động khi phân công, không dùng để cấp quyền trên lớp.
 
 * **Phản hồi Thành công (HTTP 200 OK):**
 ```json
@@ -747,6 +747,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
     "display_name": "Nguyễn Văn Sinh Viên",
     "avatar_url": "https://pub-r2.utask.internal/avatars/b2c1d3e4.webp",
     "bio": "Sinh viên K16 ngành Kỹ thuật Phần mềm",
+    "account_status": "ACTIVE",
     "roles": ["STUDENT"]
   },
   "meta": {
@@ -763,7 +764,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 * **Phương thức:** `POST`
 * **Đường dẫn:** `/users/batch`
 * **Xác thực:** Bearer Token bắt buộc.
-* **Batch:** Validate toàn request; sai UUID/quá100 trả400. Dedup IDs; user không có/đã xóa bỏ khỏi data.users; meta.total là số trả được. Single public user không có/đã xóa404. Không trả preferences/password/token. Policy là mọi Bearer hợp lệ xem allowlist, không claim cùng lớp/project.
+* **Batch:** Validate toàn request; sai UUID/quá100 trả400. Dedup IDs; user không có/đã xóa bỏ khỏi data.users; meta.total là số trả được. Single public user không có/đã xóa404. Mỗi hồ sơ có `account_status` hiện tại (`ACTIVE`, `PENDING_ACTIVATION`, `SUSPENDED`) và `roles`, cùng serializer với API đọc một người. Không trả preferences/password/token. Policy là mọi Bearer hợp lệ xem allowlist, không claim cùng lớp/project.
 * **Mô tả:** Hỗ trợ các microservice vệ tinh (đặc biệt là `work-service` khi render danh sách thành viên dự án, task assignee) truy vấn đồng thời thông tin tối đa 100 người dùng trong 1 request duy nhất, giải quyết triệt để vấn đề N+1 HTTP calls.
 
 * **Request Body:**

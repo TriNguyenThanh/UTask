@@ -69,6 +69,7 @@ def test_public_batch_allowlist_dedup_and_deleted(authenticated_account):
         "avatar_url",
         "bio",
         "roles",
+        "account_status",
     }
 
 
