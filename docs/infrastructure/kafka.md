@@ -64,8 +64,34 @@ context không thay quyết định quyền hiện hành. Pipeline chuẩn nằm
 
 ## Hiện trạng và vận hành
 
-Compose khai báo Kafka 3.9.0, cấu hình KRaft, volume và healthcheck. Chưa xác
-minh producer/consumer hoặc outbox runtime của các service; AI bootstrap chưa
+Backend Classroom–Work đã dùng `confluent-kafka`, Outbox và consumer thực tế:
+
+| Luồng | Topic mặc định | Partition key | Consumer / DLQ |
+| --- | --- | --- | --- |
+| Work tạo dự án | `utask.work.events` | Project UUID | Classroom `consume_work` / `utask.classroom.work.dlq` |
+| Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Work `consume_classroom` / `utask.work.classroom.dlq` |
+
+Publisher chỉ ghi `published_at` sau delivery callback thành công, lỗi thử
+lại tăng dần tối đa 300 giây và không gửi vượt đầu hàng lỗi cùng aggregate.
+Consumer tắt auto commit/offset store; sự kiện không áp dụng được vào DLQ
+và phải ACK trước commit offset. Lỗi dữ liệu/quyền không được đổi thành thành
+công. Work lưu receipt riêng từng dự án để nhận lại không bỏ sót phần đã lỗi.
+Nếu cùng một sự kiện gặp xung đột cố định ở một dự án và lỗi tạm thời ở dự án
+khác, Work ưu tiên thử lại lỗi tạm thời theo giới hạn consumer. Lần nhận lại
+bỏ qua receipt đã hoàn tất; chỉ phân loại sang DLQ sau khi không còn lỗi cần
+thử lại hoặc đã hết giới hạn. Thứ tự dự án không được quyết định phân loại lỗi.
+Giới hạn retry nhận từ mapping; chưa có công cụ tự động replay DLQ. Khi xử
+lý lại, sửa nguyên nhân, giữ event ID/nội dung nghiệp vụ và đưa qua cùng
+validation/chống lặp; không ghi thẳng database hoặc bỏ qua quyền.
+
+Broker mặc định retention 7 ngày qua `KAFKA_LOG_RETENTION_MS`; áp dụng cả
+topic nghiệp vụ/DLQ không có override. Topic có cấu hình riêng phải kiểm tra
+thực tế. JSON Schema nằm trong `contracts/events/`; envelope triển khai dùng
+`data`. Kết quả HTTP/Kafka thật tại
+[nghiệm thu Classroom](../classroom-service/backend-validation.md), không xác nhận staging.
+
+Compose khai báo Kafka 3.9.0, cấu hình KRaft, volume và healthcheck. Ngoài
+phạm vi Classroom–Work nêu trên, chưa xác minh producer/consumer runtime; AI bootstrap chưa
 có Kafka client. Production dùng Kafka bên ngoài theo baseline. Topic,
 partition, consumer group, retention, replay và SLA cần quyết định/kiểm tra
 riêng, không suy ra từ việc broker local khởi động được.
