@@ -115,6 +115,11 @@ def create_project(actor, payload, snapshot, scope):
         )
         data = ProjectSerializer(project).data
         emit_event(project, "project.created", data)
+        from apps.projects.tasks import recover_project_membership
+
+        transaction.on_commit(
+            lambda: recover_project_membership.delay(str(project.pk)), robust=True
+        )
         return save_receipt(
             scope, payload, data, status=201, message="Đã tạo dự án và danh sách thành viên."
         )

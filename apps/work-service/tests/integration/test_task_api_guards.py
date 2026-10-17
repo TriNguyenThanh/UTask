@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 )
 def test_ai_provenance_rejection_leaves_saved_state_unchanged(task_api, ai, actors, mode, invalid):
     leader, task_route, create = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     if mode == "backlog":
         proof = ai(project.pk)
         body, route = backlog_payload(project), task_route + "bulk-apply-ai/"
@@ -143,7 +143,7 @@ def test_manual_create_and_ai_bulk_share_allocator_under_concurrency(
     task_api, ai, actors, client_for
 ):
     _, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     batch = backlog_payload(project)
     barrier = Barrier(2)

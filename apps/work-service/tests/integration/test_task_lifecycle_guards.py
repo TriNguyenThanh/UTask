@@ -43,7 +43,7 @@ def test_restore_live_task_rejects_without_any_effect(task_api):
 @pytest.mark.parametrize("blocked_by", ["deleted-parent", "deleted-state"])
 def test_restore_child_or_task_requires_live_parent_and_state(task_api, blocked_by):
     leader, project_route, create = task_api
-    project_id = project_route.split("/")[4]
+    project_id = project_route.split("/")[2]
     if blocked_by == "deleted-parent":
         parent = create()
         reply = leader.post(

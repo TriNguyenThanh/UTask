@@ -1,5 +1,15 @@
 import { myWorkKeys } from "@/features/my-work/queries";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
+import { applyIssuePatch, applyServerVersion, type IssuePatch } from "@/features/projects/lib/optimistic";
+import type { IssueDetail, ProjectWorkspace } from "@/features/projects/types";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
 import {
@@ -10,6 +20,9 @@ import {
   issueDetailRequest,
   markAllNotificationsReadRequest,
   markNotificationReadRequest,
+  moveIssueRequest,
+  setIssueBlockedRequest,
+  type MoveIssueInput,
   notificationsRequest,
   projectAiSettingsRequest,
   projectCodeRequest,
@@ -207,5 +220,153 @@ export function useDisconnectGitHub() {
       // Home reads GitHub sync state from /my-work/github — refresh it too.
       queryClient.invalidateQueries({ queryKey: myWorkKeys.github });
     },
+  });
+}
+/* ------------------------------------------------------------------ */
+/* Issue writes: move and blocked (Demo MSW)                           */
+/* ------------------------------------------------------------------ */
+
+interface IssueSnapshot {
+  workspace: ProjectWorkspace | undefined;
+  detail: IssueDetail | undefined;
+}
+
+/**
+ * Shows `patch` in the cache right away and returns what to put back on
+ * failure. Called from `onMutate` only, so nothing is written while a card is
+ * still being dragged across columns.
+ */
+async function applyOptimisticIssue(
+  queryClient: QueryClient,
+  projectId: string,
+  issueKey: string,
+  patch: IssuePatch,
+): Promise<IssueSnapshot> {
+  const projectKey = studentFlowKeys.project(projectId);
+  const issueQueryKey = studentFlowKeys.issue(projectId, issueKey);
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: projectKey, exact: true }),
+    queryClient.cancelQueries({ queryKey: issueQueryKey, exact: true }),
+  ]);
+  const snapshot: IssueSnapshot = {
+    workspace: queryClient.getQueryData<ProjectWorkspace>(projectKey),
+    detail: queryClient.getQueryData<IssueDetail>(issueQueryKey),
+  };
+  queryClient.setQueryData<ProjectWorkspace>(projectKey, (current) =>
+    current ? applyIssuePatch(current, issueKey, patch) : current,
+  );
+  queryClient.setQueryData<IssueDetail>(issueQueryKey, (current) =>
+    current ? { ...current, issue: { ...current.issue, ...patch } } : current,
+  );
+  return snapshot;
+}
+
+function restoreIssue(
+  queryClient: QueryClient,
+  projectId: string,
+  issueKey: string,
+  snapshot: IssueSnapshot | undefined,
+) {
+  if (!snapshot) return;
+  queryClient.setQueryData(studentFlowKeys.project(projectId), snapshot.workspace);
+  queryClient.setQueryData(studentFlowKeys.issue(projectId, issueKey), snapshot.detail);
+}
+
+/** Keeps the version the server just assigned, so a queued write after this one is not stale. */
+function recordServerVersion(
+  queryClient: QueryClient,
+  projectId: string,
+  issueKey: string,
+  version: number,
+) {
+  queryClient.setQueryData<ProjectWorkspace>(studentFlowKeys.project(projectId), (current) =>
+    current ? applyServerVersion(current, issueKey, version) : current,
+  );
+  queryClient.setQueryData<IssueDetail>(studentFlowKeys.issue(projectId, issueKey), (current) =>
+    current ? { ...current, issue: { ...current.issue, version } } : current,
+  );
+}
+
+function currentIssueVersion(
+  queryClient: QueryClient,
+  projectId: string,
+  issueKey: string,
+): number {
+  const workspace = queryClient.getQueryData<ProjectWorkspace>(studentFlowKeys.project(projectId));
+  return workspace?.issues.find((issue) => issue.key === issueKey)?.version ?? 0;
+}
+
+function invalidateAfterIssueWrite(queryClient: QueryClient, projectId: string, issueKey: string) {
+  void queryClient.invalidateQueries({ queryKey: studentFlowKeys.project(projectId), exact: true });
+  void queryClient.invalidateQueries({
+    queryKey: studentFlowKeys.issue(projectId, issueKey),
+    exact: true,
+  });
+  void queryClient.invalidateQueries({ queryKey: myWorkKeys.overview });
+}
+
+export type MoveIssueVariables = { issueKey: string } & Omit<MoveIssueInput, "version">;
+
+/**
+ * Moves an issue (status, sprint, position). Writes queue per project so two
+ * drops in a row reach the server in order, and the version is read when the
+ * request actually goes out, after the previous write has bumped it.
+ */
+export function useMoveIssue(projectId: string) {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    scope: { id: `issue-write:${projectId}` },
+    mutationFn: ({ issueKey, ...input }: MoveIssueVariables) =>
+      moveIssueRequest(client, projectId, issueKey, {
+        ...input,
+        version: currentIssueVersion(queryClient, projectId, issueKey),
+      }),
+    onMutate: ({ issueKey, status, sprintId, rank }: MoveIssueVariables) =>
+      applyOptimisticIssue(queryClient, projectId, issueKey, {
+        ...(status !== undefined ? { status } : {}),
+        ...(sprintId !== undefined ? { sprintId } : {}),
+        ...(rank !== undefined ? { rank } : {}),
+      }),
+    onSuccess: (issue, { issueKey }) =>
+      recordServerVersion(queryClient, projectId, issueKey, issue.version),
+    onError: (error, { issueKey }, snapshot) => {
+      restoreIssue(queryClient, projectId, issueKey, snapshot);
+      toast.error(issueWriteErrorMessage(error));
+    },
+    onSettled: (_data, _error, { issueKey }) =>
+      invalidateAfterIssueWrite(queryClient, projectId, issueKey),
+  });
+}
+
+export interface SetBlockedVariables {
+  issueKey: string;
+  blocked: boolean;
+  reason?: string;
+}
+
+export function useSetIssueBlocked(projectId: string) {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    scope: { id: `issue-write:${projectId}` },
+    mutationFn: ({ issueKey, ...input }: SetBlockedVariables) =>
+      setIssueBlockedRequest(client, projectId, issueKey, {
+        ...input,
+        version: currentIssueVersion(queryClient, projectId, issueKey),
+      }),
+    onMutate: ({ issueKey, blocked, reason }: SetBlockedVariables) =>
+      applyOptimisticIssue(queryClient, projectId, issueKey, {
+        blocked,
+        blockedReason: blocked ? (reason?.trim() ?? null) : null,
+      }),
+    onSuccess: (issue, { issueKey }) =>
+      recordServerVersion(queryClient, projectId, issueKey, issue.version),
+    onError: (error, { issueKey }, snapshot) => {
+      restoreIssue(queryClient, projectId, issueKey, snapshot);
+      toast.error(issueWriteErrorMessage(error));
+    },
+    onSettled: (_data, _error, { issueKey }) =>
+      invalidateAfterIssueWrite(queryClient, projectId, issueKey),
   });
 }
