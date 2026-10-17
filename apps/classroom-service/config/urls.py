@@ -10,7 +10,7 @@ def healthz(request):
         return JsonResponse({'status': 'ok'})
     except Exception:
         return JsonResponse({'status': 'unavailable'}, status=503)
-urlpatterns = [path('healthz', healthz), path('openapi/', SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]), name='schema'), path('docs/', SpectacularSwaggerView.as_view(url='../openapi/'), name='swagger-ui'), path('', include('apps.courses.urls'))]
+urlpatterns = [path('healthz', healthz), path('openapi/', SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]), name='schema'), path('docs/', SpectacularSwaggerView.as_view(url='../openapi/'), name='swagger-ui'), path('', include('apps.courses.urls')), path('', include('apps.groups.urls'))]
 handler400 = 'common.http_errors.bad_request'
 handler403 = 'common.http_errors.forbidden'
 handler404 = 'common.http_errors.not_found'
