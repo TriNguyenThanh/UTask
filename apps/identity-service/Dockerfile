@@ -19,6 +19,7 @@ COPY authentication ./authentication
 COPY common ./common
 COPY messaging ./messaging
 COPY manage.py ./manage.py
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN groupadd --system --gid 10001 django \
     && useradd --system --uid 10001 --gid django --create-home --home-dir /home/django django \
@@ -27,4 +28,5 @@ RUN groupadd --system --gid 10001 django \
 USER django
 EXPOSE 8000
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["/app/.venv/bin/gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--access-logformat", "%(m)s %(U)s status=%(s)s duration=%(L)s"]
