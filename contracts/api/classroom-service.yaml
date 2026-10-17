@@ -2322,6 +2322,374 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /internal/groups/{group_id}/feedback-scope/:
+    post:
+      operationId: internal_groups_feedback_scope_create
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - internal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackScopeEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /internal/groups/{group_id}/mention-scope/:
+    get:
+      operationId: internal_groups_mention_scope_retrieve
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - internal
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MentionScopeEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /internal/groups/{group_id}/recovery-snapshot/:
+    get:
+      operationId: internal_groups_recovery_snapshot_retrieve
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - internal
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoverySnapshotEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /internal/groups/{group_id}/snapshot/:
+    get:
+      operationId: internal_groups_snapshot_retrieve
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - internal
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupSnapshotEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /internal/teachers/groups/:
+    get:
+      operationId: internal_teachers_groups_retrieve
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      tags:
+      - internal
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherGroupsEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
 components:
   schemas:
     APIError:
@@ -3134,6 +3502,70 @@ components:
           type: string
       required:
       - issue
+    FeedbackRequest:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+      required:
+      - project_id
+    FeedbackScope:
+      type: object
+      properties:
+        actor_id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        source_version:
+          type: integer
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+        mentionable_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        project_id:
+          type: string
+          format: uuid
+      required:
+      - actor_id
+      - expires_at
+      - group_id
+      - mentionable_user_ids
+      - project_id
+      - source_version
+    FeedbackScopeEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/FeedbackScope'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     Group:
       type: object
       properties:
@@ -3429,6 +3861,53 @@ components:
       - message
       - meta
       - success
+    GroupSnapshot:
+      type: object
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        source_version:
+          type: integer
+          minimum: 1
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberFact'
+      required:
+      - class_id
+      - group_id
+      - members
+      - source_version
+    GroupSnapshotEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupSnapshot'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     GroupTransferViewResponse:
       type: object
       properties:
@@ -3550,6 +4029,38 @@ components:
       required:
       - reason
       - version
+    MemberFact:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/MemberFactRoleEnum'
+        status:
+          $ref: '#/components/schemas/MemberFactStatusEnum'
+      required:
+      - role
+      - status
+      - user_id
+    MemberFactRoleEnum:
+      enum:
+      - LEADER
+      - MEMBER
+      type: string
+      description: |-
+        * `LEADER` - LEADER
+        * `MEMBER` - MEMBER
+    MemberFactStatusEnum:
+      enum:
+      - ACTIVE
+      - LEFT
+      - REMOVED
+      type: string
+      description: |-
+        * `ACTIVE` - ACTIVE
+        * `LEFT` - LEFT
+        * `REMOVED` - REMOVED
     MemberTarget:
       type: object
       properties:
@@ -3566,6 +4077,58 @@ components:
       - reason
       - user_id
       - version
+    MentionScope:
+      type: object
+      properties:
+        actor_id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        source_version:
+          type: integer
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+        mentionable_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - actor_id
+      - expires_at
+      - group_id
+      - mentionable_user_ids
+      - source_version
+    MentionScopeEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/MentionScope'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     Pagination:
       type: object
       properties:
@@ -3661,14 +4224,32 @@ components:
       - group_id
       - id
       - project_id
-    RoleEnum:
-      enum:
-      - PRIMARY
-      - CO_TEACHER
-      type: string
-      description: |-
-        * `PRIMARY` - PRIMARY
-        * `CO_TEACHER` - CO_TEACHER
+    RecoverySnapshotEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupSnapshot'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     StudentList:
       type: object
       properties:
@@ -3794,6 +4375,42 @@ components:
       - message
       - meta
       - success
+    TeacherGroups:
+      type: object
+      properties:
+        group_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - group_ids
+    TeacherGroupsEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TeacherGroups'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     TeacherInput:
       type: object
       properties:
@@ -3805,7 +4422,7 @@ components:
           format: uuid
         role:
           allOf:
-          - $ref: '#/components/schemas/RoleEnum'
+          - $ref: '#/components/schemas/TeacherInputRoleEnum'
           default: CO_TEACHER
         status:
           allOf:
@@ -3814,6 +4431,14 @@ components:
       required:
       - user_id
       - version
+    TeacherInputRoleEnum:
+      enum:
+      - PRIMARY
+      - CO_TEACHER
+      type: string
+      description: |-
+        * `PRIMARY` - PRIMARY
+        * `CO_TEACHER` - CO_TEACHER
     TeacherInputStatusEnum:
       enum:
       - ACTIVE
