@@ -116,9 +116,10 @@
 - Tham gia lớp chỉ cấp vai trò Student trong lớp, không tự động thêm vào nhóm.
 - Student có thể xem yêu cầu, mốc thời gian và trạng thái thành lập nhóm của lớp.
 
-**US-1.4 Thêm sinh viên từ danh sách lớp**
+**US-1.4 Thêm danh sách sinh viên**
 - Chỉ Teacher phụ trách lớp hoặc Admin mới được thêm sinh viên vào lớp.
-- Teacher có thể thêm từng sinh viên hoặc nhập danh sách sinh viên từ file CSV hoặc Excel.
+- Web đọc và phân tích Excel, cho Teacher xem trước rồi gửi danh sách JSON;
+  Classroom backend không nhận hoặc phân tích tệp.
 - Hệ thống kiểm tra tài khoản hiện có bằng email hoặc mã sinh viên trước khi xử lý.
 - Nếu sinh viên chưa có tài khoản, hệ thống tạo tài khoản Student ở trạng thái chờ kích hoạt và tạo enrollment với lớp.
 - Sinh viên có tài khoản mới nhận được liên kết kích hoạt để tự thiết lập mật khẩu.
