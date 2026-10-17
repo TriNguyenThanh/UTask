@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Khung nội dung trang: giữ dòng chữ dễ đọc ở màn vừa, nhưng mở rộng ở màn rộng để hai bên không bị trống. */
+@utility page-container {
+  margin-inline: auto;
+  max-width: 72rem;
+  @media (min-width: 96rem) {
+    max-width: 100rem;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 /* Laptop thấp (vd. 1366x768 trừ thanh trình duyệt): thu gọn khoảng cách để trang không phải cuộn. */
 @custom-variant short (@media (max-height: 820px));

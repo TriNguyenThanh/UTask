@@ -110,7 +110,7 @@ export function SettingsProfilePage() {
 
   if (settingsQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+      <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <SettingsHeader />
         <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />
       </div>
@@ -118,7 +118,7 @@ export function SettingsProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 short:space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+    <div className="page-container space-y-8 short:space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <SettingsHeader />
 
       {settingsQuery.isPending || !settings || !form ? (

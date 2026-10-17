@@ -16,7 +16,7 @@ import { GitHubActivitySection } from "@/features/my-work/components/GitHubActiv
 
 function NoCoursesHome() {
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+    <div className="page-container px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <EmptyState
         title="Bạn chưa có môn học trong học kỳ hiện tại."
         description="Khi được đăng ký môn học, danh sách môn và nhiệm vụ đồ án sẽ xuất hiện tại đây. Liên hệ giảng viên hoặc phòng đào tạo nếu bạn cho rằng đây là nhầm lẫn."
@@ -122,7 +122,7 @@ export function MyWorkPage() {
 
   if (overviewQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+      <div className="page-container px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <ErrorState
           error={overviewQuery.error}
           onRetry={() => void overviewQuery.refetch()}
@@ -152,11 +152,11 @@ export function MyWorkPage() {
   const githubSyncMessage = githubSyncMessageFor(githubQuery.isError, githubQuery.data?.sync.state);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+    <div className="page-container space-y-8 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <div className="space-y-4">
         <div className="flex flex-col justify-between gap-2 border-b pb-4 md:flex-row md:items-baseline">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Bàn làm việc của tôi (My Work)</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Bàn làm việc của tôi</h1>
             <p className="mt-1 text-xs font-medium text-muted-foreground">
               {overview.semester} • Cập nhật lúc{" "}
               {new Date(overview.refreshedAt).toLocaleTimeString("vi-VN", {
