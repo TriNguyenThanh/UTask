@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.messaging.management.commands import consume_identity
+from apps.messaging.management.commands import consume_classroom, consume_identity
 from infrastructure.kafka.client import KafkaPublisher
 from infrastructure.kafka.configuration import kafka_connection_config
 
@@ -102,9 +102,47 @@ def test_producer_consumer_and_dead_letter_use_same_connection(connection_settin
     consumer_factory.return_value.close.assert_called_once()
 
 
+def test_classroom_consumer_and_dead_letter_use_authenticated_connection(
+    connection_settings, monkeypatch
+):
+    connection_settings.KAFKA_SECURITY_PROTOCOL = "SASL_SSL"
+    connection_settings.KAFKA_SASL_MECHANISM = "SCRAM-SHA-256"
+    connection_settings.KAFKA_SSL_CA_LOCATION = "/run/kafka-certificates/ca.pem"
+    expected = kafka_connection_config()
+    consumer_factory = Mock()
+    consumer_factory.return_value.poll.side_effect = KeyboardInterrupt
+    dead_letter_producer = Mock()
+    monkeypatch.setattr(consume_classroom, "Consumer", consumer_factory)
+    monkeypatch.setattr(consume_identity, "Producer", dead_letter_producer)
+
+    consume_classroom.Command().handle()
+
+    consumer_factory.assert_called_once_with(
+        {
+            **expected,
+            "group.id": connection_settings.CLASSROOM_KAFKA_GROUP,
+            "enable.auto.commit": False,
+            "enable.auto.offset.store": False,
+            "auto.offset.reset": "earliest",
+        }
+    )
+    dead_letter_producer.assert_called_once_with(
+        {**expected, "enable.idempotence": True, "message.timeout.ms": 10000}
+    )
+    consumer_factory.return_value.subscribe.assert_called_once_with(
+        [connection_settings.CLASSROOM_KAFKA_TOPIC]
+    )
+    consumer_factory.return_value.close.assert_called_once()
+
+
 @pytest.mark.parametrize(
     "client",
-    [KafkaPublisher, consume_identity.DeadLetterPublisher, consume_identity.Command().handle],
+    [
+        KafkaPublisher,
+        consume_identity.DeadLetterPublisher,
+        consume_identity.Command().handle,
+        consume_classroom.Command().handle,
+    ],
 )
 def test_invalid_credentials_stop_before_creating_clients(connection_settings, monkeypatch, client):
     connection_settings.KAFKA_SECURITY_PROTOCOL = "SASL_SSL"
@@ -115,6 +153,7 @@ def test_invalid_credentials_stop_before_creating_clients(connection_settings, m
     monkeypatch.setattr("infrastructure.kafka.client.Producer", producer)
     monkeypatch.setattr(consume_identity, "Producer", producer)
     monkeypatch.setattr(consume_identity, "Consumer", consumer)
+    monkeypatch.setattr(consume_classroom, "Consumer", consumer)
     with pytest.raises(ImproperlyConfigured, match="KAFKA_SASL_PASSWORD"):
         client()
     producer.assert_not_called()
