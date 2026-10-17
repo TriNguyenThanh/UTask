@@ -2,6 +2,7 @@ name: utask
 
 # Một image cho các process thuộc AI Service.
 x-ai: &ai
+  profiles: [ai-service]
   image: ${UTASK_IMAGE_PREFIX:-utask}/ai-service:${UTASK_IMAGE_TAG:-local}
   build: ./apps/ai-service
   restart: unless-stopped
@@ -183,6 +184,8 @@ services:
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
     depends_on:
+      classroom-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -207,6 +210,8 @@ services:
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
     depends_on:
+      classroom-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -229,6 +234,8 @@ services:
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
     depends_on:
+      classroom-service:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -243,6 +250,7 @@ services:
       start_period: 15s
 
   integration-service:
+    profiles: [integration-service]
     image: ${UTASK_IMAGE_PREFIX:-utask}/integration-service:${UTASK_IMAGE_TAG:-local}
     build: ./apps/integration-service
     restart: unless-stopped
@@ -256,6 +264,7 @@ services:
     healthcheck: *django_healthcheck
 
   notification-service:
+    profiles: [notification-service]
     image: ${UTASK_IMAGE_PREFIX:-utask}/notification-service:${UTASK_IMAGE_TAG:-local}
     build: ./apps/notification-service
     restart: unless-stopped
@@ -269,6 +278,7 @@ services:
     healthcheck: *django_healthcheck
 
   ai-postgres:
+    profiles: [ai-service]
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -344,12 +354,6 @@ services:
       work-service:
         condition: service_healthy
       classroom-service:
-        condition: service_healthy
-      integration-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
-      ai-service:
         condition: service_healthy
 
 volumes:
