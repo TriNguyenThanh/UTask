@@ -13,8 +13,10 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 
 ## Chọn Kafka Docker hoặc Kafka bên ngoài
 
-**Đã triển khai ở cấu hình và client Work/Classroom; chưa xác minh kết nối
-Kafka cloud thật.** Dùng cùng một bộ biến trên local và staging:
+**Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập
+Aiven và đọc thông tin broker bằng hàm cấu hình của cả hai service từ máy
+phát triển; chưa nghiệm thu gửi/nhận sự kiện hoặc deploy VPS.
+Dùng cùng một bộ biến trên local và staging:
 
 ```dotenv
 # Local: bật profile kafka để chạy broker trong Docker.
@@ -48,8 +50,22 @@ khẩu khi dùng SASL khiến client dừng với lỗi cấu hình, không tự
 
 `KAFKA_SSL_CA_LOCATION` để trống để dùng chứng chỉ tin cậy mặc định của client.
 Nếu nhà cung cấp cấp chứng chỉ CA riêng (chứng chỉ dùng để xác minh máy chủ),
-mount tệp chỉ đọc vào các container gửi/nhận Kafka và đặt đường dẫn **trong
-container** tại biến này. Biến không tự mount tệp và chỉ dùng với `SSL`/`SASL_SSL`.
+Compose staging gắn thư mục `infra/env` chỉ đọc vào `/run/kafka-certificates`
+cho các container Work/Classroom. Đặt tệp tại `infra/env/ca.pem`, rồi cấu hình:
+
+```dotenv
+KAFKA_SSL_CA_LOCATION=/run/kafka-certificates/ca.pem
+```
+
+Đây là đường dẫn **trong container**, không phải đường dẫn Windows. Khi không
+dùng CA riêng, để biến trống; không bắt buộc có `ca.pem` nếu dùng Kafka Docker.
+Tệp CA chỉ dùng với `SSL`/`SASL_SSL`. Chỉ đặt chứng chỉ CA công khai và các
+mapping không chứa bí mật trong thư mục này, không đặt khóa riêng hoặc `.env`
+chứa thông tin đăng nhập.
+
+Trên VPS cũng cần tệp tại `STAGING_WORKDIR/infra/env/ca.pem`. Tệp PEM đang được
+Git bỏ qua; workflow chỉ chuyển các mapping `*.env`, không tự chuyển CA.
+Chuẩn bị CA trên VPS trước khi tạo lại container; không đưa khóa riêng vào Git.
 
 Chạy trực tiếp Docker Compose từ repository root. Compose tự đọc `.env`:
 

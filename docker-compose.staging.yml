@@ -10,6 +10,11 @@ x-work-runtime: &work_runtime
     - ./infra/env/database.env
     - ./infra/env/django.env
     - ./infra/env/work-service.env
+  volumes: &kafka_certificates
+    - type: bind
+      source: ./infra/env
+      target: /run/kafka-certificates
+      read_only: true
   depends_on: &work_dependencies
     postgres:
       condition: service_healthy
@@ -194,6 +199,7 @@ services:
       - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
@@ -214,6 +220,7 @@ services:
       - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
@@ -242,6 +249,7 @@ services:
       - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
@@ -267,6 +275,7 @@ services:
       - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/classroom-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
