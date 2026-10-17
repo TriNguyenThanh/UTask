@@ -20,6 +20,8 @@ VITE_ENABLE_MOCKS=false
 VITE_API_BASE_URL=http://localhost:<gateway-port>
 ```
 
+Board and Backlog writes (drag and drop, move menu, blocked flag) exist only on the mock layer: with `VITE_ENABLE_MOCKS` off they are read-only. See `docs/web/kanban-board.md`.
+
 Production builds never register MSW. `VITE_API_BASE_URL` defaults to empty so browser requests stay on same-origin `/api/...` gateway paths.
 
 ## Development accounts

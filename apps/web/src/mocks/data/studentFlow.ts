@@ -448,8 +448,12 @@ function buildCourseSe330WithTopic(
 /* Projects                                                            */
 /* ------------------------------------------------------------------ */
 
+import { generateNKeysBetween } from "fractional-indexing";
+
+import type { MockIssueState } from "@/mocks/data/database";
 import type {
   CodeContributor,
+  IssueHistoryEntry,
   Issue,
   IssueDetail,
   ProjectCode,
@@ -529,10 +533,25 @@ function buildProjectSummaries(now: Date, userId: string): ProjectSummary[] {
   return summaries;
 }
 
+type IssueSeed = Omit<Issue, "rank" | "version" | "blocked" | "blockedReason"> &
+  Partial<Pick<Issue, "blocked" | "blockedReason">>;
+
+/** Fixtures list issues in priority order; ranks are generated from that order. */
+function seedIssues(seeds: IssueSeed[]): Issue[] {
+  const ranks = generateNKeysBetween(null, null, seeds.length);
+  return seeds.map((seed, index) => ({
+    blocked: false,
+    blockedReason: null,
+    ...seed,
+    rank: ranks[index],
+    version: 1,
+  }));
+}
+
 function buildNexusIssues(now: Date): Issue[] {
-  return [
+  return seedIssues([
     { id: "i1", key: "NEXUS-101", dueAt: daysFrom(now, 3), type: "story", title: "Thiết kế schema CSDL Giỏ hàng", status: "todo", priority: "medium", storyPoints: 5, epicId: "epic-cart", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[1], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -2) },
-    { id: "i2", key: "NEXUS-102", dueAt: daysFrom(now, -1), type: "task", title: "Cập nhật tài liệu API Swagger", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: "sprint-2", assignee: NEXUS_MEMBERS[3], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -1) },
+    { id: "i2", key: "NEXUS-102", dueAt: daysFrom(now, -1), type: "task", title: "Cập nhật tài liệu API Swagger", blocked: true, blockedReason: "Chờ chốt schema Giỏ hàng (NEXUS-101)", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: "sprint-2", assignee: NEXUS_MEMBERS[3], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -1) },
     { id: "i3", key: "NEXUS-104", dueAt: daysFrom(now, 2), type: "story", title: "Tích hợp cổng thanh toán VNPay Sandbox và IPN", status: "in-progress", priority: "high", storyPoints: 5, epicId: "epic-payment", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[0], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, 0, 10) },
     { id: "i4", key: "NEXUS-105", type: "story", title: "Giao diện responsive Giỏ hàng", status: "in-progress", priority: "medium", storyPoints: 3, epicId: "epic-cart", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[1], hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, 0, 9) },
     { id: "i5", key: "NEXUS-98", dueAt: daysFrom(now, -2), type: "task", title: "Refactor Auth JWT Middleware", status: "review", priority: "high", storyPoints: 5, epicId: "epic-auth", sprintId: "sprint-2", assignee: NEXUS_MEMBERS[2], hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, 0, 8) },
@@ -541,7 +560,7 @@ function buildNexusIssues(now: Date): Issue[] {
     { id: "i8", key: "NEXUS-111", type: "bug", title: "Lỗi 500 khi thanh toán COD > 10 triệu", status: "todo", priority: "high", storyPoints: 3, epicId: "epic-payment", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -4) },
     { id: "i9", key: "NEXUS-112", type: "story", title: "Đăng nhập Google OAuth2 cho portal", status: "todo", priority: "medium", storyPoints: 5, epicId: "epic-auth", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -6) },
     { id: "i10", key: "NEXUS-113", type: "story", title: "Truy xuất nguồn gốc bằng QR + Smart Contract", status: "todo", priority: "high", storyPoints: 13, epicId: "epic-trace", sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -7) },
-  ];
+  ]);
 }
 
 function buildNexusWorkspace(now: Date): WorkspaceData {
@@ -583,11 +602,11 @@ function buildDeliWorkspace(now: Date): WorkspaceData {
     sprints: [
       { id: "sprint-deli-1", name: "Sprint 1: Onboarding & Auth", state: "active", startDate: daysFrom(now, -7), endDate: daysFrom(now, 7), goal: "Onboarding flow và đăng nhập.", completedPoints: 8, totalPoints: 21 },
     ],
-    issues: [
+    issues: seedIssues([
       { id: "d1", key: "DELI-01", type: "story", title: "Màn hình onboarding 3 bước", status: "done", priority: "medium", storyPoints: 5, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: true, isMine: false, updatedAt: daysFrom(now, -2) },
       { id: "d2", key: "DELI-02", type: "story", title: "Đăng nhập email + password", status: "in-progress", priority: "high", storyPoints: 8, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, 0, 11) },
       { id: "d3", key: "DELI-03", type: "task", title: "Cài đặt CI Flutter analyze + test", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -3) },
-    ],
+    ]),
   };
 }
 
@@ -612,6 +631,45 @@ function buildWorkspaceData(projectId: string, now: Date): WorkspaceData | null 
   return null;
 }
 
+/** Runtime changes to a project's issues, applied on top of the fixtures. */
+export interface ProjectIssueOverlay {
+  states: Record<string, MockIssueState>;
+  history: Record<string, IssueHistoryEntry[]>;
+}
+
+function compareRank(a: Issue, b: Issue): number {
+  if (a.rank === b.rank) return a.key.localeCompare(b.key);
+  return a.rank < b.rank ? -1 : 1;
+}
+
+/**
+ * Applies changed issue state and returns issues in rank order. Sprint point
+ * totals in the fixtures are hand-written, so they move by the difference
+ * each change makes instead of being recomputed.
+ */
+function applyIssueOverlay(data: WorkspaceData, overlay?: ProjectIssueOverlay): WorkspaceData {
+  if (!overlay) {
+    return { ...data, issues: [...data.issues].sort(compareRank) };
+  }
+  const totals = new Map(data.sprints.map((sprint) => [sprint.id, { ...sprint }]));
+  const issues = data.issues.map((base) => {
+    const state = overlay.states[base.id];
+    if (!state) return base;
+    const from = base.sprintId ? totals.get(base.sprintId) : undefined;
+    if (from) {
+      from.totalPoints = Math.max(0, from.totalPoints - base.storyPoints);
+      if (base.status === "done") from.completedPoints = Math.max(0, from.completedPoints - base.storyPoints);
+    }
+    const to = state.sprintId ? totals.get(state.sprintId) : undefined;
+    if (to) {
+      to.totalPoints += base.storyPoints;
+      if (state.status === "done") to.completedPoints += base.storyPoints;
+    }
+    return { ...base, ...state };
+  });
+  return { ...data, sprints: data.sprints.map((sprint) => totals.get(sprint.id) ?? sprint), issues: issues.sort(compareRank) };
+}
+
 /** `isMine` follows the signed-in user; with no user nothing is "mine". */
 function markMine(data: WorkspaceData, userId: string | null): WorkspaceData {
   return {
@@ -627,9 +685,13 @@ function markMine(data: WorkspaceData, userId: string | null): WorkspaceData {
  * Viewer-independent project facts for read models (Teacher dashboards).
  * Nothing in it belongs to a particular user, so no issue is "mine".
  */
-export function projectDataFor(projectId: string, now: Date): WorkspaceData | null {
+export function projectDataFor(
+  projectId: string,
+  now: Date,
+  overlay?: ProjectIssueOverlay,
+): WorkspaceData | null {
   const data = buildWorkspaceData(projectId, now);
-  return data ? markMine(data, null) : null;
+  return data ? markMine(applyIssueOverlay(data, overlay), null) : null;
 }
 
 /**
@@ -642,13 +704,14 @@ export function projectWorkspaceFor(
   scenario: string,
   userId: string,
   now: Date = new Date(),
+  overlay?: ProjectIssueOverlay,
 ): ProjectWorkspace | null {
   const viewer = projectViewerFor(userId, projectId);
   const data = buildWorkspaceData(projectId, now);
   const teamId = teamOfProject(projectId);
   if (!viewer || !data || !teamId) return null;
   return {
-    ...markMine(data, userId),
+    ...markMine(applyIssueOverlay(data, overlay), userId),
     courseId: MOCK_TEAM_COURSES[teamId],
     teamId,
     viewer,
@@ -661,8 +724,9 @@ export function issueDetailFor(
   issueKey: string,
   userId: string,
   now: Date = new Date(),
+  overlay?: ProjectIssueOverlay,
 ): IssueDetail | null {
-  const workspace = projectWorkspaceFor(projectId, "default", userId, now);
+  const workspace = projectWorkspaceFor(projectId, "default", userId, now, overlay);
   if (!workspace) return null;
   const issue = workspace.issues.find((candidate) => candidate.key === issueKey);
   if (!issue) return null;
@@ -702,6 +766,7 @@ export function issueDetailFor(
       { id: "h1", actorName: "Nguyễn Hoàng Nam", summary: "tạo issue", at: daysFrom(now, -5, 9, 0) },
       { id: "h2", actorName: "Nguyễn Hoàng Nam", summary: "chuyển trạng thái sang In Progress", at: daysFrom(now, -2, 10, 15) },
       { id: "h3", actorName: "Nguyễn Hoàng Nam", summary: "liên kết pull request PR #12", at: daysFrom(now, 0, 10, 0) },
+      ...(overlay?.history[issue.key] ?? []),
     ],
     subtasks:
       issue.key === "NEXUS-104"

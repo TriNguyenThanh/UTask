@@ -10,8 +10,11 @@ import {
   mockAnchorDate,
   projectSummariesForScenario,
   projectWorkspaceFor,
+  type ProjectIssueOverlay,
 } from "@/mocks/data/studentFlow";
-import type { MockCreatedTeam, MockDatabase } from "@/mocks/data/database";
+import type { Issue, IssueStatus, ProjectWorkspace } from "@/features/projects/types";
+import { STATUS_LABELS } from "@/features/projects/issueMeta";
+import type { MockCreatedTeam, MockDatabase, MockIssueState } from "@/mocks/data/database";
 import {
   accessibleProjectsForUser,
   classesVisibleForNotifications,
@@ -194,6 +197,251 @@ function validateCreateTeam(
   return { teamName, maxMembers };
 }
 
+/* ------------------------------------------------------------------ */
+/* Issue writes (Demo MSW): move and blocked                           */
+/* ------------------------------------------------------------------ */
+
+const ISSUE_STATUSES: readonly IssueStatus[] = ["todo", "in-progress", "review", "done"];
+
+function overlayOf(db: MockDatabase, projectId: string): ProjectIssueOverlay {
+  return {
+    states: db.issueStateByProject[projectId] ?? {},
+    history: db.issueHistoryByProject[projectId] ?? {},
+  };
+}
+
+function validationError(field: string, message: string) {
+  return HttpResponse.json(
+    { detail: "Dữ liệu không hợp lệ.", errors: { [field]: [message] } },
+    { status: 422 },
+  );
+}
+
+function staleIssue(issue: Issue) {
+  return HttpResponse.json(
+    { detail: "Issue vừa được người khác cập nhật.", issue },
+    { status: 409 },
+  );
+}
+
+type WriteContext = {
+  userId: string;
+  viewer: Extract<MockProjectViewer, { kind: "team-member" }>;
+  workspace: ProjectWorkspace;
+  issue: Issue;
+  body: Record<string, unknown>;
+};
+
+/**
+ * Shared front of every issue write: auth, access (404 before 403), instructor
+ * refusal, the issue lookup and a JSON object body. Returns an error response
+ * or the context the specific write needs.
+ */
+async function resolveIssueWrite(
+  db: MockDatabase,
+  scenario: MockScenario,
+  request: Request,
+  params: Record<string, string | readonly string[] | undefined>,
+): Promise<Response | WriteContext> {
+  await sleepFor(scenario);
+  const userId = parseTokenUserId(request);
+  if (!userId) return unauthorized();
+  const status = errorStatus(scenario);
+  if (status) {
+    return HttpResponse.json(
+      { detail: status === 403 ? FORBIDDEN_ERROR : SERVER_ERROR },
+      { status },
+    );
+  }
+  const projectId = String(params.projectId);
+  const viewer = projectViewerOf(db, userId, projectId, scenario);
+  if (!viewer) return notFound("Không tìm thấy dự án.");
+  // An instructor can open the project but never changes it.
+  if (viewer.kind !== "team-member") {
+    return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+  }
+  const workspace = projectWorkspaceFor(
+    projectId,
+    scenario,
+    userId,
+    new Date(),
+    overlayOf(db, projectId),
+  );
+  const issue = workspace?.issues.find((candidate) => candidate.key === String(params.issueKey));
+  if (!workspace || !issue) return notFound("Không tìm thấy issue.");
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return validationError("body", "Nội dung yêu cầu không hợp lệ.");
+  }
+  return { userId, viewer, workspace, issue, body };
+}
+
+function recordIssueChange(
+  db: MockDatabase,
+  projectId: string,
+  issue: Issue,
+  next: MockIssueState,
+  userId: string,
+  summary: string,
+) {
+  (db.issueStateByProject[projectId] ??= {})[issue.id] = next;
+  const rows = ((db.issueHistoryByProject[projectId] ??= {})[issue.key] ??= []);
+  rows.push({
+    id: `hw-${issue.key}-${rows.length + 1}`,
+    actorName: db.profilesByUser[userId]?.display_name ?? "Thành viên",
+    summary,
+    at: new Date().toISOString(),
+  });
+}
+
+function stateOf(issue: Issue): MockIssueState {
+  return {
+    status: issue.status,
+    sprintId: issue.sprintId,
+    rank: issue.rank,
+    version: issue.version,
+    blocked: issue.blocked,
+    blockedReason: issue.blockedReason,
+  };
+}
+
+type ParsedMove = {
+  status?: IssueStatus;
+  sprintId?: string | null;
+  rank?: string;
+  reason: string;
+};
+
+/** Returns the error response for a body that may not move this issue, or the parsed move. */
+function parseMove(context: WriteContext): Response | ParsedMove {
+  const { body, issue, viewer, workspace } = context;
+  if (typeof body.version !== "number") return validationError("version", "Thiếu version.");
+  if (body.status !== undefined && !ISSUE_STATUSES.includes(body.status as IssueStatus)) {
+    return validationError("status", "Trạng thái không hợp lệ.");
+  }
+  if (body.rank !== undefined && (typeof body.rank !== "string" || body.rank === "")) {
+    return validationError("rank", "Thứ tự không hợp lệ.");
+  }
+  const sprintId = body.sprintId as string | null | undefined;
+  if (sprintId !== undefined && sprintId !== null) {
+    const sprint = workspace.sprints.find((candidate) => candidate.id === sprintId);
+    if (!sprint || sprint.state === "completed") {
+      return validationError("sprintId", "Sprint không hợp lệ.");
+    }
+  }
+  // A member changes the status of their own task; ordering and sprint scope are the leader's.
+  if (viewer.role !== "leader") {
+    if (!issue.isMine || body.rank !== undefined || sprintId !== undefined) {
+      return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+    }
+  }
+  if (body.version !== issue.version) return staleIssue(issue);
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  const activeIds = new Set(
+    workspace.sprints.filter((sprint) => sprint.state === "active").map((sprint) => sprint.id),
+  );
+  const touchesActive =
+    sprintId !== undefined &&
+    sprintId !== issue.sprintId &&
+    ((issue.sprintId !== null && activeIds.has(issue.sprintId)) ||
+      (sprintId !== null && activeIds.has(sprintId)));
+  if (touchesActive && reason === "") {
+    return validationError("reason", "Cần nêu lý do khi đổi phạm vi Sprint đang chạy.");
+  }
+  return {
+    status: body.status as IssueStatus | undefined,
+    sprintId,
+    rank: body.rank as string | undefined,
+    reason,
+  };
+}
+
+function describeMove(
+  issue: Issue,
+  move: ParsedMove,
+  sprints: ProjectWorkspace["sprints"],
+): string {
+  const parts: string[] = [];
+  if (move.status !== undefined && move.status !== issue.status) {
+    parts.push(`chuyển trạng thái sang ${STATUS_LABELS[move.status]}`);
+  }
+  if (move.sprintId !== undefined && move.sprintId !== issue.sprintId) {
+    const target = sprints.find((sprint) => sprint.id === move.sprintId);
+    parts.push(target ? `đưa vào ${target.name}` : "đưa về Product Backlog");
+  }
+  if (parts.length === 0 && move.rank !== undefined && move.rank !== issue.rank) {
+    parts.push("thay đổi thứ tự ưu tiên");
+  }
+  if (parts.length === 0) return "cập nhật issue";
+  const text = parts.join(", ");
+  return move.reason ? `${text} (lý do: ${move.reason})` : text;
+}
+
+function createIssueWriteHandlers(
+  scenario: MockScenario,
+  repository: MockRepository,
+): HttpHandler[] {
+  const { db } = repository;
+  return [
+    http.post(`${ROOT}/projects/:projectId/issues/:issueKey/move`, async ({ params, request }) => {
+      const context = await resolveIssueWrite(db, scenario, request, params);
+      if (context instanceof Response) return context;
+      const move = parseMove(context);
+      if (move instanceof Response) return move;
+      const { issue, userId, workspace } = context;
+      const next: MockIssueState = {
+        ...stateOf(issue),
+        status: move.status ?? issue.status,
+        sprintId: move.sprintId === undefined ? issue.sprintId : move.sprintId,
+        rank: move.rank ?? issue.rank,
+        version: issue.version + 1,
+      };
+      recordIssueChange(
+        db,
+        String(params.projectId),
+        issue,
+        next,
+        userId,
+        describeMove(issue, move, workspace.sprints),
+      );
+      repository.save();
+      return HttpResponse.json({ ...issue, ...next });
+    }),
+    http.post(`${ROOT}/projects/:projectId/issues/:issueKey/blocked`, async ({ params, request }) => {
+      const context = await resolveIssueWrite(db, scenario, request, params);
+      if (context instanceof Response) return context;
+      const { issue, userId, viewer, body } = context;
+      if (typeof body.blocked !== "boolean" || typeof body.version !== "number") {
+        return validationError("blocked", "Thiếu thông tin đánh dấu.");
+      }
+      if (viewer.role !== "leader" && !issue.isMine) {
+        return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
+      }
+      if (body.version !== issue.version) return staleIssue(issue);
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (body.blocked && reason === "") {
+        return validationError("reason", "Cần nêu lý do khi đánh dấu bị chặn.");
+      }
+      const next: MockIssueState = {
+        ...stateOf(issue),
+        blocked: body.blocked,
+        blockedReason: body.blocked ? reason : null,
+        version: issue.version + 1,
+      };
+      recordIssueChange(
+        db,
+        String(params.projectId),
+        issue,
+        next,
+        userId,
+        body.blocked ? `đánh dấu bị chặn (lý do: ${reason})` : "bỏ đánh dấu bị chặn",
+      );
+      repository.save();
+      return HttpResponse.json({ ...issue, ...next });
+    }),
+  ];
+}
+
 export function createStudentFlowHandlers(
   scenario: MockScenario,
   repository: MockRepository,
@@ -201,6 +449,8 @@ export function createStudentFlowHandlers(
   const { db } = repository;
 
   return [
+    ...createIssueWriteHandlers(scenario, repository),
+
     // Courses & teams
     http.get(`${ROOT}/courses`, async ({ request }) => {
       await sleepFor(scenario);
@@ -359,7 +609,13 @@ export function createStudentFlowHandlers(
       if (!viewer) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
-      const workspace = projectWorkspaceFor(projectId, scenario, userId, clockFor(viewer));
+      const workspace = projectWorkspaceFor(
+        projectId,
+        scenario,
+        userId,
+        clockFor(viewer),
+        overlayOf(db, projectId),
+      );
       if (!workspace) {
         return HttpResponse.json({ detail: "Không tìm thấy dự án." }, { status: 404 });
       }
@@ -378,7 +634,13 @@ export function createStudentFlowHandlers(
       if (!viewer) {
         return notFound("Không tìm thấy dự án.");
       }
-      const detail = issueDetailFor(projectId, String(params.issueKey), userId, clockFor(viewer));
+      const detail = issueDetailFor(
+        projectId,
+        String(params.issueKey),
+        userId,
+        clockFor(viewer),
+        overlayOf(db, projectId),
+      );
       if (!detail) {
         return HttpResponse.json({ detail: "Không tìm thấy issue." }, { status: 404 });
       }

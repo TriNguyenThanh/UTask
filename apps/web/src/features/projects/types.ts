@@ -68,6 +68,17 @@ export interface Issue {
   /** Optional deadline; absent when the source has none (never treated as "not overdue"). */
   dueAt?: string | null;
   updatedAt: string;
+  /**
+   * Position within the project: every list (board column, backlog section)
+   * orders its cards by this string. A fractional index, so moving one card
+   * writes one new key and never renumbers its neighbours.
+   */
+  rank: string;
+  /** Bumped on every write; a stale value on a move gets a 409. */
+  version: number;
+  /** A flag on the card, not a column: a blocked card keeps its status. */
+  blocked: boolean;
+  blockedReason: string | null;
 }
 
 export interface Sprint {
