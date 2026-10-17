@@ -20,7 +20,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
 def test_label_epic_permissions_filter_and_tombstones(task_api, client_for, actors):
     leader, task_route, create = task_api
-    project_id = task_route.split("/")[4]
+    project_id = task_route.split("/")[2]
     member = client_for(actors["member"])
     labels = f"/projects/{project_id}/labels/"
     label = member.post(labels, {"name": "Backend", "color": "#123456"}, format="json").json()[
