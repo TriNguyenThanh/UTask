@@ -66,3 +66,7 @@ production cần được ghi riêng khi nền tảng và cách quản lý thôn
 Khi PostgreSQL chấp nhận
 kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
 được khai báo tồn tại, kể cả khi volume đã có dữ liệu.
+
+Kafka khởi động qua
+`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
+còn thiếu.
