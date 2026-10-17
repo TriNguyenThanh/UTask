@@ -108,7 +108,7 @@ def test_state_migration_preserves_completion_rank_versions_and_unrelated_column
     task_api, source_group, target_group
 ):
     leader, route, create = task_api
-    project_id = route.split("/")[4]
+    project_id = route.split("/")[2]
     source = State.objects.create(
         project_id=project_id,
         name="Source",

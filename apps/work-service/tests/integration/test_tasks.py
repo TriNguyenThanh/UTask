@@ -67,7 +67,7 @@ def test_create_denials_rollback_and_revoked_replay(task_api, client_for, actors
         )
         assert response.status_code == 422
         assert not Task.objects.exists()
-        assert Project.objects.get(pk=route.split("/")[4]).current_task_sequence == 0
+        assert Project.objects.get(pk=route.split("/")[2]).current_task_sequence == 0
         assert not IdempotencyRecord.objects.filter(endpoint_path=route).exists()
     create(key="permission")
     Project.objects.first().members.filter(user_id=actors["leader"]).update(role="MEMBER")
@@ -83,7 +83,7 @@ def test_create_denials_rollback_and_revoked_replay(task_api, client_for, actors
 @pytest.mark.django_db(transaction=True)
 def test_create_audit_outbox_failure_rolls_back(task_api, reject_outbox_event):
     leader, route, _ = task_api
-    project_id = route.split("/")[4]
+    project_id = route.split("/")[2]
     before = effect_state(project_id)
     with reject_outbox_event("task.created"):
         response = leader.post(

@@ -118,3 +118,10 @@ job đang chờ, lỗi giữa commit database và gửi Redis, gửi trùng task
 chết trước/sau khi lưu kết quả, worker cũ ghi muộn, retry không vượt budget,
 dead-letter/replay và lỗi publisher không gây gọi LLM lại. Kiểm tra client
 vẫn lấy kết quả bằng GET sau khi POST đã trả `202`.
+
+Sau tạo Project, Work giao `recover_project_membership`
+với ID dự án, đọc ảnh chụp bằng credential dịch vụ; không lưu Bearer. Task
+`recover_active_memberships` quét dự án hoạt động mỗi 300 giây để phục hồi khi
+giao task sau commit bị lỗi hoặc process chết. Không thêm bảng job/dispatcher
+cho đường phục hồi này. Xem [mã task](../../apps/work-service/apps/projects/tasks.py),
+[cấu hình Work](../../apps/work-service/config/settings/base.py).

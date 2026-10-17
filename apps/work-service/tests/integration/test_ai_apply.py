@@ -16,7 +16,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
 def test_ai_batch_replay_mixed_old_new_and_immutable_hash(task_api, ai, settings):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     route += "bulk-apply-ai/"
@@ -75,7 +75,7 @@ def test_ai_batch_replay_mixed_old_new_and_immutable_hash(task_api, ai, settings
 @pytest.mark.parametrize("error", ["cycle", "unknown-ref", "wrong-proof", "invalid-item"])
 def test_ai_invalid_batch_rolls_back_counter_audit_and_receipt(task_api, ai, error):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     proof = ai(project.pk)
     body = backlog_payload(project)
     if error == "cycle":
@@ -137,7 +137,7 @@ def test_ai_subtask_member_fields_parent_unchanged_and_unavailable(
 @pytest.mark.django_db(transaction=True)
 def test_ai_two_keys_create_items_once(task_api, ai, actors, client_for):
     _, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     barrier = Barrier(2)
@@ -165,7 +165,7 @@ def test_ai_two_keys_create_items_once(task_api, ai, actors, client_for):
 
 def test_ai_runtime_missing_verifier_is_fail_closed(task_api):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     response = leader.post(
         route + "bulk-apply-ai/",
         backlog_payload(project),
