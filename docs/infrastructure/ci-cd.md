@@ -115,6 +115,23 @@ repository; xem [cách xuất hợp đồng](../../contracts/api/README.md).
 
 ## Kiểm tra CI local trước khi đẩy mã
 
+### Classroom dùng nền CI chung
+
+Classroom được discovery nhận diện từ manifest, lockfile, Dockerfile và metadata
+Compose staging như các service khác. Thay đổi riêng AI chỉ chọn kiểm thử AI;
+thay đổi riêng Classroom chỉ chọn kiểm thử Classroom. Thay đổi cấu hình dùng
+chung chọn các service theo cơ chế hiện có. Matrix phát hành vẫn chứa mọi
+service đang bật như thiết kế gốc; không đổi chính sách phát hành trong lần
+tích hợp Classroom.
+
+Workflow Python chạy `uv run pytest` một lần cho collection mặc định của
+service; các thư mục unit/integration/contract chỉ tổ chức test, không tạo
+thêm matrix hoặc bước phân tầng chung. Các test E2E Classroom nằm riêng trong
+`apps/classroom-service/tests/e2e/`, được chạy khi chủ động gọi pytest với cấu
+hình E2E. CI và `ci_local.py` không tự khởi tạo cụm E2E và không cần image
+artifact mới để nối với release. Kết quả kiểm tra cấu hình không thay bằng
+chứng chạy GitHub Actions hoặc deploy staging thật.
+
 Chạy từ thư mục gốc repository:
 
 ```bash

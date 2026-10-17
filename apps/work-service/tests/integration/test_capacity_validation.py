@@ -13,7 +13,7 @@ def test_capacity_respects_existing_integer_storage_range(
     project_id = created_project["id"]
     before = effect_state(project_id)
     reply = client_for(actors["leader"]).patch(
-        f"/api/v1/projects/{project_id}/members/{actors['member']}/capacity/",
+        f"/projects/{project_id}/members/{actors['member']}/capacity/",
         {"weekly_capacity": capacity},
         format="json",
     )

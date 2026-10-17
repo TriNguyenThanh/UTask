@@ -99,3 +99,7 @@ CLAUDE.md
 .agents/skills/gitnexus-*/
 .claude/skills/gitnexus-*/
 .stitch/
+
+# Ignore rules retained from origin Classroom branch
+.agents/
+.claude/

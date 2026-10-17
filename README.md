@@ -23,7 +23,7 @@
 
 The AI Service supports planning and analysis by producing suggestions for users to review. The target design keeps progress calculations in the Work Service, using defined rules independently of AI.
 
-**Repository status: Partial.** The repository contains a React web application with mock API support and an AI Service with a request API, PostgreSQL persistence, a dispatcher, and Celery workers. The domain backends are not yet implemented in this checkout. Integration across services and production LLM behavior remain unverified.
+**Repository status: Partial.** The repository contains a React web application with mock API support and Identity, Classroom, and Work Django backends, plus an AI Service with a request API, PostgreSQL persistence, a dispatcher, and Celery workers. Local startup is documented separately; integration acceptance and production LLM behavior remain unverified unless recorded in service validation reports.
 
 ---
 
@@ -75,7 +75,7 @@ React and the AI Service dependencies are present in the repository. The remaini
 | Layer               | Technology                              | Scope                          |
 | ------------------- | --------------------------------------- | ------------------------------ |
 | **Frontend**        | React · Vite · TypeScript               | Web application                |
-| **Domain APIs**     | Python · Django · Django REST Framework | Planned business services      |
+| **Domain APIs**     | Python · Django · Django REST Framework | Identity, Classroom, and Work services |
 | **AI API**          | FastAPI · Pydantic                      | AI requests and validation     |
 | **AI Runtime**      | Google ADK · Gemini                     | Agent workflow and provider    |
 | **Database**        | PostgreSQL                              | Separate database per service  |
@@ -134,7 +134,7 @@ UTask/
 ├── docs/                   # System, service, and infrastructure documentation
 ├── infra/                  # Nginx, PostgreSQL, and environment configuration
 ├── scripts/                # Development and CI utilities
-├── docker-compose.yml      # Platform configuration; service sources incomplete
+├── docker-compose.yml      # Local infrastructure and default Identity–Classroom–Work stack
 └── README.md
 ```
 
@@ -154,7 +154,7 @@ Start with the [documentation overview](docs/system/README.md). Detailed develop
 | [Infrastructure](docs/infrastructure/README.md)      | Environment, storage, messaging, and CI/CD     |
 | [Architecture Decisions](docs/adr/README.md)         | Recorded decisions and changes to the baseline |
 
-The root Docker Compose configuration references domain services whose source directories are not yet present. Use the application-specific setup instructions for the web application and the standalone AI stack.
+Use the [local development guide](docs/infrastructure/local-development.md) for the default Identity–Classroom–Work stack and its environment prerequisites. Those three API containers apply database migrations at startup; Docker builds only prepare images. The Web app has separate setup instructions, and AI/other optional services require their documented profiles and configuration.
 
 ---
 

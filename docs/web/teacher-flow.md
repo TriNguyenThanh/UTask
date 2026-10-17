@@ -102,9 +102,9 @@ Trạng thái hiện tại của từng điểm nằm ở [§13](#13-kết-quả
   ([studentFlow.ts](../../apps/web/src/lib/api/studentFlow.ts)). Theo kiến trúc,
   lớp/nhóm thuộc Classroom Service (gateway `/api/classroom/`); đường hiện tại
   chỉ là đường demo, chưa có hợp đồng.
-- Client luôn `JSON.stringify` body và đặt `Content-Type: application/json`
-  ([client.ts:88](../../apps/web/src/lib/api/client.ts#L88)): chưa gửi được
-  `multipart/form-data` cho import file.
+- Client hiện gửi JSON qua `JSON.stringify`
+  ([client.ts:88](../../apps/web/src/lib/api/client.ts#L88)), phù hợp với ranh
+  giới mục tiêu thêm danh sách sinh viên. Chưa có wrapper gọi Classroom thật.
 - Query key không gắn danh tính: `["courses", id]`, `["projects"]`,
   `["my-work","overview"]`
   ([studentFlowHooks.ts:23](../../apps/web/src/lib/query/studentFlowHooks.ts#L23),
@@ -326,7 +326,7 @@ trong `apps/web`; **MSW** = handler demo. Kết luận: *Dùng ngay* / *Mở r�
 | Đổi/vô hiệu mã | Không | Không | Không | Không | Chờ contract |
 | Sửa thông tin lớp | Không (không suy ra từ tạo lớp) | Không | Không | Không | Chờ contract |
 | Thêm từng sinh viên | Không | Không | Không | Không | Chờ contract |
-| Import CSV/XLSX (US-1.4) | Mô tả trong Identity spec §3.5.1: `POST …/classrooms/{id}/students/import`, multipart, `Idempotency-Key`, `summary` + `results[]`; Classroom là chủ sở hữu nhưng chưa có hợp đồng của chính Classroom | Identity provisioning nội bộ có (`origin/main`, không gọi được từ trình duyệt); Classroom không | Không; client chưa gửi được multipart | Không | Chỉ UI preview; ghi chờ Classroom xác nhận contract |
+| Thêm danh sách sinh viên (US-1.4) | Thiết kế mục tiêu: Web đọc Excel và gửi JSON `students`; Classroom kiểm lại danh sách, quyền lớp và gọi Identity | Identity provisioning nội bộ đã có; Classroom chưa triển khai | Client gửi được JSON nhưng chưa có wrapper Classroom; Web hiện mới xem trước CSV và từ chối Excel | Không | Giữ UI xem trước; cần bổ sung đọc Excel phía Web và API Classroom trước khi bật gửi |
 | Gửi lại email kích hoạt | Chỉ API nội bộ Identity; endpoint Classroom công khai chưa có | Identity nội bộ có | Không | Không | Chờ contract |
 | Điều chỉnh nhóm (US-2.5, P1) | Không | Không | Không | Không | Chờ contract + policy |
 | Xem workspace/Backlog/Board | Không (Project Service) | Không | Có (`projectWorkspaceRequest`) | Có, chỉ cho member | Mở rộng FE + MSW (viewer context) |
@@ -510,7 +510,7 @@ vòng trước.
 | 2 Quyền/dữ liệu | Chuẩn hóa NEXUS về một Leader sẽ phá test Student | Giữ hai Leader (đã ghi là giản lược); test chuyển Leader dùng nhóm IT3090 | Không sửa code Student ngoài mục tiêu |
 | 3 Khả thi | Plan cũ dùng `/teacher/classes/:classId` | Đổi sang `/teacher/courses/:courseId` | Cùng ID với Student; tên backend chưa chốt |
 | 3 Khả thi | Plan cũ cho bật comment "nếu contract sẵn sàng" | Ghi rõ: không có wrapper/mutation; P0 chỉ hiển thị | Không có bằng chứng contract |
-| 3 Khả thi | Import tưởng như có contract (Identity §3.5.1) | Ghi là mô tả phía Identity; Classroom chưa xác nhận; client chưa gửi multipart | Không suy ra endpoint Classroom đã có từ tài liệu service khác |
+| 3 Khả thi | Thêm danh sách từng bị mô tả như tải tệp lên backend | Chốt Web đọc Excel, Classroom nhận JSON; vẫn ghi **Chưa triển khai** API Classroom | Không suy ra endpoint Classroom đã có từ tài liệu service khác |
 | 3 Khả thi | Sidebar/top bar gọi endpoint sinh viên | Layout Teacher dùng nội dung sidebar riêng trong cùng khung | Tránh gọi `/my-work` cho Teacher và tránh boolean prop rẽ nhánh |
 | 3 Khả thi | Dashboard cần quá hạn, blocked, thời điểm sync nhưng type không có | Thêm `dueAt` tùy chọn; blocked và `lastSyncedAt` hiển thị "chưa có dữ liệu" | Không bịa trường; thay đổi tùy chọn không phá Student |
 | 4 Trải nghiệm | Deep link vào workspace không quay về được lớp | `courseId`/`teamId` trong phản hồi workspace | Navigation state mất khi refresh/mở URL |
@@ -967,7 +967,7 @@ commit ở 16.8.
 | Thao tác | Hợp đồng | Kết luận |
 | --- | --- | --- |
 | Tạo lớp, đổi/vô hiệu mã, sửa lớp, thêm sinh viên | `contracts/api/` trống (chỉ có README); Classroom mới có khung ở `feat/classroom-service` | Chỉ giao diện; nút gửi disabled kèm lý do |
-| Import CSV/XLSX | Chỉ có mô tả trong Identity spec §3.5.1 trên `origin/main` (multipart, `Idempotency-Key`, `summary` + `results[]`); Classroom chưa xác nhận hợp đồng của chính nó; client chưa gửi được multipart | Chỉ kiểm tra định dạng và xem trước; không gửi; **không mở rộng client `FormData`** vì chưa có chỗ dùng |
+| Thêm danh sách sinh viên | Thiết kế mục tiêu dùng JSON `students` + `Idempotency-Key`; Classroom API chưa triển khai. Web hiện mới đọc CSV và từ chối Excel | Chỉ kiểm tra và xem trước; không gửi. Cần thêm trình đọc Excel phía Web, không mở rộng `FormData` cho backend |
 | Comment task/project | Không có | Soạn nháp; gửi disabled |
 | Tạo nhóm, chuyển thành viên, chỉ định Leader | Không có hợp đồng; chưa có chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm | Xem trước và kiểm tra điều kiện; xác nhận disabled |
 | Tín hiệu rủi ro | Không có hợp đồng Progress | Quy tắc cố định trên dữ liệu demo (§14.3), nhãn rõ là demo |
@@ -982,12 +982,13 @@ các read model demo đã có (`TeacherSignal`, `asOf`) trên đường dẫn MS
 | T03 tạo lớp | `/teacher/courses/new` | Form đủ trường (tên, mã môn tùy chọn, học kỳ, ngày bắt đầu/kết thúc, sĩ số tối thiểu/tối đa), kiểm tra ngay khi nhập, nút "Kiểm tra thông tin"; "Tạo lớp" disabled; cảnh báo xác nhận khi rời trang đã sửa (`useBlocker`) |
 | T10 cài đặt lớp | `/teacher/courses/:courseId/settings` (tab Cài đặt giờ là liên kết thật) | Thông tin lớp, mã tham gia + sao chép, giảng viên phụ trách; "Đổi mã", "Vô hiệu mã" disabled; không có nút sửa/xóa lớp |
 | Thêm từng sinh viên | Hộp thoại ở trang Sinh viên | Kiểm tra định dạng email, cần email hoặc MSSV; "Thêm vào lớp" disabled; không có ô mật khẩu hay nhóm |
-| T06 import | `/teacher/courses/:courseId/students/import` | 3 bước: chọn file CSV → kiểm tra định dạng và xem trước theo `row_number` → kết quả (chỉ là chú giải); "Xác nhận nhập" disabled |
+| T06 thêm danh sách | `/teacher/courses/:courseId/students/import` | Hiện trạng: 3 bước chọn CSV → kiểm tra và xem trước theo `row_number` → kết quả minh họa; nút xác nhận bị tắt. Thiết kế mục tiêu phải đọc Excel ở Web rồi gửi JSON |
 
 Chi tiết quyết định:
 
-- **Chỉ CSV.** Repo chưa có thư viện đọc Excel; chọn `.xlsx` hiện thông báo lý do và đề nghị xuất CSV.
-  Không thêm dependency khi chưa có quyết định.
+- **Hiện trạng chỉ CSV.** Repo chưa có thư viện đọc Excel; chọn `.xlsx` hiện
+  thông báo lý do và đề nghị xuất CSV. **Chưa triển khai** yêu cầu mới đọc Excel
+  tại Web; backend không phải phương án thay thế.
 - **Client chỉ kiểm tra hình dạng file:** có cột `email` hoặc `student_id`, email đúng cú pháp, dòng
   không rỗng, trùng trong file. Mọi thứ thuộc về danh tính (tài khoản đã có, vai trò, đã thuộc lớp)
   để backend. Quy ước cột theo Identity spec: `student_id`, `email`, `first_name`, `last_name` (có vài
@@ -1078,8 +1079,8 @@ Chạy trong `apps/web`:
 | Việc | Cần để làm gì |
 | --- | --- |
 | Hợp đồng REST của Classroom: tạo lớp, đổi/vô hiệu mã, sửa lớp, thêm sinh viên | Bật T03, T10, hộp thoại thêm sinh viên |
-| Xác nhận endpoint import của Classroom (multipart, `Idempotency-Key`, shape báo cáo) và có đọc Excel ở client hay để backend đọc | Bật T06 bước xác nhận và kết quả; khi đó mới cần mở rộng `ApiClient` cho `FormData` |
-| Giới hạn kích thước file/số dòng và định dạng mã môn, sĩ số tối đa | Thay các giới hạn tạm của giao diện |
+| Chốt API Classroom nhận JSON `students`, `Idempotency-Key` và hình dạng báo cáo; bổ sung đọc Excel tại Web | Bật T06 bước xác nhận và kết quả; không gửi tệp hoặc `FormData` tới backend |
+| Giới hạn tệp ở Web, tối đa 100 phần tử/request và định dạng mã môn, sĩ số tối đa | Thay các giới hạn tạm của giao diện |
 | Hợp đồng comment task/project và thông báo cho nhóm | Bật gửi phản hồi, lịch sử phản hồi |
 | Hợp đồng mutation membership + chính sách sĩ số, Leader thay thế, quyền đọc lịch sử sau chuyển nhóm, cách xử lý Leader cũ khi chỉ định Leader mới | Bật xác nhận điều chỉnh nhóm |
 | Quy tắc/ngưỡng rủi ro chính thức hoặc hợp đồng Progress | Thay `signalsFor`, kể cả ngưỡng 7 ngày |
@@ -1135,7 +1136,7 @@ Sáu điểm tìm thấy khi rà lại flow Teacher, đã sửa và có test:
 Ghi chú kiểm tra: test cache (mục 1) ban đầu vẫn qua khi bỏ bản sửa vì client test không có
 `staleTime` 30 giây như app; đã chỉnh test dùng cấu hình giống app và xác nhận nó đỏ khi bỏ bản sửa.
 
-Lỗi có sẵn, không do thay đổi này: `MyWork.test.tsx` "surfaces overdue tasks…" sai khi chạy trong
-khoảng 00:00–12:00 giờ địa phương, vì `TaskRow.formatDue` làm tròn chênh lệch về 0 ngày cho task
-hạn "hôm qua 17:00" và không hiện "Quá hạn N ngày". Chưa sửa vì thuộc luồng My Work.
+Đã sửa 17/10/2026: `TaskRow.formatDue` so hai mốc theo ngày lịch (chuẩn về 0h) trước khi tính số
+ngày, thay vì so hai mốc thời gian nguyên (một bên cố định giờ, một bên là giờ hiện tại), nên không
+còn phụ thuộc giờ chạy test. Có `TaskRow.test.ts` quét đủ 24 giờ để bảo đảm.
 

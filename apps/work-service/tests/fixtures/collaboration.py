@@ -7,7 +7,7 @@ from apps.collaboration.models import Attachment
 
 @pytest.fixture
 def project_upload(created_project, actors, client_for, storage):
-    route = f"/api/v1/projects/{created_project['id']}/attachments/"
+    route = f"/projects/{created_project['id']}/attachments/"
     uploader = client_for(actors["member"])
     reply = uploader.post(
         route + "presigned-url/",
@@ -35,5 +35,5 @@ def pending(leader, route):
 def pending_file(task_api, storage):
     leader, _, create = task_api
     task = create()
-    route = f"/api/v1/tasks/{task['id']}/attachments/"
+    route = f"/tasks/{task['id']}/attachments/"
     return leader, task, route, pending(leader, route)

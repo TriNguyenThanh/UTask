@@ -24,7 +24,7 @@ def test_transition_invalid_position_rolls_back_task_and_effects(task_api, neigh
         body[neighbor] = task["id"]
     elif neighbor == "unknown-state":
         body["target_state_id"] = str(uuid4())
-    reply = leader.patch(f"/api/v1/tasks/{task['id']}/transition/", body, format="json")
+    reply = leader.patch(f"/tasks/{task['id']}/transition/", body, format="json")
     assert reply.status_code == (422 if neighbor == "unknown-state" else 409), reply.content
     assert Task.objects.filter(pk=task["id"]).values().get() == before_task
     assert effect_state(task["project_id"]) == before
@@ -34,9 +34,7 @@ def test_restore_live_task_rejects_without_any_effect(task_api):
     leader, _, create = task_api
     task = create()
     before = effect_state(task["project_id"])
-    reply = leader.post(
-        f"/api/v1/tasks/{task['id']}/restore/", {"expected_version": 1}, format="json"
-    )
+    reply = leader.post(f"/tasks/{task['id']}/restore/", {"expected_version": 1}, format="json")
     assert reply.status_code == 400, reply.content
     assert effect_state(task["project_id"]) == before
     assert Task.objects.get(pk=task["id"]).version == 1
@@ -49,7 +47,7 @@ def test_restore_child_or_task_requires_live_parent_and_state(task_api, blocked_
     if blocked_by == "deleted-parent":
         parent = create()
         reply = leader.post(
-            f"/api/v1/tasks/{parent['id']}/subtasks/",
+            f"/tasks/{parent['id']}/subtasks/",
             {"title": "Child"},
             format="json",
             HTTP_IDEMPOTENCY_KEY="restore-child",
@@ -66,12 +64,12 @@ def test_restore_child_or_task_requires_live_parent_and_state(task_api, blocked_
             sequence=99000,
         )
         task = create(state_id=str(state.pk))
-    path = f"/api/v1/tasks/{task['id']}/"
+    path = f"/tasks/{task['id']}/"
     assert leader.delete(path, {"expected_version": 1}, format="json").status_code == 200
     if blocked_by == "deleted-parent":
         assert (
             leader.delete(
-                f"/api/v1/tasks/{parent['id']}/", {"expected_version": 1}, format="json"
+                f"/tasks/{parent['id']}/", {"expected_version": 1}, format="json"
             ).status_code
             == 200
         )
@@ -104,7 +102,7 @@ def test_delete_subtree_over_resource_limit_rolls_back_before_effect(task_api):
         batch_size=500,
     )
     before = effect_state(parent["project_id"])
-    reply = leader.delete(f"/api/v1/tasks/{parent['id']}/", {"expected_version": 1}, format="json")
+    reply = leader.delete(f"/tasks/{parent['id']}/", {"expected_version": 1}, format="json")
     assert reply.status_code == 400, reply.content
     assert Task.objects.filter(deleted_at__isnull=False).count() == 0
     assert Task.objects.count() == 5001
@@ -122,7 +120,7 @@ def test_subtask_command_rejects_detachment_and_root_task_can_detach(task_api, a
     leader, _, create = task_api
     parent = create()
     child_reply = leader.post(
-        f"/api/v1/tasks/{parent['id']}/subtasks/",
+        f"/tasks/{parent['id']}/subtasks/",
         {"title": "Child"},
         format="json",
         HTTP_IDEMPOTENCY_KEY="detach-child",
@@ -138,7 +136,7 @@ def test_subtask_command_rejects_detachment_and_root_task_can_detach(task_api, a
     reparent_task(Actor(actors["leader"]), UUID(root["id"]), UUID(parent["id"]), 1)
     reply = reparent_task(Actor(actors["leader"]), UUID(root["id"]), None, 2)
     assert reply.data["data"]["parent_id"] is None and reply.data["data"]["version"] == 3
-    assert leader.get(f"/api/v1/tasks/{root['id']}/").json()["data"]["parent_id"] is None
+    assert leader.get(f"/tasks/{root['id']}/").json()["data"]["parent_id"] is None
 
 
 @pytest.mark.parametrize(
@@ -201,7 +199,7 @@ def test_reorder_validates_neighbor_adjacency_and_finite_midpoint(task_api, adja
     first, second, third, moving = [create() for _ in range(4)]
     before = effect_state(moving["project_id"])
     reply = leader.patch(
-        f"/api/v1/tasks/{moving['id']}/transition/",
+        f"/tasks/{moving['id']}/transition/",
         {
             "expected_version": 1,
             "target_state_id": moving["state_id"],

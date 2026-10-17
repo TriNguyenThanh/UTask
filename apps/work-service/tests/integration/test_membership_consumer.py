@@ -18,7 +18,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 def test_membership_transfer_leave_rejoin_preserves_slot_and_capacity(
     created_project, actors, client_for
 ):
-    path = f"/api/v1/projects/{created_project['id']}/"
+    path = f"/projects/{created_project['id']}/"
     member = ProjectMember.objects.get(user_id=actors["member"])
     member.weekly_capacity = 25
     member.save()

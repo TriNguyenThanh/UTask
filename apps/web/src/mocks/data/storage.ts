@@ -6,8 +6,8 @@ import type { MockScenario } from "@/mocks/scenarios";
  * persisted `MockDatabase` shape changes, so older demo sessions restore
  * cleanly instead of crashing on missing fields.
  */
-const DB_VERSION = 3;
-const DB_KEY_PREFIX = "utask.mock.db.v3:";
+const DB_VERSION = 4;
+const DB_KEY_PREFIX = "utask.mock.db.v4:";
 const memoryFallback = new Map<string, MockDatabase>();
 
 export interface MockRepository {
@@ -37,6 +37,8 @@ function migrate(old: unknown): MockDatabase {
     githubDisconnectedByUser:
       record.githubDisconnectedByUser ?? fresh.githubDisconnectedByUser,
     aiConfigByProject: record.aiConfigByProject ?? fresh.aiConfigByProject,
+    issueStateByProject: record.issueStateByProject ?? fresh.issueStateByProject,
+    issueHistoryByProject: record.issueHistoryByProject ?? fresh.issueHistoryByProject,
   };
   return migrated;
 }

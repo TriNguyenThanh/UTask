@@ -16,7 +16,7 @@ def test_board_and_column_select_only_card_cursor_and_grouping_fields(
         acceptance_criteria="acceptance " * 1000,
     )
     client = client_for(actors["member"])
-    route = f"/api/v1/projects/{created_project['id']}/kanban/"
+    route = f"/projects/{created_project['id']}/kanban/"
     with CaptureQueriesContext(connection) as queries:
         reply = client.get(route, {"limit_per_column": 1})
         data = reply.json()["data"]

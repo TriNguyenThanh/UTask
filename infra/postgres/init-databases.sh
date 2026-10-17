@@ -4,7 +4,7 @@ set -eu
 create_database() {
   database_name="$1"
 
-  psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  psql -X --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
     --set=database_name="$database_name" <<'SQL'
 SELECT format('CREATE DATABASE %I', :'database_name')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database_name')

@@ -23,7 +23,7 @@ def test_teacher_feedback_requires_verified_scope_from_adapter(
         )
     before = effect_state(task["project_id"])
     reply = client_for(actors["teacher"]).post(
-        "/api/v1/comments/",
+        "/comments/",
         {"task_id": task["id"], "content_html": "<p>Feedback</p>"},
         format="json",
     )
@@ -46,6 +46,6 @@ def test_archived_subject_comment_creation_rolls_back_before_audit(task_api, sub
         else task["project_id"],
         "content_html": "<p>Denied</p>",
     }
-    reply = leader.post("/api/v1/comments/", body, format="json")
+    reply = leader.post("/comments/", body, format="json")
     assert reply.status_code == 400, reply.content
     assert not Comment.objects.exists() and effect_state(task["project_id"]) == before

@@ -1,7 +1,7 @@
 from django.db import connection
 from django.http import JsonResponse
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
 def healthz(request):
@@ -16,14 +16,20 @@ def healthz(request):
 urlpatterns = [
     path("healthz", healthz),
     path(
-        "api/v1/schema/",
+        "openapi/",
         SpectacularAPIView.as_view(authentication_classes=[], permission_classes=[]),
+        name="schema",
     ),
-    path("api/v1/", include("apps.projects.urls")),
-    path("api/v1/", include("apps.sprints.urls")),
-    path("api/v1/", include("apps.integrations.urls")),
-    path("api/v1/", include("apps.tasks.urls")),
-    path("api/v1/", include("apps.collaboration.urls")),
+    path(
+        "docs/",
+        SpectacularSwaggerView.as_view(url="../openapi/"),
+        name="swagger-ui",
+    ),
+    path("", include("apps.projects.urls")),
+    path("", include("apps.sprints.urls")),
+    path("", include("apps.integrations.urls")),
+    path("", include("apps.tasks.urls")),
+    path("", include("apps.collaboration.urls")),
 ]
 
 handler400 = "common.http_errors.bad_request"

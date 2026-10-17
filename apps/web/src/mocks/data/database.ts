@@ -1,4 +1,5 @@
 import type { AuthUser } from "@/features/auth/types";
+import type { Issue, IssueHistoryEntry } from "@/features/projects/types";
 import type { MockScenario } from "@/mocks/scenarios";
 
 export const LEADER_ID = "00000000-0000-4000-8000-000000000001";
@@ -113,6 +114,12 @@ export interface MockCreatedTeam {
   createdAt: string;
 }
 
+/** Fields of an issue that a write can change; only issues that were changed are stored. */
+export type MockIssueState = Pick<
+  Issue,
+  "status" | "sprintId" | "rank" | "version" | "blocked" | "blockedReason"
+>;
+
 export interface MockDatabase {
   profilesByUser: Record<string, MockProfileRecord>;
   authUsersById: Record<string, AuthUser>;
@@ -130,6 +137,10 @@ export interface MockDatabase {
     string,
     { provider: string; keyConfigured: boolean; keyHint: string; configuredAt: string }
   >;
+  /** Issue changes made at runtime: projectId → issueId → new state. */
+  issueStateByProject: Record<string, Record<string, MockIssueState>>;
+  /** History rows added by runtime writes: projectId → issueKey → rows (oldest first). */
+  issueHistoryByProject: Record<string, Record<string, IssueHistoryEntry[]>>;
 }
 
 export function createInitialDatabase(_scenario: MockScenario): MockDatabase {
@@ -147,5 +158,7 @@ export function createInitialDatabase(_scenario: MockScenario): MockDatabase {
     notificationReadByUser: {},
     githubDisconnectedByUser: {},
     aiConfigByProject: {},
+    issueStateByProject: {},
+    issueHistoryByProject: {},
   };
 }

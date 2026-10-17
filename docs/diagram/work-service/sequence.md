@@ -43,7 +43,7 @@ sequenceDiagram
     participant A as Work API
     participant S as Task command
     participant D as Work DB
-    L->>A: POST /api/v1/projects/{project_id}/tasks/ + Idempotency-Key
+    L->>A: POST /projects/{project_id}/tasks/ + Idempotency-Key
     A->>A: JWT, session-status, scope và serializer
     alt Auth hoặc dữ liệu đầu vào không hợp lệ
         A-->>L: 401/403/404/400, không mutation
@@ -82,7 +82,7 @@ sequenceDiagram
     participant A as Work API
     participant W as Workflow command
     participant D as Work DB
-    U->>A: PATCH /api/v1/tasks/{task_id}/transition/ với expected_version và neighbor IDs
+    U->>A: PATCH /tasks/{task_id}/transition/ với expected_version và neighbor IDs
     A->>A: JWT/session, scope, whitelist input
     A->>W: Lệnh chuyển state hoặc vị trí
     W->>D: BEGIN, Project rồi State/Sprint/Task theo protocol
@@ -113,7 +113,7 @@ sequenceDiagram
     actor U as Assignee ACTIVE hoặc Leader
     participant A as Work API
     participant D as Work DB
-    U->>A: PATCH /api/v1/tasks/{task_id}/block/ hoặc unblock/
+    U->>A: PATCH /tasks/{task_id}/block/ hoặc unblock/
     A->>A: JWT/session, scope, input và reason khi block
     A->>D: BEGIN, Project barrier và Task lock
     A->>D: Kiểm membership/quyền và state hiện hành
@@ -139,7 +139,7 @@ sequenceDiagram
     participant D as Work DB
     participant Pub as Work Outbox publisher
     participant K as Kafka
-    L->>A: POST /api/v1/sprints/{sprint_id}/close/ + key, target hoặc null
+    L->>A: POST /sprints/{sprint_id}/close/ + key, target hoặc null
     A->>A: JWT/session, scope và input
     A->>D: BEGIN, Project và State/Sprint/Task theo protocol
     A->>D: Quyền hiện hành, lookup receipt và so semantic hash
@@ -186,7 +186,7 @@ sequenceDiagram
     actor U as Assignee Task trong URL hoặc Leader
     participant A as Work Relation API
     participant D as Work DB
-    U->>A: POST /api/v1/tasks/{task_id}/relations/ với type và related_task_id
+    U->>A: POST /tasks/{task_id}/relations/ với type và related_task_id
     A->>A: Auth/scope, input type và quyền Task trong URL
     A->>D: BEGIN, Project graph barrier và Task theo ID
     A->>D: Kiểm hai task cùng project, không deleted, quyền hiện hành
@@ -225,7 +225,7 @@ sequenceDiagram
     L->>AI: Xem, sửa và chọn item đề xuất
     AI-->>L: Proposal/item reference và revision đã duyệt
     opt User bấm áp dụng
-        L->>W: POST /api/v1/projects/{project_id}/tasks/bulk-apply-ai/ + key
+        L->>W: POST /projects/{project_id}/tasks/bulk-apply-ai/ + key
         W->>W: JWT/session, scope, whitelist input
         opt Contract chọn kiểm provenance bằng backend read-only
             W->>AI: Kiểm binding project, proposal/item/revision ngoài transaction
@@ -292,7 +292,7 @@ sequenceDiagram
     end
     Note over AI,K: Ghép context, timeout, LLM và lưu kết quả thuộc nhóm AI
     AI-->>U: Proposal/items để user xem, sửa và chọn
-    U->>W: POST /api/v1/tasks/{task_id}/subtasks/bulk-apply-ai/ + key
+    U->>W: POST /tasks/{task_id}/subtasks/bulk-apply-ai/ + key
     W->>W: Auth/scope, source binding theo contract và whitelist
     W->>D: BEGIN, Project/Task locks, current quyền rồi receipt lookup
     W->>D: So ai_payload_hash item cũ, kiểm version/whitelist/DAG cho item mới
@@ -360,7 +360,7 @@ sequenceDiagram
             W->>K: Commit offset
         end
     end
-    U->>A: POST /api/v1/tasks/{task_id}/github-links/{link_id}/confirm/ + key
+    U->>A: POST /tasks/{task_id}/github-links/{link_id}/confirm/ + key
     A->>A: Auth/session và project scope
     A->>D: BEGIN, Project/link lock, receipt, kiểm generation/quyền
     alt Repo bị ngắt hoặc không có quyền
@@ -390,7 +390,7 @@ sequenceDiagram
     participant Pub as Work publisher
     participant K as Kafka
     participant N as Notification
-    T->>A: POST /api/v1/comments/ với đúng một subject project HOẶC task
+    T->>A: POST /comments/ với đúng một subject project HOẶC task
     A->>A: JWT/session, Task/Project scope và serializer
     A->>C: Kiểm Teacher phụ trách group và recipients cần scope lớp
     C-->>A: Scope proof/version hoặc denied/unavailable
@@ -428,7 +428,7 @@ sequenceDiagram
     participant A as Work Project API
     participant C as Classroom API
     participant D as Work DB
-    L->>A: POST /api/v1/projects/ + Idempotency-Key
+    L->>A: POST /projects/ + Idempotency-Key
     A->>A: JWT/session và validate đề tài/group
     A->>C: Xác minh group, Group Leader, members/roles và source version
     C-->>A: Snapshot hợp lệ hoặc denied/unavailable
@@ -463,7 +463,7 @@ sequenceDiagram
     participant G as GitHub
     participant IDB as Integration DB
     participant D as Work DB
-    L->>A: POST /api/v1/projects/{project_id}/github/repository/ với operation_id
+    L->>A: POST /projects/{project_id}/github/repository/ với operation_id
     A->>A: JWT/session, Leader và scope/version hiện hành
     A->>I: Command chọn repo, actor proof, expected generation
     I->>I: Kiểm caller/proof, operation replay và source generation
@@ -490,7 +490,7 @@ Không giữ Work transaction trong lúc gọi Integration/GitHub. Receipt repla
 
 ### 2.12. Sequence 12 — Tệp Task/Project: upload, confirm và download
 
-resource_path là `/api/v1/tasks/{task_id}` hoặc `/api/v1/projects/{project_id}`; server resolve đúng một subject, không nhận hai owner từ body.
+resource_path là `/tasks/{task_id}` hoặc `/projects/{project_id}`; server resolve đúng một subject, không nhận hai owner từ body.
 
 Plane FileAsset được tạo trước presign và cập nhật is_uploaded sau đó; UTask học vòng đời một hàng, nhưng thêm owner/subject/expiry/content validation và CONFIRMED-only scope.
 

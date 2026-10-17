@@ -16,7 +16,7 @@ def test_live_sprint_progress_returns_current_scope_facts_without_get_effect(tas
     leader, _, create = task_api
     task = create(story_points=5)
     sprint = draft(leader, task["project_id"], "Progress")
-    root = f"/api/v1/sprints/{sprint['id']}/"
+    root = f"/sprints/{sprint['id']}/"
     assert (
         leader.post(
             root + "tasks/",
@@ -29,7 +29,7 @@ def test_live_sprint_progress_returns_current_scope_facts_without_get_effect(tas
     if active:
         assert (
             leader.post(
-                f"/api/v1/projects/{task['project_id']}/sprints/{sprint['id']}/start/",
+                f"/projects/{task['project_id']}/sprints/{sprint['id']}/start/",
                 {"expected_version": 2},
                 format="json",
                 HTTP_IDEMPOTENCY_KEY="progress-start",
@@ -51,7 +51,7 @@ def test_invalid_sprint_create_dates_allocate_no_sprint_or_effect(
 ):
     before = effect_state(created_project["id"])
     reply = client_for(actors["leader"]).post(
-        f"/api/v1/projects/{created_project['id']}/sprints/",
+        f"/projects/{created_project['id']}/sprints/",
         {"name": "Rejected", "start_date": "2027-02-01", "end_date": "2027-01-01"},
         format="json",
     )

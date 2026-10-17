@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.contract, pytest.mark.django_
 def test_repository_read_before_connection_needs_no_provider(
     created_project, actors, client_for, response_schema
 ):
-    route = f"/api/v1/projects/{created_project['id']}/github/repository/"
+    route = f"/projects/{created_project['id']}/github/repository/"
     data = read(client_for(actors["leader"]), route, response_schema)["data"]
     assert data["project_id"] == created_project["id"]
     assert all(value is None for field, value in data.items() if field != "project_id")
@@ -30,7 +30,7 @@ def test_repository_and_link_gets_follow_source_candidate_confirmation_and_unlin
     assert selected["connection_generation"] == selected["source_version"] == 1
     assert selected["status"] == "CONNECTED" and selected["operation_id"] == "op-1"
     assert gateway.calls == gateway.effects == 1
-    route = f"/api/v1/tasks/{task.pk}/github-links/"
+    route = f"/tasks/{task.pk}/github-links/"
     member = client_for(actors["member"])
     assert read(member, route, response_schema)["data"] == []
     fact = gateway.verify_reference(
