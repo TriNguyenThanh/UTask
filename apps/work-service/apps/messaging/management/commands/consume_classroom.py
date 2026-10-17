@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from apps.messaging.classroom_consumer import process_classroom_record
 from apps.messaging.management.commands.consume_identity import DeadLetterPublisher
+from infrastructure.kafka.configuration import kafka_connection_config
 
 
 class Command(BaseCommand):
@@ -16,7 +17,7 @@ class Command(BaseCommand):
             raise CommandError("Classroom topic and DLQ topic are required")
         consumer = Consumer(
             {
-                "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_connection_config(),
                 "group.id": settings.CLASSROOM_KAFKA_GROUP,
                 "enable.auto.commit": False,
                 "enable.auto.offset.store": False,
