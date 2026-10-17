@@ -62,10 +62,11 @@ def deployment_runtime(
             "args=sys.argv[1:]\n"
             "if 'login' in args and sys.stdin.read().rstrip('\\n') != os.environ['EXPECTED_REGISTRY_TOKEN']: sys.exit(2)\n"
             "with open(os.environ['CALLS'], 'a') as output: output.write(json.dumps(args) + '\\n')\n"
-            "stage='ai-migration' if 'ai-migrate' in args and '--exit-code-from' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
+            "stage='environment' if 'config' in args and '--environment' in args else 'ai-migration' if 'ai-migrate' in args and '--exit-code-from' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
             "if stage and stage == os.environ['FAIL_ON']: sys.exit(int(os.environ['FAIL_CODE']))\n"
             "if 'run' in args: sys.stdin.read()\n"
-            "if 'config' in args and '--services' in args: print(os.environ['EXPECTED_SERVICE_NAMES'].replace(' ', '\\n') + '\\n' + os.environ['EXPECTED_GATEWAY_SERVICE'])\n"
+            "if 'config' in args and '--environment' in args: print(os.environ.get('COMPOSE_TEST_ENVIRONMENT', ''))\n"
+            "if 'config' in args and '--services' in args: print(os.environ['EXPECTED_SERVICE_NAMES'].replace(' ', '\\n') + '\\n' + os.environ['EXPECTED_GATEWAY_SERVICE'] + '\\n' + os.environ.get('EXPECTED_INFRASTRUCTURE_NAMES', 'postgres redis queue').replace(' ', '\\n'))\n"
         )
         docker.chmod(0o755)
         ssh = root / "ssh"

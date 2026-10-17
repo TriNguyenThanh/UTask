@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import tomllib
 from pathlib import Path
 
-import tomllib
 import yaml
 
 
@@ -61,7 +61,13 @@ def validate_runtime(compose: dict, services: dict):
         if name not in compose:
             raise ValueError(f"Missing Compose dependency: {name}")
         result = set()
-        for dependency in compose[name].get("depends_on", {}):
+        for dependency, options in compose[name].get("depends_on", {}).items():
+            if (
+                isinstance(options, dict)
+                and options.get("required") is False
+                and dependency not in active
+            ):
+                continue
             if dependency.endswith("-service") and dependency not in services:
                 raise ValueError(f"{name} requires unimplemented service {dependency}")
             result.add(dependency)
@@ -94,9 +100,20 @@ def validate_runtime(compose: dict, services: dict):
     }
     for name in tuple(active):
         active.update(dependencies(name))
+    # Keep optional infrastructure as deploy candidates. The server filters this
+    # list against its actual Compose profiles before starting any container.
+    optional_infrastructure = {
+        dependency
+        for name in active
+        for dependency, options in compose[name].get("depends_on", {}).items()
+        if isinstance(options, dict)
+        and options.get("required") is False
+        and compose.get(dependency, {}).get("x-deploy", {}).get("role")
+        == "infrastructure"
+    }
     infrastructure_services = []
     gateways = []
-    for name in sorted(active):
+    for name in sorted(active | optional_infrastructure):
         if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
             raise ValueError(f"Invalid Compose service name: {name}")
         runtime = compose[name]

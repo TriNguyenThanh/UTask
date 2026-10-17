@@ -15,19 +15,29 @@ done
 cd "$workdir"
 test -s .env || { echo "Missing staging .env on server" >&2; exit 1; }
 test -s staging-images.json || { echo 'Missing pinned release images' >&2; exit 1; }
-printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
-unset registry_token
-trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
 export UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag"
 read -r -a services <<< "$service_names"
-export COMPOSE_PROFILES="${service_names// /,}"
+unset COMPOSE_PROFILES
+compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json)
+# CLI --profile replaces COMPOSE_PROFILES, so carry the server's Kafka choice
+# into the explicit application profiles without sourcing or printing .env.
+compose_environment=$("${compose[@]}" config --environment < /dev/null)
 profiles=()
+while IFS='=' read -r name value; do
+  if [[ "$name" == COMPOSE_PROFILES && ",$value," == *,kafka,* ]]; then
+    profiles+=(--profile kafka)
+  fi
+done <<< "$compose_environment"
+unset compose_environment
 for service in "${services[@]}"; do
   [[ "$service" =~ ^[a-z][a-z0-9-]*-service$ ]] || { echo "Invalid deploy service name" >&2; exit 1; }
   profiles+=(--profile "$service")
 done
-compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json "${profiles[@]}")
+compose+=("${profiles[@]}")
 "${compose[@]}" config --quiet
+printf '%s\n' "$registry_token" | docker login "$registry" --username "$registry_user" --password-stdin
+unset registry_token
+trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
 "${compose[@]}" pull --quiet
 # Keep the current config intact until the candidate and apps are ready.
 nginx_config="$workdir/infra/nginx/nginx.deployment.conf"
@@ -35,6 +45,14 @@ nginx_active="$workdir/infra/nginx/nginx.conf"
 test -s "$nginx_config" || { echo 'Missing uploaded Nginx configuration' >&2; exit 1; }
 "${compose[@]}" run --rm --no-deps --interactive=false -v "$nginx_config:/etc/nginx/nginx.conf:ro" "$gateway_service" nginx -t < /dev/null
 read -r -a infrastructure <<< "$infrastructure_names"
+runtime_names=$("${compose[@]}" config --services < /dev/null)
+active_infrastructure=()
+for name in "${infrastructure[@]}"; do
+  if [[ $'\n'"$runtime_names"$'\n' == *$'\n'"$name"$'\n'* ]]; then
+    active_infrastructure+=("$name")
+  fi
+done
+infrastructure=("${active_infrastructure[@]}")
 if (( ${#infrastructure[@]} )); then
   "${compose[@]}" up -d --no-build --wait --wait-timeout 120 "${infrastructure[@]}" < /dev/null
 fi
@@ -49,7 +67,6 @@ for service in "${services[@]}"; do
   fi
 done
 runtime_services=()
-runtime_names=$("${compose[@]}" config --services < /dev/null)
 while IFS= read -r runtime_service; do
   if [[ "$runtime_service" != "$gateway_service" && "$runtime_service" != "ai-migrate" ]]; then
     runtime_services+=("$runtime_service")
