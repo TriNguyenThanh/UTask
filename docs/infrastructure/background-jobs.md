@@ -108,3 +108,6 @@ job đang chờ, lỗi giữa commit database và gửi Redis, gửi trùng task
 chết trước/sau khi lưu kết quả, worker cũ ghi muộn, retry không vượt budget,
 dead-letter/replay và lỗi publisher không gây gọi LLM lại. Kiểm tra client
 vẫn lấy kết quả bằng GET sau khi POST đã trả `202`.
+
+Classroom `drain_outbox` gửi sự kiện theo lớp. Work gửi theo dự án. Beat gọi
+publisher mỗi 5 giây.
