@@ -137,10 +137,12 @@ def test_every_client_receives_connection_options_and_keeps_delivery_guards(
     kafka_settings.KAFKA_SASL_USERNAME = "test-user"
     kafka_settings.KAFKA_SASL_PASSWORD = "test-password"
     kafka_settings.KAFKA_SSL_CA_LOCATION = "/certs/ca.pem"
-    publisher = Mock()
-    dlq = Mock()
+    publisher_driver = Mock()
+    dlq_driver = Mock()
     consumer_driver = Mock()
     consumer_driver.poll.side_effect = KeyboardInterrupt
+    publisher = Mock(return_value=publisher_driver)
+    dlq = Mock(return_value=dlq_driver)
     consumer = Mock(return_value=consumer_driver)
     monkeypatch.setattr(kafka, "Producer", publisher)
     monkeypatch.setattr(consume_work, "Producer", dlq)

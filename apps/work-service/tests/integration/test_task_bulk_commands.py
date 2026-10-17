@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
 def test_ai_batch_writes_tasks_junctions_audit_outbox_in_bulk(task_api, ai, actors):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     label = leader.post(
         f"/projects/{project.pk}/labels/",
         {"name": "Batch", "color": "#123456"},
@@ -92,7 +92,8 @@ def test_ai_scope_calls_real_sprint_command_add_remove_and_replays(task_api, ai)
     assert OutboxEvent.objects.filter(event_type="sprint.scope_changed").count() == 1
     assert (
         IdempotencyRecord.objects.filter(
-            ai_item_id="action", endpoint_path=f"/sprints/{sprint['id']}/tasks/"
+            idempotency_key__startswith="work-ai:",
+            endpoint_path=f"/sprints/{sprint['id']}/tasks/",
         ).count()
         == 1
     )
@@ -114,7 +115,8 @@ def test_ai_scope_calls_real_sprint_command_add_remove_and_replays(task_api, ai)
     assert SprintTask.objects.count() == 1
     assert (
         IdempotencyRecord.objects.filter(
-            ai_item_id="action", endpoint_path=f"/sprints/{sprint['id']}/tasks/"
+            idempotency_key__startswith="work-ai:",
+            endpoint_path=f"/sprints/{sprint['id']}/tasks/",
         ).count()
         == 2
     )

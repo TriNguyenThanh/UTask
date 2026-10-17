@@ -6,8 +6,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY . .
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN useradd --create-home work && chown -R work:work /app
 USER work
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--access-logformat", "%(t)s %(m)s %(U)s status=%(s)s duration=%(L)s request_id=%({x-request-id}i)s"]

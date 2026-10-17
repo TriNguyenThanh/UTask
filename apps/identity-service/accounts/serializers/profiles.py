@@ -24,10 +24,20 @@ class _UserSummarySerializer(UserDetailsSerializer):
 
 
 class PublicUserSerializer(_UserSummarySerializer):
+    account_status = serializers.CharField(read_only=True)
     bio = serializers.CharField(source="profile.bio", read_only=True, allow_null=True)
 
     class Meta(_UserSummarySerializer.Meta):
-        fields = ("id", "email", "student_id", "display_name", "avatar_url", "bio", "roles")
+        fields = (
+            "id",
+            "email",
+            "student_id",
+            "display_name",
+            "avatar_url",
+            "bio",
+            "roles",
+            "account_status",
+        )
         read_only_fields = fields
 
 

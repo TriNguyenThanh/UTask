@@ -1,3 +1,4 @@
+import importlib
 import runpy
 from pathlib import Path
 from unittest.mock import Mock
@@ -137,3 +138,25 @@ def test_base_settings_use_environment_or_plaintext_defaults(monkeypatch, use_en
         expected = dict(zip(expected, ["PLAINTEXT", "PLAIN", "", "", ""], strict=True))
     values = runpy.run_path(str(Path(__file__).resolve().parents[2] / "config/settings/base.py"))
     assert {name: values[name] for name in expected} == expected
+
+
+def test_base_settings_read_kafka_environment(monkeypatch):
+    import config.settings.base as base
+
+    overrides = {
+        "KAFKA_BOOTSTRAP_SERVERS": "external.example:9093",
+        "KAFKA_SECURITY_PROTOCOL": "SASL_SSL",
+        "KAFKA_SASL_MECHANISM": "SCRAM-SHA-512",
+        "KAFKA_SASL_USERNAME": "configured-user",
+        "KAFKA_SASL_PASSWORD": "configured-password",
+        "KAFKA_SSL_CA_LOCATION": "/certificates/ca.pem",
+    }
+    with monkeypatch.context() as env:
+        for key, value in overrides.items():
+            env.setenv(key, value)
+        try:
+            importlib.reload(base)
+            assert all(getattr(base, key) == value for key, value in overrides.items())
+        finally:
+            env.undo()
+            importlib.reload(base)

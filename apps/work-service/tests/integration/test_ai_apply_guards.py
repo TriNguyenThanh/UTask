@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 @pytest.mark.parametrize("kind", ["backlog", "action"])
 def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
     leader, task_route, create = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     if kind == "backlog":
         body = backlog_payload(project)
         route = task_route + "bulk-apply-ai/"
@@ -43,7 +43,7 @@ def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
 
 def test_ai_backlog_stale_project_version_preserves_counter_audit_and_receipt(task_api, ai):
     leader, task_route, _ = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     ai(project.pk)
     before = effect_state(project.pk)
     body = {**backlog_payload(project), "expected_project_version": 999}
@@ -56,7 +56,7 @@ def test_ai_backlog_stale_project_version_preserves_counter_audit_and_receipt(ta
 
 def test_ai_new_dependency_on_archived_applied_item_rolls_back_new_batch(task_api, ai):
     leader, task_route, _ = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     route = task_route + "bulk-apply-ai/"

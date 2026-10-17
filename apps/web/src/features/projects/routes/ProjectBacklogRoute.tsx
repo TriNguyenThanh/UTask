@@ -7,20 +7,31 @@ import {
   CircleDot,
   GitPullRequest,
   Plus,
-  Search,
   Sparkles,
   SquareCheckBig,
   UserRound,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
+import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
+import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
+import { PressableText } from "@/features/projects/components/PressableText";
+import { useDraggableIssue } from "@/features/projects/dnd/useDraggableIssue";
+import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
+import { daysLeft, STATUS_LABELS } from "@/features/projects/issueMeta";
+import {
+  hasActiveFilters,
+  matchesFilters,
+  useIssueFilters,
+  type FlagFilter,
+} from "@/features/projects/lib/issueFilters";
 import type {
   Issue,
   IssueType,
@@ -32,6 +43,7 @@ import {
   canCreateTask,
   canManageSprint,
   projectPermissionContext,
+  viewerRole,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
@@ -65,13 +77,6 @@ const priorityConfig: Record<Issue["priority"], { label: string; badge: string }
   low: { label: "Ưu tiên Thấp", badge: "bg-slate-100 text-slate-600 border-slate-200" },
 };
 
-const statusLabels: Record<Issue["status"], string> = {
-  todo: "Cần làm",
-  "in-progress": "Đang làm",
-  review: "Chờ Review",
-  done: "Hoàn thành",
-};
-
 function sprintDateRange(sprint: Sprint): string {
   const start = new Date(sprint.startDate).toLocaleDateString("vi-VN", {
     day: "2-digit",
@@ -84,12 +89,6 @@ function sprintDateRange(sprint: Sprint): string {
   return `${start} - ${end}`;
 }
 
-function sprintDaysLeft(sprint: Sprint): number {
-  const end = new Date(sprint.endDate);
-  const now = new Date();
-  return Math.ceil((end.getTime() - now.getTime()) / 86_400_000);
-}
-
 /* ------------------------------------------------------------------ */
 /* Issue row                                                           */
 /* ------------------------------------------------------------------ */
@@ -98,10 +97,13 @@ function IssueRow({
   projectId,
   issue,
   onOpenIssue,
+  actions,
 }: {
   projectId: string;
   issue: Issue;
   onOpenIssue: (projectId: string, issueKey: string) => void;
+  /** Per-row actions menu, the non-drag way to move it. */
+  actions?: ReactNode;
 }) {
   const TypeIcon = typeIcons[issue.type];
   const priority = priorityConfig[issue.priority];
@@ -118,22 +120,20 @@ function IssueRow({
         >
           <TypeIcon className="size-2.5" aria-hidden />
         </span>
-        <button
-          type="button"
-          onClick={() => onOpenIssue(projectId, issue.key)}
+        <PressableText
+          onActivate={() => onOpenIssue(projectId, issue.key)}
+          label={`Mở issue ${issue.key}: ${issue.title}`}
           className="shrink-0 text-xs font-semibold text-primary hover:underline focus-visible:underline focus-visible:outline-none"
-          aria-label={`Mở issue ${issue.key}: ${issue.title}`}
         >
           {issue.key}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenIssue(projectId, issue.key)}
+        </PressableText>
+        <PressableText
+          onActivate={() => onOpenIssue(projectId, issue.key)}
+          label={`Mở issue ${issue.key}: ${issue.title}`}
           className="min-w-0 truncate text-left text-xs font-medium hover:text-primary focus-visible:underline focus-visible:outline-none"
-          aria-label={`Mở issue ${issue.key}: ${issue.title}`}
         >
           {issue.title}
-        </button>
+        </PressableText>
         {issue.hasPullRequest ? (
           <span
             className="inline-flex shrink-0 items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"
@@ -175,12 +175,75 @@ function IssueRow({
           </span>
         )}
         <span className="hidden w-20 text-center text-[11px] font-medium text-muted-foreground md:inline-flex md:items-center">
-          {statusLabels[issue.status]}
+          {STATUS_LABELS[issue.status]}
           {issue.status === "done" ? (
             <CheckCircle2 className="ml-1 size-3 text-emerald-600" aria-hidden />
           ) : null}
         </span>
+        {actions}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One backlog row that can be dragged (leader only) and dropped on. Position
+ * comes from the row under the pointer, the sprint from the section around it.
+ */
+function BacklogRow({
+  projectId,
+  issue,
+  onOpenIssue,
+  mover,
+  destination,
+}: {
+  projectId: string;
+  issue: Issue;
+  onOpenIssue: (projectId: string, issueKey: string) => void;
+  mover: ReturnType<typeof useIssueMover>;
+  /** Rows shown in the section this row sits in. */
+  destination: readonly Issue[];
+}) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const isLeader = mover.role === "leader";
+  const canDrag = isLeader && mover.canDragIssue(issue);
+  const { dragging, closestEdge } = useDraggableIssue({
+    elementRef: wrapperRef,
+    issueKey: issue.key,
+    canDrag,
+    canReorder: isLeader,
+  });
+  return (
+    <div
+      ref={wrapperRef}
+      data-issue-key={issue.key}
+      className={cn(
+        "relative transition-colors",
+        canDrag && "cursor-grab active:cursor-grabbing",
+        dragging && "opacity-40",
+        mover.flashKey === issue.key && "bg-primary/10",
+      )}
+    >
+      {closestEdge ? (
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary",
+            closestEdge === "top" ? "-top-px" : "-bottom-px",
+          )}
+        />
+      ) : null}
+      <IssueRow
+        projectId={projectId}
+        issue={issue}
+        onOpenIssue={onOpenIssue}
+        actions={
+          <IssueActionsMenu
+            issueKey={issue.key}
+            groups={mover.menuFor(issue, { kind: "backlog", destination })}
+          />
+        }
+      />
     </div>
   );
 }
@@ -195,23 +258,30 @@ function SprintSection({
   issues,
   onOpenIssue,
   canComplete,
+  mover,
 }: {
   projectId: string;
   sprint: Sprint;
   issues: Issue[];
   onOpenIssue: (projectId: string, issueKey: string) => void;
   canComplete: boolean;
+  mover: ReturnType<typeof useIssueMover>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const isOver = useSectionDropTarget(sectionRef, sprint.id, mover.enabled && mover.role === "leader");
   const percent =
     sprint.totalPoints > 0
       ? Math.round((sprint.completedPoints / sprint.totalPoints) * 100)
       : 0;
-  const daysLeft = sprintDaysLeft(sprint);
+  const remaining = daysLeft(sprint.endDate);
   const isActive = sprint.state === "active";
 
   return (
-    <section className="mb-6">
+    <section
+      ref={sectionRef}
+      className={cn("mb-6 rounded transition-colors", isOver && "bg-primary/5 ring-2 ring-primary/30")}
+    >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -243,9 +313,9 @@ function SprintSection({
               Kế hoạch
             </Badge>
           )}
-          {isActive && daysLeft >= 0 ? (
+          {isActive && remaining >= 0 ? (
             <Badge variant="secondary" className="text-[11px] font-medium">
-              Còn {daysLeft} ngày
+              Còn {remaining} ngày
             </Badge>
           ) : null}
           {sprint.goal ? (
@@ -295,11 +365,13 @@ function SprintSection({
           ) : (
             <div className="divide-y border-b">
               {issues.map((issue) => (
-                <IssueRow
+                <BacklogRow
                   key={issue.id}
                   projectId={projectId}
                   issue={issue}
                   onOpenIssue={onOpenIssue}
+                  mover={mover}
+                  destination={issues}
                 />
               ))}
             </div>
@@ -314,13 +386,13 @@ function SprintSection({
 /* Backlog route                                                       */
 /* ------------------------------------------------------------------ */
 
-type FilterChip = "mine" | "unassigned" | "pull-request" | "bug";
-
-const filterChips: { id: FilterChip; label: string }[] = [
-  { id: "mine", label: "Chỉ việc của tôi" },
-  { id: "unassigned", label: "Chưa phân công" },
-  { id: "pull-request", label: "Có Pull Request" },
-  { id: "bug", label: "Bugs" },
+const BACKLOG_FLAGS: readonly FlagFilter[] = [
+  "mine",
+  "unassigned",
+  "pr",
+  "bug",
+  "blocked",
+  "overdue",
 ];
 
 function emptyBacklogDescription(hasActiveFilters: boolean, readOnly: boolean): string {
@@ -356,20 +428,6 @@ function BacklogSkeleton() {
   );
 }
 
-function issueMatches(
-  issue: Issue,
-  epicFilter: string | null,
-  query: string,
-  chips: FilterChip[],
-): boolean {
-  if (epicFilter !== null && issue.epicId !== epicFilter) return false;
-  if (query && !`${issue.key} ${issue.title}`.toLowerCase().includes(query)) return false;
-  if (chips.includes("mine") && !issue.isMine) return false;
-  if (chips.includes("unassigned") && issue.assignee !== null) return false;
-  if (chips.includes("pull-request") && !issue.hasPullRequest) return false;
-  return !(chips.includes("bug") && issue.type !== "bug");
-}
-
 export default function ProjectBacklogRoute() {
   const navigate = useNavigate();
   const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
@@ -379,36 +437,20 @@ export default function ProjectBacklogRoute() {
     viewer.kind === "team-member" && viewer.role === "leader",
   );
 
-  const [epicFilter, setEpicFilter] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [chips, setChips] = useState<FilterChip[]>([]);
+  const { filters, setFilters, toggleFlag, clear: clearFilters } = useIssueFilters();
+  const epicFilter = filters.epic;
+  const setEpicFilter = (epic: string | null) => setFilters({ ...filters, epic });
 
   const openIssue = (pid: string, key: string) => {
     navigate(`/projects/${pid}/board?issue=${key}`);
   };
 
-  const toggleChip = (chip: FilterChip) => {
-    setChips((current) =>
-      current.includes(chip)
-        ? current.filter((item) => item !== chip)
-        : [...current, chip],
-    );
-  };
+  const filtersActive = hasActiveFilters(filters);
 
-  const hasActiveFilters =
-    epicFilter !== null || search.trim() !== "" || chips.length > 0;
-
-  const clearFilters = () => {
-    setEpicFilter(null);
-    setSearch("");
-    setChips([]);
-  };
-
-  const filteredIssues = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    return data.issues.filter((issue) => issueMatches(issue, epicFilter, q, chips));
-  }, [data, epicFilter, search, chips]);
+  const filteredIssues = useMemo(
+    () => data.issues.filter((issue) => matchesFilters(issue, filters)),
+    [data, filters],
+  );
 
   const workspace = data;
   const permCtx: ProjectPermissionContext = projectPermissionContext(
@@ -419,6 +461,20 @@ export default function ProjectBacklogRoute() {
   const needsAiKey = aiRequiresKey(permCtx);
   const canCompleteSprint = canManageSprint(permCtx);
   const showCreateEpic = canCreateTask(permCtx);
+
+  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+  const backlogSectionRef = useRef<HTMLElement | null>(null);
+  const backlogOver = useSectionDropTarget(
+    backlogSectionRef,
+    null,
+    mover.enabled && mover.role === "leader",
+  );
+  useBacklogDropMonitor({
+    enabled: mover.enabled && mover.role === "leader",
+    issues: workspace.issues,
+    issuesIn: (sprintId) => filteredIssues.filter((issue) => issue.sprintId === sprintId),
+    onMove: mover.requestMove,
+  });
 
   const activeSprints = workspace.sprints.filter(
     (sprint) => sprint.state === "active",
@@ -472,6 +528,7 @@ export default function ProjectBacklogRoute() {
 
   return (
     <div className="flex min-h-0 flex-col">
+      {mover.dialog}
       {/* 2-column workspace */}
       <div className="flex flex-1 min-h-0 flex-col md:flex-row">
 
@@ -552,54 +609,15 @@ export default function ProjectBacklogRoute() {
 
         {/* Sprints + backlog */}
         <div className="min-w-0 flex-1 bg-background p-4 md:p-5">
-          {/* Search + chips */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-72 max-w-full">
-              <Search
-                className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Tìm kiếm issue trong backlog..."
-                aria-label="Tìm kiếm issue theo key hoặc tiêu đề"
-                className="h-8 pl-8 text-xs"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {filterChips
-                .filter((chip) => !(readOnly && chip.id === "mine"))
-                .map((chip) => {
-                const active = chips.includes(chip.id);
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => toggleChip(chip.id)}
-                    aria-pressed={active}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                      active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-muted text-foreground hover:bg-muted/60",
-                    )}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
-              {hasActiveFilters ? (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="ml-1 text-xs font-semibold text-primary hover:underline focus-visible:underline"
-                >
-                  Xóa bộ lọc
-                </button>
-              ) : null}
-            </div>
+          <div className="mb-4">
+            <IssueFilterBar
+              issues={workspace.issues}
+              filters={filters}
+              flags={BACKLOG_FLAGS.filter((flag) => !(readOnly && flag === "mine"))}
+              onChange={setFilters}
+              onToggleFlag={toggleFlag}
+              onClear={clearFilters}
+            />
           </div>
 
           {/* Leader-only toolbar */}
@@ -618,10 +636,10 @@ export default function ProjectBacklogRoute() {
 
           {filteredIssues.length === 0 ? (
             <EmptyState
-              title={hasActiveFilters ? "Không có issue khớp bộ lọc" : "Backlog trống"}
-              description={emptyBacklogDescription(hasActiveFilters, readOnly)}
+              title={filtersActive ? "Không có issue khớp bộ lọc" : "Backlog trống"}
+              description={emptyBacklogDescription(filtersActive, readOnly)}
               action={
-                hasActiveFilters ? (
+                filtersActive ? (
                   <Button size="sm" variant="outline" onClick={clearFilters}>
                     Xóa bộ lọc
                   </Button>
@@ -640,6 +658,7 @@ export default function ProjectBacklogRoute() {
                   )}
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
+                  mover={mover}
                 />
               ))}
               {upcomingSprints.map((sprint) => (
@@ -652,11 +671,18 @@ export default function ProjectBacklogRoute() {
                   )}
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
+                  mover={mover}
                 />
               ))}
 
               {/* Product Backlog */}
-              <section className="mb-10">
+              <section
+                ref={backlogSectionRef}
+                className={cn(
+                  "mb-10 rounded transition-colors",
+                  backlogOver && "bg-primary/5 ring-2 ring-primary/30",
+                )}
+              >
                 <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
                   <div className="flex items-center gap-2.5">
                     <h2 className="text-sm font-bold">Product Backlog</h2>
@@ -678,11 +704,13 @@ export default function ProjectBacklogRoute() {
                 ) : (
                   <div className="divide-y border-b">
                     {backlogIssues.map((issue) => (
-                      <IssueRow
+                      <BacklogRow
                         key={issue.id}
                         projectId={projectId}
                         issue={issue}
                         onOpenIssue={openIssue}
+                        mover={mover}
+                        destination={backlogIssues}
                       />
                     ))}
                   </div>

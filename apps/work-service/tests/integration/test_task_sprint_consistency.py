@@ -17,7 +17,7 @@ def test_ai_bulk_two_authorized_actors_replay_same_items_and_old_actor_loses_rig
     task_api, ai, actors, client_for
 ):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     first = leader.post(
