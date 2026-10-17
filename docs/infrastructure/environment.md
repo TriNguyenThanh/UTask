@@ -226,6 +226,18 @@ mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp v�
 không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
 Chi tiết tại [Classroom backend](../classroom-service/README.md).
 
+Mapping Work dùng `CLASSROOM_KAFKA_TOPIC` ở `.env` làm nguồn cho
+`WORK_CLASSROOM_KAFKA_TOPIC` trong container để bên gửi Classroom và bên nhận
+Work dùng cùng topic. `WORK_KAFKA_TOPIC`, nhóm đọc
+`WORK_CLASSROOM_KAFKA_GROUP`, topic lỗi `WORK_CLASSROOM_KAFKA_DLQ_TOPIC` và
+giới hạn `WORK_CLASSROOM_CONSUMER_MAX_RETRIES` cũng đi qua mapping này cho
+API và mọi worker Work ở cả Compose local lẫn staging. Chỉ khai báo trong
+`.env.example` không tự đưa biến vào container; phải có ánh xạ `env_file`.
+Consumer Classroom của Work dùng cùng hàm cấu hình kết nối với publisher,
+consumer Identity và bên gửi thông điệp lỗi, gồm tài khoản, mật khẩu và CA
+khi dùng Kafka cloud. Quy tắc chỉ xác nhận offset sau xử lý hoặc DLQ thành công
+được giữ nguyên; kiểm thử cấu hình không thay cho nghiệm thu luồng sự kiện thật.
+
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
 deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và

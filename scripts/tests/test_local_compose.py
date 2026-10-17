@@ -190,6 +190,78 @@ class LocalComposeTests(unittest.TestCase):
             ],
         )
 
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_work_kafka_mappings_use_defaults_and_custom_values(self):
+        defaults = {
+            "WORK_KAFKA_TOPIC": "utask.work.events",
+            "WORK_CLASSROOM_KAFKA_TOPIC": "utask.classroom.events",
+            "WORK_CLASSROOM_KAFKA_GROUP": "work-classroom-groups-v1",
+            "WORK_CLASSROOM_KAFKA_DLQ_TOPIC": "utask.work.classroom.dlq",
+            "WORK_CLASSROOM_CONSUMER_MAX_RETRIES": "5",
+        }
+        overrides = {
+            "WORK_KAFKA_TOPIC": "custom.work.events",
+            "CLASSROOM_KAFKA_TOPIC": "custom.classroom.events",
+            "WORK_CLASSROOM_KAFKA_GROUP": "custom-work-classroom-group",
+            "WORK_CLASSROOM_KAFKA_DLQ_TOPIC": "custom.work.classroom.dlq",
+            "WORK_CLASSROOM_CONSUMER_MAX_RETRIES": "9",
+        }
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(
+                ("COMPOSE_", "UTASK_", "KAFKA_", "WORK_", "CLASSROOM_")
+            )
+        }
+        env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="test")
+        for base in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for custom in (False, True):
+                with self.subTest(base=base, custom=custom):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            base,
+                            "--profile",
+                            "work-service",
+                            "--profile",
+                            "work-profile-consumer",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        env={**env, **(overrides if custom else {})},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    expected = dict(defaults)
+                    if custom:
+                        expected.update(
+                            {k: v for k, v in overrides.items() if k in expected}
+                        )
+                        expected["WORK_CLASSROOM_KAFKA_TOPIC"] = overrides[
+                            "CLASSROOM_KAFKA_TOPIC"
+                        ]
+                    for name in (
+                        "work-service",
+                        "work-publisher",
+                        "work-beat",
+                        "work-group-consumer",
+                        "work-profile-consumer",
+                    ):
+                        for variable, value in expected.items():
+                            with self.subTest(process=name, variable=variable):
+                                self.assertEqual(
+                                    services[name]["environment"][variable], value
+                                )
+
 
 @unittest.skipUnless(SHELL, "POSIX shell is unavailable")
 class PostgresSetupScriptTests(unittest.TestCase):
