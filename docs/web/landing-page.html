@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UTask – Quản lý project CNTT cho sinh viên và giảng viên</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Be+Vietnam+Pro:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b2f33;--bg2:#11464b;--ink:#e8fbf8;--mute:#9ec7c4;--line:rgba(255,255,255,.12);--card:rgba(255,255,255,.06);--v:#14b8a6;--c:#f59e0b;--s:#5eead4;--g:#86efac;
+--hf:'Bricolage Grotesque','Be Vietnam Pro',system-ui,sans-serif;--bf:'Be Vietnam Pro',system-ui,sans-serif}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#effaf8;--bg2:#d5f1ec;--ink:#0b2f33;--mute:#47686b;--line:rgba(11,47,51,.15);--card:rgba(255,255,255,.7)}}
+:root[data-theme="light"]{--bg:#effaf8;--bg2:#d5f1ec;--ink:#0b2f33;--mute:#47686b;--line:rgba(11,47,51,.15);--card:rgba(255,255,255,.7)}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth;height:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.65 var(--bf);overflow-x:hidden;min-height:100%}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--s);outline-offset:3px}
+h1,h2,h3{font-family:var(--hf);line-height:1.08;letter-spacing:-.02em}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+/* ambient */
+.aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.aurora i{position:absolute;width:55vmax;height:55vmax;border-radius:50%;filter:blur(90px);opacity:.38;animation:drift 22s ease-in-out infinite alternate}
+.aurora i:nth-child(1){background:var(--v);top:-20%;left:-10%}
+.aurora i:nth-child(2){background:var(--c);right:-20%;top:20%;animation-delay:-8s;opacity:.22}
+.aurora i:nth-child(3){background:var(--s);bottom:-30%;left:20%;animation-delay:-14s;opacity:.2}
+@keyframes drift{to{transform:translate(8vmax,6vmax) scale(1.2)}}
+#glow{position:fixed;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,.22),transparent 65%);pointer-events:none;z-index:0;left:50%;top:30%}
+/* nav */
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backdrop-filter:blur(14px);background:color-mix(in srgb,var(--bg) 70%,transparent);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{font:800 22px var(--hf);display:flex;align-items:center;gap:10px}
+.logo b{width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,var(--v),var(--c));display:grid;place-items:center;font-size:15px;color:#05302d;animation:spin 9s linear infinite}
+@keyframes spin{50%{transform:rotate(180deg) scale(.9)}100%{transform:rotate(360deg)}}
+.links{display:flex;gap:26px;font-size:14.5px;color:var(--mute)}
+.links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:999px;font-weight:600;border:1px solid var(--line);cursor:pointer;background:none;color:var(--ink);font:600 15px var(--bf);transition:transform .25s,box-shadow .25s}
+.btn.p{background:linear-gradient(135deg,var(--v),#2dd4bf);border:0;color:#05302d;box-shadow:0 8px 30px -8px var(--v)}
+.btn:hover{transform:translateY(-3px)}
+.btn.p:hover{box-shadow:0 14px 36px -6px var(--v)}
+@media(max-width:760px){.links{display:none}}
+/* hero */
+.hero{padding:84px 0 70px;display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+.hero h1{font-size:clamp(40px,6vw,76px);font-weight:800}
+.grad{background:linear-gradient(100deg,var(--s),var(--v) 45%,var(--c));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% 100%;animation:sheen 6s linear infinite}
+@keyframes sheen{to{background-position:-200% 0}}
+.hero p{color:var(--mute);font-size:18px;max-width:50ch;margin:22px 0 32px}
+.cta{display:flex;gap:14px;flex-wrap:wrap}
+.pill{display:inline-flex;gap:8px;align-items:center;padding:6px 14px;border:1px solid var(--line);border-radius:999px;font-size:13.5px;color:var(--mute);margin-bottom:22px;background:var(--card)}
+.pill s{width:8px;height:8px;border-radius:50%;background:var(--g);text-decoration:none;box-shadow:0 0 0 0 var(--g);animation:ping 2s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 9px transparent}}
+.stage{perspective:1200px}
+.board{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px;backdrop-filter:blur(10px);transform:rotateY(-9deg) rotateX(5deg);transition:transform .2s;box-shadow:0 40px 80px -30px rgba(0,0,0,.5)}
+.bh{display:flex;justify-content:space-between;font:600 13px var(--bf);color:var(--mute);margin-bottom:14px}
+.bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden;margin:6px 0 14px}
+.bar b{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--v),var(--s));transition:width 1s}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.col{background:rgba(127,127,170,.1);border-radius:14px;padding:10px;min-height:250px}
+.col h4{font:600 12.5px var(--bf);color:var(--mute);margin-bottom:10px;display:flex;justify-content:space-between}
+.k{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:10px;margin-bottom:8px;font-size:13px;line-height:1.35}
+.k div{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11.5px;color:var(--mute)}
+.av{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#05302d}
+.k.hot{animation:pop .8s}
+@keyframes pop{30%{box-shadow:0 0 0 3px var(--g);transform:scale(1.04)}}
+@media(max-width:900px){.hero{grid-template-columns:1fr;padding-top:50px}.board{transform:none}}
+/* marquee */
+.mq{border-block:1px solid var(--line);overflow:hidden;padding:16px 0;color:var(--mute);font:600 20px var(--hf)}
+.mq div{display:flex;gap:56px;width:max-content;animation:run 30s linear infinite}
+.mq:hover div{animation-play-state:paused}
+@keyframes run{to{transform:translateX(-50%)}}
+/* sections */
+section{padding:100px 0}
+.hd{max-width:640px;margin-bottom:48px}
+.hd h2{font-size:clamp(32px,4.4vw,52px);font-weight:800}
+.hd p{color:var(--mute);margin-top:14px;font-size:17px}
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.cell{grid-column:span 2;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;position:relative;overflow:hidden;transition:transform .3s,border-color .3s}
+.cell:hover{transform:translateY(-6px);border-color:var(--v)}
+.cell::after{content:"";position:absolute;inset:0;background:radial-gradient(260px circle at var(--x,50%) var(--y,0),rgba(20,184,166,.2),transparent 70%);opacity:0;transition:opacity .3s;pointer-events:none}
+.cell:hover::after{opacity:1}
+.cell.w{grid-column:span 3}.cell.f{grid-column:span 4}
+.cell h3{font-size:23px;margin:16px 0 8px}
+.cell p{color:var(--mute);font-size:15px}
+.cell ul{list-style:none;padding:0;margin-top:14px;display:grid;gap:6px;font-size:14px;color:var(--mute)}
+.cell li::before{content:"✓";color:var(--g);margin-right:9px;font-weight:700}
+.ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:rgba(20,184,166,.18)}
+.heat{display:grid;grid-template-columns:repeat(18,1fr);gap:4px;margin-top:18px}
+.heat i{aspect-ratio:1;border-radius:4px;background:var(--line)}
+@media(max-width:900px){.cell,.cell.w,.cell.f{grid-column:span 6}}
+/* AI */
+.ai{background:linear-gradient(160deg,var(--bg2),transparent);border-block:1px solid var(--line)}
+.aig{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:26px}
+.mem{display:grid;grid-template-columns:62px 1fr 48px;gap:12px;align-items:center;margin:14px 0;font-size:14px}
+.track{height:14px;background:var(--line);border-radius:9px;overflow:hidden}
+.track b{display:block;height:100%;border-radius:9px;width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1),background .6s}
+.say{min-height:96px;margin-top:18px;padding:14px 16px;border-radius:14px;background:rgba(134,239,172,.1);border:1px solid rgba(134,239,172,.35);font-size:14.5px;color:var(--ink)}
+.say.empty{color:var(--mute);background:none;border-style:dashed;border-color:var(--line)}
+.stats{display:flex;gap:30px;margin-top:30px;flex-wrap:wrap}
+.stats b{font:800 40px var(--hf);display:block}
+.stats span{color:var(--mute);font-size:14px}
+@media(max-width:900px){.aig{grid-template-columns:1fr}}
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;position:relative}
+.flow::before{content:"";position:absolute;top:27px;left:6%;right:6%;height:2px;background:linear-gradient(90deg,var(--v),var(--c));opacity:.5}
+.st{text-align:center;padding:0 14px;position:relative}
+.st b{width:54px;height:54px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;background:var(--bg);border:2px solid var(--v);font:800 20px var(--hf)}
+.st p{color:var(--mute);font-size:14.5px;margin-top:6px}
+@media(max-width:760px){.flow{grid-template-columns:1fr 1fr;gap:30px 0}.flow::before{display:none}}
+/* final */
+.end{text-align:center;padding:110px 24px;border-radius:32px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(20,184,166,.3),rgba(245,158,11,.18));position:relative;overflow:hidden}
+.end h2{font-size:clamp(34px,5vw,60px);font-weight:800;max-width:16ch;margin:0 auto 18px}
+.end p{color:var(--mute);margin-bottom:30px}
+footer{padding:40px 0;color:var(--mute);font-size:14px;text-align:center}
+.rv{opacity:0;transform:translateY(26px);transition:opacity .8s,transform .8s}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div><div id="glow"></div>
+
+<nav><div class="wrap">
+  <a class="logo" href="#"><b>U</b>UTask</a>
+  <div class="links"><a href="#tinh-nang">Tính năng</a><a href="#ai">AI Agent</a><a href="#quy-trinh">Quy trình</a></div>
+  <a class="btn p" href="#bat-dau" style="padding:9px 18px">Dùng thử</a>
+</div></nav>
+
+<main class="wrap">
+<header class="hero">
+  <div>
+    <span class="pill"><s></s>Scrum + GitHub + AI trong một nơi</span>
+    <h1>Project nhóm chạy đúng tiến độ, <span class="grad">ai làm gì đều thấy rõ.</span></h1>
+    <p>UTask gom backlog, sprint, Kanban và commit GitHub vào một nền tảng. AI phát hiện thành viên quá tải, cảnh báo nguy cơ trễ deadline và đề xuất chia lại task.</p>
+    <div class="cta"><a class="btn p" href="#bat-dau">Tạo project đầu tiên</a><a class="btn" href="#ai">Xem AI phân tích</a></div>
+  </div>
+  <div class="stage"><div class="board" id="board">
+    <div class="bh"><span>Sprint 3 · Hệ thống đặt phòng</span><span id="pct">30%</span></div>
+    <div class="bar"><b id="pbar"></b></div>
+    <div class="cols" id="cols"></div>
+  </div></div>
+</header>
+</main>
+
+<div class="mq" aria-hidden="true"><div id="mq"></div></div>
+
+<section id="tinh-nang"><div class="wrap">
+  <div class="hd rv"><h2>Mọi thứ một project CNTT cần, không phải mở năm công cụ</h2><p>Sinh viên quản lý công việc, giảng viên theo dõi đóng góp, cùng trên một dữ liệu.</p></div>
+  <div class="bento">
+    <div class="cell f rv"><div class="ic">🗂️</div><h3>Quản lý project theo Scrum</h3><p>Tạo project, mời thành viên, chia nhóm và xây Product Backlog với Epic, User Story, Task.</p>
+      <ul><li>Story Point, Priority, Deadline cho từng task</li><li>Kanban Board kéo thả theo trạng thái</li></ul></div>
+    <div class="cell rv"><div class="ic">🏃</div><h3>Sprint rõ ràng</h3><p>Tạo sprint, đưa task vào sprint, theo dõi tiến độ và xem thống kê khi sprint kết thúc.</p></div>
+    <div class="cell rv"><div class="ic">🐙</div><h3>Tích hợp GitHub</h3><p>Liên kết repository, lấy commit qua API và xem đóng góp của từng người ngay trên dashboard.</p><div class="heat" id="heat"></div></div>
+    <div class="cell w rv"><div class="ic">🤖</div><h3>AI Agent phân tích workload</h3><p>Xây bằng Google ADK. Agent đọc task, tiến độ và hoạt động GitHub, rồi giải thích vì sao nên chuyển task nào cho ai.</p></div>
+    <div class="cell w rv"><div class="ic">🎓</div><h3>Công cụ cho giảng viên</h3><p>Quản lý lớp, sinh viên, nhóm, điểm danh và điểm số. Xem tiến độ và mức đóng góp thật của từng thành viên.</p></div>
+  </div>
+</div></section>
+
+<section id="ai" class="ai"><div class="wrap aig">
+  <div class="rv">
+    <div class="hd" style="margin:0"><h2>AI thấy sự mất cân bằng trước khi deadline tới</h2><p>Thử bấm bên cạnh: một nhóm 4 người, mỗi người đang gánh số Story Point rất khác nhau.</p></div>
+    <div class="stats"><div><b data-n="4">0</b><span>nhóm mẫu trong demo</span></div><div><b data-n="80">0</b><span>Story Point trong sprint</span></div><div><b data-n="3">0</b><span>cảnh báo rủi ro deadline</span></div></div>
+  </div>
+  <div class="panel rv">
+    <div id="mems"></div>
+    <div class="say empty" id="say">Bấm “Hỏi AI đề xuất” để xem phân tích và lý do.</div>
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn p" id="ask">Hỏi AI đề xuất</button><button class="btn" id="reset">Đặt lại</button></div>
+  </div>
+</div></section>
+
+<section id="quy-trinh"><div class="wrap">
+  <div class="hd rv"><h2>Từ backlog đến đánh giá trong bốn bước</h2></div>
+  <div class="flow rv">
+    <div class="st"><b>1</b><h3 style="font-size:19px">Lập backlog</h3><p>Epic, story và task cho project.</p></div>
+    <div class="st"><b>2</b><h3 style="font-size:19px">Chạy sprint</h3><p>Phân task, kéo thả trên Kanban.</p></div>
+    <div class="st"><b>3</b><h3 style="font-size:19px">Nghe AI</h3><p>Phát hiện lệch tải, đề xuất chia lại.</p></div>
+    <div class="st"><b>4</b><h3 style="font-size:19px">Đánh giá</h3><p>Giảng viên xem đóng góp và chấm điểm.</p></div>
+  </div>
+</div></section>
+
+<div class="wrap" id="bat-dau" style="padding-bottom:70px"><div class="end rv">
+  <h2>Cho project nhóm của bạn một nơi làm việc chung</h2>
+  <p>Miễn phí cho sinh viên và giảng viên trong môi trường học tập.</p>
+  <a class="btn p" href="#" style="font-size:17px;padding:16px 34px">Bắt đầu với UTask</a>
+</div></div>
+<footer>© 2026 UTask · Nền tảng quản lý dự án công nghệ thông tin</footer>
+
+<script>
+const $=s=>document.querySelector(s);
+// marquee
+const tags=['Product Backlog','Epic','User Story','Sprint','Kanban','Story Point','GitHub API','Google ADK','Điểm danh','Điểm số','Workload'];
+$('#mq').innerHTML=[...tags,...tags].map(t=>`<span>${t}</span>`).join('');
+// hero kanban
+const cols=['Cần làm','Đang làm','Hoàn thành'],P=['#14b8a6','#f59e0b','#5eead4','#fb7185'],N=['A','B','C','D'];
+let data=[['Thiết kế ERD',0],['API đăng nhập',0],['Trang Backlog',0],['Kanban kéo thả',1],['Kết nối GitHub',1],['Wireframe',2]].map((t,i)=>({t:t[0],c:t[1],m:i%4,id:i,pts:[3,5,2,8,5,3][i]}));
+const colEls=cols.map(n=>{const d=document.createElement('div');d.className='col';d.innerHTML=`<h4>${n}<span></span></h4>`;$('#cols').append(d);return d});
+function render(hot){
+  const first=new Map();document.querySelectorAll('.k').forEach(e=>first.set(e.dataset.id,e.getBoundingClientRect()));
+  colEls.forEach((el,ci)=>{el.querySelectorAll('.k').forEach(k=>k.remove());el.querySelector('span').textContent=data.filter(d=>d.c==ci).length;
+    data.filter(d=>d.c==ci).forEach(d=>{const k=document.createElement('div');k.className='k'+(d.id===hot?' hot':'');k.dataset.id=d.id;
+      k.innerHTML=`${d.t}<div><span>${d.pts} SP</span><span class="av" style="background:${P[d.m]}">${N[d.m]}</span></div>`;el.append(k);
+      const f=first.get(String(d.id));if(f){const l=k.getBoundingClientRect();k.animate([{transform:`translate(${f.left-l.left}px,${f.top-l.top}px)`},{transform:'none'}],{duration:700,easing:'cubic-bezier(.2,.8,.2,1)'})}})});
+  const p=Math.round(data.filter(d=>d.c==2).length/data.length*100);$('#pct').textContent=p+'%';$('#pbar').style.width=p+'%';
+}
+render();
+setInterval(()=>{const open=data.filter(d=>d.c<2);if(!open.length){data.forEach((d,i)=>d.c=i%2?1:0);render();return}
+  const t=open[Math.floor(Math.random()*open.length)];t.c++;render(t.id)},2200);
+// tilt
+const b=$('#board');b.parentElement.addEventListener('mousemove',e=>{const r=b.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;b.style.transform=`rotateY(${-9+x*14}deg) rotateX(${5-y*12}deg)`});
+b.parentElement.addEventListener('mouseleave',()=>b.style.transform='');
+// glow + card spotlight
+addEventListener('pointermove',e=>{const g=$('#glow');g.style.left=e.clientX+'px';g.style.top=e.clientY+'px'});
+document.querySelectorAll('.cell').forEach(c=>c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();c.style.setProperty('--x',e.clientX-r.left+'px');c.style.setProperty('--y',e.clientY-r.top+'px')}));
+// heat
+$('#heat').innerHTML=Array.from({length:72},(_,i)=>{const v=Math.random();return `<i style="background:${v>.75?'var(--g)':v>.5?'rgba(134,239,172,.55)':v>.3?'rgba(134,239,172,.25)':''};animation:pop2 .6s ${i*18}ms both"></i>`}).join('');
+document.head.insertAdjacentHTML('beforeend','<style>@keyframes pop2{from{transform:scale(0)}}</style>');
+// AI demo
+const mem=[['An',34],['Bình',12],['Chi',28],['Dũng',6]],after=[20,19,21,20];
+const mems=$('#mems');mem.forEach((m,i)=>mems.insertAdjacentHTML('beforeend',`<div class="mem"><span>${m[0]}</span><div class="track"><b id="t${i}"></b></div><span id="v${i}"></span></div>`));
+function set(arr,good){arr.forEach((v,i)=>{$('#t'+i).style.width=v/40*100+'%';$('#t'+i).style.background=good?'var(--g)':v>25?'var(--c)':v<10?'var(--s)':'var(--v)';$('#v'+i).textContent=v+' SP'})}
+set(mem.map(m=>m[1]));
+let typing;function type(t){clearInterval(typing);const s=$('#say');s.className='say';s.textContent='';let i=0;typing=setInterval(()=>{s.textContent=t.slice(0,++i);if(i>=t.length)clearInterval(typing)},18)}
+$('#ask').onclick=()=>{type('An và Chi đang vượt 25 SP, có nguy cơ trễ deadline. Dũng mới nhận 6 SP và ít commit tuần này. Đề xuất: chuyển 14 SP từ An sang Bình, chuyển 8 SP từ Chi sang Dũng.');setTimeout(()=>set(after,true),500)};
+$('#reset').onclick=()=>{clearInterval(typing);set(mem.map(m=>m[1]));const s=$('#say');s.className='say empty';s.textContent='Bấm “Hỏi AI đề xuất” để xem phân tích và lý do.'};
+// reveal + counters
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;e.target.classList.add('in');
+  e.target.querySelectorAll('[data-n]').forEach(n=>{const to=+n.dataset.n;let c=0;const id=setInterval(()=>{c+=Math.max(1,to/40);if(c>=to){c=to;clearInterval(id)}n.textContent=Math.round(c)},30)});io.unobserve(e.target)}),{threshold:.2});
+document.querySelectorAll('.rv').forEach(e=>io.observe(e));
+</script>
+</body>
+</html>

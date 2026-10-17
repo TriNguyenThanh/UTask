@@ -8,6 +8,97 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `django.env`: cấu hình dùng chung cho các dịch vụ Django.
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
+- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
+  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
+
+## Chọn Kafka Docker hoặc Kafka bên ngoài
+
+**Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập
+Aiven và đọc thông tin broker bằng hàm cấu hình của cả hai service từ máy
+phát triển; chưa nghiệm thu gửi/nhận sự kiện hoặc deploy VPS.
+Dùng cùng một bộ biến trên local và staging:
+
+```dotenv
+# Local: bật profile kafka để chạy broker trong Docker.
+COMPOSE_PROFILES=kafka
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_SECURITY_PROTOCOL=PLAINTEXT
+```
+
+```dotenv
+# Staging: thay bằng địa chỉ do nhà cung cấp Kafka cấp.
+COMPOSE_PROFILES=
+KAFKA_BOOTSTRAP_SERVERS=broker.example.com:9092
+```
+
+Nếu nhà cung cấp yêu cầu đăng nhập, điền thêm đúng thông số họ cấp:
+
+```dotenv
+KAFKA_SECURITY_PROTOCOL=SASL_SSL
+KAFKA_SASL_MECHANISM=PLAIN
+KAFKA_SASL_USERNAME=...
+KAFKA_SASL_PASSWORD=...
+```
+
+`KAFKA_SECURITY_PROTOCOL` chọn kiểu kết nối: `PLAINTEXT` không mã hóa,
+`SSL` mã hóa đường truyền, `SASL_PLAINTEXT` đăng nhập không mã hóa,
+`SASL_SSL` đăng nhập qua đường truyền mã hóa. `KAFKA_SASL_MECHANISM` là
+cách đăng nhập, hỗ trợ `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`;
+chỉ cần điền theo nhà cung cấp, không tự đoán. Khi không dùng SASL, client
+không gửi thông tin đăng nhập. Giá trị không hợp lệ hoặc thiếu tài khoản/mật
+khẩu khi dùng SASL khiến client dừng với lỗi cấu hình, không tự hạ kiểu kết nối.
+
+`KAFKA_SSL_CA_LOCATION` để trống để dùng chứng chỉ tin cậy mặc định của client.
+Nếu nhà cung cấp cấp chứng chỉ CA riêng (chứng chỉ dùng để xác minh máy chủ),
+Compose staging gắn thư mục `infra/env` chỉ đọc vào `/run/kafka-certificates`
+cho các container Work/Classroom. Đặt tệp tại `infra/env/ca.pem`, rồi cấu hình:
+
+```dotenv
+KAFKA_SSL_CA_LOCATION=/run/kafka-certificates/ca.pem
+```
+
+Đây là đường dẫn **trong container**, không phải đường dẫn Windows. Khi không
+dùng CA riêng, để biến trống; không bắt buộc có `ca.pem` nếu dùng Kafka Docker.
+Tệp CA chỉ dùng với `SSL`/`SASL_SSL`. Chỉ đặt chứng chỉ CA công khai và các
+mapping không chứa bí mật trong thư mục này, không đặt khóa riêng hoặc `.env`
+chứa thông tin đăng nhập.
+
+Trên VPS cũng cần tệp tại `STAGING_WORKDIR/infra/env/ca.pem`. Tệp PEM đang được
+Git bỏ qua; workflow chỉ chuyển các mapping `*.env`, không tự chuyển CA.
+Chuẩn bị CA trên VPS trước khi tạo lại container; không đưa khóa riêng vào Git.
+
+Chạy trực tiếp Docker Compose từ repository root. Compose tự đọc `.env`:
+
+```bash
+docker compose up --build -d
+
+# Trên VPS, dùng .env của staging cạnh file Compose.
+# Workflow deploy vẫn cấp image đã phát hành qua staging-images.json.
+docker compose -f docker-compose.staging.yml -f staging-images.json up -d
+```
+
+Nếu cần chạy app có profile khi thao tác staging thủ công, thêm
+`--profile work-service --profile classroom-service` trước `up`.
+Khi truyền `--profile` trên lệnh, Docker Compose ưu tiên danh sách đó thay cho
+`COMPOSE_PROFILES`; nếu vẫn dùng broker Docker, thêm cả `--profile kafka`.
+Deploy staging tự bật profile các app được phát hành và giữ lựa chọn profile
+`kafka` của máy chủ. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
+(giữ các profile khác nếu có) rồi điền địa chỉ broker.
+Không cần file Compose riêng hay script khởi động bổ sung.
+Worker chỉ chờ broker Docker khi profile `kafka` được bật; khi tắt, dependency
+này không bắt buộc. Docker Compose cần hỗ trợ `depends_on.required` (từ 2.20).
+Biến đã export trong shell được Compose ưu tiên hơn giá trị trong `.env`.
+
+Tắt profile `kafka` không tạo topic trên cloud, không chuyển dữ liệu/offset và không tự
+xóa container Kafka cũ. Chuẩn bị topic, quyền gửi/nhận, nhóm đọc và thời gian
+lưu theo [hướng dẫn Kafka](kafka.md#kafka-bên-ngoài). Giữ nguyên volume nếu
+cần quay lại broker Docker. Sau khi sửa cấu hình kết nối, tạo lại các container
+liên quan để nhận biến mới; chỉ restart không nạp lại giá trị.
+
+Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
+`infra/env/classroom-service.env` → Compose `env_file` → settings → client
+gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
+không thay đổi nội dung sự kiện.
 
 AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
 và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
@@ -24,10 +115,22 @@ Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo 
 theo mẫu repository rồi kiểm tra cấu hình Compose:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
-docker compose up --build
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+docker compose -p utask config --quiet
 ```
+
+Điền các giá trị local còn thiếu trước khi khởi động. Với Identity–Classroom–Work,
+dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
+Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
+sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
+`kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
+bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
+Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
+khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
+trước runtime theo [quy trình CI/CD](ci-cd.md).
 
 Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
 Django, token hoặc thông tin xác thực môi trường dùng chung.
@@ -107,6 +210,22 @@ runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/pr
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
+Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
+publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
+`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa Work `CLASSROOM_WORK_SERVICE_KEY`.
+Các secret để trống trong mẫu, phải điền riêng từng môi trường. Caller keys
+`classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp; không thay route
+Identity để nối Classroom. Work dùng `CLASSROOM_BASE_URL`, adapter
+`RemoteClassroom`, cùng khóa Work; staging giữ chế độ Classroom dev tắt.
+
+Classroom Celery dùng Redis DB3 (`CLASSROOM_REDIS_URL`); Work dùng DB2.
+`CLASSROOM_KAFKA_TOPIC`, `CLASSROOM_WORK_KAFKA_TOPIC`, nhóm đọc và DLQ có mapping
+riêng; phía Work nhận các biến `WORK_CLASSROOM_KAFKA_*`. `KAFKA_LOG_RETENTION_MS`
+mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp vụ và DLQ
+không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
+Chi tiết tại [Classroom backend](../classroom-service/README.md).
+
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
 deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và
@@ -125,8 +244,9 @@ giá trị không trống trong `.env` có thể thay các mặc định này. C
 khi có đủ credential và callback theo [tài liệu Identity](../identity-service/README.md).
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
-chủ đích. Script khởi tạo chỉ chạy khi volume còn trống; sửa `.env` không tự đổi tên
-database hoặc chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
+chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
+chạy script qua cơ chế khởi tạo volume mới. Sửa `.env` không tự đổi tên database hoặc
+chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
 
