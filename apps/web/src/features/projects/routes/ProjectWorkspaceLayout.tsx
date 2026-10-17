@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api/errors";
 import { studentFlowKeys, useProjectWorkspace } from "@/lib/query/studentFlowHooks";
 import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types";
 import { isReadOnlyViewer } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
 
 /** Module heading per tab, shown under the project breadcrumb. */
@@ -146,8 +147,17 @@ export default function ProjectWorkspaceLayout() {
 
   return (
     <ProjectWorkspaceContext.Provider value={contextValue}>
-      <ProjectWorkspaceHeader workspace={workspaceData} />
-      <Outlet />
+      {/* On desktop the board fills the viewport under the header and scrolls
+          per column; other modules scroll as a whole inside <main>. */}
+      <div
+        className={cn(
+          "flex flex-col",
+          contextValue.activeModule === "board" ? "lg:h-full" : "min-h-full",
+        )}
+      >
+        <ProjectWorkspaceHeader workspace={workspaceData} />
+        <Outlet />
+      </div>
     </ProjectWorkspaceContext.Provider>
   );
 }
@@ -157,7 +167,7 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
   const teacherBase = `/teacher/courses/${workspace.courseId}`;
 
   return (
-    <header className="border-b px-4 pt-4 md:px-6">
+    <header className="shrink-0 border-b px-4 pt-4 short:pt-2 md:px-6">
       {readOnly ? (
         // Built from the workspace payload, so it is right on deep link and refresh.
         <Breadcrumbs

@@ -110,7 +110,7 @@ export function SettingsProfilePage() {
 
   if (settingsQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <SettingsHeader />
         <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />
       </div>
@@ -118,13 +118,13 @@ export function SettingsProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-8 short:space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <SettingsHeader />
 
       {settingsQuery.isPending || !settings || !form ? (
         <ProfileSkeleton />
       ) : (
-        <section aria-labelledby="profile-section-title" className="space-y-6">
+        <section aria-labelledby="profile-section-title" className="space-y-6 short:space-y-3">
           <header className="space-y-1">
             <h2 id="profile-section-title" className="text-lg font-semibold">
               Thông tin Học vụ Sinh viên
@@ -134,9 +134,9 @@ export function SettingsProfilePage() {
             </p>
           </header>
 
-          <div className="flex flex-col items-start gap-5 border-y py-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start gap-5 border-y py-4 short:py-2 sm:flex-row sm:items-center">
             <div
-              className="flex size-16 shrink-0 items-center justify-center rounded-full bg-secondary text-xl font-bold text-primary"
+              className="flex size-16 short:size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-xl font-bold text-primary"
               aria-hidden
             >
               {initialsOf(form.fullName || settings.fullName)}
@@ -146,7 +146,7 @@ export function SettingsProfilePage() {
             </p>
           </div>
 
-          <form className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2" onSubmit={handleSubmit}>
+          <form className="grid grid-cols-1 gap-x-8 gap-y-6 short:gap-y-3 md:grid-cols-2" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5">

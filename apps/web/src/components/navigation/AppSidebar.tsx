@@ -105,13 +105,13 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
   const { data: notifications } = useNotifications();
   const unreadCount = notifications?.filter((item) => !item.read).length ?? 0;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto py-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 short:gap-3 overflow-y-auto py-3 short:py-2">
       <nav aria-label="Điều hướng chính" className="space-y-0.5">
         <NavLink
           to="/my-work"
           className={({ isActive }) =>
             cn(
-              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium transition-colors",
               isActive
                 ? "bg-accent font-semibold text-accent-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -135,7 +135,7 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           to="/courses"
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium transition-colors",
               isActive
                 ? "bg-accent font-semibold text-accent-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -149,7 +149,7 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           to="/projects"
           className={({ isActive }) =>
             cn(
-              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium transition-colors",
               isActive
                 ? "bg-accent font-semibold text-accent-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -173,7 +173,7 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
           to="/settings/profile"
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium transition-colors",
               isActive
                 ? "bg-accent font-semibold text-accent-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -186,7 +186,7 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
         {canUseTeacherSpace(user) ? (
           <NavLink
             to="/teacher"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="flex items-center gap-3 rounded-md px-3 py-2 short:py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <BookOpen className="size-4" aria-hidden />
             Không gian giảng viên
@@ -194,7 +194,7 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
         ) : null}
         <NavLink
           to="/notifications"
-          className="flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="flex items-center justify-between rounded-md px-3 py-2 short:py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <span className="flex items-center gap-3">
             <Bell className="size-4" aria-hidden />

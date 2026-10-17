@@ -61,7 +61,7 @@ export function SettingsSecurityPage() {
 
   if (settingsQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <SettingsHeader />
         <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />
       </div>
@@ -69,13 +69,14 @@ export function SettingsSecurityPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-8 short:space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <SettingsHeader />
 
       {settingsQuery.isPending || !settings ? (
         <SecuritySkeleton />
       ) : (
         <>
+          <div className="grid gap-8 short:gap-4 lg:grid-cols-2 lg:items-start">
           <section aria-labelledby="password-section-title" className="space-y-4">
             <header className="space-y-1">
               <h2
@@ -90,7 +91,7 @@ export function SettingsSecurityPage() {
               </p>
             </header>
             <form
-              className="max-w-md space-y-4"
+              className="max-w-md space-y-4 short:space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 toast.info("API đổi mật khẩu sẽ khả dụng khi backend hỗ trợ");
@@ -193,6 +194,8 @@ export function SettingsSecurityPage() {
               ))}
             </ul>
           </section>
+
+          </div>
 
           <section aria-labelledby="account-section-title" className="space-y-4">
             <h2 id="account-section-title" className="text-lg font-semibold">

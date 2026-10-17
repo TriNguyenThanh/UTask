@@ -924,7 +924,7 @@ export function Component() {
     const apiError =
       courseQuery.error instanceof ApiError ? courseQuery.error : null;
     return (
-      <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         {apiError?.status === 404 ? (
           <EmptyState
             title="Không tìm thấy môn học"
@@ -948,7 +948,7 @@ export function Component() {
   const course = courseQuery.data;
   if (!course || !courseId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <EmptyState
           title="Không tìm thấy môn học"
           description="Không tải được thông tin môn học."
@@ -963,7 +963,7 @@ export function Component() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <Breadcrumbs
         items={[
           { label: "Môn học của tôi", to: "/courses" },

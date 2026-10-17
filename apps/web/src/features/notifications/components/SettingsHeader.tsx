@@ -13,7 +13,7 @@ const settingsTabs = [
  */
 export function SettingsHeader() {
   return (
-    <header className="space-y-4">
+    <header className="space-y-4 short:space-y-2">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Cài đặt Cá nhân &amp; Tích hợp</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -31,7 +31,7 @@ export function SettingsHeader() {
             to={tab.to}
             className={({ isActive }) =>
               cn(
-                "-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm font-medium transition-colors",
+                "-mb-px whitespace-nowrap border-b-2 pb-2.5 short:pb-1.5 text-sm font-medium transition-colors",
                 isActive
                   ? "border-primary font-semibold text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground",

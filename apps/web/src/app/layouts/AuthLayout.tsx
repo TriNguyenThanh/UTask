@@ -12,7 +12,7 @@ export function AuthLayout({
   return (
     <div className="flex min-h-svh flex-col bg-[#faf9f8] text-[#1a1c1c]">
       <header className="w-full border-b border-[#e5e3df] bg-[#faf9f8]">
-        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-14 short:h-11 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link className="flex items-center gap-2.5" to="/login" aria-label="UTask — về trang đăng nhập">
             <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold tracking-tight text-primary-foreground">
               UT
@@ -28,13 +28,13 @@ export function AuthLayout({
         </div>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-12">
+      <main className="flex flex-1 items-center justify-center px-4 py-10 md:py-12 short:py-4">
         {children}
       </main>
 
-      <footer className="w-full border-t border-[#e5e3df] bg-[#faf9f8] py-4">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-4 text-center text-xs text-[#787586] sm:px-6 lg:flex-row lg:text-left">
-          <p>© 2026 UTask Academic Platform · Đại học Quốc gia TP.HCM</p>
+      <footer className="w-full border-t border-[#e5e3df] bg-[#faf9f8] py-4 short:py-2">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 short:gap-1 px-4 text-center text-xs text-[#787586] sm:px-6 lg:flex-row lg:text-left">
+          <p>© 2026 UTask Academic Platform</p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2" aria-label="Thông tin nền tảng">
             <span>Quy chế đồ án</span>
             <span>Chính sách bảo mật SSO</span>
