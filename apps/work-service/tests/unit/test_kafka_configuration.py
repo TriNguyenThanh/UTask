@@ -1,4 +1,6 @@
 import importlib
+import runpy
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -17,7 +19,7 @@ def connection_settings(settings):
     settings.KAFKA_SECURITY_PROTOCOL = "PLAINTEXT"
     settings.KAFKA_SASL_MECHANISM = "PLAIN"
     settings.KAFKA_SASL_USERNAME = "test-user"
-    settings.KAFKA_SASL_PASSWORD = "test-password"
+    settings.KAFKA_SASL_PASSWORD = " test-password "
     settings.KAFKA_SSL_CA_LOCATION = ""
     return settings
 
@@ -35,13 +37,12 @@ def test_plaintext_connection_omits_unused_credentials_and_ca(connection_setting
 def test_authenticated_connection_maps_credentials(connection_settings, protocol, mechanism):
     connection_settings.KAFKA_SECURITY_PROTOCOL = protocol.lower()
     connection_settings.KAFKA_SASL_MECHANISM = mechanism.lower()
-    config = kafka_connection_config()
-    assert config == {
+    assert kafka_connection_config() == {
         "bootstrap.servers": "broker.example:9092",
         "security.protocol": protocol,
         "sasl.mechanism": mechanism,
         "sasl.username": "test-user",
-        "sasl.password": "test-password",
+        "sasl.password": " test-password ",
     }
 
 
@@ -60,6 +61,7 @@ def test_encrypted_connection_accepts_optional_ca_path(connection_settings, prot
     ("name", "value"),
     [
         ("KAFKA_SECURITY_PROTOCOL", "secret-invalid-protocol"),
+        ("KAFKA_SECURITY_PROTOCOL", ""),
         ("KAFKA_SASL_MECHANISM", "secret-invalid-mechanism"),
         ("KAFKA_SASL_USERNAME", ""),
         ("KAFKA_SASL_PASSWORD", ""),
@@ -76,6 +78,7 @@ def test_invalid_authentication_fails_without_exposing_values(connection_setting
 
 def test_producer_consumer_and_dead_letter_use_same_connection(connection_settings, monkeypatch):
     connection_settings.KAFKA_SECURITY_PROTOCOL = "SASL_SSL"
+    connection_settings.KAFKA_SSL_CA_LOCATION = "/certificates/kafka-ca.pem"
     connection_settings.IDENTITY_KAFKA_TOPIC = "agreed-profile-topic"
     expected = kafka_connection_config()
     event_producer = Mock()
@@ -92,6 +95,7 @@ def test_producer_consumer_and_dead_letter_use_same_connection(connection_settin
         assert all(config[key] == value for key, value in expected.items())
     for factory in [event_producer, dead_letter_producer]:
         assert factory.call_args.args[0]["enable.idempotence"] is True
+        assert factory.call_args.args[0]["message.timeout.ms"] == 10000
     consumer_config = consumer_factory.call_args.args[0]
     assert consumer_config["enable.auto.commit"] is False
     assert consumer_config["enable.auto.offset.store"] is False
@@ -115,6 +119,25 @@ def test_invalid_credentials_stop_before_creating_clients(connection_settings, m
         client()
     producer.assert_not_called()
     consumer.assert_not_called()
+
+
+@pytest.mark.parametrize("use_environment", [False, True])
+def test_base_settings_use_environment_or_plaintext_defaults(monkeypatch, use_environment):
+    expected = {
+        "KAFKA_SECURITY_PROTOCOL": "SASL_SSL",
+        "KAFKA_SASL_MECHANISM": "SCRAM-SHA-512",
+        "KAFKA_SASL_USERNAME": "configured-user",
+        "KAFKA_SASL_PASSWORD": "configured-password",
+        "KAFKA_SSL_CA_LOCATION": "/certificates/ca.pem",
+    }
+    for name, value in expected.items():
+        monkeypatch.delenv(name, raising=False)
+        if use_environment:
+            monkeypatch.setenv(name, value)
+    if not use_environment:
+        expected = dict(zip(expected, ["PLAINTEXT", "PLAIN", "", "", ""], strict=True))
+    values = runpy.run_path(str(Path(__file__).resolve().parents[2] / "config/settings/base.py"))
+    assert {name: values[name] for name in expected} == expected
 
 
 def test_base_settings_read_kafka_environment(monkeypatch):
