@@ -7,6 +7,7 @@ MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'django.middlewar
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
+TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'APP_DIRS': True}]
 USE_TZ = True
 TIME_ZONE = 'UTC'
 LANGUAGE_CODE = 'vi'
