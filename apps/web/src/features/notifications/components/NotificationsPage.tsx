@@ -182,7 +182,7 @@ export function NotificationsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+    <div className="page-container space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <header className="flex flex-col justify-between gap-4 border-b pb-4 md:flex-row md:items-center">
         <div>
           <div className="flex items-center gap-3">

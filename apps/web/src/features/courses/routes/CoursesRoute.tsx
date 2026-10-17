@@ -104,7 +104,7 @@ export function Component() {
 
   if (overviewQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+      <div className="page-container px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <ErrorState
           error={overviewQuery.error}
           onRetry={() => void overviewQuery.refetch()}
@@ -114,7 +114,7 @@ export function Component() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+    <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <div className="border-b pb-4">
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <GraduationCap className="size-6 text-primary" aria-hidden />

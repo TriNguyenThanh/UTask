@@ -216,7 +216,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 function ProjectsSkeleton() {
   return (
     <div
-      className="mx-auto max-w-5xl space-y-6 p-4 md:p-6"
+      className="page-container space-y-6 p-4 md:p-6"
       role="status"
       aria-label="Đang tải danh sách dự án"
     >
@@ -276,7 +276,7 @@ export default function ProjectsRoute() {
     : roleProjects;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
+    <div className="page-container space-y-5 p-4 md:p-6">
       {/* Page title */}
       <div>
         <h1 className="text-xl font-bold tracking-tight md:text-2xl">
