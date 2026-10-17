@@ -8,6 +8,8 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `django.env`: cấu hình dùng chung cho các dịch vụ Django.
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
+- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
+  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
 AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
 và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
