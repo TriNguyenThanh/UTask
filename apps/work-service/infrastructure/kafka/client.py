@@ -4,13 +4,14 @@ from confluent_kafka import Producer
 from django.conf import settings
 
 from apps.messaging.services import canonical_json
+from infrastructure.kafka.configuration import kafka_connection_config
 
 
 class KafkaPublisher:
     def __init__(self):
         self.producer = Producer(
             {
-                "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_connection_config(),
                 "enable.idempotence": True,
                 "message.timeout.ms": 10000,
             }

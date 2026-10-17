@@ -5,13 +5,14 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.messaging.consumer import process_record
+from infrastructure.kafka import kafka_connection_config
 
 
 class DeadLetterPublisher:
     def __init__(self):
         self.producer = Producer(
             {
-                "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_connection_config(),
                 "enable.idempotence": True,
                 "message.timeout.ms": 10000,
             }
@@ -39,7 +40,7 @@ class Command(BaseCommand):
             raise CommandError("WORK_WORK_KAFKA_TOPIC requires an agreed producer topic")
         consumer = Consumer(
             {
-                "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_connection_config(),
                 "group.id": settings.WORK_KAFKA_GROUP,
                 "enable.auto.commit": False,
                 "enable.auto.offset.store": False,

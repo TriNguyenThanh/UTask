@@ -100,6 +100,78 @@ class KafkaProfileDeploymentTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("docker"), "Requires Docker Compose")
 class NativeKafkaComposeTests(unittest.TestCase):
+    def test_staging_certificate_directory_is_read_only_and_ca_file_optional(self):
+        recipients = {
+            "work-service",
+            "work-publisher",
+            "work-beat",
+            "work-profile-consumer",
+            "work-group-consumer",
+            "classroom-service",
+            "classroom-publisher",
+            "classroom-beat",
+            "classroom-work-consumer",
+        }
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("COMPOSE_", "KAFKA_"))
+        }
+        env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="test")
+        with tempfile.TemporaryDirectory() as directory:
+            checkout = Path(directory)
+            mappings = checkout / "infra/env"
+            mappings.mkdir(parents=True)
+            for mapping in (ROOT / "infra/env").glob("*.env"):
+                shutil.copyfile(mapping, mappings / mapping.name)
+            shutil.copyfile(
+                ROOT / "docker-compose.staging.yml",
+                checkout / "docker-compose.staging.yml",
+            )
+            self.assertFalse((mappings / "ca.pem").exists())
+            for ca_location in ("", "/run/kafka-certificates/ca.pem"):
+                with self.subTest(ca_location=ca_location):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            str(ROOT / ".env.example"),
+                            "-f",
+                            "docker-compose.staging.yml",
+                            "--profile",
+                            "*",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=checkout,
+                        env={**env, "KAFKA_SSL_CA_LOCATION": ca_location},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    self.assertLessEqual(recipients, services.keys())
+                    for name, runtime in services.items():
+                        mounts = [
+                            mount
+                            for mount in runtime.get("volumes", [])
+                            if mount["target"] == "/run/kafka-certificates"
+                        ]
+                        self.assertEqual(len(mounts), int(name in recipients))
+                        if name in recipients:
+                            self.assertEqual(mounts[0]["type"], "bind")
+                            self.assertTrue(mounts[0]["read_only"])
+                            self.assertEqual(
+                                Path(mounts[0]["source"]).resolve(), mappings.resolve()
+                            )
+                            self.assertEqual(
+                                runtime["environment"]["KAFKA_SSL_CA_LOCATION"],
+                                ca_location,
+                            )
+
     def test_native_profiles_and_external_auth_without_local_cluster_id(self):
         env = {
             key: value
