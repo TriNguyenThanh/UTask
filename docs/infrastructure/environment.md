@@ -145,3 +145,39 @@ Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volu
 `ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
 volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
 Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.
+
+Classroom khi bật                                                |
+| `INTEGRATION_DB_NAME`, `INTEGRATION_DJANGO_SECRET_KEY`         | Integration khi bật                                              |
+| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
+
+Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
+Không tạo thêm `.env` trong từng container và không đưa nguyên `.env` chung vào tất cả
+app. Hiện chỉ cần điền secret runtime của Identity và PostgreSQL, cùng khóa mail nếu
+dùng đăng ký/reset; các app chưa bật chưa cần secret riêng. Giữ các tên database theo
+mẫu cho script khởi tạo PostgreSQL. Xem [phạm vi staging và biến cần có](ci-cd.md).
+
+Sau khi sửa `.env`, phải tạo lại container của service để áp dụng biến mới, không chỉ
+`restart`. Workflow deploy lần tiếp theo sẽ áp dụng; nếu thao tác thủ công, cấp đúng
+hai biến nội suy image prefix/tag và giữ file `staging-images.json` của lần phát hành.
+Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
+`up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
+
+Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
+
+Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
+publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
+`WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
+có placeholder trống trong `.env.example`; chỉ điền credentials của môi trường
+được phép dùng. `WORK_STORAGE_ADAPTER` mặc định tại mapping là
+`infrastructure.storage.R2Storage`. `WORK_AI_ADAPTER` và
+`WORK_INTEGRATION_ADAPTER` mặc định vẫn là `UnavailableProposals` và
+`UnavailableIntegration`: thêm mapping không tự nối service thật. Giữ
+`WORK_CLASSROOM_DEV_ENABLED=false` ở staging; không đưa fixture test vào adapter
+runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
+
+`env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
+
+Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
+publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
+`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa
