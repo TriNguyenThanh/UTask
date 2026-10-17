@@ -27,14 +27,18 @@ services:
     env_file:
       - ./infra/env/database.env
       - ./infra/env/postgres.env
+    entrypoint: ["/bin/sh", "/usr/local/bin/start-postgres.sh"]
+    command: ["postgres"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/start-postgres.sh:/usr/local/bin/start-postgres.sh:ro
       - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "test -f /tmp/utask-postgres-ready && pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 150s
 
   redis:
     image: redis:7-alpine
