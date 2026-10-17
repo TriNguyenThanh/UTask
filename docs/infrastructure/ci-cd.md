@@ -94,12 +94,22 @@ Workflow dùng chung nhận các input tùy chọn từ job gọi trong `ci.yml`
 | --- | --- | --- |
 | `postgres` | `false` | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
 | `redis` | `false` | Khởi tạo Redis 7 tại `127.0.0.1:6379`. |
-| `test_env` | `{}` | JSON chứa biến kiểm thử không bí mật, truyền vào pytest và gate Django. |
 | `django` | `false` | Chạy system check, kiểm tra lệch model/migration và bảo vệ lịch sử migration trên PR. |
 
 Hai container thuộc riêng từng job trên runner tạm thời. Health checks phải đạt trước
 khi chạy các bước kiểm tra. Credential trên chỉ dành cho CI; không dùng secrets
-staging/production hoặc `.env` local cho pytest. `test_env` không phải cơ chế truyền secrets.
+staging/production hoặc `.env` local cho pytest. `x-ci.test_env` trong Compose
+chỉ chứa cấu hình kiểm thử, không phải cơ chế truyền secrets.
+
+Matrix truyền giữa các job chỉ chứa tên service và các cờ chọn PostgreSQL,
+Redis, Django. Không đưa `test_env` hoặc giá trị mật khẩu kiểm thử vào job output:
+GitHub có thể bỏ toàn bộ output khi nhận diện giá trị giống secret, khiến
+matrix không khởi tạo được dù job nhận diện service báo thành công.
+Sau checkout, mỗi job Python chạy `scripts/discover_services.py --write-test-env
+<service>` để đọc lại metadata của cùng commit và ghi vào `GITHUB_ENV` (tệp biến
+môi trường dành cho các bước tiếp theo trong chính job đó). Các bước tạo database
+kiểm thử, Django check và pytest nhận cùng cấu hình như CI local, không truyền
+credential qua output giữa các job và không in giá trị ra log.
 
 Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME=ci`,
 `IDENTITY_TEST_DB_NAME=test_identity_ci` cùng `IDENTITY_TEST_REDIS_URL` dùng Redis DB15.

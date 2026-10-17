@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -242,15 +243,58 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
     }
 
 
+def write_test_environment(root: Path, service: str, output: Path):
+    """Hydrate one service's test environment on its own GitHub runner."""
+    if not re.fullmatch(r"[a-z][a-z0-9-]*-service", service):
+        raise ValueError("Invalid Python service name")
+    result = discover_services(root, shared=True)
+    check = next(
+        (check for check in result["checks"]["include"] if check["service"] == service),
+        None,
+    )
+    if check is None:
+        raise ValueError(f"Unknown Python service: {service}")
+    environment = json.loads(check["test_env"])
+    for name, value in environment.items():
+        if (
+            not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name)
+            or name.startswith(("GITHUB_", "RUNNER_"))
+            or name == "NODE_OPTIONS"
+        ):
+            raise ValueError("Invalid or reserved test environment variable name")
+        if any(character in value for character in ("\n", "\r", "\0")):
+            raise ValueError("Test environment values must be single-line without NUL")
+    with output.open("a", encoding="utf-8", newline="\n") as file:
+        file.writelines(f"{name}={value}\n" for name, value in environment.items())
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write-test-env", metavar="SERVICE")
+    arguments = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    if arguments.write_test_env:
+        output = os.environ.get("GITHUB_ENV")
+        if not output:
+            parser.error("--write-test-env requires GITHUB_ENV")
+        write_test_environment(root, arguments.write_test_env, Path(output))
+        return
     result = discover_services(
-        Path(__file__).resolve().parents[1],
+        root,
         json.loads(os.environ.get("CHANGED_FILES", "[]")),
         shared=os.environ.get("SHARED_CHANGED") == "true",
         deployment=os.environ.get("DEPLOYMENT_CHANGED") == "true",
     )
     output = os.environ.get("GITHUB_OUTPUT")
     if output:
+        # Runner job outputs may be dropped wholesale when a matrix includes
+        # credential-shaped test values. Only transport scheduling metadata.
+        result["checks"] = {
+            "include": [
+                {key: check[key] for key in ("service", "postgres", "redis", "django")}
+                for check in result["checks"]["include"]
+            ]
+        }
         with open(output, "a") as file:
             file.writelines(
                 f"{name}={json.dumps(value)}\n" for name, value in result.items()
