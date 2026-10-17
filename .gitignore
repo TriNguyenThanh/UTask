@@ -100,6 +100,21 @@ CLAUDE.md
 .claude/skills/gitnexus-*/
 .stitch/
 
-# Ignore rules retained from origin Classroom branch
-.agents/
-.claude/
+.claude
+reports/
+apps/work-service/tools/api_workflows/
+apps/classroom-service/tools/api_workflows/
+.agents/skills/
+docs/diagram/identity-service/assets/
+CLAUDE.md
+apps/work-service/commit-plan.md
+docs/diagram/work-service/index.html
+docs/diagram/classroom-service/assets/
+artifacts/
+docs/diagram/classroom-service/index.html
+docs/classroom-service/backend-validation.md
+docs/classroom-service/implementation-plan.md
+docs/classroom-service/commit-plan.md
+docs/classroom-service/api-workflows.md
+scripts/classroom_backend_e2e.py
+scripts/sync_classroom_diagrams.py
