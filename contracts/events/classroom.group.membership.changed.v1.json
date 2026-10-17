@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Classroom group membership changed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "const": "classroom.group.membership.changed"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "producer": {
+      "const": "classroom-service"
+    },
+    "class_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entity_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "class_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "data": {
+      "$ref": "#/$defs/GroupSnapshot"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "aggregate_id",
+    "occurred_at",
+    "trace_id",
+    "producer",
+    "class_id",
+    "entity_version",
+    "class_sequence",
+    "data"
+  ],
+  "$defs": {
+    "MemberFact": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "role": {
+          "$ref": "#/$defs/MemberFactRoleEnum"
+        },
+        "status": {
+          "$ref": "#/$defs/MemberFactStatusEnum"
+        }
+      },
+      "required": [
+        "role",
+        "status",
+        "user_id"
+      ]
+    },
+    "MemberFactRoleEnum": {
+      "enum": [
+        "LEADER",
+        "MEMBER"
+      ],
+      "type": "string",
+      "description": "* `LEADER` - LEADER\n* `MEMBER` - MEMBER"
+    },
+    "MemberFactStatusEnum": {
+      "enum": [
+        "ACTIVE",
+        "LEFT",
+        "REMOVED"
+      ],
+      "type": "string",
+      "description": "* `ACTIVE` - ACTIVE\n* `LEFT` - LEFT\n* `REMOVED` - REMOVED"
+    },
+    "GroupSnapshot": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "class_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemberFact"
+          }
+        }
+      },
+      "required": [
+        "class_id",
+        "group_id",
+        "members",
+        "source_version"
+      ]
+    }
+  }
+}

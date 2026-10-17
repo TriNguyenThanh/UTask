@@ -8,6 +8,8 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `django.env`: cấu hình dùng chung cho các dịch vụ Django.
 - `postgres.env`: tên database do script khởi tạo sử dụng.
 - `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
+- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
+  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
 AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
 và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
@@ -24,10 +26,22 @@ Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo 
 theo mẫu repository rồi kiểm tra cấu hình Compose:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose config --quiet
-docker compose up --build
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+docker compose -p utask config --quiet
 ```
+
+Điền các giá trị local còn thiếu trước khi khởi động. Với Identity–Classroom–Work,
+dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
+Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
+sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
+`kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
+bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
+Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
+khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
+trước runtime theo [quy trình CI/CD](ci-cd.md).
 
 Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
 Django, token hoặc thông tin xác thực môi trường dùng chung.
@@ -107,6 +121,22 @@ runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/pr
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
+Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
+publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
+`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa Work `CLASSROOM_WORK_SERVICE_KEY`.
+Các secret để trống trong mẫu, phải điền riêng từng môi trường. Caller keys
+`classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp; không thay route
+Identity để nối Classroom. Work dùng `CLASSROOM_BASE_URL`, adapter
+`RemoteClassroom`, cùng khóa Work; staging giữ chế độ Classroom dev tắt.
+
+Classroom Celery dùng Redis DB3 (`CLASSROOM_REDIS_URL`); Work dùng DB2.
+`CLASSROOM_KAFKA_TOPIC`, `CLASSROOM_WORK_KAFKA_TOPIC`, nhóm đọc và DLQ có mapping
+riêng; phía Work nhận các biến `WORK_CLASSROOM_KAFKA_*`. `KAFKA_LOG_RETENTION_MS`
+mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp vụ và DLQ
+không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
+Chi tiết tại [Classroom backend](../classroom-service/README.md).
+
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
 deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và
@@ -125,8 +155,9 @@ giá trị không trống trong `.env` có thể thay các mặc định này. C
 khi có đủ credential và callback theo [tài liệu Identity](../identity-service/README.md).
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
-chủ đích. Script khởi tạo chỉ chạy khi volume còn trống; sửa `.env` không tự đổi tên
-database hoặc chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
+chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
+chạy script qua cơ chế khởi tạo volume mới. Sửa `.env` không tự đổi tên database hoặc
+chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
 
