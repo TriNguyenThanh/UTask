@@ -96,8 +96,6 @@ bằng mã, màn cấu hình project, màn AI sinh backlog, màn kết nối rep
 
 - Không có ESLint, Prettier hay `.editorconfig`; `pnpm lint` chỉ là `tsc --noEmit`.
 - Không có test e2e. Không có `Dockerfile` hay bước deploy cho web.
-- Test `MyWork.test.tsx` "surfaces overdue tasks…" sai khi chạy trong khoảng
-  00:00–12:00 giờ địa phương ([teacher-flow.md §16.10](teacher-flow.md#1610-sửa-sau-review)).
 - `@vitejs/plugin-react` nằm ở `dependencies`.
 - [HomeRoute.tsx](../../apps/web/src/app/routes/HomeRoute.tsx) không được tham
   chiếu ở đâu.

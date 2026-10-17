@@ -1135,7 +1135,7 @@ Sáu điểm tìm thấy khi rà lại flow Teacher, đã sửa và có test:
 Ghi chú kiểm tra: test cache (mục 1) ban đầu vẫn qua khi bỏ bản sửa vì client test không có
 `staleTime` 30 giây như app; đã chỉnh test dùng cấu hình giống app và xác nhận nó đỏ khi bỏ bản sửa.
 
-Lỗi có sẵn, không do thay đổi này: `MyWork.test.tsx` "surfaces overdue tasks…" sai khi chạy trong
-khoảng 00:00–12:00 giờ địa phương, vì `TaskRow.formatDue` làm tròn chênh lệch về 0 ngày cho task
-hạn "hôm qua 17:00" và không hiện "Quá hạn N ngày". Chưa sửa vì thuộc luồng My Work.
+Đã sửa 17/10/2026: `TaskRow.formatDue` so hai mốc theo ngày lịch (chuẩn về 0h) trước khi tính số
+ngày, thay vì so hai mốc thời gian nguyên (một bên cố định giờ, một bên là giờ hiện tại), nên không
+còn phụ thuộc giờ chạy test. Có `TaskRow.test.ts` quét đủ 24 giờ để bảo đảm.
 
