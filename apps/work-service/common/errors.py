@@ -14,7 +14,6 @@ CONSTRAINT_ERRORS = {
     "uq_epic_name_per_project": (409, "EPIC_NAME_EXISTS"),
     "uq_label_name_per_project": (409, "LABEL_NAME_EXISTS"),
     "uq_projects_identifier": (409, "DUPLICATE_IDENTIFIER"),
-    "uq_one_primary_project_per_group": (409, "GROUP_PROJECT_ALREADY_EXISTS"),
     "uq_one_leader_per_project": (409, "ONE_LEADER_PER_PROJECT"),
     "uq_state_name_per_project": (409, "STATE_NAME_EXISTS"),
     "uq_state_slug_per_project": (409, "STATE_NAME_EXISTS"),

@@ -84,11 +84,13 @@ def test_reused_key_and_group_conflicts(created_project, client_for, actors, pro
         format="json",
         HTTP_IDEMPOTENCY_KEY="other",
     )
-    assert (
-        result.status_code == 409
-        and result.json()["error"]["code"] == "GROUP_PROJECT_ALREADY_EXISTS"
+    assert result.status_code == 201
+    assert Project.objects.count() == 2
+    duplicate = client.post(
+        "/projects/", project_payload, format="json", HTTP_IDEMPOTENCY_KEY="duplicate-identifier"
     )
-    assert Project.objects.count() == 1
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "DUPLICATE_IDENTIFIER"
 
 
 def test_replay_rechecks_current_membership(created_project, client_for, actors, project_payload):
@@ -174,11 +176,9 @@ def test_unarchive_uniqueness_and_identifier_retained(
     )
     assert other.status_code == 201
     result = client.post(path + "unarchive/", {"expected_version": 2}, format="json")
-    assert (
-        result.status_code == 409
-        and result.json()["error"]["code"] == "GROUP_PROJECT_ALREADY_EXISTS"
-    )
-    assert Project.objects.get(pk=created_project["id"]).archived_at is not None
+    assert result.status_code == 200
+    assert Project.objects.filter(archived_at__isnull=True).count() == 2
+    assert Project.objects.get(pk=created_project["id"]).archived_at is None
 
 
 def test_scoped_list_cursor_and_members(created_project, client_for, actors, classroom, settings):
