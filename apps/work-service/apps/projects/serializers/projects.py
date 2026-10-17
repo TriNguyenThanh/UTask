@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from rest_framework import serializers
 
 from apps.projects.models import Project
@@ -54,6 +56,14 @@ class CreateProjectSerializer(StrictInputSerializer):
     start_date = serializers.DateField(required=False, allow_null=True, default=None)
     end_date = serializers.DateField(required=False, allow_null=True, default=None)
     classroom_group_id = serializers.CharField(max_length=100)
+
+    def validate_classroom_group_id(self, value):
+        try:
+            return str(UUID(value))
+        except ValueError:
+            # Developer adapters retain their logical string IDs; the remote
+            # authority adapter validates UUIDs before making an HTTP request.
+            return value
 
     def validate(self, attrs):
         if (

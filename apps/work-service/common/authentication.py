@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 import jwt
@@ -13,6 +13,7 @@ from infrastructure.identity import IdentityClient
 class Actor:
     id: UUID
     is_authenticated: bool = True
+    access_token: str = field(default="", repr=False, compare=False)
 
 
 class WorkJWTAuthentication(BaseAuthentication):
@@ -50,7 +51,7 @@ class WorkJWTAuthentication(BaseAuthentication):
                 audience=settings.IDENTITY_JWT_AUDIENCE,
                 options={"require": ["exp", "iss", "aud", "sub", "token_type"]},
             )
-            actor = Actor(UUID(claims["sub"]))
+            actor = Actor(UUID(claims["sub"]), access_token=token)
             if claims["token_type"] != "access":
                 raise jwt.InvalidTokenError("Access token required")
         except (jwt.PyJWTError, ValueError, TypeError, KeyError, UnicodeError) as exc:
