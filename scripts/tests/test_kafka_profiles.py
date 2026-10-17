@@ -1,28 +1,101 @@
 """Native Kafka Compose profiles and staging infrastructure selection."""
 
-
 import json
-
-
 import os
-
-
 import shutil
-
-
 import subprocess
-
-
 import tempfile
-
-
 import unittest
-
-
 from pathlib import Path
 
+from scripts.discover_services import discover_services, validate_runtime
+from scripts.tests.fixtures.deployment import (
+    deployment_runtime,
+    docker_calls,
+    run_staging_deploy,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class OptionalDependencyDiscoveryTests(unittest.TestCase):
+    def test_optional_broker_remains_a_deployment_candidate(self):
+        result = discover_services(ROOT)
+        self.assertIn("kafka", result["infrastructure_services"])
+
+    def test_optional_inactive_worker_is_not_activated(self):
+        health = {"test": ["CMD", "true"]}
+        compose = {
+            "sample-service": {
+                "healthcheck": health,
+                "depends_on": {"disabled-worker": {"required": False}},
+            },
+            "nginx": {"healthcheck": health, "x-deploy": {"role": "gateway"}},
+            "disabled-worker": {
+                "profiles": ["disabled"],
+                "x-deploy": {"role": "worker", "application": "missing-service"},
+            },
+        }
+        infrastructure, gateway, dependencies = validate_runtime(
+            compose, {"sample-service": {}}
+        )
+        self.assertEqual(infrastructure, [])
+        self.assertEqual(gateway, "nginx")
+        self.assertEqual(dependencies["sample-service"], set())
+        compose["sample-service"]["depends_on"]["disabled-worker"]["required"] = True
+        with self.assertRaisesRegex(ValueError, "healthcheck"):
+            validate_runtime(compose, {"sample-service": {}})
+
+
+@unittest.skipUnless(os.name != "nt" and shutil.which("bash"), "Requires POSIX Bash")
+class KafkaProfileDeploymentTests(unittest.TestCase):
+    def test_server_kafka_profile_controls_broker_start_and_wait(self):
+        for selected in ("", "kafka", "kafka,work-service"):
+            with (
+                self.subTest(selected=selected),
+                deployment_runtime() as (root, env, calls),
+            ):
+                env["COMPOSE_TEST_ENVIRONMENT"] = (
+                    f"COMPOSE_PROFILES={selected}\nPRIVATE=never-print-this\n"
+                )
+                env["infrastructure_names"] = "postgres redis kafka"
+                env["EXPECTED_INFRASTRUCTURE_NAMES"] = "postgres redis" + (
+                    " kafka" if "kafka" in selected else ""
+                )
+                result = run_staging_deploy(root, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                commands = docker_calls(calls)
+                self.assertEqual(
+                    any("up" in c and "kafka" in c[c.index("up") :] for c in commands),
+                    "kafka" in selected,
+                )
+                self.assertNotIn("never-print-this", result.stdout + result.stderr)
+                infrastructure_up = next(c for c in commands if "up" in c)
+                self.assertIn("--wait", infrastructure_up)
+                self.assertLess(
+                    commands.index(infrastructure_up),
+                    next(i for i, c in enumerate(commands) if "migrate" in c),
+                )
+                for command in commands:
+                    if "up" in command:
+                        self.assertEqual(
+                            any(
+                                command[i : i + 2] == ["--profile", "kafka"]
+                                for i in range(len(command) - 1)
+                            ),
+                            "kafka" in selected,
+                        )
+
+    def test_profile_probe_failure_stops_before_login_or_container_mutations(self):
+        with deployment_runtime(fail_on="environment") as (root, env, calls):
+            result = run_staging_deploy(root, env)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(
+                any(
+                    "login" in c or "up" in c or "pull" in c
+                    for c in docker_calls(calls)
+                )
+            )
 
 
 @unittest.skipUnless(shutil.which("docker"), "Requires Docker Compose")

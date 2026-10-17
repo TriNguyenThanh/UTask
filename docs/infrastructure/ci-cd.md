@@ -67,14 +67,19 @@ migration đã trên nhánh gốc; migration mới được phép thêm. Gate n�
 đã merge, không xác định migration nào đã áp dụng trên từng VPS.
 
 Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
-profile cùng tên service; Kafka có profile `kafka` và được bật cùng profile Work.
-Workflow cấp profile từ kết quả nhận diện, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
+profile cùng tên service; Kafka Docker chỉ chạy khi bật profile `kafka`
+trong `COMPOSE_PROFILES` của `.env` trên VPS. Bỏ profile này khi dùng broker
+bên ngoài; worker không bắt buộc phụ thuộc broker Docker. Xem
+[cấu hình Kafka theo môi trường](environment.md#chọn-kafka-docker-hoặc-kafka-bên-ngoài).
+Workflow cấp profile app từ kết quả nhận diện; script deploy giữ thêm lựa chọn
+profile `kafka` của máy chủ.
 Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy để khởi động;
 backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
 
 `docker-compose.yml` dành cho local, có build context và port hỗ trợ phát triển.
 `docker-compose.staging.yml` là file độc lập dùng image đã phát hành, chỉ publish Nginx.
-PostgreSQL/Redis/Kafka vẫn thuộc stack staging; không dùng cấu hình này làm production.
+PostgreSQL/Redis vẫn thuộc stack staging; Kafka mặc định thuộc stack hoặc dùng
+broker bên ngoài theo profile `kafka`. Không dùng cấu hình này làm production.
 Hai file giữ project name `utask` và tên volume để server staging đang dùng có thể chuyển
 file mà không tạo một bộ dữ liệu khác. Không chạy cả hai stack trong cùng Docker host/project.
 
