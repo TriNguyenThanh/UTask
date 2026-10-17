@@ -378,6 +378,173 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/enrollments/:
+    get:
+      operationId: classes_enrollments_retrieve
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentListViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /classes/{class_id}/enrollments/{enrollment_id}/exit/:
+    post:
+      operationId: classes_enrollments_exit_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: enrollment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentExit'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentExitViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/{class_id}/groups/:
     get:
       operationId: classes_groups_retrieve
@@ -699,6 +866,86 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/students/:
+    post:
+      operationId: classes_students_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentList'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentListViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/{class_id}/teachers/:
     get:
       operationId: classes_teachers_retrieve
@@ -811,6 +1058,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClassTeacherViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /classes/join/:
+    post:
+      operationId: classes_join_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinCode'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassJoinViewResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassJoinViewCreated'
           description: ''
         '400':
           content:
@@ -2290,6 +2617,58 @@ components:
       - name
       - starts_on
       - term
+    ClassJoinViewCreated:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Enrollment'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ClassJoinViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Enrollment'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     ClassList:
       type: object
       properties:
@@ -2620,6 +2999,132 @@ components:
       - message
       - meta
       - success
+    Enrollment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          maxLength: 20
+        source:
+          type: string
+          maxLength: 20
+        enrolled_at:
+          type: string
+          format: date-time
+        left_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        profile:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+      required:
+      - class_section_id
+      - id
+      - profile
+      - user_id
+    EnrollmentExit:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    EnrollmentExitViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Enrollment'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    EnrollmentListViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/Enrollment'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    EnrollmentSummary:
+      type: object
+      properties:
+        total_records:
+          type: integer
+        enrolled:
+          type: integer
+        already_enrolled:
+          type: integer
+        failed:
+          type: integer
+        created_accounts:
+          type: integer
+        existing_accounts:
+          type: integer
+        flagged:
+          type: integer
+        duplicates:
+          type: integer
+      required:
+      - already_enrolled
+      - created_accounts
+      - duplicates
+      - enrolled
+      - existing_accounts
+      - failed
+      - flagged
+      - total_records
     ErrorDetail:
       type: object
       properties:
@@ -3164,6 +3669,57 @@ components:
       description: |-
         * `PRIMARY` - PRIMARY
         * `CO_TEACHER` - CO_TEACHER
+    StudentList:
+      type: object
+      properties:
+        students:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          maxItems: 100
+          minItems: 1
+      required:
+      - students
+    StudentListResult:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/EnrollmentSummary'
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - results
+      - summary
+    StudentListViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/StudentListResult'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     Teacher:
       type: object
       properties:
