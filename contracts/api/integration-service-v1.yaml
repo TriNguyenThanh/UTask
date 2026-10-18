@@ -1,0 +1,270 @@
+openapi: 3.1.0
+info:
+  title: UTask Integration API
+  version: 1.1.0
+  description: >-
+    Integration sở hữu GitHub account mapping. Health và GET/DELETE account
+    đã triển khai; OAuth consent thuộc M3 và chưa có route/provider adapter.
+    Xác thực actor qua Identity GET /users/me hiện có, không cần sửa Identity.
+    Không dùng Identity OAuth proof/mapping hoặc endpoint Work chưa triển khai.
+servers:
+  - url: /api/integrations
+    description: Qua gateway; internal path bị chặn.
+  - url: http://integration-service:8000
+    description: Root server trong mạng backend.
+x-utask-ownership: integration-service
+security: []
+paths:
+  /healthz:
+    get:
+      operationId: integrationHealth
+      summary: Kiểm tra DB Integration bằng SELECT 1
+      x-utask-status: implemented
+      responses:
+        '200':
+          description: DB sẵn sàng.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Healthy'}
+              example: {status: ok}
+        '503':
+          description: DB không khả dụng, không trả chi tiết lỗi.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Unavailable'}
+              example: {status: unavailable}
+    head:
+      operationId: integrationHealthHead
+      summary: Kiểm tra DB, không trả body
+      x-utask-status: implemented
+      responses:
+        '200': {description: DB sẵn sàng.}
+        '503': {description: DB không khả dụng.}
+  /api/v1/github/account:
+    get:
+      operationId: getOwnGitHubAccount
+      summary: Đọc mapping GitHub của actor hiện tại
+      x-utask-status: implemented
+      security: [{ActorBearer: []}]
+      description: >-
+        Không nhận query hoặc body. Actor lấy từ Identity GET /users/me bằng
+        Bearer hiện tại; không nhận user_id hoặc key service thay user.
+        Chưa liên kết trả UNLINKED/version 0. Metadata GitHub bị ẩn khi REVOKED.
+        Response Cache-Control private, no-store; không cache quyền cho phép.
+      responses:
+        '200': {$ref: '#/components/responses/Account'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: revokeOwnGitHubAccount
+      summary: Thu hồi mapping GitHub của actor hiện tại
+      x-utask-status: implemented
+      security: [{ActorBearer: []}]
+      description: >-
+        Không nhận query/body hoặc actor ID. Transaction chỉ đổi row của user
+        hiện tại. Lần thu hồi đầu tăng source_version, lần lặp lại giữ nguyên.
+        Không gỡ installation dùng chung, không đổi Identity hoặc Work.
+        Hiện chỉ thu hồi mapping local; chưa có credential/provider adapter để
+        gọi GitHub revoke token. Không tạo row khi user chưa có mapping.
+      responses:
+        '200': {$ref: '#/components/responses/Account'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    head:
+      operationId: headOwnGitHubAccount
+      summary: Kiểm tra cùng quyền/nguồn với GET, không trả body
+      x-utask-status: implemented
+      security: [{ActorBearer: []}]
+      responses:
+        '200': {description: Actor được xác thực và dữ liệu truy cập được.}
+        '400': {description: Endpoint không nhận query/body.}
+        '401': {description: Bearer/phiên không hợp lệ.}
+        '503': {description: Identity hoặc DB không khả dụng.}
+  /api/v1/github/authorizations/start:
+    post:
+      operationId: startOwnGitHubConsent
+      summary: Thiết kế M3 — bắt đầu consent GitHub App của cá nhân
+      x-utask-status: design-not-implemented-m3
+      security: [{ActorBearer: []}]
+      description: >-
+        Chưa có route. Không cần project_id/leader/Identity GitHub link.
+        State dùng một lần TTL 10 phút, binding actor/session/browser nonce,
+        PKCE S256 và redirect URI cấu hình allowlist chính xác. Integration
+        giữ verifier. Cookie nonce HttpOnly, SameSite=Lax, Secure ở staging.
+      responses:
+        '200':
+          description: URL GitHub authorize đã ràng buộc state, không token.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConsentStartResponse'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/github/authorizations/complete:
+    post:
+      operationId: completeOwnGitHubConsent
+      summary: Thiết kế M3 — xác minh GitHub và lưu mapping ở Integration
+      x-utask-status: design-not-implemented-m3
+      security: [{ActorBearer: []}]
+      description: >-
+        Chưa có route/provider adapter. Kiểm actor/session/state/cookie lại,
+        đổi code theo registration Integration và gọi GitHub /user bằng token
+        mới; ID/login phải từ provider, không từ JSON client. State chỉ dùng
+        một lần; timeout exchange không xác định yêu cầu flow mới. Trùng GitHub
+        ID active của user khác hoặc đổi ID đang liên kết trả 409. Không trả
+        token/code/verifier; credential tương lai chỉ lưu mã hóa tại Integration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConsentCompleteRequest'}
+            example: {code: example-authorization-code, state: example-unguessable-state}
+      responses:
+        '200': {$ref: '#/components/responses/Account'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '409':
+          description: Danh tính đang được liên kết hoặc cần unlink/consent mới.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    ActorBearer: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    Healthy:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {const: ok}
+    Unavailable:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {const: unavailable}
+    AccountSnapshot:
+      type: object
+      additionalProperties: false
+      required: [user_id, status, github_user_id, github_username, verified_at, linked_at, revoked_at, source_version]
+      properties:
+        user_id: {type: string, format: uuid}
+        status: {enum: [UNLINKED, LINKED, REVOKED]}
+        github_user_id: {type: [string, 'null'], pattern: '^[1-9][0-9]{0,99}$'}
+        github_username:
+          type: [string, 'null']
+          maxLength: 39
+          pattern: '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'
+        verified_at: {type: [string, 'null'], format: date-time}
+        linked_at: {type: [string, 'null'], format: date-time}
+        revoked_at: {type: [string, 'null'], format: date-time}
+        source_version: {type: integer, minimum: 0}
+      allOf:
+        - if:
+            properties:
+              status: {const: LINKED}
+          then:
+            properties:
+              github_user_id: {type: string}
+              github_username: {type: string}
+              verified_at: {type: string}
+              linked_at: {type: string}
+              revoked_at: {type: 'null'}
+              source_version: {minimum: 1}
+          else:
+            properties:
+              github_user_id: {type: 'null'}
+              github_username: {type: 'null'}
+              verified_at: {type: 'null'}
+              linked_at: {type: 'null'}
+        - if:
+            properties:
+              status: {const: UNLINKED}
+          then:
+            properties:
+              revoked_at: {type: 'null'}
+              source_version: {const: 0}
+        - if:
+            properties:
+              status: {const: REVOKED}
+          then:
+            properties:
+              revoked_at: {type: string}
+              source_version: {minimum: 1}
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success: {const: true}
+        data: {$ref: '#/components/schemas/AccountSnapshot'}
+    ConsentStartResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success: {const: true}
+        data:
+          type: object
+          additionalProperties: false
+          required: [authorization_url, expires_at]
+          properties:
+            authorization_url: {type: string, format: uri, pattern: '^https://github\.com/login/oauth/authorize\?'}
+            expires_at: {type: string, format: date-time}
+    ConsentCompleteRequest:
+      type: object
+      additionalProperties: false
+      required: [code, state]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 2048, writeOnly: true}
+        state: {type: string, minLength: 20, maxLength: 256, writeOnly: true}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [success, error]
+      properties:
+        success: {const: false}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code: {type: string, minLength: 1}
+            message: {type: string, minLength: 1}
+  responses:
+    Account:
+      description: Snapshot của actor, không credential và không dữ liệu user khác.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AccountResponse'}
+          example:
+            success: true
+            data:
+              user_id: 11111111-1111-4111-8111-111111111111
+              status: LINKED
+              github_user_id: '12345'
+              github_username: My-Login
+              verified_at: '2026-10-18T03:00:00Z'
+              linked_at: '2026-10-18T03:00:00Z'
+              revoked_at: null
+              source_version: 1
+    InvalidRequest:
+      description: Body/query/actor tự khai báo không được chấp nhận.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthenticated:
+      description: Thiếu/sai Bearer hoặc Identity xác nhận phiên bị thu hồi.
+      headers:
+        WWW-Authenticate: {schema: {type: string}, description: Bearer}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Identity hoặc DB lỗi; không cấp quyền hoặc trả chi tiết upstream.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

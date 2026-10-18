@@ -9,6 +9,10 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
 
 ## Hợp đồng đã chốt
 
+- [`integration-service-v1.yaml`](integration-service-v1.yaml): health và API
+  đọc/thu hồi GitHub account thuộc Integration; OAuth consent M3 là thiết kế
+  chưa triển khai. [ADR-004](../../docs/adr/004-integration-github-account-ownership.md).
+
 - [`ai-service-v1.yaml`](ai-service-v1.yaml): API AI giai đoạn 1; đã chốt thiết
   kế, có bootstrap implementation một phần; chưa có provider/ADK hoặc runtime
   production. Xem [code map](../../docs/ai-service/code-map.md).
