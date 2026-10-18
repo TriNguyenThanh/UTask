@@ -28,6 +28,10 @@ KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required
 class GroupListView(APIView):
     @extend_schema(
         operation_id="groups_list",
+        description=(
+            "Sinh viên thấy nhóm trong lớp đang ghi danh; "
+            "Teacher đang phụ trách thấy nhóm trong lớp; Admin thấy mọi nhóm."
+        ),
         parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
         responses={
             200: envelope_schema("GroupList", GroupSerializer, many=True, paginated=True),
@@ -40,6 +44,12 @@ class GroupListView(APIView):
 
     @extend_schema(
         request=GroupCreateSerializer,
+        description=(
+            "Sinh viên đang ghi danh tự tạo nhóm. Teacher đang phụ trách hoặc Admin tạo thay "
+            "sinh viên bằng leader_id; người được chọn phải có tài khoản STUDENT ACTIVE và "
+            "ghi danh ACTIVE trong lớp. Mỗi sinh viên chỉ có một nhóm hoạt động trong lớp; "
+            "lớp phải mở và chưa chốt nhóm."
+        ),
         parameters=[KEY],
         responses={201: envelope_schema("GroupCreated", GroupSerializer), **ERRORS},
     )
@@ -50,7 +60,10 @@ class GroupListView(APIView):
 
 
 class GroupDetailView(APIView):
-    @extend_schema(responses={200: envelope_schema("GroupDetail", GroupSerializer), **ERRORS})
+    @extend_schema(
+        description="Thành viên đang hoạt động của đúng nhóm, Teacher đang phụ trách hoặc Admin.",
+        responses={200: envelope_schema("GroupDetail", GroupSerializer), **ERRORS},
+    )
     def get(self, request, group_id):
         return success_response(
             group_detail(request, group_id), message="Đã lấy thông tin nhóm học tập."
@@ -58,6 +71,10 @@ class GroupDetailView(APIView):
 
     @extend_schema(
         request=GroupPatchSerializer,
+        description=(
+            "Trưởng nhóm, Teacher đang phụ trách hoặc Admin; "
+            "lớp mở, nhóm hoạt động và đúng phiên bản."
+        ),
         parameters=[KEY],
         responses={200: envelope_schema("GroupUpdated", GroupSerializer), **ERRORS},
     )

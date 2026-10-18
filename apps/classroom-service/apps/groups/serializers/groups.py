@@ -13,6 +13,7 @@ class GroupSerializer(serializers.ModelSerializer):
 class GroupCreateSerializer(StrictInputSerializer):
     class_id = serializers.UUIDField()
     name = serializers.CharField(max_length=200)
+    leader_id = serializers.UUIDField(required=False)
 
 
 class GroupPatchSerializer(StrictInputSerializer):

@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.contract, pytest.mark.django_db]
 
 @pytest.mark.parametrize("role", ["TEACHER", "SYSTEM_ADMIN"])
 @pytest.mark.parametrize("command", ["join_class", "create_group", "join_group"])
-def test_completed_membership_command_replays_after_role_change_without_new_writes(
+def test_completed_membership_command_requires_current_role_before_replay_without_new_writes(
     group, client_for, post_command, identity, role, command
 ):
     actor_id = uuid4()
@@ -46,30 +46,29 @@ def test_completed_membership_command_replays_after_role_change_without_new_writ
 
     identity["roles"][str(actor_id)] = [role]
     replay = post_command(client, path, payload, key)
-    assert replay.status_code == original.status_code
-    assert replay.json() == original.json()
-    assert "code" not in replay.json()["data"]
+    assert replay.status_code == 403
+    assert replay.json()["error"]["code"] == "PERMISSION_DENIED"
 
     fresh = post_command(client, path, payload)
     assert fresh.status_code == 403
     assert fresh.json()["error"]["code"] == "PERMISSION_DENIED"
     changed = {**payload, "name": "Tên khác"} if command == "create_group" else {"code": "OTHER"}
     conflict = post_command(client, path, changed, key)
-    assert conflict.status_code == 422
-    assert conflict.json()["error"]["code"] == "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD"
+    assert conflict.status_code == 403
+    assert conflict.json()["error"]["code"] == "PERMISSION_DENIED"
 
     section.status = "CLOSED"
     section.join_code_hash = None
     section.save()
     group.invite_code_hash = None
     group.save()
+    identity["roles"][str(actor_id)] = ["STUDENT"]
     assert post_command(client, path, payload, key).json() == original.json()
 
     identity["active"] = False
     assert post_command(client, path, payload, key).status_code == 401
     identity["active"] = True
-    # An Admin still has class-read authority. Revoke the relationships under Teacher
-    # to check actual loss of read access rather than only a change of global role.
+    # An assignment cannot replace the global role required by a student command.
     identity["roles"][str(actor_id)] = ["TEACHER"]
     left_at = timezone.now()
     Enrollment.objects.filter(class_section=section, user_id=actor_id).update(
@@ -79,11 +78,11 @@ def test_completed_membership_command_replays_after_role_change_without_new_writ
     if role == "TEACHER":
         assignment = ClassTeacher.objects.create(class_section=section, user_id=actor_id)
         teacher_replay = post_command(client, path, payload, key)
-        assert teacher_replay.status_code == original.status_code
-        assert teacher_replay.json() == original.json()
+        assert teacher_replay.status_code == 403
         assignment.status = "LEFT"
         assignment.left_at = timezone.now()
         assignment.save(update_fields=["status", "left_at"])
+    identity["roles"][str(actor_id)] = ["STUDENT"]
     denied = post_command(client, path, payload, key)
     assert denied.status_code == 404
     assert denied.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
