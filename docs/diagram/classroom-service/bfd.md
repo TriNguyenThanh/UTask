@@ -1,7 +1,10 @@
 # Classroom Service — Sơ đồ chức năng quản lý lớp học
 
 **Trạng thái: Thiết kế mục tiêu.** Đây là chức năng cần xây dựng, chưa phải
-chức năng của một dịch vụ đã chạy.
+chức năng của một dịch vụ đã chạy. Phạm vi quyền đã chốt riêng; xem
+bảng quyền. Trong code hiện tại,
+Teacher cần role `TEACHER` và phân công `ACTIVE`; `PRIMARY`/`CO_TEACHER` ngang
+quyền, Admin chỉ có các quyền được liệt kê theo thao tác.
 
 Nguồn: yêu cầu nghiệp vụ (đầu vào local `UTask - Phân tích thiết kế yêu cầu.md`),
 [kiến trúc](../../architecture/README.md), [quyền sở hữu dữ liệu](../../system/data-ownership.md).
@@ -158,7 +161,7 @@ skinparam defaultFontSize 16
 *** Nhóm thuộc lớp nào
 ** 4.2 Xác nhận lớp giảng viên phụ trách
 *** Giảng viên chỉ xem dự án của đúng lớp
-*** Nhận xét dự án ở giai đoạn sau
+*** Nhận xét/nhắc tên P1 tại Work theo phân công hiện hành
 ** 4.3 Ghi nhận các dự án của nhóm
 *** Nhận sự kiện Work đã tạo dự án qua Kafka
 *** Một nhóm có nhiều dự án hoạt động đồng thời
@@ -207,7 +210,7 @@ skinparam defaultFontSize 16
 | 3.1–3.5 Nhóm và thành viên | US-2.1–2.3, vòng đời vai trò mục 1.2 | Bản đầu |
 | 3.6 Điều chỉnh nhóm ngoại lệ, kể cả sau khi chốt | US-2.5 | Giai đoạn sau |
 | 4.1, 4.3, 4.4 Nhóm và nhiều dự án tự chọn đề tài | US-2.4 | Bản đầu |
-| 4.2 Quyền xem lớp của Giảng viên | US-4.4; nhận xét theo US-4.5 | Xem ở bản đầu; nhận xét ở giai đoạn sau |
+| 4.2 Quyền xem lớp của Giảng viên | US-4.4; nhận xét theo US-4.5 | Đọc theo phân công hiện hành; Work có code path nhận xét/nhắc tên P1 |
 | 5.0 Tra cứu và lịch sử | US-1.3, US-2.5, nguyên tắc kiểm toán mục 2.3 | Theo chức năng tương ứng |
 
 “Bản đầu” tương ứng P0, “giai đoạn sau” ở đây tương ứng P1. Điểm danh và điểm
