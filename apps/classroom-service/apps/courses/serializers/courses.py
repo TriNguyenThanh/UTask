@@ -7,7 +7,8 @@ from common.serializers import StrictInputSerializer
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
-        fields = ["id", "code", "name", "archived_at"]
+        fields = ["id", "code", "name", "created_by_id", "archived_at"]
+        read_only_fields = ["created_by_id"]
 
 
 class CourseInputSerializer(StrictInputSerializer):

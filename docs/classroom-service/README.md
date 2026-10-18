@@ -101,7 +101,7 @@ kết quả cũ khi còn quyền đọc; mã thô không có trong GET hoặc re
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
-| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực, ghi danh mục bởi Admin |
+| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin mọi môn |
 | Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động |
 | Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Phụ trách/quản trị lớp; chốt nhóm bởi giảng viên phụ trách |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
@@ -117,6 +117,9 @@ triển khai thật. Envelope giữ `success/message/data/meta/error`, thông b�
 tiếng Việt. Danh sách lớp, giảng viên lớp, ghi danh, nhóm, thành viên, liên
 kết và lịch sử có trang mặc định 20, tối đa 100; cursor gắn phạm vi/bộ lọc.
 Danh mục Course sắp theo mã/ID, chưa phân trang do model không có trường thời gian.
+`Course.created_by_id` là UUID tùy chọn, tham chiếu logic tới Identity và chỉ đọc
+trên API. Teacher chỉ sửa/ngừng dùng môn mình tạo; Admin có thể quản lý mọi môn.
+Môn cũ có `created_by_id=NULL` chỉ Admin được sửa/ngừng dùng.
 
 Xác thực dùng JWT RS256/JWKS và kiểm phiên qua Identity. Vai trò toàn cục đọc
 từ `/users/me` trong request; phân công hiện hành mới cấp quyền giảng viên
@@ -178,6 +181,9 @@ Bearer; Beat quét dự án hoạt động mỗi 300 giây để bù crash/Redis
 commit. Không thêm bảng job, không tạo Project để bù liên kết trễ.
 
 ## Cấu hình và chạy
+
+Quyền ghi danh mục Course và hành vi của `created_by_id` được mô tả cùng bảng
+quyền API ở mục [API backend và quyền](#api-backend-và-quyền).
 
 Classroom nhận cấu hình theo pipeline `.env` → `infra/env/classroom-service.env`
 → Compose `env_file` → settings; xem [tài liệu biến môi trường](../infrastructure/environment.md).

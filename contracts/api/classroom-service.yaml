@@ -1328,6 +1328,7 @@ paths:
           description: ''
     post:
       operationId: courses_create
+      description: Giảng viên hoặc Quản trị viên hệ thống được tạo môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1402,6 +1403,8 @@ paths:
   /courses/{course_id}/:
     patch:
       operationId: courses_partial_update
+      description: Giảng viên được sửa môn học do mình tạo; Quản trị viên hệ thống
+        được sửa mọi môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1481,6 +1484,8 @@ paths:
   /courses/{course_id}/archive/:
     post:
       operationId: courses_archive_create
+      description: Giảng viên được ngừng dùng môn học do mình tạo; Quản trị viên hệ
+        thống được ngừng dùng mọi môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -3456,6 +3461,12 @@ components:
         name:
           type: string
           maxLength: 200
+        created_by_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
         archived_at:
           type:
           - string
@@ -3463,6 +3474,7 @@ components:
           format: date-time
       required:
       - code
+      - created_by_id
       - id
       - name
     CourseArchiveViewResponse:
