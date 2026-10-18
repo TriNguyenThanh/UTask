@@ -1,40 +1,21 @@
 """Validate local startup gates without modifying the developer's Docker cluster."""
 
-
 import json
-
-
 import os
-
-
 import shutil
-
-
 import subprocess
-
-
 import tempfile
-
-
 import unittest
-
-
 from pathlib import Path
-
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[2]
-
-
 SHELL = shutil.which("sh") or (
     "C:/Program Files/Git/bin/bash.exe"
     if Path("C:/Program Files/Git/bin/bash.exe").is_file()
     else None
 )
-
-
 DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION", "AI")
 
 
@@ -84,8 +65,6 @@ class LocalComposeTests(unittest.TestCase):
             "ai-service",
             "ai-worker",
             "ai-dispatcher",
-            "ai-migrate",
-            "ai-postgres",
         ):
             self.assertEqual(self.services[name]["profiles"], ["ai-service"])
 

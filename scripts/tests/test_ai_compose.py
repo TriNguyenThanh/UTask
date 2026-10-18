@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher", "ai-migrate")
+AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher")
 
 
 class AIComposeTests(unittest.TestCase):
@@ -44,27 +44,20 @@ class AIComposeTests(unittest.TestCase):
                     self.assertEqual(process["environment"], api["environment"])
                     self.assertEqual(process["env_file"], api["env_file"])
                     self.assertTrue(process["init"])
-                    if name == "ai-migrate":
+                    self.assertEqual(process["restart"], "unless-stopped")
+                    for dependency in ("postgres", "redis"):
                         self.assertEqual(
-                            process["command"], ["alembic", "upgrade", "head"]
-                        )
-                        self.assertEqual(process["restart"], "no")
-                        self.assertEqual(
-                            process["depends_on"]["ai-postgres"]["condition"],
+                            process["depends_on"][dependency]["condition"],
                             "service_healthy",
                         )
-                    else:
-                        self.assertEqual(process["restart"], "unless-stopped")
+                    if name != "ai-service":
                         self.assertEqual(
-                            process["depends_on"]["ai-migrate"]["condition"],
-                            "service_completed_successfully",
-                        )
-                        self.assertEqual(
-                            process["depends_on"]["redis"]["condition"],
+                            process["depends_on"]["ai-service"]["condition"],
                             "service_healthy",
                         )
-                        self.assertNotIn("work-service", process["depends_on"])
-                        self.assertNotIn("integration-service", process["depends_on"])
+                    self.assertNotIn("work-service", process["depends_on"])
+                    self.assertNotIn("integration-service", process["depends_on"])
+                self.assertNotIn("ai-migrate", services)
                 self.assertEqual(
                     services["ai-dispatcher"]["command"],
                     ["python", "-m", "jobs.dispatcher"],
@@ -76,22 +69,29 @@ class AIComposeTests(unittest.TestCase):
                 if "staging" in filename:
                     self.assertIn("healthcheck", services["ai-dispatcher"])
                     self.assertEqual(api["x-deploy"]["gateway_health_path"], None)
-                    for name in ("ai-worker", "ai-dispatcher", "ai-migrate"):
+                    for name in ("ai-worker", "ai-dispatcher"):
                         self.assertEqual(
                             services[name]["x-deploy"]["application"], "ai-service"
                         )
                     self.assertEqual(
-                        services["ai-migrate"]["x-deploy"]["role"], "migration"
+                        services["postgres"]["x-deploy"]["role"], "infrastructure"
                     )
-                    self.assertEqual(
-                        services["ai-postgres"]["x-deploy"]["role"], "infrastructure"
-                    )
-                database = services["ai-postgres"]
-                self.assertEqual(database["image"], "postgres:17-alpine")
-                self.assertIn(
-                    "ai_database:/var/lib/postgresql/data", database["volumes"]
+                self.assertNotIn("ai-postgres", services)
+                self.assertEqual(
+                    [
+                        name
+                        for name, service in services.items()
+                        if service.get("image", "").startswith("postgres:")
+                    ],
+                    ["postgres"],
                 )
-                self.assertNotIn("ports", database)
+                database = services["postgres"]
+                self.assertEqual(database["image"], "postgres:16-alpine")
+                self.assertIn(
+                    "postgres_data:/var/lib/postgresql/data", database["volumes"]
+                )
+                if "staging" in filename:
+                    self.assertNotIn("ports", database)
 
     def test_dispatcher_liveness_accepts_only_matching_process_arguments(self):
         services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
@@ -121,6 +121,59 @@ class AIComposeTests(unittest.TestCase):
                 else:
                     with self.assertRaises(AssertionError):
                         exec(compile(probe[3], "dispatcher-health", "exec"), {})  # noqa: S102 - execute trusted Compose probe with mocked process files
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_ai_database_url_override_and_shared_database_name(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "COMPOSE_", "POSTGRES_", "UTASK_"))
+        }
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="test",
+            POSTGRES_USER="fixture_user",
+            POSTGRES_PASSWORD="fixture_password",
+            AI_DB_NAME="custom_ai_db",
+        )
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for override in (
+                "",
+                "postgresql+psycopg://fixture_user:encoded%40password@postgres:5432/custom_ai_db",
+            ):
+                with self.subTest(compose=filename, override=bool(override)):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            filename,
+                            "--profile",
+                            "ai-service",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        env={**env, "AI_DATABASE_URL": override},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    self.assertEqual(
+                        services["postgres"]["environment"]["AI_DB_NAME"],
+                        "custom_ai_db",
+                    )
+                    for name in AI_PROCESSES:
+                        self.assertEqual(
+                            services[name]["environment"]["AI_DATABASE_URL"],
+                            override
+                            or "postgresql+psycopg://fixture_user:fixture_password@postgres:5432/custom_ai_db",
+                        )
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
     def test_resolved_urls_use_docker_dns_and_staging_profiles_enable_all_processes(
@@ -154,12 +207,12 @@ class AIComposeTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 services = json.loads(result.stdout)["services"]
-                for name in (*AI_PROCESSES, "ai-postgres"):
+                for name in (*AI_PROCESSES, "postgres"):
                     self.assertIn(name, services)
                 for name in AI_PROCESSES:
                     settings = services[name]["environment"]
                     self.assertIn(
-                        "@ai-postgres:5432/ai_context_db", settings["AI_DATABASE_URL"]
+                        "@postgres:5432/ai_context_db", settings["AI_DATABASE_URL"]
                     )
                     self.assertEqual(settings["AI_BROKER_URL"], "redis://redis:6379/1")
                     self.assertEqual(

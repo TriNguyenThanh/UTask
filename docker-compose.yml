@@ -314,21 +314,13 @@ services:
         condition: service_healthy
     healthcheck: *django_healthcheck
 
-  ai-migrate:
-    <<: *ai
-    restart: "no"
-    command: [alembic, upgrade, head]
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   ai-service:
     <<: *ai
     volumes:
       - ./datasets:/app/datasets:ro
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -342,8 +334,10 @@ services:
     <<: *ai
     command: [celery, -A, jobs.celery_app:celery_app, worker, --loglevel=INFO, --concurrency=2]
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -357,8 +351,10 @@ services:
     <<: *ai
     command: [python, -m, jobs.dispatcher]
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
