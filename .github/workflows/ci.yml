@@ -185,5 +185,5 @@ jobs:
       migration_services: ${{ join(fromJSON(needs.changes.outputs.django_services), ' ') }}
       gateway_health_paths: ${{ needs.changes.outputs.gateway_health_paths }}
       infrastructure_services: ${{ join(fromJSON(needs.changes.outputs.infrastructure_services), ' ') }}
-      gateway_service: ${{ needs.changes.outputs.gateway_service }}
+      gateway_service: ${{ fromJSON(needs.changes.outputs.gateway_service) }}
     secrets: inherit
