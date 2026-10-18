@@ -1,11 +1,43 @@
-from apps.projects.models import ProjectMember
+from uuid import UUID
+
+from rest_framework.exceptions import NotFound
+
+from apps.projects.models import Project, ProjectMember
 from apps.projects.queries import visible_project
+from apps.tasks.models import Task
 from apps.tasks.queries import visible_task
 from infrastructure.classroom import classroom_client
+from infrastructure.identity import IdentityClient
+
+
+def admin_feedback_access(actor, project):
+    # Work owns this binding, verified against Classroom when the project was created.
+    if not project.class_id or not project.classroom_group_id:
+        return False
+    token = getattr(actor, "access_token", "")
+    if not token:
+        return False
+    user = IdentityClient().current_user(token)
+    return UUID(user["id"]) == actor.id and "SYSTEM_ADMIN" in user["roles"]
 
 
 def subject_access(actor, *, task_id=None, project_id=None, for_feedback=False):
-    subject = visible_task(actor, task_id) if task_id else visible_project(actor, project_id)
+    try:
+        subject = visible_task(actor, task_id) if task_id else visible_project(actor, project_id)
+    except NotFound:
+        if not for_feedback:
+            raise
+        subject = (
+            Task.objects.select_related("project")
+            .filter(pk=task_id, deleted_at__isnull=True, project__deleted_at__isnull=True)
+            .first()
+            if task_id
+            else Project.objects.filter(pk=project_id, deleted_at__isnull=True).first()
+        )
+        project = subject.project if subject and task_id else subject
+        if project is None or not admin_feedback_access(actor, project):
+            raise NotFound("Không tìm thấy đối tượng bình luận yêu cầu.") from None
+        return subject, project, False
     project = subject.project if task_id else subject
     member = ProjectMember.objects.filter(
         project=project, user_id=actor.id, status="ACTIVE"

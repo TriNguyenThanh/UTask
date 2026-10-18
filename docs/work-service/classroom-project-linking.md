@@ -36,6 +36,22 @@ Ranh giới theo [kiến trúc](../system/architecture.md) và
 **Không cần thêm `class_work_item_id` vào Work theo nghiệp vụ này.** Yêu cầu
 thêm trường đó trong bản thiết kế trước đã được thay thế bởi mục 1.
 
+**Đã triển khai trong source hiện tại — quyền Admin trên nhận xét:** Admin hệ
+thống hiện hành có thể tạo nhận xét hoặc sửa/xóa nhận xét của chính mình trên
+Project có liên kết lớp/nhóm đã được Work xác minh khi tạo. Thao tác có thể gắn
+với Project hoặc Task thuộc Project đó. Quyền này không mở quyền đọc Project,
+Task hay danh sách nhận xét. Nhận xét Admin không được gắn cờ phản hồi giảng
+viên và không phát sự kiện `teacher.feedback.added`; điều kiện trạng thái và
+kiểm soát người được nhắc tên vẫn áp dụng. Không có quyền Classroom Admin bổ
+sung nào được tạo cho mục đích này; thao tác thuộc Work.
+
+Nguồn đối chiếu: [guard nội dung](../../apps/work-service/apps/collaboration/permissions.py),
+[lọc/scope comment](../../apps/work-service/apps/collaboration/queries.py),
+[lệnh lưu](../../apps/work-service/apps/collaboration/services/comments.py) và
+[API comment](../../apps/work-service/apps/collaboration/views/comments.py).
+Các test mới nằm tại `apps/work-service/tests/{unit,integration}/test_admin_feedback.py`;
+kết quả chạy chưa xác nhận trong lượt tài liệu này.
+
 ## 3. Cơ chế đã triển khai
 
 Các cơ chế sau nằm trong mã Work:
