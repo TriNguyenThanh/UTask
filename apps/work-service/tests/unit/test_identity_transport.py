@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 import requests
 
@@ -5,6 +7,90 @@ from common.errors import WorkError
 from infrastructure.identity import IdentityClient
 
 pytestmark = pytest.mark.unit
+
+
+def test_current_user_returns_verified_roles_and_uses_bearer_without_redirects(
+    monkeypatch, settings
+):
+    data = {"id": str(uuid4()), "roles": ["SYSTEM_ADMIN"]}
+    calls = []
+
+    class Reply:
+        status_code = 200
+
+        def json(self):
+            return {"success": True, "data": data}
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Reply()
+
+    monkeypatch.setattr("infrastructure.identity.requests.get", get)
+    assert IdentityClient().current_user("current-access") == data
+    assert calls == [
+        (
+            settings.IDENTITY_BASE_URL + "/users/me",
+            {
+                "headers": {"Authorization": "Bearer current-access"},
+                "timeout": settings.BACKEND_HTTP_TIMEOUT,
+                "allow_redirects": False,
+            },
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [],
+        {"success": False},
+        {"success": True, "data": {}},
+        {"success": True, "data": {"id": "bad-id", "roles": []}},
+        {"success": True, "data": {"id": str(uuid4()), "roles": "SYSTEM_ADMIN"}},
+        {"success": True, "data": {"id": str(uuid4()), "roles": [None]}},
+    ],
+)
+def test_current_user_rejects_malformed_response(monkeypatch, body):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "infrastructure.identity.requests.get",
+        lambda *a, **k: SimpleNamespace(status_code=200, json=lambda: body),
+    )
+    with pytest.raises(WorkError) as error:
+        IdentityClient().current_user("token")
+    assert error.value.code == "IDENTITY_UNAVAILABLE" and error.value.status_code == 503
+
+
+@pytest.mark.parametrize("status", [302, 307, 401, 403, 500])
+def test_current_user_rejects_redirect_and_error_without_reading_body(monkeypatch, status):
+    from types import SimpleNamespace
+
+    def invalid_body():
+        pytest.fail("An unsuccessful response is not authoritative")
+
+    monkeypatch.setattr(
+        "infrastructure.identity.requests.get",
+        lambda *a, **k: SimpleNamespace(status_code=status, json=invalid_body),
+    )
+    with pytest.raises(WorkError):
+        IdentityClient().current_user("token")
+
+
+def test_current_user_requires_token_and_fails_closed_on_network_error(monkeypatch):
+    def fail(*args, **kwargs):
+        raise requests.ConnectionError("private transport detail")
+
+    monkeypatch.setattr("infrastructure.identity.requests.get", fail)
+    with pytest.raises(WorkError) as error:
+        IdentityClient().current_user("token")
+    assert "private transport detail" not in str(error.value)
+    monkeypatch.setattr(
+        "infrastructure.identity.requests.get",
+        lambda *a, **k: pytest.fail("Missing token must not reach transport"),
+    )
+    with pytest.raises(WorkError):
+        IdentityClient().current_user("")
 
 
 @pytest.mark.parametrize(
