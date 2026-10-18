@@ -37,6 +37,57 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    def test_discovery_gateway_json_is_decoded_before_remote_compose_commands(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+        gateway_input = workflow["jobs"]["release-staging"]["with"]["gateway_service"]
+        self.assertEqual(
+            gateway_input, "${{ fromJSON(needs.changes.outputs.gateway_service) }}"
+        )
+        self.assertEqual(
+            RELEASE["jobs"]["deploy-staging"]["env"]["STAGING_GATEWAY_SERVICE"],
+            "${{ inputs.gateway_service }}",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output"
+            result = subprocess.run(
+                [
+                    shutil.which("python3") or shutil.which("python"),
+                    str(ROOT / "scripts/discover_services.py"),
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "GITHUB_OUTPUT": str(output),
+                    "SHARED_CHANGED": "true",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            # GitHub's fromJSON evaluates this JSON string before workflow_call.
+            gateway = json.loads(outputs["gateway_service"])
+        compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
+        self.assertIn(gateway, compose["services"])
+        with deployment_runtime() as (root, env, calls):
+            env["gateway_service"] = gateway
+            env["EXPECTED_GATEWAY_SERVICE"] = gateway
+            result = run_staging_deploy(root, env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            commands = docker_calls(calls)
+            gateway_commands = [
+                command
+                for command in commands
+                if "nginx" in command and ("-t" in command or "-s" in command)
+            ]
+            self.assertEqual(len(gateway_commands), 3)
+            for command in gateway_commands:
+                self.assertIn(gateway, command)
+                self.assertNotIn(outputs["gateway_service"], command)
+
     def test_remote_deploy_continues_after_compose_run_consumes_stdin(self):
         with deployment_runtime(
             services="identity-service sample-service worker-service",

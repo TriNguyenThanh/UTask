@@ -1,5 +1,11 @@
 # CI/CD
 
+Discovery xuất `gateway_service` dưới dạng chuỗi JSON trong job output.
+Workflow điều phối giải mã bằng `fromJSON` trước khi truyền vào workflow deploy;
+script trên VPS phải nhận tên service thuần như `nginx`, không có dấu ngoặc kép
+JSON. Kiểm thử triển khai đối chiếu output discovery và tham số lệnh Compose
+để tránh lỗi `no such service: "nginx"` do truyền nguyên chuỗi đã mã hóa.
+
 **Trạng thái: Một phần.** Workflow đã được cấu hình; staging/production và
 branch protection trên GitHub chưa được xác minh. Thiết kế vận hành theo
 [baseline](../architecture/README.md), mục 20–26.
