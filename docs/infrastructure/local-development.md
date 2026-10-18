@@ -92,7 +92,7 @@ lệnh khởi động Identity–Classroom–Work.
 
 ## Chạy riêng pipeline AI từ root
 
-Điền `AI_DB_PASSWORD`, `AI_CREDENTIAL_KEY`, credential JWT và LLM trong `.env`
+Điền `AI_DB_NAME`, `AI_CREDENTIAL_KEY`, credential JWT và LLM trong `.env`
 theo [cấu hình AI](../ai-service/README.md#cấu-hình). Password DB phải dùng được
 trong URL; nếu có ký tự đặc biệt, đặt `AI_DATABASE_URL` với password đã percent-encode.
 Từ repository root:
@@ -103,16 +103,19 @@ docker compose exec ai-service python -c "import urllib.request; print(urllib.re
 docker compose logs --tail 100 ai-service ai-worker ai-dispatcher
 ```
 
-Compose tự khởi động `ai-postgres`, Redis và `ai-migrate`. Migration Alembic
-phải thành công trước khi ba process chạy. Các process AI dùng chung image;
+Compose dùng container `postgres` chung và Redis. Entry point (script chạy trước
+lệnh chính của container) của API chạy Alembic trước Uvicorn; migration phải
+thành công thì API mới khởi động. Worker và dispatcher đợi API healthy, không
+chạy migration. Không có container `ai-migrate`. Các process AI dùng chung image;
 worker local dùng concurrency 2. API vẫn mang tên `ai-service` để Nginx định tuyến.
 Lệnh chạy riêng trên chưa khởi động Nginx và không publish cổng API; kiểm tra
 bằng `exec` như trên. Nếu cần gọi API trực tiếp từ host, dùng
 [Compose riêng AI](../ai-service/README.md#chạy-bằng-compose-riêng-của-ai).
 
-PostgreSQL AI là instance 17 riêng, user `ai_service`, database `ai_context_db`,
-volume `ai_database`; không thay đổi PostgreSQL/volume của các service Django.
-Broker dùng Redis chung tại DB1, còn request/result nằm trong PostgreSQL AI.
+AI dùng database riêng `AI_DB_NAME` (mặc định `ai_context_db`) trên container
+PostgreSQL 16 chung, dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` hiện có. Script
+khởi tạo bổ sung database này nếu chưa có, không thay đổi dữ liệu các database
+khác. Broker dùng Redis chung tại DB1, request/result nằm trong database AI.
 Redis DB1 là phân vùng logic, không phải ranh giới phân quyền. API, worker và
 dispatcher dùng cùng cấu hình/credential. Không chờ Work/Integration ở mức
 Compose; khi tắt mock, REST adapter vẫn từ chối nếu domain thiếu cấu hình hoặc lỗi.

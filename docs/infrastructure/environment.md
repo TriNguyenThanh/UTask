@@ -105,8 +105,10 @@ và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
 không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
 export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY`
-vào các process AI; PostgreSQL AI nhận `AI_DB_PASSWORD`. Compose root ghi đè
-URL DB sang `ai-postgres` và broker sang Redis DB1, tránh `localhost` trong container.
+vào các process AI. Compose root dùng chung container `postgres` cho mọi service,
+AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
+`POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
+`postgres` và broker sang Redis DB1, tránh `localhost` trong container.
 CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
 [cấu hình AI](../ai-service/README.md#cấu-hình) và
 [mock data](../ai-service/mock-data.md).
@@ -266,8 +268,16 @@ Local giữ cờ và biến thường trong `infra/env/ai-service.env`. Staging 
 `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; dùng giá trị cấu hình staging trong
 `.env` server theo các override được khai báo ở Compose. Không bật mock ở staging.
 
-`AI_DB_PASSWORD` bắt buộc khi khởi động PostgreSQL AI lần đầu. Password phải dùng
-được trong URL, hoặc cung cấp `AI_DATABASE_URL` với password percent-encode.
+Root Compose chỉ có một container PostgreSQL 16 (`postgres`), với các database
+riêng cho từng service. AI dùng `AI_DB_NAME=ai_context_db`; tên này được truyền
+qua `infra/env/postgres.env` cho script khởi tạo database. Không còn container
+`ai-postgres` trong Compose local/staging. `AI_DB_PASSWORD` chỉ còn phục vụ
+Compose standalone của AI, không được dùng để khởi động stack root.
+
+URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết nối database
+riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
+`AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
+tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
 `AI_CREDENTIAL_KEY` phải giống nhau cho các process; JWT chọn public key hoặc
 JWKS, cùng issuer/audience đúng từ Identity; LLM cần model/base URL/key và REST
 adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
