@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir uv \
 COPY src ./src
 COPY migrations ./migrations
 COPY alembic.ini ./alembic.ini
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]

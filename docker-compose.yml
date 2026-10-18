@@ -10,7 +10,7 @@ x-ai: &ai
   env_file:
     - ./infra/env/ai-service.env
   environment:
-    AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://ai_service:${AI_DB_PASSWORD:-}@ai-postgres:5432/ai_context_db}
+    AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${AI_DB_NAME:-ai_context_db}}
     AI_BROKER_URL: redis://redis:6379/1
     AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
     AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
@@ -314,37 +314,13 @@ services:
         condition: service_healthy
     healthcheck: *django_healthcheck
 
-  ai-postgres:
-    profiles: [ai-service]
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ai_service
-      POSTGRES_DB: ai_context_db
-      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-}
-    volumes:
-      - ai_database:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai_service -d ai_context_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  ai-migrate:
-    <<: *ai
-    restart: "no"
-    command: [alembic, upgrade, head]
-    depends_on:
-      ai-postgres:
-        condition: service_healthy
-
   ai-service:
     <<: *ai
     volumes:
       - ./datasets:/app/datasets:ro
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -358,8 +334,10 @@ services:
     <<: *ai
     command: [celery, -A, jobs.celery_app:celery_app, worker, --loglevel=INFO, --concurrency=2]
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -373,8 +351,10 @@ services:
     <<: *ai
     command: [python, -m, jobs.dispatcher]
     depends_on:
-      ai-migrate:
-        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 
