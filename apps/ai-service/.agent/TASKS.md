@@ -14,6 +14,45 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-18 — Migration trước API trong container entrypoint
+
+- Trạng thái: Đã triển khai source và kiểm tra local; không commit/push/deploy
+  hoặc chạy migration production. Giữ nguyên schema và migration Alembic hiện có.
+- `docker-entrypoint.sh` chạy `alembic upgrade head` trước `uvicorn` hoặc đường
+  dẫn tuyệt đối tới Uvicorn, dùng Alembic cùng thư mục executable. Migration
+  lỗi dừng API; `exec` giữ tham số, PID và mã thoát của lệnh. Worker, dispatcher
+  và lệnh quản trị bỏ qua migration tự động. Dockerfile copy executable và
+  gắn ENTRYPOINT, giữ CMD API.
+- Compose riêng bỏ `migrate`: API chờ DB/broker healthy; worker/dispatcher chờ
+  API/broker healthy. Giữ PostgreSQL 17 riêng của stack AI; Compose root dùng
+  PostgreSQL 16 chung do agent chính cập nhật. Không thêm khóa migration giữa
+  replica; cần migration qua một API trước khi scale đồng thời.
+- Files: `Dockerfile`, `docker-entrypoint.sh`, `compose.yaml`,
+  `tests/test_container_startup.py`; docs AI `README.md`, `mock-data.md`,
+  `architecture.md`, `erd.md`, `code-map.md` đồng bộ startup container với
+  application lifespan không tự tạo schema; chạy bằng uv vẫn migrate thủ công.
+- Tests mới dùng shell/lệnh giả, không gọi LLM hoặc DB nghiệp vụ: thành công,
+  lỗi migration, restart ở head, tuyệt đối/sibling executable, args rỗng/có
+  khoảng trắng, PID, mã thoát, worker/dispatcher/manual-command skip.
+- Kiểm tra: `uv run ruff check .`, `uv run ruff format --check .` pass (87 file),
+  compileall test mới pass; 72 link nội bộ docs và `git diff --check` pass.
+  Compose riêng `config --quiet` pass với password giả chỉ trong process
+  kiểm tra (root `.env` không đặt password của PostgreSQL riêng).
+  `uv run pytest` trên Windows gặp lỗi encoding cp1252 trong test contract cũ.
+  Chạy lại với Python `-X utf8` và WindowsSelector policy trong bộ nhớ:
+  233 passed, 59 skipped, 1 failed ở test cũ đòi chmod POSIX 0600 trên Windows.
+  Loại đúng test đó: **233 passed, 59 skipped, 1 deselected**. 10 ca shell mới
+  skip trên Windows. Agent chính chạy lại toàn bộ bằng image Linux với
+  PostgreSQL 16 và Redis 7 thử nghiệm riêng: **293 passed**, gồm 10 ca shell
+  và test quyền POSIX; một cảnh báo experimental của Google ADK.
+  Build image đạt. Docker smoke thực tế đạt ba tình huống: database sạch tự
+  migrate rồi HTTP healthy, restart khi schema ở head vẫn healthy, migration
+  lỗi không khởi động API. Container/network thử nghiệm đã được dọn; chưa
+  deploy VPS hoặc xác minh provider production.
+- GitNexus impact Dockerfile trả UNKNOWN (file không được graph index), không
+  xác định callers/processes. Đã đối chiếu source compose/Dockerfile và startup
+  tests để xác định gate API/worker/dispatcher; không coi UNKNOWN là LOW.
+
 ### 2026-10-15 — Chạy pipeline với LLM thật qua CLIProxyAPI
 
 - Trạng thái: Đã triển khai và xác minh local. API/dispatcher/worker, AI

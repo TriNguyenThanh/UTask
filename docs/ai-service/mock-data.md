@@ -20,7 +20,11 @@ AI_LLM_API_BASE=http://host.docker.internal:8317/v1
 
 Secret và credential xác minh JWT giữ trong `.env` root theo
 [mẫu root](../../.env.example): AI_LLM_API_KEY, AI_CREDENTIAL_KEY,
-AI_DB_PASSWORD và AI_JWT_PUBLIC_KEY. Settings đọc config rồi secret;
+AI_JWT_PUBLIC_KEY. Compose root dùng `POSTGRES_USER`/`POSTGRES_PASSWORD`
+chung với Django và database AI riêng theo `AI_DB_NAME` (mặc định `ai_context_db`);
+`AI_DB_PASSWORD` chỉ dành cho Compose AI độc lập ở phần chạy bên dưới.
+Xem [cấu hình Compose root](README.md#chạy-từ-compose-root) cho override URL.
+Settings đọc config rồi secret;
 biến process có ưu tiên cao nhất. Không có env riêng cho mock.
 `host.docker.internal` được ánh xạ về host trong Compose vì `localhost` bên
 trong container là chính container AI. `AI_LLM_API_KEY` phải khớp một key trong
@@ -52,6 +56,11 @@ Cùng một Compose cho cả mock và thật. `--remove-orphans` dọn container
 mock-domain cũ nếu còn từ cách chạy trước. Đổi cờ rồi chạy lại `up` để API và
 worker nạp cùng nguồn. Nếu chạy bằng uv, không đổi entrypoint API/worker;
 Settings tự đọc config, fixture đóng gói trong src.
+
+Trong container, entrypoint API chạy `alembic upgrade head` trước Uvicorn;
+migration lỗi thì API dừng, worker/dispatcher tiếp tục chờ API healthy.
+Compose không còn process migration riêng. Với `uv`, vẫn chạy Alembic thủ
+công như [hướng dẫn từng process](README.md#chạy-từng-process-bằng-uv).
 
 Mock chỉ thay quyền/context Work/Integration. Muốn tạo proposal thành công,
 CLIProxyAPI phải có credential provider/model hợp lệ và `api-keys` không còn

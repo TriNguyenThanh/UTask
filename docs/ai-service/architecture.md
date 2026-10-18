@@ -94,7 +94,10 @@ GET /api/ai/v1/requests/{request_id}
 API/dispatcher/worker là process của cùng AI Service, cùng code và AI DB;
 không bắt buộc singleton. ADK session chỉ ở memory trong một job, không phải
 request repository. Nguồn schema là [migration](../../apps/ai-service/migrations/versions/0001_request_pipeline.py),
-không tạo bảng khi API startup.
+application lifespan không tạo bảng. Entrypoint container chạy
+`alembic upgrade head` trước Uvicorn; migration lỗi thì API không khởi động.
+Worker/dispatcher chờ API healthy trong Compose; chạy trực tiếp bằng `uv`
+vẫn cần migration thủ công theo [README](README.md#chạy-từng-process-bằng-uv).
 
 ### Giới hạn tối thiểu chống spam
 

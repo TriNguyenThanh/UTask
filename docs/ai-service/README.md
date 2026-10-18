@@ -61,8 +61,10 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | Biến | Ý nghĩa |
 | --- | --- |
 | `AI_ENVIRONMENT`, `MOCK_TEST` | Chế độ development/test/staging/production và cờ context mock |
-| `AI_DATABASE_URL` | PostgreSQL riêng; nếu URL chứa password thì đặt trong `.env` root |
-| `AI_DB_PASSWORD` | Password DB local trong `.env` root; Compose tự tạo URL nội bộ |
+| `AI_DATABASE_URL` | URL database của AI; override tùy chọn trong `.env` root, password phải percent-encode nếu chứa ký tự đặc biệt |
+| `AI_DB_NAME` | Tên database AI trên PostgreSQL chung của Compose root; mặc định `ai_context_db` |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credential PostgreSQL chung với Django trong Compose root; dùng để tạo URL khi không có `AI_DATABASE_URL` |
+| `AI_DB_PASSWORD` | Chỉ dùng cho PostgreSQL của Compose riêng tại `apps/ai-service/compose.yaml` |
 | `AI_BROKER_URL` | Redis broker; không dùng Redis làm result repository |
 | `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext xóa khi bàn giao kết quả hoặc terminal |
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
@@ -153,9 +155,18 @@ fixture không xác nhận contract domain production.
 ## Chạy từ Compose root
 
 Compose root local/staging giữ tên `ai-service` cho API và tách `ai-worker`,
-`ai-dispatcher`, `ai-migrate`, dùng chung image/tag. AI có PostgreSQL 17 riêng
-(`ai-postgres`, volume `ai_database`) và dùng Redis chung DB1 làm broker.
-API/worker/dispatcher chờ migration Alembic thành công; worker còn có Celery ping.
+`ai-dispatcher`, dùng chung image/tag. Các process AI dùng cùng
+container PostgreSQL 16 (`postgres`) với Django, nhưng lưu trong database riêng
+`${AI_DB_NAME:-ai_context_db}`, dùng chung `POSTGRES_USER`/`POSTGRES_PASSWORD`.
+AI dùng Redis chung DB1 làm broker. Root Compose không cần `AI_DB_PASSWORD`.
+Entrypoint API chạy `alembic upgrade head` trước Uvicorn; migration lỗi thì API
+dừng. Worker/dispatcher chờ API healthy và broker healthy; worker còn có Celery ping.
+Không còn service `ai-migrate` riêng trong Compose root.
+Root Compose mặc định tạo URL `postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<AI_DB_NAME>`.
+Nếu credential chứa ký tự đặc biệt trong URL, đặt `AI_DATABASE_URL` với credential
+đã percent-encode. Override này có ưu tiên cao hơn URL mặc định; xóa hoặc cập nhật
+URL cũ trỏ tới `ai-postgres`/`localhost` trước khi chạy root Compose. Xem
+[cấu hình môi trường](../infrastructure/environment.md) cho cấu hình root.
 Hướng dẫn và giới hạn kiểm tra nằm tại
 [chạy AI local từ root](../infrastructure/local-development.md#chạy-riêng-pipeline-ai-từ-root)
 và [CI/CD](../infrastructure/ci-cd.md). Compose riêng dưới đây vẫn dành cho môi
@@ -174,9 +185,11 @@ docker compose --project-name ai-mock --env-file ../../.env \
 curl http://localhost:8000/healthz
 ```
 
-[`compose.yaml`](../../apps/ai-service/compose.yaml) chạy PostgreSQL riêng,
-Redis, một process migration, API, dispatcher và Celery worker. API/worker/
-dispatcher chỉ khởi động sau migration; DB/broker không mở cổng ra host.
+[`compose.yaml`](../../apps/ai-service/compose.yaml) chạy PostgreSQL 17 riêng,
+Redis, API, dispatcher và Celery worker. API chờ DB/broker healthy rồi entrypoint
+chạy `alembic upgrade head` trước Uvicorn. Migration lỗi thì API không khởi động;
+worker/dispatcher chờ API và broker healthy. Không còn service `migrate` riêng;
+DB/broker không mở cổng ra host.
 Điền `AI_DB_PASSWORD` bằng password local có thể dùng trong URL; Compose tự
 đặt URL DB/broker theo tên container. Worker local dùng concurrency 2, có thể
 điều chỉnh theo tài nguyên; đây không phải quyết định topology production.
@@ -187,6 +200,14 @@ lỗi startup. API/worker dùng cùng factory: mock đọc fixture tại adapter
 tắt mock gọi REST của Work/Integration. JWT và LLM vẫn thật. Đổi cờ/key rồi
 chạy lại `docker compose ... up` để các process nạp cùng cấu hình. Không có
 server mock, launcher riêng hoặc Compose override cho mock.
+
+Entrypoint nhận `uvicorn` hoặc đường dẫn kết thúc bằng `/uvicorn` sẽ chạy
+Alembic từ cùng thư mục executable rồi `exec` nguyên lệnh API. Mỗi lần khởi
+động API đều upgrade tới `head`; Alembic không áp dụng lại revision đã có.
+Lệnh worker, dispatcher và lệnh quản trị như `alembic upgrade head` được thực
+thi trực tiếp, giữ nguyên tham số và mã thoát. Application lifespan không tự
+tạo schema. Với nhiều API replica, khởi động một API để migration xong trước
+khi scale; entrypoint không có khóa điều phối migration giữa replica.
 
 ## Chạy từng process bằng uv
 

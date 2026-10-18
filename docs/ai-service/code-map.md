@@ -94,7 +94,10 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
   khi đọc inbox, nhận NOTIFY, reconnect và phục hồi định kỳ; không chạy model.
 - `infrastructure/db/tables.py`: ORM metadata của bốn bảng AI.
 - `migrations/versions/0001_request_pipeline.py`: Alembic migration độc lập;
-  không tạo schema khi startup. Test so sánh migration với ORM trên PostgreSQL.
+  application lifespan không tạo schema. Entrypoint container API chạy
+  `alembic upgrade head` trước Uvicorn; lỗi thì dừng API. Test so sánh migration
+  với ORM trên PostgreSQL; `test_container_startup.py` kiểm tra shell bằng lệnh
+  giả: thứ tự migrate/API, lỗi, restart ở head, args/exit/PID và lệnh bỏ qua.
 - `migrations/versions/0002_completion_handoff.py`: completion inbox và index;
   migration bắt buộc trước API/worker dùng bàn giao kết quả.
 - `migrations/versions/0003_request_admission.py`: hai index đếm request theo
@@ -179,11 +182,15 @@ mock-domain hoặc Compose override; luồng request/polling giữ nguyên.
 
 ## Hạ tầng liên quan (read-only)
 
-Compose/env/Nginx/CI root chưa được cập nhật cùng deployment AI. Trạng thái
-runtime service và deployment toàn hệ thống là hai phạm vi khác nhau; xem
-[architecture](architecture.md) để biết requirement gateway/domain còn lại.
+Compose root local/staging có API, dispatcher và worker AI dùng chung image;
+entrypoint API chạy Alembic trước Uvicorn. Hướng dẫn cấu hình và vận hành nằm
+trong [README](README.md#chạy-từ-compose-root). Cấu hình Compose không chứng
+minh gateway/domain hoặc production đã tích hợp; xem [architecture](architecture.md)
+để biết requirement còn lại.
 
 [`compose.yaml`](../../apps/ai-service/compose.yaml) của riêng AI lắp API,
-dispatcher, worker, PostgreSQL, Redis và migration; cấu hình mẫu ở
+dispatcher, worker, PostgreSQL và Redis; API entrypoint chạy Alembic trước
+Uvicorn, worker/dispatcher chờ API và broker healthy. Không còn service migrate
+riêng; cấu hình mẫu ở
 [cấu hình AI](../../infra/env/ai-service.env) và [mẫu secret root](../../.env.example). Đây là stack local,
 không là integration test Identity/Work/Integration hoặc gateway root.
