@@ -1,53 +1,22 @@
 from contextlib import nullcontext
-
-
 from types import SimpleNamespace
-
-
 from unittest.mock import Mock
-
-
 from uuid import uuid4
-
 
 import pytest
 
-
 from apps.courses import permissions as classes
-
-
 from apps.courses.queries import classes as class_queries
-
-
 from apps.courses.services import classes as class_commands
-
-
 from apps.courses.services import enrollments
-
-
 from apps.groups import permissions as groups
-
-
 from apps.groups.queries import groups as group_queries
-
-
 from apps.groups.queries import scope
-
-
 from apps.groups.serializers.groups import GroupCreateSerializer
-
-
 from apps.groups.services import groups as group_commands
-
-
 from apps.groups.services import members
-
-
 from apps.messaging.queries import activities
-
-
 from common.errors import ClassroomError
-
 
 pytestmark = pytest.mark.unit
 
