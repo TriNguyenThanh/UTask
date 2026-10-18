@@ -351,12 +351,12 @@ workflow chờ chúng healthy trước migration, không cố định PostgreSQL
 Migration Django và Alembic của AI được chạy trước khi khởi động stack app; lỗi migration
 dừng deploy trước bước `up` toàn stack. Các service dùng framework/lệnh khác cần khai báo
 cơ chế migration riêng khi được đưa vào release.
-Riêng AI, deploy chờ PostgreSQL AI và Redis healthy rồi chạy migration bằng `compose up`
-với `--force-recreate --exit-code-from ai-migrate` trước app stack. Lệnh trả lỗi sẽ dừng
-deploy. Sau đó script khởi động rõ các process runtime bằng `--no-deps`, nên Compose không
-duyệt lại dependency và chạy migration lần nữa; các dependency hạ tầng và migration đã
-được kiểm tra ở bước trước. Container migration thành công vẫn được giữ lại để
-`service_completed_successfully` tiếp tục làm dependency gate khi chạy Compose thủ công.
+AI cũng chạy migration bằng `compose run --rm --no-deps ai-service
+/app/.venv/bin/alembic upgrade head` sau khi PostgreSQL chung và Redis healthy.
+Lệnh trả lỗi sẽ dừng deploy trước cập nhật runtime. Sau đó script khởi động rõ
+các process runtime bằng `--no-deps`; mỗi API tự chạy migration trong entrypoint
+trước server, còn worker bỏ qua migration. Khi dùng Compose trực tiếp, worker
+đợi API healthy. Không giữ một container migration riêng giữa các lần deploy.
 Nginx config được upload dưới tên `nginx.deployment.conf`, kiểm tra bằng container
 chạy `nginx -t` trước migration; file đang dùng được giữ nguyên khi validation lỗi.
 Sau khi app/worker healthy, script ghi nội dung mới vào đúng bind mount hiện có,
@@ -412,26 +412,35 @@ Redis/Kafka bên ngoài và secrets của nền tảng production. Compose local
 
 **Một phần (cấu hình và regression test có trong repository; staging thực tế chưa xác minh):** CI vẫn build/publish một image
 `ai-service`; staging dùng cùng tag SHA cho `ai-service`, `ai-worker`,
-`ai-dispatcher`, `ai-migrate`. Bốn process và `ai-postgres` cùng profile
+`ai-dispatcher`. Ba process cùng profile
 `ai-service`. Nhận diện app dựa trên thư mục source; các process phụ không tạo
 thêm entry build. `ai-service` là app nội bộ, khai báo
-`x-deploy.gateway_health_path: null`; `ai-worker`, `ai-dispatcher` và
-`ai-migrate` dùng chung image AI. `ai-postgres` có vai trò `infrastructure`;
-`ai-migrate` có vai trò migration của `ai-service`. API không chờ Work/Integration
+`x-deploy.gateway_health_path: null`; `ai-worker` và `ai-dispatcher`
+dùng chung image AI. PostgreSQL dùng container `postgres` chung.
+API không chờ Work/Integration
 tại Compose; REST adapter vẫn kiểm tra quyền/context và từ chối khi domain chưa sẵn sàng.
 
-AI phụ thuộc PostgreSQL 17 riêng với volume `ai_database`, không đổi dữ liệu
-PostgreSQL Django. Broker dùng Redis chung DB1. API, worker và dispatcher chờ
-`ai-migrate` hoàn tất thành công; migration chạy một lần bằng Alembic trước khi
-khởi động app stack và lỗi migration làm deploy dừng. `x-ci.test_env` của AI cấp
+AI dùng database riêng `AI_DB_NAME` (mặc định `ai_context_db`) trên cùng container
+PostgreSQL 16 và volume `postgres_data` với các service khác, không đọc database
+nghiệp vụ của service khác. Sau khi hạ tầng healthy và trước Alembic, deploy
+có AI chạy lại script khởi tạo database hiện có để tạo database còn thiếu,
+kể cả volume PostgreSQL đã tồn tại. Lỗi chuẩn bị database làm deploy dừng trước
+migration và cập nhật app. Broker dùng Redis chung DB1. Deploy chạy migration bằng
+`compose run --rm --no-deps ai-service /app/.venv/bin/alembic upgrade head`
+trước khi cập nhật runtime, tương tự bước `manage.py migrate` của Django.
+Khi API khởi động, entrypoint chạy lại Alembic trước Uvicorn; schema đã ở head
+thì không có migration mới để áp dụng. Worker/dispatcher bỏ qua migration và
+đợi API healthy trong Compose. Migration lỗi ngăn API khởi động và chặn deploy.
+Không có service/container migration riêng trong cấu hình Compose.
+`x-ci.test_env` của AI cấp
 `TEST_DATABASE_NAME=ai_test`, `TEST_DATABASE_URL`, `TEST_REDIS_URL`; workflow
 Python tạo database test theo tên được validate rồi chạy pytest. Script nhận
-diện PostgreSQL theo image của dependency, nên `ai-postgres` cũng bật PostgreSQL
-cho CI. Bộ workflow hiện khai báo PostgreSQL 16 cho runner; runtime AI dùng 17.
+diện PostgreSQL theo image của dependency; cả CI và runtime root dùng PostgreSQL 16.
 
-`depends_on: service_completed_successfully` cũng bảo vệ thứ tự khi chạy Compose
+`depends_on: service_healthy` với API bảo vệ thứ tự worker khi chạy Compose
 thủ công. Migration chạy tới `head`; nếu không bật AI thì không chạy bước Alembic
-hoặc khởi động PostgreSQL AI. Không có chuyển dữ liệu tự động từ Compose AI riêng.
+cho AI. Không có chuyển dữ liệu tự động từ container AI PostgreSQL cũ hoặc
+Compose AI standalone; volume cũ phải được giữ lại để backup/chuyển dữ liệu có chủ đích.
 
 Trên VPS, điền password DB, khóa Fernet, JWT issuer/audience và public key hoặc
 JWKS, URL REST quyền/context, model/base URL/API key trong `.env` server theo

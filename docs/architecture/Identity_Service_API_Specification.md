@@ -1098,9 +1098,15 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework.exceptions import (
-    AuthenticationFailed, NotAuthenticated, PermissionDenied,
-    ValidationError, ParseError, NotFound, Throttled,
+    AuthenticationFailed,
+    NotAuthenticated,
+    PermissionDenied,
+    ValidationError,
+    ParseError,
+    NotFound,
+    Throttled,
 )
+
 
 def unified_identity_exception_handler(exc, context):
     response = exception_handler(exc, context)
@@ -1113,10 +1119,17 @@ def unified_identity_exception_handler(exc, context):
     if isinstance(exc, (ValidationError, DjangoValidationError, ParseError)):
         status_code, error_code = 400, "VALIDATION_ERROR"
         message = "Dữ liệu đầu vào không hợp lệ."
-        values = detail if isinstance(detail, dict) else getattr(exc, "message_dict", None)
+        values = (
+            detail if isinstance(detail, dict) else getattr(exc, "message_dict", None)
+        )
         if isinstance(values, dict):
             details = [
-                {"field": str(field), "issue": str(issues[0] if isinstance(issues, list) and issues else issues)}
+                {
+                    "field": str(field),
+                    "issue": str(
+                        issues[0] if isinstance(issues, list) and issues else issues
+                    ),
+                }
                 for field, issues in values.items()
             ]
         else:
@@ -1145,7 +1158,10 @@ def unified_identity_exception_handler(exc, context):
         details = provided_details if isinstance(provided_details, list) else []
 
     envelope = {
-        "success": False, "message": message, "data": None, "meta": None,
+        "success": False,
+        "message": message,
+        "data": None,
+        "meta": None,
         "error": {"code": error_code, "details": details},
     }
     # Giữ header Retry-After/WWW-Authenticate của DRF khi có.
@@ -1162,6 +1178,7 @@ def unified_identity_exception_handler(exc, context):
 # apps/identity-service/common/renderers.py
 from rest_framework.renderers import JSONRenderer
 
+
 class UnifiedJSONRenderer(JSONRenderer):
     def render(self, data, accepted_media_type=None, renderer_context=None):
         response = renderer_context.get("response") if renderer_context else None
@@ -1175,10 +1192,12 @@ class UnifiedJSONRenderer(JSONRenderer):
 
         envelope = {
             "success": is_success,
-            "message": "Thao tác thực hiện thành công." if is_success else "Yêu cầu thất bại.",
+            "message": "Thao tác thực hiện thành công."
+            if is_success
+            else "Yêu cầu thất bại.",
             "data": data if is_success else None,
             "meta": None,
-            "error": None if is_success else {"code": "API_ERROR", "details": []}
+            "error": None if is_success else {"code": "API_ERROR", "details": []},
         }
         return super().render(envelope, accepted_media_type, renderer_context)
 ```

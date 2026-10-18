@@ -114,7 +114,10 @@ policy retention riêng; completion được xóa khi API tiếp nhận. Xem
 Worker chết không được chạy lại model trên request đang running; dispatcher
 lưu failed khi deadline hết và chưa có completion. Completion đã commit được
 giữ lại cho API tiếp nhận sau khởi động lại. Không đặt lại budget hoặc cho worker cũ ghi đè.
-Không chạy migration tự động trong process API/worker; Alembic là bước deploy.
+Application lifespan API/worker không tự tạo schema. Entrypoint container API
+chạy `alembic upgrade head` trước Uvicorn và dừng nếu migration lỗi; worker/
+dispatcher chờ API healthy trong Compose. Lệnh worker/dispatcher không tự
+migration; chạy từng process bằng `uv` vẫn cần bước Alembic thủ công.
 
 ## Quyết định cần chốt trước migration
 

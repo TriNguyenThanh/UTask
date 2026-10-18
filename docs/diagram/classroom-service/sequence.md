@@ -1,7 +1,8 @@
 # Classroom Service — Một yêu cầu được xử lý như thế nào?
 
-**Trạng thái: Thiết kế mục tiêu.** Các luồng dưới đây mô tả hệ thống cần xây,
-chưa khẳng định các API đã được triển khai.
+**Trạng thái: Thiết kế mục tiêu, cập nhật theo quyền đã chốt.** Các sơ đồ mô
+tả luồng nghiệp vụ. Quyền nêu trong bảng và phần ghi chú được đối chiếu với
+source hiện tại; test mới có trong worktree, chưa xác nhận kết quả chạy.
 
 Đọc mỗi sơ đồ **từ trên xuống**. Mỗi cột là một người hoặc một phần của hệ
 thống; mỗi mũi tên là một yêu cầu hoặc câu trả lời. Khung “Nếu…” cho biết hệ
@@ -69,11 +70,15 @@ hạn. Lỗi cấp mã thử lại trên mã lớp đã
 tạo. Gửi lại lệnh tạo không tự tạo lớp khác hay đổi mã đang dùng. Bản ghi chống lặp không
 lưu mã thô. Đổi/vô hiệu mã kiểm lại quyền Giảng viên trong giao dịch.
 
-Kiểm môn học, ngày bắt đầu ≤ kết thúc và `0 < min <= max`. Sửa lớp kiểm phiên
+Kiểm môn học, ngày bắt đầu ≤ kết thúc và `0 < min <= max`. Teacher chỉ tạo,
+sửa hoặc ngừng dùng môn do mình tạo; Admin được quản lý mọi môn. `created_by_id`
+do server gán và chỉ đọc; môn cũ `NULL` chỉ Admin sửa/ngừng dùng. Sửa lớp kiểm phiên
 bản mong đợi, không giảm mức tối đa xuống dưới số thành viên hiện có. Quản trị
 viên hệ thống được tạo lớp nhưng phải chỉ định một tài khoản Giảng viên đang
 hoạt động làm người phụ trách chính; Quản trị viên không tự có quyền dạy học
-hoặc xem nội dung dự án.
+hoặc xem nội dung dự án. Quyền Teacher cần role `TEACHER` và phân công lớp
+`ACTIVE`; `PRIMARY`/`CO_TEACHER` ngang quyền. Thu hồi phân công làm mất quyền
+ngay, kể cả khi Work lấy scope qua API nội bộ.
 
 </details>
 
@@ -225,8 +230,11 @@ sequenceDiagram
 <details>
 <summary>Chi tiết triển khai và xử lý lỗi</summary>
 
-Khóa lớp, ghi danh và bản ghi yêu cầu. Chỉ tạo khi lớp mở lập nhóm, người tạo
-đang học và chưa thuộc nhóm hoạt động khác trong lớp. Tạo nhóm, gán Trưởng
+Khóa lớp, ghi danh và bản ghi yêu cầu. Sinh viên tự tạo khi đang học và chưa
+thuộc nhóm hoạt động khác trong lớp. Teacher hoặc Admin có thể tạo thay bằng
+`leader_id` là Student có tài khoản và ghi danh đang `ACTIVE`; quyền quản lý
+lớp được kiểm lại trước khi đọc/ghi receipt. Không kiểm tra/đổi role người nhận
+trên replay đã hoàn tất, nhưng vẫn cần quyền hiện hành của người gọi. Tạo nhóm, gán Trưởng
 nhóm, đặt `source_version=1`, lưu lịch sử, sự kiện chứa đầy đủ danh sách thành
 viên và kết quả chống lặp cùng giao dịch. Giao diện gửi lệnh cấp mã sau tạo;
 nếu lỗi chỉ cấp lại trên nhóm đã tạo. HMAC/thời hạn ở nhóm; mã và đường dẫn mời dùng
@@ -299,7 +307,7 @@ sequenceDiagram
         L->>D: Kiểm người nhận quyền đang thuộc chính nhóm này
         L->>D: Chuyển quyền và giữ đúng một Trưởng nhóm
         L-->>N: Quyền Trưởng nhóm đã được chuyển
-    else Giảng viên điều chỉnh nhóm ở giai đoạn sau
+    else Teacher/Admin điều chỉnh nhóm theo quyền P1
         L->>D: Kiểm cùng lớp, nhóm nhận còn chỗ và có lý do
         L->>D: Chuyển người, giữ Trưởng nhóm và lịch sử hai nhóm
         L-->>N: Đã ghi nhận điều chỉnh
@@ -497,7 +505,7 @@ sequenceDiagram
         W->>W: Chỉ lấy dự án thuộc các nhóm được phép xem
         W-->>GV: Tiến độ và công việc của các nhóm đó
     end
-    opt Nhận xét và nhắc tên ở giai đoạn sau
+    opt Nhận xét và nhắc tên theo phạm vi hiện hành
         GV->>W: Gửi nhận xét cho nhóm
         W->>L: Kiểm lại quyền nhận xét và người được nhắc tên
         L-->>W: Kết quả kiểm tra
@@ -512,29 +520,39 @@ xem/nhận xét dự án của lớp mình phụ trách.
 <details>
 <summary>Chi tiết triển khai và xử lý lỗi</summary>
 
-Kiểm xác thực dịch vụ và phiên người dùng. Đọc phân công Giảng viên và nhóm
-nhất quán; không có phân công trả rỗng, lỗi xác minh không được đổi thành có
-quyền. Work vẫn đọc theo thành viên dự án khi phù hợp; lỗi Classroom không
-xóa quyền đó. Vai trò Giảng viên toàn cục không cấp quyền đọc mọi lớp.
+Kiểm xác thực dịch vụ và phiên người dùng. Đọc phân công Teacher hiện hành và
+nhóm nhất quán; không có phân công trả rỗng, lỗi xác minh không được đổi thành
+có quyền. Work vẫn đọc theo thành viên dự án khi phù hợp; lỗi Classroom không
+xóa quyền đó. Role Teacher toàn cục không cấp quyền đọc mọi lớp.
 
-Danh sách nhóm được phép xem thuộc P0. Nhận xét/nhắc tên thuộc P1, cần xác
-minh người thực hiện, dự án, nhóm, phiên bản, thời hạn và người được nhắc tên
-qua bộ nối tin cậy. Work khóa dự án, kiểm dữ liệu trước khi lưu nhận xét, lịch
-sử và Outbox cùng giao dịch. Không tin bằng chứng tự gửi từ trình duyệt hoặc
-tạo dịch vụ ký mã riêng. Giảng viên không được đổi công việc, đóng Sprint hay
-sửa phân công. Bảng theo dõi và chỉ số công việc do Work tính bằng quy tắc.
+Danh sách nhóm được phép xem thuộc P0. Nhận xét/nhắc tên đã có code path trong
+Work; quyền Teacher cần role toàn cục và phân công `ACTIVE` tại thời điểm kiểm
+tra. Work xác minh người thực hiện, dự án, nhóm, phiên bản, thời hạn và người
+được nhắc tên qua bộ nối Classroom tin cậy. Work khóa dự án, kiểm dữ liệu trước
+khi lưu nhận xét, lịch sử và Outbox cùng giao dịch. Không tin bằng chứng tự gửi
+từ trình duyệt hoặc tạo dịch vụ ký mã riêng. Giảng viên không được đổi công
+việc, đóng Sprint hay sửa phân công. Bảng theo dõi và chỉ số công việc do Work
+tính bằng quy tắc.
+
+Admin có thể tạo comment và chỉ sửa/xóa comment của chính mình trên Project có
+liên kết Classroom đã xác minh. Quyền này không cho đọc Project, Task hoặc danh
+sách comment; comment Admin không mang cờ và không phát event teacher feedback.
 
 </details>
 
 ## 3. Quy tắc kỹ thuật chung dành cho người triển khai
 
-- Mọi yêu cầu đều xác thực phiên; vai trò toàn cục đọc từ Identity qua API
-  công bố, quyền lớp từ phân công Giảng viên hiện hành. Mã nguồn đối chiếu ở dưới.
+- Mọi yêu cầu đều xác thực phiên; role toàn cục đọc từ Identity. Quyền Teacher
+  trên lớp cần role `TEACHER` và phân công `ACTIVE`; Admin không có nhánh tổng
+  quyền mà từng lệnh dùng guard riêng.
 - Thứ tự khóa: lớp → nhóm theo mã → ghi danh/thành viên → kết quả chống lặp.
   Tạo lớp chưa có dòng dữ liệu thì khóa yêu cầu trước khi tạo.
-- Trả kết quả cũ chỉ khi còn quyền đọc; lệnh mới mới kiểm quyền ghi/phiên bản.
-  Cùng khóa nhưng khác nội dung trả 422. Trưởng nhóm vừa chuyển quyền có thể đọc
-  kết quả trong nhóm còn tham gia nhưng không được gửi lệnh quản lý mới.
+- Replay vẫn qua guard quyền hiện hành theo từng API: Course kiểm role và quyền
+  sở hữu trước receipt; lệnh lớp kiểm quyền quản lý; NH02 tạo thay kiểm quyền
+  quản lý lớp; Work kiểm lại Teacher scope hoặc Admin role. Một số kiểm tra
+  nghiệp vụ nằm sau replay nên không chạy lại, như role/trạng thái Leader được
+  chỉ định ở NH02. Cùng khóa nhưng khác nội dung bị từ chối. Không suy ra một
+  thứ tự guard duy nhất cho mọi lệnh.
 - Hủy giao dịch do lỗi không trả thành công. Thay đổi nghiệp vụ, lịch sử, sự
   kiện đã có hợp đồng và kết quả chống lặp lưu cùng giao dịch. GET không có tác
   dụng phụ. Gọi HTTP/gửi Kafka ở ngoài giao dịch giữ khóa; sau HTTP kiểm lại quyền.

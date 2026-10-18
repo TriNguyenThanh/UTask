@@ -26,7 +26,9 @@ def require_role(request, *roles):
         raise ClassroomError("PERMISSION_DENIED", "Bạn không có quyền thực hiện thao tác này.", 403)
 
 
-def is_teacher(actor, section):
+def is_teacher(actor, section, *, roles=()):
+    if "TEACHER" not in roles:
+        return False
     return ClassTeacher.objects.filter(
         class_section=section, user_id=actor.id, status="ACTIVE"
     ).exists()
@@ -34,7 +36,7 @@ def is_teacher(actor, section):
 
 def can_read(request, section):
     return (
-        is_teacher(request.user, section)
+        is_teacher(request.user, section, roles=actor_roles(request))
         or Enrollment.objects.filter(
             class_section=section, user_id=request.user.id, status="ACTIVE"
         ).exists()
@@ -48,7 +50,7 @@ def require_read(request, section):
 
 
 def require_manage(request, section, *, teacher_only=False):
-    if not is_teacher(request.user, section) and (
+    if not is_teacher(request.user, section, roles=actor_roles(request)) and (
         teacher_only or "SYSTEM_ADMIN" not in actor_roles(request)
     ):
         raise ClassroomError("PERMISSION_DENIED", "Bạn không có quyền quản lý lớp học này.", 403)
@@ -58,10 +60,10 @@ def visible_classes(request):
     qs = ClassSection.objects.all()
     if "SYSTEM_ADMIN" in actor_roles(request):
         return qs
-    return qs.filter(
-        Q(teachers__user_id=request.user.id, teachers__status="ACTIVE")
-        | Q(enrollments__user_id=request.user.id, enrollments__status="ACTIVE")
-    ).distinct()
+    scope = Q(enrollments__user_id=request.user.id, enrollments__status="ACTIVE")
+    if "TEACHER" in actor_roles(request):
+        scope |= Q(teachers__user_id=request.user.id, teachers__status="ACTIVE")
+    return qs.filter(scope).distinct()
 
 
 def require_open(section, *, forming=False):

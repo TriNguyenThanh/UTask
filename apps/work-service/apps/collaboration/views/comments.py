@@ -21,7 +21,17 @@ COMMENTS = envelope_schema("CommentsEnvelope", CommentSerializer, many=True, pag
 class CommentCreateView(GenericAPIView):
     serializer_class = CommentInputSerializer
 
-    @extend_schema(request=CommentInputSerializer, responses={201: COMMENT, **ERRORS})
+    @extend_schema(
+        request=CommentInputSerializer,
+        responses={201: COMMENT, **ERRORS},
+        description=(
+            "Thành viên dự án hoặc giảng viên phụ trách được gửi nhận xét theo quyền hiện có. "
+            "SYSTEM_ADMIN hiện hành tại Identity được tạo bình luận trên dự án có liên kết "
+            "lớp và nhóm đã xác minh, hoặc công việc thuộc dự án đó. Bình luận Admin không "
+            "được đánh dấu là phản hồi giảng viên và không cấp quyền đọc dự án/công việc "
+            "hay danh sách bình luận. Giữ kiểm tra trạng thái và phạm vi người được nhắc tên."
+        ),
+    )
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -44,9 +54,19 @@ class CommentCreateView(GenericAPIView):
 class CommentDetailView(GenericAPIView):
     serializer_class = EditCommentSerializer
 
-    @extend_schema(request=EditCommentSerializer, responses={200: COMMENT, **ERRORS})
+    @extend_schema(
+        request=EditCommentSerializer,
+        responses={200: COMMENT, **ERRORS},
+        description=(
+            "Chỉ tác giả được sửa bình luận theo quyền nhận xét hiện hành. SYSTEM_ADMIN "
+            "hiện hành tại Identity chỉ được sửa bình luận của mình trong dự án có liên "
+            "kết lớp và nhóm đã xác minh, hoặc công việc thuộc dự án đó. Quyền Admin này "
+            "không cấp quyền đọc dự án/công việc hay danh sách bình luận, không biến bình "
+            "luận thành phản hồi giảng viên; giữ kiểm tra trạng thái và phạm vi nhắc tên."
+        ),
+    )
     def patch(self, request, comment_id):
-        comment = visible_comment(request.user, comment_id)
+        comment = visible_comment(request.user, comment_id, for_feedback=True)
         _, project, teacher = subject_access(
             request.user, task_id=comment.task_id, project_id=comment.project_id, for_feedback=True
         )
@@ -63,9 +83,20 @@ class CommentDetailView(GenericAPIView):
             teacher_mentions=recipients,
         )
 
-    @extend_schema(request=None, responses={200: COMMENT, **ERRORS})
+    @extend_schema(
+        request=None,
+        responses={200: COMMENT, **ERRORS},
+        description=(
+            "Tác giả hoặc trưởng nhóm được xóa bình luận theo quyền hiện có. SYSTEM_ADMIN "
+            "hiện hành tại Identity chỉ được xóa bình luận của mình trong dự án có liên "
+            "kết lớp và nhóm đã xác minh, hoặc công việc thuộc dự án đó; không được xóa "
+            "bình luận của người khác chỉ nhờ vai trò Admin. Giữ kiểm tra trạng thái, "
+            "không cấp quyền đọc dự án/công việc hay danh sách bình luận và không phát "
+            "sự kiện phản hồi giảng viên cho bình luận Admin."
+        ),
+    )
     def delete(self, request, comment_id):
-        comment = visible_comment(request.user, comment_id)
+        comment = visible_comment(request.user, comment_id, for_feedback=True)
         _, project, teacher = subject_access(
             request.user, task_id=comment.task_id, project_id=comment.project_id, for_feedback=True
         )

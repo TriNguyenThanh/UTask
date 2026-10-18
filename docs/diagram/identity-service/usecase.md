@@ -31,7 +31,7 @@ Actor chỉ đặt ngoài boundary. Worker/outbox/DB không là actor của use 
 
 ### Tài khoản và khôi phục
 
-![Tài khoản và khôi phục](assets/UC-ID-MAP-01.svg)
+Tài khoản và khôi phục
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -73,7 +73,7 @@ P --> U14
 
 ### Phiên và mật khẩu
 
-![Phiên và mật khẩu](assets/UC-ID-MAP-02.svg)
+Phiên và mật khẩu
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -112,7 +112,7 @@ A --> U13
 
 ### Hồ sơ cá nhân
 
-![Hồ sơ cá nhân](assets/UC-ID-MAP-03.svg)
+Hồ sơ cá nhân
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -150,7 +150,7 @@ R --> U19
 
 ### Import lớp học
 
-![Import lớp học](assets/UC-ID-MAP-04.svg)
+Import lớp học
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -190,7 +190,7 @@ end note
 
 ### Quản trị toàn cục
 
-![Quản trị toàn cục](assets/UC-ID-MAP-05.svg)
+Quản trị toàn cục
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -226,7 +226,7 @@ end note
 
 ### Giao thức giữa các service
 
-![Giao thức giữa các service](assets/UC-ID-MAP-06.svg)
+Giao thức giữa các service
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -263,7 +263,7 @@ end note
 
 ### Liên kết OAuth cá nhân
 
-![Liên kết OAuth cá nhân](assets/UC-ID-MAP-07.svg)
+Liên kết OAuth cá nhân
 
 <details>
 <summary>Nguồn PlantUML</summary>

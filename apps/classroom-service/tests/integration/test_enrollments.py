@@ -38,7 +38,7 @@ def test_class_exit_updates_membership_atomically_and_leader_cannot_exit(
     assert leader.status == "ACTIVE"
 
 
-def test_admin_cannot_remove_group_member_through_enrollment_exit(
+def test_admin_removes_group_member_through_enrollment_exit(
     group, actors, client_for, post_command
 ):
     member = Enrollment.objects.get(class_section=group.class_section, user_id=actors["member"])
@@ -47,10 +47,11 @@ def test_admin_cannot_remove_group_member_through_enrollment_exit(
         f"/classes/{group.class_section_id}/enrollments/{member.pk}/exit/",
         {"reason": "Loại"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
     member.refresh_from_db()
-    assert member.status == "ACTIVE"
-    assert GroupMember.objects.get(enrollment=member).status == "ACTIVE"
+    assert member.status == "REMOVED"
+    assert GroupMember.objects.get(enrollment=member).status == "REMOVED"
+    assert OutboxEvent.objects.count() == 1
 
 
 def test_class_join_replay_survives_rotated_code_but_requires_current_read(

@@ -52,6 +52,11 @@ class StudentListView(APIView):
 class EnrollmentExitView(APIView):
     @extend_schema(
         request=EnrollmentExitSerializer,
+        description=(
+            "Sinh viên tự rời lớp theo điều kiện hiện tại; Teacher đang phụ trách hoặc Admin "
+            "được loại sinh viên. Trưởng nhóm phải có người kế nhiệm "
+            "trước khi kết thúc thành viên nhóm."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("EnrollmentExitViewResponse", EnrollmentSerializer),

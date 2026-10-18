@@ -21,6 +21,7 @@ class CourseListView(APIView):
     @extend_schema(
         request=CourseInputSerializer,
         parameters=[KEY],
+        description="Giảng viên hoặc Quản trị viên hệ thống được tạo môn học.",
         responses={201: envelope_schema("CourseCreated", CourseSerializer), **ERRORS},
     )
     def post(self, request):
@@ -33,6 +34,9 @@ class CourseUpdateView(APIView):
     @extend_schema(
         request=CourseInputSerializer,
         parameters=[KEY],
+        description=(
+            "Giảng viên được sửa môn học do mình tạo; Quản trị viên hệ thống được sửa mọi môn học."
+        ),
         responses={
             200: envelope_schema("CourseUpdateViewResponse", CourseSerializer),
             **ERRORS,
@@ -48,6 +52,10 @@ class CourseArchiveView(APIView):
     @extend_schema(
         request=StrictInputSerializer,
         parameters=[KEY],
+        description=(
+            "Giảng viên được ngừng dùng môn học do mình tạo; "
+            "Quản trị viên hệ thống được ngừng dùng mọi môn học."
+        ),
         responses={
             200: envelope_schema("CourseArchiveViewResponse", CourseSerializer),
             **ERRORS,

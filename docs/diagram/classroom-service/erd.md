@@ -39,6 +39,7 @@ erDiagram
         uuid id PK
         varchar code UK
         varchar name
+        uuid created_by_id "tham chiếu logic Identity; NULL với môn cũ"
         timestamptz archived_at "có thể chưa lưu trữ"
     }
     CLASS_SECTIONS {
@@ -149,6 +150,11 @@ erDiagram
         timestamptz expires_at
     }
 ```
+
+`Course.created_by_id` đã có trong model và migration `0002`; API chỉ trả
+trường này, không nhận giá trị từ payload. Teacher chỉ quản lý môn mình tạo;
+Admin quản lý được mọi môn, gồm môn cũ có `created_by_id=NULL`. Đây là
+tham chiếu logic tới Identity, không phải khóa ngoại liên service.
 
 ## 2. Mỗi bảng dùng để làm gì?
 

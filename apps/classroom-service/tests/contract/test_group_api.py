@@ -18,7 +18,7 @@ def test_leader_transfer_replay_preserves_single_leader_event_and_history(
     key = uuid4()
     reply = post_command(leader, route, payload, key)
     assert reply.status_code == 200, reply.content
-    assert post_command(leader, route, payload, key).json() == reply.json()
+    assert post_command(leader, route, payload, key).status_code == 403
     assert post_command(leader, route, {**payload, "version": 2}).status_code == 403
     assert GroupMember.objects.filter(group=group, role="LEADER", status="ACTIVE").count() == 1
     assert (

@@ -16,7 +16,7 @@ Nguồn chuẩn:
 | [usecase.md](usecase.md) | Actor và 6 phân hệ, quyền mục tiêu |
 | [sequence.md](sequence.md) | 12 luồng command/event, transaction và đối chiếu Plane |
 | [erd.md](erd.md) | 20 bảng mục tiêu, facts/snapshot và invariant |
-| [index.html](index.html) | Bản xem được sinh từ các file Markdown trên |
+| index.html | Bản xem được sinh từ các file Markdown trên |
 
 Classroom sở hữu Group/GroupMember; Work sở hữu ProjectMember và công việc. AI đọc context riêng qua Kafka; Work tính số liệu; GitHub link mới cần user confirm. Sprint P1, GitHub/AI/dashboard nằm trong P0 theo PRD. Plane commit 7466675e471efe1c96b122615f7a0d30c9b2eb05 chỉ là tham khảo kỹ thuật, không thay quy tắc UTask.
 

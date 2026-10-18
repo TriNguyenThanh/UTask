@@ -24,7 +24,7 @@ def test_leader_permission_and_denial_message_follow_command_authority(
 ):
     member = SimpleNamespace(role=member_role) if member_role else None
     monkeypatch.setattr(permissions, "active_member", lambda *args: member)
-    monkeypatch.setattr(permissions, "is_teacher", lambda *args: is_teacher)
+    monkeypatch.setattr(permissions, "is_teacher", lambda *args, **kwargs: is_teacher)
     group = SimpleNamespace(class_section=object())
     if allowed:
         assert permissions.require_leader(group, object(), teacher_allowed=teacher_allowed) is None

@@ -23,8 +23,8 @@ việc” là Work Service. Mã UC chỉ giúp tra cứu; không cần nhớ mã
 | Sinh viên | Tham gia và xem lớp; khi có ghi danh hoạt động mới được tạo/tham gia nhóm |
 | Thành viên nhóm | Sinh viên đang thuộc nhóm; có thể rời chính nhóm mình theo chính sách |
 | Trưởng nhóm | Là Thành viên nhóm; thêm quyền quản lý mã mời, loại thành viên và chuyển quyền trong đúng nhóm |
-| Giảng viên | Có quyền tạo lớp; chỉ quản lý/xem lớp đang được phân công và theo dõi dự án của các nhóm trong lớp |
-| Quản trị viên hệ thống | Được tạo lớp và thêm sinh viên; không tự trở thành Giảng viên và không mặc định đọc nội dung dự án |
+| Giảng viên | Có role `TEACHER`; được tạo lớp và quản lý lớp đang có phân công `ACTIVE`. `PRIMARY` và `CO_TEACHER` có quyền ngang nhau. Mất phân công là mất quyền ngay, kể cả khi Work kiểm tra qua API nội bộ. |
+| Quản trị viên hệ thống | Có quyền riêng theo từng thao tác: quản lý Course, tạo lớp/thêm sinh viên, các thao tác Classroom đã chọn và comment Work giới hạn. Không tự trở thành Teacher hay được quyền đọc dự án. |
 | Identity Service | Hỗ trợ xác minh tài khoản/phiên và tìm hoặc tạo tài khoản; không tạo ghi danh |
 | Work Service | Gọi REST để xác minh nhóm/quyền; phát sự kiện tạo dự án để Classroom ghi liên kết |
 
@@ -59,7 +59,7 @@ rectangle "Hệ thống lớp học" {
   usecase "Quản lý lớp và sinh viên" as LOP
   usecase "Tạo nhóm hoặc vào nhóm" as LAPNHOM
   usecase "Quản lý mã mời và thành viên" as THANHVIEN
-  usecase "Điều chỉnh nhóm\nở giai đoạn sau" as NGOAILE
+  usecase "Điều chỉnh nhóm theo quyền đã chốt" as NGOAILE
   usecase "Xác nhận nhóm, quyền và\nghi liên kết nhiều dự án" as TICH_HOP
 }
 SV -- LOP
@@ -67,10 +67,14 @@ GV -- LOP
 QT -- LOP
 ID -- LOP
 SV -- LAPNHOM
+GV -- LAPNHOM : tạo thay Leader được chỉ định
+QT -- LAPNHOM : tạo thay Leader được chỉ định
 TV -- THANHVIEN
 TN -- THANHVIEN
-GV -- THANHVIEN : chuyển Trưởng nhóm
+GV -- THANHVIEN : theo quyền từng thao tác
+QT -- THANHVIEN : chỉ các thao tác đã chọn
 GV -- NGOAILE
+QT -- NGOAILE : điều chỉnh thành viên
 WORK -- TICH_HOP
 @enduml
 ```
@@ -105,11 +109,11 @@ rectangle "Lớp và sinh viên" {
   usecase "UC-CL-15\nXem lớp, nhóm và lịch sử được phép xem" as UC15
 }
 GV -- UC01
-QT -- UC01 : tạo lớp, chỉ định Giảng viên chính
+QT -- UC01 : tạo lớp, chỉ định Teacher ACTIVE
 GV -- UC02
 SV -- UC03
 GV -- UC04
-QT -- UC04 : quyền Quản trị viên hệ thống
+QT -- UC04 : thêm sinh viên
 ID -- UC04 : tìm hoặc tạo tài khoản
 SV -- UC15
 GV -- UC15
@@ -131,7 +135,8 @@ skinparam defaultFontSize 16
 actor "Sinh viên chưa có nhóm" as SV
 actor "Thành viên nhóm" as TV
 actor "Trưởng nhóm" as TN
-actor "Giảng viên đúng lớp" as GV
+actor "Giảng viên có phân công ACTIVE" as GV
+actor "Quản trị viên hệ thống" as QT
 TN --|> TV
 rectangle "Nhóm học tập" {
   usecase "UC-CL-05\nTạo nhóm" as UC05
@@ -140,16 +145,20 @@ rectangle "Nhóm học tập" {
   usecase "UC-CL-08\nRời nhóm của mình" as UC08
   usecase "UC-CL-09\nLoại thành viên" as UC09
   usecase "UC-CL-10\nChuyển quyền Trưởng nhóm" as UC10
-  usecase "UC-CL-11\nPhân người hoặc chuyển nhóm\nở giai đoạn sau" as UC11
+  usecase "UC-CL-11\nPhân người hoặc chuyển nhóm\nP1" as UC11
 }
-SV -- UC05
+SV -- UC05 : tự tạo khi đủ điều kiện
+GV -- UC05 : tạo thay Leader
+QT -- UC05 : tạo thay Leader
 SV -- UC06
 TN -- UC07
 TV -- UC08 : Trưởng nhóm phải chuyển quyền trước
 TN -- UC09
 TN -- UC10
-GV -- UC10
-GV -- UC11
+GV -- UC10 : chỉ khi phân công ACTIVE
+GV -- UC11 : chỉ khi phân công ACTIVE
+QT -- UC09 : loại thành viên
+QT -- UC11 : điều chỉnh thành viên
 @enduml
 ```
 
@@ -171,12 +180,13 @@ rectangle "Chức năng kết nối với dự án" {
   usecase "UC-CL-12\nXác nhận danh sách thành viên nhóm" as UC12
   usecase "UC-CL-13\nXác nhận các nhóm thuộc lớp\ngiảng viên phụ trách" as UC13
   usecase "UC-CL-14\nGhi liên kết dự án từ sự kiện\ntạo dự án của Work" as UC14
-  usecase "UC-CL-16\nKiểm tra quyền nhận xét và nhắc tên\nở giai đoạn sau" as UC16
+  usecase "UC-CL-16\nKiểm tra quyền nhận xét và nhắc tên" as UC16
 }
 WORK -- UC12 : xác minh qua REST
 WORK -- UC13
 WORK -- UC14 : sự kiện qua Kafka
 WORK -- UC16
+GV -- UC16 : xác minh phân công hiện hành
 @enduml
 ```
 
@@ -210,6 +220,9 @@ môn học, tên, học kỳ, ngày bắt đầu/kết thúc và giới hạn nh
 tạo lớp trở thành người phụ trách chính. Khi Quản trị viên tạo thay, yêu cầu
 phải chỉ định một tài khoản Giảng viên đang hoạt động làm người phụ trách
 chính; không gán Quản trị viên thành Giảng viên và không cấp quyền xem dự án.
+Teacher chỉ được tạo/sửa/ngừng dùng Course do mình tạo; Admin được quản lý
+mọi Course. `created_by_id` là UUID tham chiếu logic Identity, trường chỉ đọc;
+Course cũ chưa có người tạo có giá trị `NULL` và chỉ Admin được sửa/ngừng dùng.
 
 Trải nghiệm tạo lớp tự cấp mã tham gia khi bước tạo mới thành công. Hai lệnh
 tạo/cấp mã được tách để chỉ lưu mã băm; nếu cấp mã thất bại, báo lớp đã tạo và
@@ -230,9 +243,12 @@ hạn. Ghi danh đã hoạt động không tạo bản sao; `LEFT`/`REMOVED` kh�
 phục trong P0 khi chưa có chính sách tham gia lại. Tham gia lớp không cấp vai
 trò nhóm hoặc dự án.
 
-Đọc lớp cần ghi danh đang hoạt động hoặc phân công Giảng viên hiện hành,
+Đọc lớp cần ghi danh đang hoạt động hoặc phân công Teacher hiện hành,
 không phụ thuộc có nhóm. Giảng viên xem danh sách sinh viên/nhóm và lịch sử
 đúng lớp; Sinh viên không mặc định được xem lịch sử quản trị hoặc danh sách lớp khác.
+`PRIMARY` và `CO_TEACHER` có cùng quyền. Với quyền Teacher, role toàn cục
+`TEACHER` và phân công `ACTIVE` đều phải còn hiệu lực; thu hồi phân công làm
+mất quyền ngay, kể cả khi Work gọi scope nội bộ.
 Đọc/lọc/phân trang không tạo nhật ký hay sự kiện. Hồ sơ Identity chỉ bổ sung
 tên/ảnh, không cấp quyền.
 
@@ -262,8 +278,13 @@ sửa nội dung dùng khóa mới. Ghi danh `LEFT`/`REMOVED` cần xử lý ri�
 
 ### UC-CL-05/06/07 — Tạo, tham gia và mã mời nhóm
 
-Sinh viên phải đang ghi danh, lớp mở lập nhóm, nhóm đang hoạt động và chưa có
-nhóm khác cùng lớp. Tạo nhóm gán người tạo làm Trưởng nhóm; trải nghiệm tạo tự
+Sinh viên tự tạo nhóm khi đang ghi danh, lớp mở lập nhóm và chưa có nhóm
+hoạt động khác trong lớp. Teacher hoặc Admin có thể tạo thay khi chọn
+`leader_id` là Student có tài khoản `ACTIVE` và ghi danh `ACTIVE` trong lớp;
+người được chỉ định trở thành Leader. Admin không có quyền cấp/đổi/tắt mã mời.
+
+Tạo nhóm yêu cầu lớp mở lập nhóm, nhóm đang hoạt động và chưa có nhóm khác
+cùng lớp. Tạo nhóm tự thân gán người tạo làm Trưởng nhóm; trải nghiệm tạo tự
 cấp mã mời, lỗi cấp mã chỉ thử lại trên nhóm đã tạo. Nhóm ban đầu được dưới
 mức tối thiểu trong giai đoạn hình thành; mức tối đa luôn được kiểm khi tham gia.
 
@@ -325,6 +346,15 @@ phân công trả danh sách rỗng, lỗi xác minh không được diễn gi�
 UC-CL-16 xác minh người thực hiện/dự án/nhóm/phiên bản/thời hạn và người được
 nhắc tên ở P1. Work lưu phản hồi, tính bảng theo dõi và kiểm quyền công việc;
 không cấp Giảng viên quyền đổi công việc, Sprint hoặc phân công.
+
+Admin được xem danh sách nhóm toàn hệ thống (NH01), tạo nhóm thay cho Leader
+được chỉ định (NH02), xem chi tiết (NH03), sửa nhóm (NH04), loại thành viên
+(NH09) và xem lịch sử nhóm (NH12). Student chỉ xem NH03 khi là thành viên
+ACTIVE đúng nhóm. Admin không có quyền NH05 cấp mã mời, NH07 xem thành viên,
+NH10 chuyển Leader hoặc NH11 xem danh sách liên kết dự án. LH10 cho Admin
+loại người khác khỏi lớp; LH13 cho chốt lập nhóm; LH15 cho điều chỉnh thành
+viên. Chi tiết quyết định và các quyền bị loại xem tại
+bảng quyền chuẩn.
 
 ## 6. Phạm vi hoãn và bằng chứng
 

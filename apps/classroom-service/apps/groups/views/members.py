@@ -48,6 +48,11 @@ class GroupLeaveView(APIView):
 class GroupRemoveView(APIView):
     @extend_schema(
         request=MemberTargetSerializer,
+        description=(
+            "Trưởng nhóm, Teacher đang phụ trách hoặc Admin được loại thành viên thường; "
+            "lớp phải mở, kể cả sau khi chốt nhóm. "
+            "Trưởng nhóm phải có người kế nhiệm trước khi bị loại."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("GroupRemoveViewResponse", GroupSerializer),
@@ -78,6 +83,10 @@ class GroupTransferView(APIView):
 class TeacherAdjustmentView(APIView):
     @extend_schema(
         request=TeacherAdjustmentSerializer,
+        description=(
+            "Teacher đang phụ trách hoặc Admin phân/chuyển/loại sinh viên khỏi nhóm; "
+            "lớp mở, có lý do, giữ sĩ số và người kế nhiệm trưởng nhóm, kể cả sau khi chốt nhóm."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("TeacherAdjustmentViewResponse", AdjustmentResultSerializer),

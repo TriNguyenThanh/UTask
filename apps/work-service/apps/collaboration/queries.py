@@ -21,9 +21,14 @@ def comment_queryset():
     )
 
 
-def visible_comment(actor, comment_id):
+def visible_comment(actor, comment_id, *, for_feedback=False):
     scope = ProjectMember.objects.filter(user_id=actor.id, status="ACTIVE").values("project_id")
     query = comment_queryset().filter(deleted_at__isnull=True)
+    if for_feedback:
+        own = query.filter(pk=comment_id, user_id=actor.id).first()
+        if own:
+            subject_access(actor, task_id=own.task_id, project_id=own.project_id, for_feedback=True)
+            return own
     member = query.filter(
         Q(project_id__in=scope) | Q(task__project_id__in=scope), pk=comment_id
     ).first()

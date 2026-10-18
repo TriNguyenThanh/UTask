@@ -38,7 +38,7 @@ Hình thể hiện8 bảng nghiệp vụ và5 bảng thư viện liên quan tr�
 Các bảng framework còn lại ở mục4; trường trong hình là khóa/dữ liệu chính, không thay
 models hoặc toàn bộ data dictionary.
 
-![Quan hệ dữ liệu Identity](assets/ERD-ID-01.svg)
+Quan hệ dữ liệu Identity
 
 <details>
 <summary>Nguồn PlantUML</summary>

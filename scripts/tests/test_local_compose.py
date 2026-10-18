@@ -16,7 +16,7 @@ SHELL = shutil.which("sh") or (
     if Path("C:/Program Files/Git/bin/bash.exe").is_file()
     else None
 )
-DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION")
+DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION", "AI")
 
 
 class LocalComposeTests(unittest.TestCase):
@@ -65,8 +65,6 @@ class LocalComposeTests(unittest.TestCase):
             "ai-service",
             "ai-worker",
             "ai-dispatcher",
-            "ai-migrate",
-            "ai-postgres",
         ):
             self.assertEqual(self.services[name]["profiles"], ["ai-service"])
 
@@ -272,7 +270,9 @@ class PostgresSetupScriptTests(unittest.TestCase):
         for prefix in DATABASES:
             env[f"{prefix}_DB_NAME"] = f"{prefix.lower()} database's"
         if missing:
-            env.pop("CLASSROOM_DB_NAME", None)
+            env.pop(
+                f"{missing if isinstance(missing, str) else 'CLASSROOM'}_DB_NAME", None
+            )
         env["PATH"] = str(directory) + os.pathsep + env["PATH"]
         env["PSQL_LOG"] = (directory / "calls").as_posix()
         env["PSQL_FAILURE"] = "1" if failure else "0"
@@ -299,8 +299,9 @@ class PostgresSetupScriptTests(unittest.TestCase):
                 result = self.run_setup(directory)
                 self.assertEqual(result.returncode, 0, result.stderr)
             calls = (Path(directory) / "calls").read_text()
-            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 10)
-            self.assertEqual(calls.count("-X\n"), 10)
+            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 12)
+            self.assertEqual(calls.count("-X\n"), 12)
+            self.assertIn("--set=database_name=ai database's\n", calls)
             self.assertIn("--set=database_name=classroom database's\n", calls)
             self.assertIn("WHERE NOT EXISTS (SELECT 1 FROM pg_database", calls)
             self.assertIn("format('CREATE DATABASE %I'", calls)
@@ -317,8 +318,12 @@ class PostgresSetupScriptTests(unittest.TestCase):
             )
 
     def test_missing_database_name_fails_before_psql(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = self.run_setup(directory, missing=True)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Missing CLASSROOM_DB_NAME", result.stderr)
-            self.assertFalse((Path(directory) / "calls").exists())
+        for missing in ("CLASSROOM", "AI"):
+            with (
+                self.subTest(missing=missing),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                result = self.run_setup(directory, missing=missing)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"Missing {missing}_DB_NAME", result.stderr)
+                self.assertFalse((Path(directory) / "calls").exists())
