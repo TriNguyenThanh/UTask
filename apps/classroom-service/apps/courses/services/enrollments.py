@@ -30,7 +30,7 @@ from infrastructure.identity import IdentityClient
 
 
 def join_class(request, payload):
-    actor_roles(request)
+    require_role(request, "STUDENT")
     digest = code_hash(payload["code"])
     with transaction.atomic():
         saved = lookup_receipt(receipt_scope(request, require_key(request)), payload)
@@ -75,10 +75,10 @@ def add_students(request, class_id, payload):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
+        require_manage(request, section)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_manage(request, section)
         require_open(section)
         if receipt.upstream_key is None:
             receipt.upstream_key = uuid4()
@@ -105,10 +105,10 @@ def add_students(request, class_id, payload):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
+        require_manage(request, section)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_manage(request, section)
         require_open(section)
         results = []
         seen = set()
@@ -207,13 +207,13 @@ def exit_class(request, class_id, enrollment_id, payload):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
-        receipt = begin_receipt(request, payload, section)
-        if receipt.status == "COMPLETED":
-            return replay_response(receipt)
         enrollment = get_object_or_404(Enrollment, pk=enrollment_id, class_section=section)
         own = enrollment.user_id == request.user.id
         if not own:
-            require_manage(request, section, teacher_only=True)
+            require_manage(request, section)
+        receipt = begin_receipt(request, payload, section)
+        if receipt.status == "COMPLETED":
+            return replay_response(receipt)
         require_open(section)
         membership = GroupMember.objects.filter(enrollment=enrollment, status="ACTIVE").first()
         if membership:
