@@ -31,14 +31,18 @@ services:
     env_file:
       - ./infra/env/database.env
       - ./infra/env/postgres.env
+    entrypoint: ["/bin/sh", "/usr/local/bin/start-postgres.sh"]
+    command: ["postgres"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/start-postgres.sh:/usr/local/bin/start-postgres.sh:ro
       - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "test -f /tmp/utask-postgres-ready && pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 150s
 
   redis:
     x-deploy:
@@ -293,10 +297,20 @@ services:
 
   integration-service:
     profiles: [integration-service]
+    x-deploy:
+      gateway_health_path: /api/integrations/healthz
+    x-ci:
+      test_env:
+        TEST_DATABASE_NAME: integration_test
+        INTEGRATION_TEST_DB_NAME: integration_test
+        INTEGRATION_TEST_DB_USER: utask_ci
+        INTEGRATION_TEST_DB_PASSWORD: ci-only-postgres-password
+        INTEGRATION_TEST_DB_HOST: "127.0.0.1"
+        INTEGRATION_TEST_DB_PORT: "5432"
     image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    init: true
     restart: unless-stopped
     env_file:
-      - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
     depends_on:

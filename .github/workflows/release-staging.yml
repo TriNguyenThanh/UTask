@@ -223,6 +223,7 @@ jobs:
           scp staging-images.json "$target:${STAGING_WORKDIR}/staging-images.json"
           scp .env.example "$target:${STAGING_WORKDIR}/.env.example"
           scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"
+          scp infra/postgres/start-postgres.sh "$target:${STAGING_WORKDIR}/infra/postgres/start-postgres.sh"
           scp infra/postgres/init-databases.sh "$target:${STAGING_WORKDIR}/infra/postgres/init-databases.sh"
           scp infra/nginx/nginx.conf "$target:${STAGING_WORKDIR}/infra/nginx/nginx.deployment.conf"
           scp scripts/deploy_staging.sh "$target:${STAGING_WORKDIR}/scripts/deploy_staging.sh"

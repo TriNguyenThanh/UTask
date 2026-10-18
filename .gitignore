@@ -101,6 +101,7 @@ CLAUDE.md
 .stitch/
 
 .claude
+.codex
 reports/
 apps/work-service/tools/api_workflows/
 apps/classroom-service/tools/api_workflows/

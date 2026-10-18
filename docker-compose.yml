@@ -290,9 +290,9 @@ services:
     profiles: [integration-service]
     image: ${UTASK_IMAGE_PREFIX:-utask}/integration-service:${UTASK_IMAGE_TAG:-local}
     build: ./apps/integration-service
+    init: true
     restart: unless-stopped
     env_file:
-      - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
     depends_on:
