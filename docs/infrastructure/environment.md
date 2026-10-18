@@ -259,7 +259,9 @@ khi có đủ credential và callback theo [tài liệu Identity](../identity-se
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
 chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
-chạy script qua cơ chế khởi tạo volume mới. Sửa `.env` không tự đổi tên database hoặc
+chạy script qua cơ chế khởi tạo volume mới; khi deploy có AI, script còn chạy lại
+trên PostgreSQL đã healthy để bổ sung database AI còn thiếu trước migration.
+Sửa `.env` không tự đổi tên database hoặc
 chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
@@ -283,7 +285,9 @@ JWKS, cùng issuer/audience đúng từ Identity; LLM cần model/base URL/key v
 adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
 Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
 
-Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volume
-`ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
-volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
-Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.
+Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự
+thay password role đã lưu trong volume PostgreSQL. Redis DB1 là broker AI;
+Redis DB0 dành cấu hình Identity. Đổi Compose không tự chuyển dữ liệu AI cũ
+từ volume `ai_database` hoặc stack standalone vào database chung. Giữ volume
+cũ để kiểm tra/backup; không chạy `down -v`. Nếu AI từng có dữ liệu, cần xuất
+và khôi phục có chủ đích trước khi sử dụng database đích.

@@ -62,7 +62,7 @@ def deployment_runtime(
             "args=sys.argv[1:]\n"
             "if 'login' in args and sys.stdin.read().rstrip('\\n') != os.environ['EXPECTED_REGISTRY_TOKEN']: sys.exit(2)\n"
             "with open(os.environ['CALLS'], 'a') as output: output.write(json.dumps(args) + '\\n')\n"
-            "stage='environment' if 'config' in args and '--environment' in args else 'ai-migration' if 'ai-migrate' in args and '--exit-code-from' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
+            "stage='database-preparation' if '/docker-entrypoint-initdb.d/init-databases.sh' in args else 'environment' if 'config' in args and '--environment' in args else 'ai-migration' if '/app/.venv/bin/alembic' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
             "if stage and stage == os.environ['FAIL_ON']: sys.exit(int(os.environ['FAIL_CODE']))\n"
             "if 'run' in args: sys.stdin.read()\n"
             "if 'config' in args and '--environment' in args: print(os.environ.get('COMPOSE_TEST_ENVIRONMENT', ''))\n"
@@ -86,11 +86,7 @@ def deployment_runtime(
             "registry_token": "test-token",
             "EXPECTED_REGISTRY_TOKEN": "test-token",
             "EXPECTED_SERVICE_NAMES": services
-            + (
-                " ai-worker ai-dispatcher ai-migrate ai-postgres"
-                if "ai-service" in services.split()
-                else ""
-            ),
+            + (" ai-worker ai-dispatcher" if "ai-service" in services.split() else ""),
             "EXPECTED_GATEWAY_SERVICE": "nginx",
             "registry": "test.invalid",
             "registry_user": "test",
@@ -99,8 +95,7 @@ def deployment_runtime(
             "service_names": services,
             "migration_names": migrations,
             "gateway_names": paths,
-            "infrastructure_names": "postgres redis queue"
-            + (" ai-postgres" if "ai-service" in services.split() else ""),
+            "infrastructure_names": "postgres redis queue",
             "gateway_service": "nginx",
         }
         yield root, env, calls

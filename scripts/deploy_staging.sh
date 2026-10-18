@@ -57,9 +57,10 @@ if (( ${#infrastructure[@]} )); then
   "${compose[@]}" up -d --no-build --wait --wait-timeout 120 "${infrastructure[@]}" < /dev/null
 fi
 if [[ " $service_names " == *" ai-service "* ]]; then
-  # Keep the successful one-shot container for service_completed_successfully.
-  # Force a fresh migration for each release, and stop before updating any app.
-  "${compose[@]}" up --no-build --no-deps --force-recreate --exit-code-from ai-migrate ai-migrate < /dev/null
+  # Existing PostgreSQL volumes do not rerun entrypoint initialization. Provision
+  # declared databases idempotently before applying the AI schema migration.
+  "${compose[@]}" exec -T --interactive=false postgres /bin/sh /docker-entrypoint-initdb.d/init-databases.sh < /dev/null
+  "${compose[@]}" run --rm --no-deps --interactive=false ai-service /app/.venv/bin/alembic upgrade head < /dev/null
 fi
 for service in "${services[@]}"; do
   if [[ " $migration_names " == *" $service "* ]]; then
@@ -68,13 +69,13 @@ for service in "${services[@]}"; do
 done
 runtime_services=()
 while IFS= read -r runtime_service; do
-  if [[ "$runtime_service" != "$gateway_service" && "$runtime_service" != "ai-migrate" ]]; then
+  if [[ "$runtime_service" != "$gateway_service" ]]; then
     runtime_services+=("$runtime_service")
   fi
 done <<< "$runtime_names"
 
-# Every active runtime is explicit here; dependencies and migrations were gated
-# above. Do not restart the completed migration through dependency traversal.
+# Every active runtime is explicit here; database readiness and migrations were
+# gated above. Compose dependencies wait for API readiness during manual startup.
 "${compose[@]}" up -d --no-build --no-deps --wait --wait-timeout 120 "${runtime_services[@]}" < /dev/null
 if [[ -f "$nginx_active" ]]; then
   cat "$nginx_config" > "$nginx_active"

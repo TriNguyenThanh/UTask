@@ -351,12 +351,12 @@ workflow chờ chúng healthy trước migration, không cố định PostgreSQL
 Migration Django và Alembic của AI được chạy trước khi khởi động stack app; lỗi migration
 dừng deploy trước bước `up` toàn stack. Các service dùng framework/lệnh khác cần khai báo
 cơ chế migration riêng khi được đưa vào release.
-Riêng AI, deploy chờ PostgreSQL AI và Redis healthy rồi chạy migration bằng `compose up`
-với `--force-recreate --exit-code-from ai-migrate` trước app stack. Lệnh trả lỗi sẽ dừng
-deploy. Sau đó script khởi động rõ các process runtime bằng `--no-deps`, nên Compose không
-duyệt lại dependency và chạy migration lần nữa; các dependency hạ tầng và migration đã
-được kiểm tra ở bước trước. Container migration thành công vẫn được giữ lại để
-`service_completed_successfully` tiếp tục làm dependency gate khi chạy Compose thủ công.
+AI cũng chạy migration bằng `compose run --rm --no-deps ai-service
+/app/.venv/bin/alembic upgrade head` sau khi PostgreSQL chung và Redis healthy.
+Lệnh trả lỗi sẽ dừng deploy trước cập nhật runtime. Sau đó script khởi động rõ
+các process runtime bằng `--no-deps`; mỗi API tự chạy migration trong entrypoint
+trước server, còn worker bỏ qua migration. Khi dùng Compose trực tiếp, worker
+đợi API healthy. Không giữ một container migration riêng giữa các lần deploy.
 Nginx config được upload dưới tên `nginx.deployment.conf`, kiểm tra bằng container
 chạy `nginx -t` trước migration; file đang dùng được giữ nguyên khi validation lỗi.
 Sau khi app/worker healthy, script ghi nội dung mới vào đúng bind mount hiện có,
@@ -439,7 +439,8 @@ diện PostgreSQL theo image của dependency; cả CI và runtime root dùng Po
 
 `depends_on: service_healthy` với API bảo vệ thứ tự worker khi chạy Compose
 thủ công. Migration chạy tới `head`; nếu không bật AI thì không chạy bước Alembic
-hoặc khởi động PostgreSQL AI. Không có chuyển dữ liệu tự động từ Compose AI riêng.
+cho AI. Không có chuyển dữ liệu tự động từ container AI PostgreSQL cũ hoặc
+Compose AI standalone; volume cũ phải được giữ lại để backup/chuyển dữ liệu có chủ đích.
 
 Trên VPS, điền password DB, khóa Fernet, JWT issuer/audience và public key hoặc
 JWKS, URL REST quyền/context, model/base URL/API key trong `.env` server theo
