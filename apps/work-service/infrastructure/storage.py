@@ -9,6 +9,7 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 
 from common.errors import WorkError
+from common.json_validation import has_excessive_json_nesting
 
 
 @dataclass(frozen=True)
@@ -86,7 +87,8 @@ class R2Storage:
                 try:
                     text = body.decode("utf-8")
                     if kind == "application/json":
-                        json.loads(text)
+                        if has_excessive_json_nesting(json.loads(text)):
+                            return ObjectFacts(size, kind, False)
                     valid = True
                 except (ValueError, UnicodeError, RecursionError):
                     pass

@@ -11,6 +11,15 @@ importers:
       '@atlaskit/pragmatic-drag-and-drop':
         specifier: 4.0.0
         version: 4.0.0
+      '@atlaskit/pragmatic-drag-and-drop-auto-scroll':
+        specifier: 3.2.1
+        version: 3.2.1
+      '@atlaskit/pragmatic-drag-and-drop-hitbox':
+        specifier: 3.0.0
+        version: 3.0.0
+      '@atlaskit/pragmatic-drag-and-drop-live-region':
+        specifier: 2.1.0
+        version: 2.1.0
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
@@ -32,6 +41,9 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      fractional-indexing:
+        specifier: 3.2.0
+        version: 3.2.0
       lucide-react:
         specifier: ^1.48.0
         version: 1.48.0(react@18.3.1)
@@ -107,6 +119,15 @@ packages:
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
+
+  '@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.1':
+    resolution: {integrity: sha512-2fhWAG48EjPoKhoHLG6RcT3/VaCzYEbRb6BtA/Vcfx4FrL0P1KrEgBJ6OAwB0X8MOV6UH22YgjFFHjv8fQD9rA==}
+
+  '@atlaskit/pragmatic-drag-and-drop-hitbox@3.0.0':
+    resolution: {integrity: sha512-AGLp1ewjm07eRN2NL62awllSM19FrWVZMQYfZA/jugQlpaeoTr5ah2DE7zfiEt7yrg34htoKQVM+y6SGIQYs2A==}
+
+  '@atlaskit/pragmatic-drag-and-drop-live-region@2.1.0':
+    resolution: {integrity: sha512-7THqnYhsSQnVqyVBCdMvdjWTjE3bUd5WKqs8g2SVv6UgJTIKunVmCH5lg6oySmqGGyVtHyOf7aXgpVpgUS9kbg==}
 
   '@atlaskit/pragmatic-drag-and-drop@4.0.0':
     resolution: {integrity: sha512-pyDo2B5NiaExoKGmgeXKGNUL4aR4UzzSZm8QWWjYTEyBLVqSqKyKUwtVxMw2YEkakagOGFONUdHM32LAH2nPug==}
@@ -1761,6 +1782,10 @@ packages:
       picomatch:
         optional: true
 
+  fractional-indexing@3.2.0:
+    resolution: {integrity: sha512-PcOxmqwYCW7O2ovKRU8OoQQj2yqTfEB/yeTYk4gPid6dN5ODRfU1hXd9tTVZzax/0NkO7AxpHykvZnT1aYp/BQ==}
+    engines: {node: ^14.13.1 || >=16.0.0}
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -2431,6 +2456,20 @@ snapshots:
       '@csstools/css-parser-algorithms': 3.0.5(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-tokenizer': 3.0.4
       lru-cache: 10.4.3
+
+  '@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.1':
+    dependencies:
+      '@atlaskit/pragmatic-drag-and-drop': 4.0.0
+      '@babel/runtime': 7.29.7
+
+  '@atlaskit/pragmatic-drag-and-drop-hitbox@3.0.0':
+    dependencies:
+      '@atlaskit/pragmatic-drag-and-drop': 4.0.0
+      '@babel/runtime': 7.29.7
+
+  '@atlaskit/pragmatic-drag-and-drop-live-region@2.1.0':
+    dependencies:
+      '@babel/runtime': 7.29.7
 
   '@atlaskit/pragmatic-drag-and-drop@4.0.0':
     dependencies:
@@ -3953,6 +3992,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fractional-indexing@3.2.0: {}
 
   fsevents@2.3.3:
     optional: true

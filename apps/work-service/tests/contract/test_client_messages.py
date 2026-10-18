@@ -67,7 +67,7 @@ def test_receipt_message_commits_with_result_and_replay_keeps_original_envelope(
     scope = {
         "user_id": actors["leader"],
         "http_method": "POST",
-        "endpoint_path": "/api/v1/projects/",
+        "endpoint_path": "/projects/",
         "idempotency_key": "outcome-message",
     }
     with transaction.atomic():
@@ -94,22 +94,22 @@ def test_owned_api_validation_messages_are_vietnamese_and_have_no_effect(
     client = client_for(actors["leader"])
     routes = {
         "project": (
-            "/api/v1/projects/",
+            "/projects/",
             {"identifier": "bad", "name": "Tên dự án", "classroom_group_id": "group-1"},
             "identifier",
         ),
         "state": (
-            f"/api/v1/projects/{project_id}/states/",
+            f"/projects/{project_id}/states/",
             {"name": "Kiểm tra", "color": "red", "sequence": 100, "group": "BACKLOG"},
             "color",
         ),
         "sprint": (
-            f"/api/v1/projects/{project_id}/sprints/",
+            f"/projects/{project_id}/sprints/",
             {"name": "Kế hoạch", "start_date": "bad-date"},
             "start_date",
         ),
         "username": (
-            f"/api/v1/projects/{project_id}/members/{actors['leader']}/github/",
+            f"/projects/{project_id}/members/{actors['leader']}/github/",
             {"github_username": ""},
             "github_username",
         ),
@@ -133,15 +133,15 @@ def test_owned_read_outcomes_and_actual_auth_error_envelope(github, actors, clie
     _, _, repository, task = github
     client = client_for(actors["member"])
     routes = {
-        "/api/v1/projects/": "Đã lấy danh sách dự án.",
-        f"/api/v1/projects/{task.project_id}/": "Đã lấy thông tin dự án.",
-        f"/api/v1/projects/{task.project_id}/members/": "Đã lấy danh sách thành viên dự án.",
-        f"/api/v1/projects/{task.project_id}/states/": "Đã lấy danh sách cột trạng thái.",
-        f"/api/v1/projects/{task.project_id}/kanban/": "Đã lấy bảng công việc của dự án.",
-        f"/api/v1/projects/{task.project_id}/dashboard/": "Đã lấy số liệu công việc của dự án.",
-        f"/api/v1/projects/{task.project_id}/sprints/": "Đã lấy danh sách chu kỳ làm việc.",
+        "/projects/": "Đã lấy danh sách dự án.",
+        f"/projects/{task.project_id}/": "Đã lấy thông tin dự án.",
+        f"/projects/{task.project_id}/members/": "Đã lấy danh sách thành viên dự án.",
+        f"/projects/{task.project_id}/states/": "Đã lấy danh sách cột trạng thái.",
+        f"/projects/{task.project_id}/kanban/": "Đã lấy bảng công việc của dự án.",
+        f"/projects/{task.project_id}/dashboard/": "Đã lấy số liệu công việc của dự án.",
+        f"/projects/{task.project_id}/sprints/": "Đã lấy danh sách chu kỳ làm việc.",
         repository: "Đã lấy thông tin kết nối kho mã nguồn của dự án.",
-        f"/api/v1/tasks/{task.pk}/github-links/": "Đã lấy danh sách liên kết GitHub của công việc.",
+        f"/tasks/{task.pk}/github-links/": "Đã lấy danh sách liên kết GitHub của công việc.",
     }
     before = effect_state(task.project_id)
     for route, message in routes.items():

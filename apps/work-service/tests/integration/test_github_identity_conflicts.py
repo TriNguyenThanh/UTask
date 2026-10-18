@@ -10,7 +10,7 @@ def test_leader_cannot_declare_another_members_username(created_project, actors,
     project_id = created_project["id"]
     before = effect_state(project_id)
     reply = client_for(actors["leader"]).patch(
-        f"/api/v1/projects/{project_id}/members/{actors['member']}/github/",
+        f"/projects/{project_id}/members/{actors['member']}/github/",
         {"github_username": "other-account"},
         format="json",
     )
@@ -27,7 +27,7 @@ def test_duplicate_username_returns_conflict_and_rolls_back_all_effects(
     assert (
         client_for(actors["leader"])
         .patch(
-            f"/api/v1/projects/{project_id}/members/{actors['leader']}/github/",
+            f"/projects/{project_id}/members/{actors['leader']}/github/",
             {"github_username": "same-user"},
             format="json",
         )
@@ -37,7 +37,7 @@ def test_duplicate_username_returns_conflict_and_rolls_back_all_effects(
     before = effect_state(project_id)
     members = list(ProjectMember.objects.order_by("id").values())
     reply = client_for(actors["member"]).patch(
-        f"/api/v1/projects/{project_id}/members/{actors['member']}/github/",
+        f"/projects/{project_id}/members/{actors['member']}/github/",
         {"github_username": username},
         format="json",
     )

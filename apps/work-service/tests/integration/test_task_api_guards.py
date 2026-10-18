@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 )
 def test_ai_provenance_rejection_leaves_saved_state_unchanged(task_api, ai, actors, mode, invalid):
     leader, task_route, create = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     if mode == "backlog":
         proof = ai(project.pk)
         body, route = backlog_payload(project), task_route + "bulk-apply-ai/"
@@ -49,7 +49,7 @@ def test_ai_provenance_rejection_leaves_saved_state_unchanged(task_api, ai, acto
             "expected_parent_version": 1,
             "subtasks": [{"local_id": "a", "ai_revision": "r1", "title": "Reviewed child"}],
         }
-        route = f"/api/v1/tasks/{parent['id']}/subtasks/bulk-apply-ai/"
+        route = f"/tasks/{parent['id']}/subtasks/bulk-apply-ai/"
     else:
         target = create()
         proof = ai(project.pk, kind="ACTION", targets=[target["id"]])
@@ -61,7 +61,7 @@ def test_ai_provenance_rejection_leaves_saved_state_unchanged(task_api, ai, acto
                 "priority": "HIGH",
             }
         )
-        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        route = f"/projects/{project.pk}/ai-actions/apply/"
     replacements = {
         "expired": {"expires_at": timezone.now() - timedelta(seconds=1)},
         "actor": {"actor_ids": frozenset([actors["member"]])},
@@ -101,11 +101,11 @@ def test_ai_assignment_action_readback_authoritative_retry_and_valid_payload_con
             "assignee_ids": [str(actors["leader"])],
         }
     )
-    route = f"/api/v1/projects/{project_id}/ai-actions/apply/"
+    route = f"/projects/{project_id}/ai-actions/apply/"
     reply = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="assign-action")
     assert reply.status_code == 200, reply.content
     outcome = reply.json()["data"]
-    detail = leader.get(f"/api/v1/tasks/{task['id']}/").json()["data"]
+    detail = leader.get(f"/tasks/{task['id']}/").json()["data"]
     assert detail["assignee_ids"] == [str(actors["leader"])] and detail["version"] == 2
     assert TaskAssignment.objects.get(task_id=task["id"]).user_id == actors["leader"]
     assert outcome["affected_tasks"][0]["id"] == task["id"]
@@ -129,7 +129,7 @@ def test_ai_assignment_action_readback_authoritative_retry_and_valid_payload_con
     assert conflict.status_code == 422, conflict.content
     assert conflict.json()["error"]["code"] == "AI_ITEM_PAYLOAD_CONFLICT"
     assert effect_state(project_id) == before
-    operation = f"/api/v1/projects/{project_id}/ai-operations/{outcome['operation_id']}/"
+    operation = f"/projects/{project_id}/ai-operations/{outcome['operation_id']}/"
     assert client_for(actors["teacher"]).get(operation).json()["data"] == outcome
     assert client_for(actors["outsider"]).get(operation).status_code == 404
     assert leader.get(operation.replace(project_id, foreign_scope[0]["id"])).status_code == 404
@@ -143,7 +143,7 @@ def test_manual_create_and_ai_bulk_share_allocator_under_concurrency(
     task_api, ai, actors, client_for
 ):
     _, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     batch = backlog_payload(project)
     barrier = Barrier(2)
@@ -199,14 +199,14 @@ def test_cancelled_transition_has_no_completion_timestamp_and_readback(task_api)
     task = create()
     project = Project.objects.get(pk=task["project_id"])
     state_reply = leader.post(
-        f"/api/v1/projects/{project.pk}/states/",
+        f"/projects/{project.pk}/states/",
         {"name": "Cancelled", "color": "#123456", "sequence": 60000, "group": "CANCELLED"},
         format="json",
     )
     assert state_reply.status_code == 201, state_reply.content
     cancelled = project.states.get(pk=state_reply.json()["data"]["id"])
     project.refresh_from_db()
-    route = f"/api/v1/tasks/{task['id']}/"
+    route = f"/tasks/{task['id']}/"
     before_revision = project.board_revision
     response = leader.patch(
         route + "transition/",
@@ -247,7 +247,7 @@ def test_task_write_api_families_reject_teacher_and_outsider_without_effect(
 ):
     leader, task_route, create = task_api
     task, related = create(), create()
-    detail = f"/api/v1/tasks/{task['id']}/"
+    detail = f"/tasks/{task['id']}/"
     project = Project.objects.get(pk=task["project_id"])
     if operation == "backlog":
         route, method, payload = task_route, "post", {"title": "Denied"}
@@ -304,7 +304,7 @@ def test_assignee_cannot_use_leader_only_ai_commands(task_api, actors, client_fo
     if operation == "bulk-backlog":
         route, body = task_route + "bulk-apply-ai/", backlog_payload(project)
     else:
-        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        route = f"/projects/{project.pk}/ai-actions/apply/"
         body = action_payload(
             {
                 "kind": "SET_PRIORITY",

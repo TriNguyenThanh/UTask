@@ -35,7 +35,7 @@ def test_github_username_permission_and_verified_identity_denials_have_no_effect
     before = effect_state(project_id)
     members = list(ProjectMember.objects.order_by("id").values())
     reply = client_for(caller).patch(
-        f"/api/v1/projects/{project_id}/members/{target}/github/",
+        f"/projects/{project_id}/members/{target}/github/",
         {"github_username": "changed"},
         format="json",
     )
@@ -51,7 +51,7 @@ def test_github_username_permission_and_verified_identity_denials_have_no_effect
 def test_same_declared_username_is_noop_and_does_not_upgrade_verification(
     created_project, actors, client_for
 ):
-    route = f"/api/v1/projects/{created_project['id']}/members/{actors['member']}/github/"
+    route = f"/projects/{created_project['id']}/members/{actors['member']}/github/"
     client = client_for(actors["member"])
     first = client.patch(route, {"github_username": "student"}, format="json")
     assert first.status_code == 200
@@ -70,7 +70,7 @@ def test_verification_request_for_removed_member_rolls_back_receipt_and_notifica
     )
     before = effect_state(project_id)
     reply = client_for(actors["leader"]).post(
-        f"/api/v1/projects/{project_id}/members/{actors['member']}/github/request-verification/",
+        f"/projects/{project_id}/members/{actors['member']}/github/request-verification/",
         {},
         format="json",
         HTTP_IDEMPOTENCY_KEY="inactive-notification",

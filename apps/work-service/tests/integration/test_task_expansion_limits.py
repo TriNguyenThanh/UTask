@@ -17,7 +17,7 @@ def test_subtask_expansion_limit_has_cursor_read_alternative(task_api, ai, actor
         revisions={f"child-{i}": "r1" for i in range(100)},
     )
     member = client_for(actors["member"])
-    path = f"/api/v1/tasks/{parent['id']}/subtasks/"
+    path = f"/tasks/{parent['id']}/subtasks/"
     body = {
         "proposal_id": "proposal-1",
         "context_version": 42,
@@ -37,7 +37,7 @@ def test_subtask_expansion_limit_has_cursor_read_alternative(task_api, ai, actor
     )
     assert extra.status_code == 201, extra.content
     with CaptureQueriesContext(connection) as captured:
-        detail = leader.get(f"/api/v1/tasks/{parent['id']}/", {"expand": "subtasks"})
+        detail = leader.get(f"/tasks/{parent['id']}/", {"expand": "subtasks"})
     assert detail.status_code == 400, detail.content
     assert len(captured) <= 12
     first = leader.get(route, {"parent_id": parent["id"], "page_size": 100}).json()

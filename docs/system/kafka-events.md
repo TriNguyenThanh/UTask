@@ -12,9 +12,15 @@
 | `github.commit.received`, `github.pull_request.opened`, `github.pull_request.merged`, `github.issue.updated` | Integration  | Work, AI, Notification khi cần                    | Chia sẻ hoạt động GitHub đã chuẩn hóa  |
 | `ai.analysis.completed`, `ai.project.risk.detected`                                                          | AI           | Notification hoặc service đã đăng ký nhận         | Thông báo phân tích/rủi ro đã hoàn tất |
 
-Classroom có thể cần event nhóm/thành viên; tên, payload và service nhận phải
-chốt theo use case, không suy ra schema từ wildcard. Baseline dùng cả ví dụ
-`comment.created` và `task.comment.created`; tên cuối cùng cần event contract.
+Classroom công bố sự kiện `classroom.group.membership.changed` khi thành viên
+nhóm thay đổi; xem [hợp đồng JSON Schema](../../contracts/events/classroom.group.membership.changed.v1.json).
+Work nhận ảnh chụp thành viên để cập nhật các dự án hoạt động của nhóm.
+
+Work công bố sự kiện `work.project.created`; Classroom nhận sự kiện để ghi
+liên kết nhóm–dự án. Xem [hợp đồng JSON Schema](../../contracts/events/work.project.created.v1.json).
+
+Baseline dùng cả ví dụ `comment.created` và `task.comment.created`; tên sự
+kiện cuối cùng cần được chốt bằng hợp đồng cụ thể.
 
 ## Envelope và version
 

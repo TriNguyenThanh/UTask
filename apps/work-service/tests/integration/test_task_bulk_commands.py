@@ -15,9 +15,9 @@ pytestmark = [pytest.mark.django_db, pytest.mark.integration]
 
 def test_ai_batch_writes_tasks_junctions_audit_outbox_in_bulk(task_api, ai, actors):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     label = leader.post(
-        f"/api/v1/projects/{project.pk}/labels/",
+        f"/projects/{project.pk}/labels/",
         {"name": "Batch", "color": "#123456"},
         format="json",
     ).json()["data"]
@@ -75,14 +75,14 @@ def test_ai_scope_calls_real_sprint_command_add_remove_and_replays(task_api, ai)
     task = create()
     project_id = task["project_id"]
     sprint_reply = leader.post(
-        f"/api/v1/projects/{project_id}/sprints/",
+        f"/projects/{project_id}/sprints/",
         {"name": "Scope", "start_date": "2027-01-01", "end_date": "2027-01-15"},
         format="json",
     )
     assert sprint_reply.status_code == 201, sprint_reply.content
     sprint = sprint_reply.json()["data"]
     ai(project_id, kind="ACTION", targets=[task["id"]])
-    route = f"/api/v1/projects/{project_id}/ai-actions/apply/"
+    route = f"/projects/{project_id}/ai-actions/apply/"
     body = action_payload(sprint_action(task, sprint, 1))
     reply = leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="scope-add")
     assert reply.status_code == 200, reply.content
@@ -90,6 +90,13 @@ def test_ai_scope_calls_real_sprint_command_add_remove_and_replays(task_api, ai)
     assert membership.sprint_id == UUID(sprint["id"]) and membership.ended_at is None
     assert Sprint.objects.get(pk=sprint["id"]).version == 2
     assert OutboxEvent.objects.filter(event_type="sprint.scope_changed").count() == 1
+    assert (
+        IdempotencyRecord.objects.filter(
+            idempotency_key__startswith="work-ai:",
+            endpoint_path=f"/sprints/{sprint['id']}/tasks/",
+        ).count()
+        == 1
+    )
     assert (
         leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="scope-add-new-key").json()
         == reply.json()
@@ -106,7 +113,13 @@ def test_ai_scope_calls_real_sprint_command_add_remove_and_replays(task_api, ai)
     membership.refresh_from_db()
     assert membership.ended_at is not None and membership.end_reason == "REMOVED"
     assert SprintTask.objects.count() == 1
-    assert IdempotencyRecord.objects.filter(ai_item_id="action").count() == 2
+    assert (
+        IdempotencyRecord.objects.filter(
+            idempotency_key__startswith="work-ai:",
+            endpoint_path=f"/sprints/{sprint['id']}/tasks/",
+        ).count()
+        == 2
+    )
 
 
 @pytest.mark.parametrize("failure", ["stale", "active-reason", "cross-project"])
@@ -117,13 +130,13 @@ def test_ai_scope_failure_rolls_back_other_entity_and_receipts(task_api, ai, fai
     sprint = Sprint.objects.create(project=project, name="Test scope", sort_order=10000)
     if failure == "active-reason":
         response = leader.patch(
-            f"/api/v1/sprints/{sprint.pk}/",
+            f"/sprints/{sprint.pk}/",
             {"expected_version": 1, "start_date": "2027-01-01", "end_date": "2027-01-15"},
             format="json",
         )
         assert response.status_code == 200, response.content
         started = leader.post(
-            f"/api/v1/projects/{project.pk}/sprints/{sprint.pk}/start/",
+            f"/projects/{project.pk}/sprints/{sprint.pk}/start/",
             {"expected_version": 2},
             format="json",
             HTTP_IDEMPOTENCY_KEY="start",
@@ -150,7 +163,7 @@ def test_ai_scope_failure_rolls_back_other_entity_and_receipts(task_api, ai, fai
     )
     before = OutboxEvent.objects.count()
     reply = leader.post(
-        f"/api/v1/projects/{project.pk}/ai-actions/apply/",
+        f"/projects/{project.pk}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="scope-failure",

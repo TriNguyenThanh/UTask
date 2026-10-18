@@ -4,11 +4,21 @@
 Celery + Redis; sự kiện giữa service dùng Kafka. Xem
 [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>).
 Compose root local/staging đã khai báo Celery worker và dispatcher của AI,
-cùng migration Alembic trước startup. Worker/scheduler của các domain khác
-chưa được khai báo. Có broker trong hạ tầng không chứng minh job của mọi
+cùng migration Alembic trước startup. Work và Classroom cũng đã có publisher
+worker/Beat/consumer trong Compose với cùng image API theo service. Có broker
+trong hạ tầng không chứng minh job của mọi
 service đã được triển khai. Xem [cách chạy AI local](local-development.md#chạy-riêng-pipeline-ai-từ-root).
 
 ## Quyền sở hữu job
+
+Classroom `drain_outbox` gửi sự kiện theo lớp; Work gửi theo dự án. Beat gọi
+publisher mỗi 5 giây. Sau tạo Project, Work giao `recover_project_membership`
+với ID dự án, đọc ảnh chụp bằng credential dịch vụ; không lưu Bearer. Task
+`recover_active_memberships` quét dự án hoạt động mỗi 300 giây để phục hồi khi
+giao task sau commit bị lỗi hoặc process chết. Không thêm bảng job/dispatcher
+cho đường phục hồi này. Xem [mã task](../../apps/work-service/apps/projects/tasks.py),
+[cấu hình Work](../../apps/work-service/config/settings/base.py),
+[cấu hình Classroom](../../apps/classroom-service/config/settings/base.py).
 
 Service sở hữu nghiệp vụ cũng sở hữu mã task, trạng thái và kết quả job.
 Ví dụ: Integration xử lý đồng bộ GitHub, Notification gửi email, service
@@ -108,3 +118,10 @@ job đang chờ, lỗi giữa commit database và gửi Redis, gửi trùng task
 chết trước/sau khi lưu kết quả, worker cũ ghi muộn, retry không vượt budget,
 dead-letter/replay và lỗi publisher không gây gọi LLM lại. Kiểm tra client
 vẫn lấy kết quả bằng GET sau khi POST đã trả `202`.
+
+Sau tạo Project, Work giao `recover_project_membership`
+với ID dự án, đọc ảnh chụp bằng credential dịch vụ; không lưu Bearer. Task
+`recover_active_memberships` quét dự án hoạt động mỗi 300 giây để phục hồi khi
+giao task sau commit bị lỗi hoặc process chết. Không thêm bảng job/dispatcher
+cho đường phục hồi này. Xem [mã task](../../apps/work-service/apps/projects/tasks.py),
+[cấu hình Work](../../apps/work-service/config/settings/base.py).

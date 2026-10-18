@@ -22,9 +22,9 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 def test_read_validation_errors_leave_all_project_effects_unchanged(task_api, resource, params):
     leader, task_route, create = task_api
     task = create()
-    root = f"/api/v1/projects/{task['project_id']}/"
+    root = f"/projects/{task['project_id']}/"
     path = (
-        "/api/v1/projects/"
+        "/projects/"
         if resource == "projects"
         else task_route
         if resource == "tasks"
@@ -46,13 +46,13 @@ def test_task_list_status_reads_back_soft_deleted_record_without_writes(task_api
     archived = create()
     assert (
         leader.post(
-            f"/api/v1/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
+            f"/tasks/{archived['id']}/archive/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
     assert (
         leader.delete(
-            f"/api/v1/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
+            f"/tasks/{deleted['id']}/", {"expected_version": 1}, format="json"
         ).status_code
         == 200
     )
@@ -73,13 +73,13 @@ def test_sprint_filter_uses_membership_without_duplicate_rows(task_api, surface,
     backlog = create()
     sprint = Sprint.objects.create(project_id=assigned["project_id"], name="Filter")
     scope = leader.post(
-        f"/api/v1/sprints/{sprint.pk}/tasks/",
+        f"/sprints/{sprint.pk}/tasks/",
         {"expected_version": 1, "action": "ADD", "task_ids": [assigned["id"]]},
         format="json",
         HTTP_IDEMPOTENCY_KEY="filter-scope",
     )
     assert scope.status_code == 200, scope.content
-    path = route if surface == "tasks" else f"/api/v1/projects/{assigned['project_id']}/kanban/"
+    path = route if surface == "tasks" else f"/projects/{assigned['project_id']}/kanban/"
     reply = leader.get(path, {"sprint_id": "none" if filter_value == "none" else str(sprint.pk)})
     assert reply.status_code == 200, reply.content
     data = reply.json()["data"]
@@ -98,7 +98,7 @@ def test_teacher_project_list_requires_selected_group_scope(
 ):
     before = effect_state(created_project["id"])
     reply = client_for(actors["teacher"]).get(
-        "/api/v1/projects/", {"classroom_group_id": group_id, "status": "all"}
+        "/projects/", {"classroom_group_id": group_id, "status": "all"}
     )
     assert reply.status_code == expected, reply.content
     if expected == 200:
@@ -122,7 +122,7 @@ def test_block_explicit_flag_cannot_be_used_to_unblock(task_api, value):
     task = create()
     before = effect_state(task["project_id"])
     reply = leader.patch(
-        f"/api/v1/tasks/{task['id']}/block/",
+        f"/tasks/{task['id']}/block/",
         {"expected_version": 1, "blocked_reason": "Waiting", "is_blocked": value},
         format="json",
     )

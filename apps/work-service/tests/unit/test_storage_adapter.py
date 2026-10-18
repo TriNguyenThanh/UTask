@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 import boto3
 import pytest
 
+from common.json_validation import MAX_JSON_NESTING_DEPTH
 from infrastructure.storage import R2Storage
 
 
@@ -26,8 +27,14 @@ def test_boto3_conditional_put_presign_signs_required_headers(monkeypatch, setti
     assert headers["If-None-Match"] == "*"
 
 
+_TOO_DEEP_JSON = b"[" * (MAX_JSON_NESTING_DEPTH + 1) + b"0" + b"]" * (MAX_JSON_NESTING_DEPTH + 1)
+
+
 @pytest.mark.unit
-@pytest.mark.parametrize("body,valid", [(b'{"ok":true}', True), (b"not json!!", False)])
+@pytest.mark.parametrize(
+    "body,valid",
+    [(b'{"ok":true}', True), (b"not json!!", False), (_TOO_DEEP_JSON, False)],
+)
 def test_storage_inspect_checks_content_bytes_outside_transaction(
     monkeypatch, settings, body, valid
 ):

@@ -16,7 +16,7 @@ def test_assignment_subtask_whitelist_and_subtree_restore(task_api, actors, clie
     leader, _, create = task_api
     parent = create(due_date="2027-01-01")
     member = client_for(actors["member"])
-    route = f"/api/v1/tasks/{parent['id']}/subtasks/"
+    route = f"/tasks/{parent['id']}/subtasks/"
     denied = member.post(
         route, {"title": "Con", "story_points": 3}, format="json", HTTP_IDEMPOTENCY_KEY="no"
     )
@@ -35,20 +35,18 @@ def test_assignment_subtask_whitelist_and_subtree_restore(task_api, actors, clie
         ]
         == child
     )
-    child_url = f"/api/v1/tasks/{child['id']}/"
+    child_url = f"/tasks/{child['id']}/"
     assert member.get(child_url).json()["data"] == child
-    parent_read = member.get(f"/api/v1/tasks/{parent['id']}/").json()["data"]
+    parent_read = member.get(f"/tasks/{parent['id']}/").json()["data"]
     assert parent_read["subtasks_count"] == 1 and parent_read["version"] == 1
     assert leader.delete(child_url, {"expected_version": 1}, format="json").status_code == 200
     assert (
-        leader.delete(
-            f"/api/v1/tasks/{parent['id']}/", {"expected_version": 1}, format="json"
-        ).status_code
+        leader.delete(f"/tasks/{parent['id']}/", {"expected_version": 1}, format="json").status_code
         == 200
     )
     assert (
         leader.post(
-            f"/api/v1/tasks/{parent['id']}/restore/", {"expected_version": 2}, format="json"
+            f"/tasks/{parent['id']}/restore/", {"expected_version": 2}, format="json"
         ).status_code
         == 200
     )
@@ -59,7 +57,7 @@ def test_transition_completion_reopen_block_and_stale(task_api, client_for, acto
     leader, _, create = task_api
     task = create()
     member = client_for(actors["member"])
-    detail = f"/api/v1/tasks/{task['id']}/"
+    detail = f"/tasks/{task['id']}/"
     assert (
         member.patch(
             detail + "block/",
@@ -126,7 +124,7 @@ def test_rank_neighbors_rebalance_and_bulk_state_delete(task_api):
     Task.objects.filter(pk=left["id"]).update(sort_order=1.0)
     Task.objects.filter(pk=right["id"]).update(sort_order=1.0000000000000002)
     reply = leader.patch(
-        f"/api/v1/tasks/{moving['id']}/transition/",
+        f"/tasks/{moving['id']}/transition/",
         {
             "expected_version": 1,
             "target_state_id": left["state_id"],
@@ -140,20 +138,20 @@ def test_rank_neighbors_rebalance_and_bulk_state_delete(task_api):
     assert ranks == [UUID(left["id"]), UUID(moving["id"]), UUID(right["id"])]
     target = State.objects.get(project_id=left["project_id"], group="REVIEW")
     response = leader.patch(
-        f"/api/v1/tasks/{moving['id']}/transition/",
+        f"/tasks/{moving['id']}/transition/",
         {"expected_version": 2, "target_state_id": str(target.pk), "previous_task_id": left["id"]},
         format="json",
     )
     assert response.status_code == 409
     response = leader.patch(
-        f"/api/v1/tasks/{moving['id']}/transition/",
+        f"/tasks/{moving['id']}/transition/",
         {"expected_version": 2, "target_state_id": str(target.pk)},
         format="json",
     )
     assert response.status_code == 200
     done = State.objects.get(project_id=left["project_id"], group="COMPLETED")
     response = leader.delete(
-        f"/api/v1/projects/{left['project_id']}/states/{target.pk}/?target_state_id={done.pk}"
+        f"/projects/{left['project_id']}/states/{target.pk}/?target_state_id={done.pk}"
     )
     assert response.status_code == 200, response.content
     assert Task.objects.get(pk=moving["id"]).completed_at is not None
@@ -166,7 +164,7 @@ def test_relations_inverse_canonical_cycle_and_permission(task_api, actors, clie
 
     def edge(source, target, kind="BLOCKS", client=leader):
         return client.post(
-            f"/api/v1/tasks/{source['id']}/relations/",
+            f"/tasks/{source['id']}/relations/",
             {"related_task_id": target["id"], "relation_type": kind},
             format="json",
         )
@@ -175,7 +173,7 @@ def test_relations_inverse_canonical_cycle_and_permission(task_api, actors, clie
     assert edge(b, a, "BLOCKED_BY").status_code == 409
     assert edge(b, c).status_code == 201
     event_count = OutboxEvent.objects.count()
-    detail = leader.get(f"/api/v1/tasks/{b['id']}/", {"expand": "relations"})
+    detail = leader.get(f"/tasks/{b['id']}/", {"expand": "relations"})
     assert detail.status_code == 200, detail.content
     persisted = detail.json()["data"]
     assert persisted["version"] == Task.objects.get(pk=b["id"]).version == 2
@@ -197,10 +195,10 @@ def test_relations_inverse_canonical_cycle_and_permission(task_api, actors, clie
     row = response.json()["data"]
     assert UUID(row["task_id"]) < UUID(row["related_task_id"])
     assert edge(c, a, "RELATES_TO").status_code == 409
-    assert leader.delete(f"/api/v1/tasks/{b['id']}/relations/{row['id']}/").status_code == 404
-    assert leader.delete(f"/api/v1/tasks/{a['id']}/relations/{row['id']}/").status_code == 200
+    assert leader.delete(f"/tasks/{b['id']}/relations/{row['id']}/").status_code == 404
+    assert leader.delete(f"/tasks/{a['id']}/relations/{row['id']}/").status_code == 200
     assert TaskRelation.objects.get(pk=row["id"]).deleted_at is not None
-    reread = leader.get(f"/api/v1/tasks/{a['id']}/", {"expand": "relations"}).json()["data"]
+    reread = leader.get(f"/tasks/{a['id']}/", {"expand": "relations"}).json()["data"]
     assert row["id"] not in {item["id"] for item in reread["relations"]}
     assert OutboxEvent.objects.filter(event_type="task.relation.deleted").count() == 1
 
@@ -213,7 +211,7 @@ def test_disjoint_edges_cannot_jointly_create_cycle(task_api, actors, client_for
     for source, target in [(b, c), (d, a)]:
         assert (
             leader.post(
-                f"/api/v1/tasks/{source['id']}/relations/",
+                f"/tasks/{source['id']}/relations/",
                 {"related_task_id": target["id"], "relation_type": "BLOCKS"},
                 format="json",
             ).status_code
@@ -228,7 +226,7 @@ def test_disjoint_edges_cannot_jointly_create_cycle(task_api, actors, client_for
             barrier.wait(timeout=10)
             source, target = pair
             return client.post(
-                f"/api/v1/tasks/{source['id']}/relations/",
+                f"/tasks/{source['id']}/relations/",
                 {"related_task_id": target["id"], "relation_type": "BLOCKS"},
                 format="json",
             ).status_code

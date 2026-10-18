@@ -1,0 +1,43 @@
+from django.urls import path
+
+from apps.groups.views.groups import (
+    ClassGroupsView,
+    GroupCodeView,
+    GroupDetailView,
+    GroupListView,
+    GroupMembersView,
+    GroupProjectsView,
+)
+from apps.groups.views.members import (
+    GroupJoinView,
+    GroupLeaveView,
+    GroupRemoveView,
+    GroupTransferView,
+    TeacherAdjustmentView,
+)
+from apps.groups.views.scope import (
+    FeedbackScopeView,
+    GroupSnapshotView,
+    MentionScopeView,
+    RecoverySnapshotView,
+    TeacherGroupsView,
+)
+
+urlpatterns = [
+    path("groups/", GroupListView.as_view()),
+    path("groups/join/", GroupJoinView.as_view()),
+    path("groups/<uuid:group_id>/", GroupDetailView.as_view()),
+    path("groups/<uuid:group_id>/members/", GroupMembersView.as_view()),
+    path("groups/<uuid:group_id>/projects/", GroupProjectsView.as_view()),
+    path("groups/<uuid:group_id>/invite-code/", GroupCodeView.as_view()),
+    path("groups/<uuid:group_id>/leave/", GroupLeaveView.as_view()),
+    path("groups/<uuid:group_id>/remove-member/", GroupRemoveView.as_view()),
+    path("groups/<uuid:group_id>/transfer-leader/", GroupTransferView.as_view()),
+    path("classes/<uuid:class_id>/groups/", ClassGroupsView.as_view()),
+    path("classes/<uuid:class_id>/adjust-member/", TeacherAdjustmentView.as_view()),
+    path("internal/groups/<uuid:group_id>/snapshot/", GroupSnapshotView.as_view()),
+    path("internal/groups/<uuid:group_id>/recovery-snapshot/", RecoverySnapshotView.as_view()),
+    path("internal/teachers/groups/", TeacherGroupsView.as_view()),
+    path("internal/groups/<uuid:group_id>/feedback-scope/", FeedbackScopeView.as_view()),
+    path("internal/groups/<uuid:group_id>/mention-scope/", MentionScopeView.as_view()),
+]

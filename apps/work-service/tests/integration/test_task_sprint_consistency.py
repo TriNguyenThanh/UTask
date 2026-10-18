@@ -17,7 +17,7 @@ def test_ai_bulk_two_authorized_actors_replay_same_items_and_old_actor_loses_rig
     task_api, ai, actors, client_for
 ):
     leader, route, _ = task_api
-    project = Project.objects.get(pk=route.split("/")[4])
+    project = Project.objects.get(pk=route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     first = leader.post(
@@ -52,21 +52,21 @@ def test_ai_bulk_two_authorized_actors_replay_same_items_and_old_actor_loses_rig
 
 def active_sprint(leader, project_id, task_ids):
     reply = leader.post(
-        f"/api/v1/projects/{project_id}/sprints/",
+        f"/projects/{project_id}/sprints/",
         {"name": "Acceptance", "start_date": "2027-01-01", "end_date": "2027-01-15"},
         format="json",
     )
     assert reply.status_code == 201, reply.content
     sprint = reply.json()["data"]
     scoped = leader.post(
-        f"/api/v1/sprints/{sprint['id']}/tasks/",
+        f"/sprints/{sprint['id']}/tasks/",
         {"expected_version": 1, "action": "ADD", "task_ids": task_ids},
         format="json",
         HTTP_IDEMPOTENCY_KEY="sprint-scope",
     )
     assert scoped.status_code == 200, scoped.content
     start = leader.post(
-        f"/api/v1/projects/{project_id}/sprints/{sprint['id']}/start/",
+        f"/projects/{project_id}/sprints/{sprint['id']}/start/",
         {"expected_version": 2},
         format="json",
         HTTP_IDEMPOTENCY_KEY="sprint-start",
@@ -81,7 +81,7 @@ def test_task_subtree_delete_ends_scope_and_restore_preserves_sprint_history(
     leader, _, create = task_api
     parent = create()
     child = client_for(actors["member"]).post(
-        f"/api/v1/tasks/{parent['id']}/subtasks/",
+        f"/tasks/{parent['id']}/subtasks/",
         {"title": "Child"},
         format="json",
         HTTP_IDEMPOTENCY_KEY="child",
@@ -94,15 +94,13 @@ def test_task_subtree_delete_ends_scope_and_restore_preserves_sprint_history(
         .order_by("task_id")
         .values_list("id", flat=True)
     )
-    deleted = leader.delete(
-        f"/api/v1/tasks/{parent['id']}/", {"expected_version": 1}, format="json"
-    )
+    deleted = leader.delete(f"/tasks/{parent['id']}/", {"expected_version": 1}, format="json")
     assert deleted.status_code == 200, deleted.content
     assert Task.objects.filter(deleted_at__isnull=False).count() == 2
     assert SprintTask.objects.filter(ended_at__isnull=True).count() == 0
     assert SprintTask.objects.filter(end_reason="REMOVED").count() == 2
     restored = leader.post(
-        f"/api/v1/tasks/{parent['id']}/restore/", {"expected_version": 2}, format="json"
+        f"/tasks/{parent['id']}/restore/", {"expected_version": 2}, format="json"
     )
     assert restored.status_code == 200, restored.content
     assert Task.objects.filter(deleted_at__isnull=True).count() == 2
@@ -124,7 +122,7 @@ def test_close_rollover_and_task_transition_share_one_consistent_cut(task_api, a
     task = create(story_points=5)
     source = active_sprint(leader, task["project_id"], [task["id"]])
     target = leader.post(
-        f"/api/v1/projects/{task['project_id']}/sprints/", {"name": "Next"}, format="json"
+        f"/projects/{task['project_id']}/sprints/", {"name": "Next"}, format="json"
     )
     assert target.status_code == 201, target.content
     target = target.json()["data"]
@@ -140,14 +138,14 @@ def test_close_rollover_and_task_transition_share_one_consistent_cut(task_api, a
             barrier.wait(timeout=10)
             if kind == "close":
                 reply = client.post(
-                    f"/api/v1/sprints/{source['id']}/close/",
+                    f"/sprints/{source['id']}/close/",
                     body,
                     format="json",
                     HTTP_IDEMPOTENCY_KEY="race-close",
                 )
             else:
                 reply = client.patch(
-                    f"/api/v1/tasks/{task['id']}/transition/",
+                    f"/tasks/{task['id']}/transition/",
                     {"expected_version": 1, "target_state_id": str(done.pk)},
                     format="json",
                 )
@@ -174,7 +172,7 @@ def test_close_rollover_and_task_transition_share_one_consistent_cut(task_api, a
     snapshot = closed.closure_snapshot
     # Reopen after close changes current work, never the captured closure facts.
     reopen = leader.patch(
-        f"/api/v1/tasks/{task['id']}/transition/",
+        f"/tasks/{task['id']}/transition/",
         {"expected_version": 2, "target_state_id": task["state_id"]},
         format="json",
     )
@@ -183,7 +181,7 @@ def test_close_rollover_and_task_transition_share_one_consistent_cut(task_api, a
     assert closed.closure_snapshot == snapshot
     assert (
         leader.post(
-            f"/api/v1/sprints/{source['id']}/close/",
+            f"/sprints/{source['id']}/close/",
             body,
             format="json",
             HTTP_IDEMPOTENCY_KEY="race-close",

@@ -15,10 +15,10 @@ def read_routes(github):
     _, leader, repository, task = github
     sprint = draft(leader, task.project_id, "Read scope")
     return {
-        "sprint_list": f"/api/v1/projects/{task.project_id}/sprints/",
-        "sprint_detail": f"/api/v1/sprints/{sprint['id']}/",
+        "sprint_list": f"/projects/{task.project_id}/sprints/",
+        "sprint_detail": f"/sprints/{sprint['id']}/",
         "repository": repository,
-        "github_links": f"/api/v1/tasks/{task.pk}/github-links/",
+        "github_links": f"/tasks/{task.pk}/github-links/",
     }
 
 
@@ -36,7 +36,7 @@ def foreign_scope(classroom, actors, client_for):
     classroom.groups[snapshot.group_id] = snapshot
     leader = client_for(actors["leader"])
     reply = leader.post(
-        "/api/v1/projects/",
+        "/projects/",
         {"identifier": "OTHER", "name": "Other scope", "classroom_group_id": snapshot.group_id},
         format="json",
         HTTP_IDEMPOTENCY_KEY="other-project",
@@ -44,7 +44,7 @@ def foreign_scope(classroom, actors, client_for):
     assert reply.status_code == 201, reply.content
     project = reply.json()["data"]
     task = leader.post(
-        f"/api/v1/projects/{project['id']}/tasks/",
+        f"/projects/{project['id']}/tasks/",
         {"title": "Foreign task", "assignee_ids": [str(actors["outsider"])]},
         format="json",
         HTTP_IDEMPOTENCY_KEY="foreign-task",
