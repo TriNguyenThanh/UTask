@@ -157,7 +157,12 @@ Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tư�
 Outbox có code ghi dữ liệu; publisher/ACK Kafka, gửi mail và consumer liên service cần
 triển khai/nghiệm thu riêng. Chi tiết event ở mục4 của đặc tả API.
 
-Google dùng allauth xác minh danh tính đăng nhập. GitHub dùng để liên kết tài khoản:
+Theo [ADR-004](../adr/004-integration-github-account-ownership.md), luồng GitHub
+mới thuộc Integration và dùng `GET /users/me` của Identity để xác thực actor.
+Không cần sửa code/allowlist Identity. Nội dung GitHub sau đây mô tả **source
+legacy còn giữ nguyên**, không phải dependency hoặc ownership của luồng mới.
+
+Google dùng allauth xác minh danh tính đăng nhập. Source GitHub legacy dùng để liên kết tài khoản:
 Identity quản lý OAuth context/link, chỉ Integration đổi code và gọi GitHub API qua
 `POST /api/v1/internal/oauth/github/exchange`. Identity kiểm binding của proof trước khi
 ghi link. Avatar dùng presign/upload/confirm với R2. Các luồng này phụ thuộc feature flags

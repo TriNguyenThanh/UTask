@@ -1,209 +1,117 @@
 # Phạm vi và quyền truy cập Integration Service
 
-**Trạng thái: Thiết kế mục tiêu, rà soát ngày 15/10/2026.** Đây là chính sách
-đề xuất cho bộ [API](api.md) và [sơ đồ](../diagram/integration-service/README.md).
-Server Integration chưa triển khai; các quy tắc có bằng chứng phía Work/Identity
-được ghi riêng ở cuối tài liệu. Không coi ma trận này là quyền đã được enforce.
+**Trạng thái: Một phần.** Quyền sở hữu account và xác thực actor được chốt;
+API GET/DELETE account cùng persistence có trong source. Consent GitHub,
+credential và các luồng Project còn là mục tiêu. [API](api.md) ghi chi tiết
+route; [foundation](foundation.md) ghi bằng chứng source/test.
 
-## 1. Phạm vi nghiệp vụ
+## 1. Quyền sở hữu
 
-Integration là đầu mối duy nhất gọi GitHub API, phục vụ **thu thập và xác minh
-dữ liệu**, gồm GitHub App installation, quyền repository, metadata,
-commit/branch/issue/PR, webhook, đồng bộ, OAuth proof và phát sự kiện.
-
-| Integration sở hữu | Service khác sở hữu |
+| Dữ liệu/trách nhiệm | Chủ sở hữu |
 | --- | --- |
-| Trạng thái installation, phạm vi GitHub App, dữ liệu GitHub chuẩn hóa | Identity: tài khoản UTask, phiên và liên kết danh tính OAuth |
-| Kết nối kỹ thuật project–repository, generation và kết quả xác minh | Work: Project/ProjectMember, quyết định chọn repository, TaskGitHubLink, xác nhận liên kết và tiến độ |
-| Delivery webhook, job đồng bộ, outbox và credential kỹ thuật cần thiết | Classroom: nhóm/lớp và phạm vi giảng viên; Work xác minh qua API Classroom |
-| Dữ kiện hoạt động nguồn để Work/AI dùng | AI: phân tích/đề xuất; Notification: thông báo cho người nhận |
+| Tài khoản UTask, JWT, phiên và xác minh Bearer | Identity |
+| Mapping `user_id`–GitHub, consent GitHub cá nhân, provider credential và dữ liệu GitHub | Integration |
+| Project, ProjectMember, Task, quyền user/project và Task–GitHub nghiệp vụ | Work |
+| Group/GroupMember và quyền phạm vi lớp | Classroom |
 
-`ProjectConnection` là trạng thái kỹ thuật Integration thực hiện **theo lệnh
-đã được Work cho phép**, không phải quyền quản trị Project. Việc nhận diện
-mã task trong branch/commit/PR chỉ tạo dữ kiện/ứng viên; Work kiểm tra và xác
-nhận liên kết. Không tạo TaskGitHubLink thứ hai trong Integration.
+Integration lưu `user_id` UUID như tham chiếu logic. Không có FK xuyên service,
+không đọc DB Identity/Work, không migrate hoặc tự nhập mapping GitHub legacy
+từ Identity/Work. Việc có cùng GitHub ID ở hệ thống cũ không tự tạo record
+Integration.
 
-Phạm vi hiện tại không gồm tạo/sửa issue, PR, comment hoặc push code lên
-GitHub; không tự đổi trạng thái Task khi PR merge; không tính điểm, quyết định
-đóng góp học tập hoặc chỉ số tiến độ; không quản lý user, vai trò, lớp/nhóm.
-Issue là dữ liệu thu thập mục tiêu; xác minh link Issue với Work cần mở rộng
-adapter trước, hiện adapter chỉ hỗ trợ branch/commit/PR.
+Mapping Integration chỉ xác định account GitHub được liên kết với actor UTask.
+Nó không chứng minh quyền Project, quyền thành viên, quyền cài đặt GitHub App
+hay quyền trên repository. OAuth consent cá nhân không cần Project ID, leader
+role hoặc quyền Work.
 
-## 2. Ba lớp kiểm tra độc lập
+## 2. Xác thực actor
 
-1. **Danh tính caller:** JWT của người dùng, credential riêng của service hoặc
-   chữ ký webhook. Mạng backend/gateway không thay xác thực ứng dụng.
-2. **Quyền UTask:** Work quyết định action trên đúng Project/Task của user;
-   Identity quyết định danh tính và phiên. Role khai báo trong body/JWT chưa
-   xác minh, service key và projection cũ không tự cấp quyền tài nguyên.
-3. **Quyền GitHub:** installation đang hoạt động, App được cấp repository và
-   permission cần thiết. Khi user chọn/liệt kê repository, phải chứng minh
-   quyền của chính GitHub user đã liên kết, không dùng quyền App toàn cục.
+API account nhận Bearer từ caller. Integration gọi endpoint Identity hiện có
+`GET /users/me`, chuyển tiếp Bearer; Identity tự kiểm JWT/session và trả user
+ID tại `data.id`. Integration dùng ID đó làm actor và chỉ đọc/thu hồi account
+của actor hiện tại. `user_id` trong query/body không được chấp nhận.
 
-Với thao tác chọn repository, cả ba lớp phải đạt. Khi đọc context của project
-đã kết nối, áp dụng quyền chia sẻ project do Work cho phép và phạm vi GitHub App
-hiện hành; không bắt mỗi sinh viên/giảng viên phải tự cài App. Chỉ chia sẻ
-metadata/hoạt động được duyệt, không suy từ quyền đọc project thành quyền đọc
-source code, secret, token hoặc mọi repository trong installation.
+Không dùng Identity OAuth `SocialAccount`, `profile.github_username`, API
+mapping nội bộ hoặc proof exchange làm nguồn quyền/mapping mới. Không cần thêm
+Integration vào session-status allowlist vì actor được xác minh qua `/users/me`.
+Lỗi 401/403 từ Identity từ chối xác thực; Identity hoặc response lỗi không
+được biến thành cho phép.
 
-OAuth proof chỉ chứng minh danh tính; không chứng minh quyền quản trị GitHub.
-Installation token đại diện App, không đại diện user. GitHub phân biệt quyền
-của hai loại token; xem [quyền GitHub App](https://docs.github.com/en/enterprise-cloud%40latest/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app).
+Đã có source adapter và unit test cho request Bearer, timeout, response/error
+handling. Việc Integration gọi Identity xuyên service khi chạy chưa được xác
+minh.
 
-Nếu không xác minh được quyền, từ chối thao tác cần quyền đó. Không chuyển
-sang quyền App toàn cục hoặc coi dữ liệu thiếu thành quyền cho phép.
+## 3. Ma trận hành động
 
-## 3. Người dùng và quyền nghiệp vụ
-
-**Thiết kế mục tiêu bám theo guard Work hiện có.** Các action project đều
-đi qua Work; browser chỉ trực tiếp gọi API cài App và lựa chọn dữ liệu GitHub
-được phép xem. Quyền GitHub vẫn được kiểm tra ở Integration.
-
-| Hành động | Điều kiện UTask | Điều kiện bổ sung và nơi quyết định |
+| Hành động | Điều kiện | Trạng thái |
 | --- | --- | --- |
-| Bắt đầu/callback cài App trong luồng Project | Leader ACTIVE của Project có thể ghi, do Work xác nhận | GitHub tự kiểm quyền cài App; callback kiểm state/phiên và installation, chỉ ghi nhận installation, chưa kết nối Project |
-| Liệt kê installation/repository để chọn | Leader ACTIVE trong luồng cấu hình Project được Work cho phép | Lọc theo GitHub user đã được Identity xác minh và quyền GitHub hiện hành; không liệt kê tất cả installation của App |
-| Chọn/đổi/ngắt repository của Project | Chỉ leader ACTIVE, Project không archived/deleted | Browser gọi Work; Work kiểm quyền trước/sau thao tác; Integration chỉ nhận Work command, kiểm generation và GitHub access. Ngắt kết nối vẫn cho phép khi App đã bị thu hồi quyền |
-| Xem metadata kết nối và link Task đã lưu | User có quyền đọc project/task theo Work | Member ACTIVE hoặc giảng viên đúng phạm vi đã được Work xác minh; không mở quyền liệt kê repo private ngoài Project |
-| Thêm/xác nhận/gỡ link Task | Member ACTIVE của Project, Task/Project còn có thể ghi | Guard Work hiện không bắt buộc là assignee; giảng viên chỉ có quyền xem không được mutation. Integration chỉ xác minh reference |
-| Khai báo GitHub username | Member ACTIVE khai báo cho chính mình qua Work | Không tự đổi `is_github_verified`; thay danh tính đã xác minh phải theo OAuth |
-| Nhắc thành viên xác minh GitHub | Leader ACTIVE qua Work | Chỉ phát yêu cầu nhắc; không được liên kết tài khoản hoặc xác minh thay thành viên |
-| Liên kết/gỡ OAuth GitHub | User thao tác tài khoản của mình qua Identity | Integration chỉ xử lý yêu cầu exchange do Identity gửi, không nhận code từ browser trên internal API |
-| Đồng bộ thủ công | Leader ACTIVE yêu cầu qua Work | Giới hạn tần suất, đúng repo/generation; browser không trực tiếp tạo job nội bộ |
-| Đọc GitHub context phục vụ AI | User được Work cho phép đọc dữ liệu Project cho use case AI | AI gọi read-only theo user/target; không được chọn installation, đổi kết nối hay giao job sync |
+| Đọc account GitHub của mình | Bearer hợp lệ; actor lấy từ Identity `/users/me` | Đã có route trong source |
+| Thu hồi liên kết account của mình | Bearer hợp lệ; chỉ mapping actor hiện tại bị thu hồi | Đã có route trong source; thao tác GitHub token revoke chưa có |
+| Liên kết/đổi GitHub account cá nhân | Consent/provider xác minh GitHub; nếu đang LINKED thì đổi account theo quy tắc unlink trước | Chưa có HTTP OAuth consent; service helper chỉ nhận dữ liệu đã xác minh, chưa nối với provider |
+| Đọc hoặc thu hồi account người khác | Không cho phép qua API user | Không có route theo `user_id` |
+| Thực hiện OAuth consent | Chính user UTask đã xác thực; không cần Project/leader | Thiết kế mục tiêu M3 |
+| Liệt kê installation/repository cá nhân | Consent và credential hiện hành, quyền user GitHub còn hiệu lực | Chưa triển khai |
+| Đọc snapshot Work cho Project | API REST GET thuộc Work và phạm vi được contract cho phép | Tích hợp runtime chưa có; GET không cấp quyền ghi |
+| Ghi Project/Task/TaskGitHubLink hoặc prepare/confirm | Contract Work có sẵn, quyền và CAS được Work bảo đảm | Chưa mở; không dùng snapshot GET để suy quyền ghi |
+| Đọc context GitHub cho AI | Contract nội bộ và phạm vi Work đã cấp | Chưa triển khai |
 
-Vai trò `SYSTEM_ADMIN`, `TEACHER` hoặc GitHub organization owner không tự bỏ
-qua điều kiện Project. Không thêm quyền đọc mọi repository/private data cho
-admin UTask. Quyền vận hành hạ tầng tách khỏi quyền nghiệp vụ; trường hợp
-truy cập đặc biệt cần chính sách riêng và audit trước khi mở.
+## 4. Ranh giới Work và GitHub
 
-## 4. Allowlist service và tác nhân kỹ thuật
+Work sở hữu mọi quyền Project/Task và quyết định thay đổi nghiệp vụ. Integration
+có thể dùng snapshot qua API đọc Work hiện có: `/projects/{id}/`,
+`/tasks/{id}/`, `/projects/{id}/members/`. Các GET này không đảm bảo authorize
+mutation, không cung cấp compare-and-set (CAS) và không thay thế một contract
+Work cho prepare/confirm.
 
-Các quyền dưới đây là quyền **tối đa theo nhóm API**, không phải một service
-key dùng chung có thể gọi toàn bộ Integration.
+Không mở luồng repository/project hoặc Task link nếu contract Work cần thiết
+chưa có. Integration không yêu cầu sửa Work trong phạm vi này; adapter Work
+hiện mặc định `UnavailableIntegration`. Quyền GitHub user và quyền GitHub App
+phải được kiểm tra riêng nếu sau này có use case GitHub. Account link tự thân
+không cấp một trong hai quyền.
 
-| Caller | Được gọi/được làm | Không được cấp mặc định |
-| --- | --- | --- |
-| Identity | `oauth/github/exchange` cho operation/user đã kiểm tra | Liệt kê repository, đổi kết nối, đọc context Project, tạo job sync |
-| Work | Chọn/đọc/ngắt connection, verify reference, yêu cầu sync cho Project có quyền | Exchange OAuth thay Identity; truy cập mọi repo của App; tự đặt kết quả GitHub đã xác minh |
-| AI | Đọc `github-activity` đã lọc theo Project và user | Command, sync, OAuth exchange, installation/repository enumeration, token GitHub |
-| Notification | Nhận event Kafka theo subscription và schema đã chốt | REST đọc toàn bộ GitHub, đọc token hoặc nguồn code |
-| GitHub webhook | Gửi delivery đúng App và chữ ký; cập nhật facts/quyền theo loại event | Tạo quyền user, xác nhận Task link hoặc sửa Task trực tiếp |
-| Worker/dispatcher/publisher Integration | Đồng bộ hoặc phát outbox trong phạm vi job, repo/generation và credential kỹ thuật | Giả danh user, mở endpoint admin công khai, truy cập database service khác |
-| Caller khác/browser vào internal API | Không cho phép | Không dùng JWT hợp lệ của user để thay service credential |
+Integration là service duy nhất được gọi trực tiếp GitHub API. AI/Work không
+nhận GitHub token. Notification chỉ nhận event đã có contract; hiện chưa có
+publisher Integration.
 
-Work/AI gửi cả danh tính service và ngữ cảnh actor được kiểm chứng. Integration
-hỏi Work qua REST về **action + target**, không chỉ hỏi user có tồn tại.
-Tên action, URL kiểm quyền và cách chuyển actor chưa có contract Integration;
-trước khi có, các endpoint phụ thuộc phải đóng. Khi Integration hỏi Work để
-xác minh, Work xử lý bằng quyền nội bộ của mình, không gọi vòng lại Integration.
+## 5. Credential và thu hồi
 
-Job hệ thống theo lịch/webhook dùng danh tính worker và phạm vi installation
-đã được cho phép, không phụ thuộc JWT user còn sống hay lấy JWT cũ để giả danh.
-Job nhận từ user chỉ được tạo sau kiểm quyền lúc tiếp nhận; khi chạy kiểm lại
-connection generation, quyền App và chính sách hủy/thu hồi. Kết quả job luôn
-được kiểm quyền lại khi đọc; job ID không phải credential.
+`GitHubAccount` đang lưu mapping và metadata xác minh; hiện model không có
+trường token. OAuth consent/token adapter và nơi lưu credential chưa được
+triển khai. Khi có consent, credential thuộc Integration, phải được bảo vệ và
+không trả về trong API, log, event hoặc context AI.
 
-## 5. Quyền GitHub và dữ liệu tối thiểu
+DELETE `/api/v1/github/account` đánh dấu mapping `REVOKED`, ghi `revoked_at`
+và tăng `source_version`; gọi lại không tăng version. Hiện DELETE chưa thể
+thu hồi token ở GitHub do token adapter chưa có. Thu hồi account không gỡ GitHub
+App installation dùng chung và không thay quyền/membership trong Work.
 
-**Đề xuất permission đọc cho giai đoạn thu thập**, cần đối chiếu từng GitHub
-endpoint/event được triển khai trước đăng ký App:
+Không tự động import account/mapping từ các model hoặc API legacy. Chuyển đổi
+dữ liệu cần quyết định riêng về consent và xác minh; không suy ra quyền từ một
+mapping cũ.
 
-| Nhóm GitHub | Quyền đề xuất | Phạm vi sử dụng |
-| --- | --- | --- |
-| Metadata | Read | Repository, owner, default branch và phạm vi truy cập |
-| Contents | Read | Commit/branch cần thiết; không mặc định lấy toàn bộ nội dung file/diff |
-| Pull requests | Read | Metadata/trạng thái PR |
-| Issues | Read | Metadata/trạng thái issue khi bật chức năng thu thập |
-| Administration, Actions, Workflows, Members, quyền ghi | Không yêu cầu mặc định | Chỉ thêm khi có use case và review permission riêng |
+## 6. Bằng chứng hiện trạng
 
-Giới hạn token theo repository/permission cần dùng; ưu tiên webhook và
-đồng bộ có giới hạn thay vì quét toàn bộ tài khoản. Đây là lựa chọn UTask theo
-[nguyên tắc quyền tối thiểu của GitHub](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app),
-không khẳng định App thực tế đã có cấu hình này.
+- Source Integration có `GitHubAccount`, migration, validation, service link/
+  unlink, view GET/DELETE, Identity client và route `/api/v1/github/account`.
+- Unit test bao phủ validation, idempotency, conflict, stale verification và
+  hành vi revoke; test integration cần PostgreSQL bao phủ constraint, race
+  đồng thời, uniqueness và persistence.
+- Chưa có GitHub OAuth client/token adapter, consent endpoint, provider
+  verification hay revoke GitHub token.
+- Work adapter hiện `UnavailableIntegration`. Adapter cũ không được xem là
+  Integration đã tích hợp.
+- Identity và Work có source legacy liên quan GitHub. Chúng được giữ nguyên;
+  không phải owner mới của mapping do Integration tạo và không phải đường
+  migration tự động.
 
-Cần có credential ủy quyền theo user hoặc cơ chế GitHub tương đương để chứng
-minh tập installation/repository user được truy cập. Mapping `github_user_id`
-và proof Identity hiện có không đủ thay thế bước này. Chưa có cơ chế/token
-lifecycle đã chốt thì không mở API liệt kê hoặc chọn repo bằng App token toàn cục.
+## 7. Ca cần kiểm thử cho các bước kế tiếp
 
-Integration chỉ đọc/ghi DB của mình. Secret/token ở cơ chế lưu bí mật có bảo
-vệ và vòng đời rõ ràng, không nằm trong response, Kafka, log, context AI hoặc
-ERD nghiệp vụ. Consumer nhận metadata tối thiểu theo hợp đồng; không gửi raw
-webhook mặc định. Kafka ACL/topic và retention cần chốt trước vận hành.
-
-## 6. Thu hồi quyền và ranh giới mạng
-
-- Gỡ/suspend App hoặc bỏ repo khỏi installation: ngừng đọc GitHub và cấp dữ
-  liệu mới trong phạm vi bị thu hồi, vô hiệu job liên quan, phát facts cho Work
-  cập nhật projection; không tự cấp lại quyền qua dữ liệu cũ.
-- User rời Project hoặc giảng viên hết phạm vi: Work từ chối đọc/ghi tiếp theo;
-  dữ liệu cache, cursor, job hoặc event cũ không cấp quyền trở lại.
-- Gỡ OAuth: Identity là nguồn đúng về mapping; không tự gỡ installation dùng
-  chung của nhóm. Đóng quyền liệt kê/thao tác GitHub theo danh tính cũ;
-  chính sách chia sẻ installation đã được thiết lập cần được xác minh riêng.
-- Public allowlist chỉ gồm luồng cài App, danh sách có kiểm quyền, đọc job
-  theo scope và webhook. Internal path và route con phải bị chặn tại gateway;
-  health endpoint không trả secret hoặc chi tiết GitHub private.
-- Hiện Nginx chưa chặn riêng internal Integration; PostgreSQL dùng credential
-  chung là khoảng trống hạ tầng, không phải quyền mục tiêu được chấp thuận.
-
-Dữ liệu lịch sử sau thu hồi quyền cần retention và chính sách đọc riêng;
-trong khi chưa chốt, không phục vụ qua API nguồn/context Integration cho scope
-đã thu hồi. Work xử lý dữ liệu nghiệp vụ đã lưu theo chính sách của Work.
-
-## 7. Bằng chứng hiện trạng và phần còn thiếu
-
-**Một phần — phía gọi đã có source và test; chưa có server Integration:**
-
-- Work [`require_leader`](../../apps/work-service/apps/projects/permissions.py)
-  yêu cầu member ACTIVE/LEADER và project ghi được;
-  [repository service](../../apps/work-service/apps/integrations/services/repositories.py)
-  kiểm lại quyền/generation sau lời gọi adapter.
-  Route ngắt kết nối riêng phía Work chưa có; quyền ngắt kết nối trong ma
-  trận trên là thiết kế mục tiêu, chưa phải chức năng người dùng đang chạy.
-- Work [link guard](../../apps/work-service/apps/integrations/services/links.py)
-  yêu cầu thành viên ACTIVE và task/project ghi được;
-  [scope đọc](../../apps/work-service/apps/projects/queries/projects.py) nhận
-  member ACTIVE hoặc teacher scope do Classroom xác minh, không lấy role từ JWT.
-- Work [account service](../../apps/work-service/apps/integrations/services/accounts.py)
-  tách khai báo username, dữ kiện xác minh và yêu cầu nhắc xác minh.
-- Identity [mapping API](../../apps/identity-service/accounts/views/internal.py)
-  chỉ cho caller `integration` đọc mapping GitHub; [test allowlist](../../apps/identity-service/tests/test_api_completion.py)
-  kiểm caller khác bị từ chối. API không cấp GitHub access token.
-- Identity [OAuth proof client](../../apps/identity-service/authentication/adapters/github_identity_proof.py)
-  gọi exchange bằng key riêng. API kiểm tra session hiện allowlist
-  `work`, `classroom`, `ai` theo [Identity docs](../identity-service/README.md);
-  chưa được giả định Integration gọi được API này. Cách Integration xác minh
-  JWT/phiên và nguồn quyền Work cần chốt trước mở public API.
-
-Cần chốt tiếp: contract kiểm quyền action/target và chuyển actor; credential
-GitHub theo user và consent; permission App theo endpoint/event; chính sách
-thu hồi/lịch sử; timeout và cache quyền; ACL Kafka và secret lifecycle. Mọi
-ngoại lệ trong các mục này vẫn là **Chưa triển khai**, không suy từ ma trận
-quyền thành hành vi đang chạy.
-
-## 8. Ca kiểm thử quyền bắt buộc khi triển khai
-
-- Leader ACTIVE được chọn repo có quyền; member, outsider, leader đã rời hoặc
-  Project đã khóa bị từ chối. Quyền/generation đổi trong lúc gọi GitHub phải
-  được kiểm lại trước áp dụng kết quả ở Work.
-- Cài App thành công không tạo ProjectConnection. Callback sai state/phiên,
-  replay hoặc mất quyền Work bị từ chối; installation ID đoán được không cấp quyền.
-- User A không nhìn thấy repo private của user B chỉ vì cùng GitHub App;
-  thiếu credential user hoặc quyền GitHub đã thu hồi không được dùng App token
-  toàn cục để tiếp tục liệt kê/chọn repo.
-- AI đọc đúng Project được cấp quyền; caller AI không gọi được exchange,
-  repository-selection, danh sách installation hoặc tạo job. Key Identity,
-  Work và AI không thay thế nhau.
-- User đọc được metadata Project không nhận token/source code hoặc repo khác;
-  member đã rời/teacher hết scope không đọc được context, job hoặc cursor cũ.
-- Webhook đúng chữ ký cập nhật facts nhưng không xác nhận Task link; webhook
-  sai chữ ký không thay dữ liệu. Job đúng danh tính worker vẫn bỏ kết quả khi
-  generation/App access bị thu hồi.
-- Ngắt kết nối qua Work vẫn thực hiện được khi App đã bị gỡ; không tự gỡ App
-  dùng chung hoặc làm ảnh hưởng kết nối Project khác.
-
-Các ca này là yêu cầu kiểm thử server/adapter trong tương lai; đợt rà soát
-tài liệu chỉ kiểm tra nhất quán, link, JSON mẫu và render sơ đồ, không xác nhận
-permission runtime Integration.
+- API account chỉ thao tác account actor trả từ Identity; bỏ qua/không nhận
+  `user_id` do client gửi; Identity 401/403 và timeout không cấp quyền.
+- GET chưa liên kết trả `UNLINKED`; DELETE liên kết trả `REVOKED`; DELETE lặp
+  không đổi version; account khác không bị tác động.
+- Khi triển khai consent: state/PKCE/callback gắn đúng actor, account GitHub
+  đang LINKED không bị âm thầm đổi; credential không lộ; revoke chặn tái sử
+  dụng credential.
+- Luồng Project phải dùng contract Work đã chốt và kiểm tra quyền/CAS. Snapshot
+  GET hoặc quyền OAuth cá nhân không đủ để cho phép mutation.

@@ -241,7 +241,8 @@ giá trị local của service đang bật bằng cấu hình staging, gồm sec
 PEM. Workflow không upload/ghi đè `.env` hoặc file PEM.
 
 Workflow upload `docker-compose.staging.yml`, `.env.example`, bộ ánh xạ dùng chung `infra/env/*.env`,
-Nginx, init PostgreSQL và script deploy; datasets upload nếu thư mục có trong source,
+Nginx, init PostgreSQL, wrapper `start-postgres.sh` và script deploy;
+datasets upload nếu thư mục có trong source,
 không rẽ nhánh theo tên AI. Các biến Google/GitHub/R2/caller keys nếu dùng
 được cung cấp trong `.env` server, không đặt giá trị bí mật vào file ánh xạ tracked.
 
@@ -259,6 +260,8 @@ IDENTITY_DJANGO_SECRET_KEY=<secret>
 WORK_DB_NAME=work_db
 CLASSROOM_DB_NAME=classroom_db
 INTEGRATION_DB_NAME=integration_db
+INTEGRATION_DB_USER=integration_service
+INTEGRATION_DB_PASSWORD=<secret-riêng-Integration>
 NOTIFICATION_DB_NAME=notification_db
 
 DJANGO_DEBUG=false

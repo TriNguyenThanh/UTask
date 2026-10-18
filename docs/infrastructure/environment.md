@@ -125,12 +125,15 @@ docker compose -p utask config --quiet
 dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
 Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
 sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+Staging cũng dùng wrapper PostgreSQL này: deploy upload `start-postgres.sh`,
+health chỉ sẵn sàng sau preparation, kể cả volume đã có dữ liệu. Script tạo
+role Integration và cập nhật mật khẩu từ `INTEGRATION_DB_PASSWORD`; cấu hình
+thiếu/trùng hoặc role có đặc quyền gây dừng trước khi app chạy migration.
 `start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
 `kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
 bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
-Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
-khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
-trước runtime theo [quy trình CI/CD](ci-cd.md).
+Staging không dùng wrapper Kafka local; migration chạy tuần tự trước runtime
+theo [quy trình CI/CD](ci-cd.md).
 
 Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
 Django, token hoặc thông tin xác thực môi trường dùng chung.
@@ -144,11 +147,20 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
   Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
 
-**Một phần:** các service Django local/staging hiện dùng chung `POSTGRES_USER` và
-`POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
-yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
-hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
-khoảng trống triển khai, không phải lựa chọn bảo mật production.
+**Một phần:** Integration dùng `INTEGRATION_DB_USER`/`INTEGRATION_DB_PASSWORD`
+riêng, không fallback `POSTGRES_USER`/`POSTGRES_PASSWORD`. Container app chỉ
+nhận host/port, `DATABASE_NAME`, credential Integration và cấu hình Django.
+Script chuẩn bị role không đặc quyền, database/schema riêng và đóng PUBLIC
+CONNECT/TEMP ở các database quản lý, `postgres` và `template1`. Custom role cần
+được GRANT rõ ràng trước vận hành nếu trước đây dựa PUBLIC CONNECT; database
+ngoài danh sách repo phải tự đóng ACL để không cấp lại quyền cho login khác.
+Role Integration cũ có đặc quyền, membership hoặc sở hữu DB khác bị từ chối;
+không tự hạ quyền role đang dùng chung.
+
+Identity/Work/Classroom còn dùng credential chung `POSTGRES_*`; baseline yêu
+cầu tiếp tục tách từng service. Hai biến Integration DB credential là đầu vào
+bắt buộc của PostgreSQL startup, kể cả khi profile app Integration đang tắt.
+Điền giá trị riêng vào `.env` trước cập nhật local/staging; không dùng mật khẩu mẫu.
 
 AI đã có Celery broker qua Redis; Kafka client và R2 tùy service vẫn là
 công nghệ mục tiêu theo baseline; biến môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã

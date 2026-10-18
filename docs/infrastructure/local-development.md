@@ -13,8 +13,9 @@ có container chuẩn bị riêng. Compose chỉ báo hai service này healthy s
 Khi API container khởi động, entrypoint chạy migration Django rồi mới chạy
 Gunicorn. Worker dùng cùng image nhưng bỏ qua migration; Compose đợi API tương
 ứng healthy trước khi chạy worker. Đã kiểm build/khởi động, dừng/khởi động lại
-và luồng HTTP/Kafka trên volume local hiện có; xem
-[nghiệm thu startup không có container chuẩn bị](../classroom-service/backend-validation.md#khởi-động-không-có-container-chuẩn-bị-riêng).
+và luồng HTTP/Kafka trên volume local hiện có; ghi chú nghiệm thu startup là
+bản local `backend-validation.md`, không thuộc checkout Git theo
+[quy ước tài liệu Classroom](../classroom-service/README.md).
 Kết quả local không xác nhận staging hoặc các provider bên ngoài.
 
 ## Khởi động Identity, Classroom và Work
@@ -78,7 +79,8 @@ Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoả
 xem các điều kiện trong [tài liệu Identity](../identity-service/README.md).
 Thông tin cấu hình, secret và luồng áp dụng biến được mô tả tại
 [biến môi trường](environment.md); hiện trạng kết quả kiểm tra nếu có
-được ghi riêng trong [nghiệm thu backend Classroom](../classroom-service/backend-validation.md).
+được ghi riêng trong bản local `backend-validation.md`, theo
+[quy ước tài liệu Classroom](../classroom-service/README.md).
 
 Staging tiếp tục chạy migration tuần tự trước khi cập nhật runtime theo
 [quy trình deploy](ci-cd.md). Khi API staging khởi động, entrypoint chạy
@@ -89,6 +91,13 @@ các service đó đã hoàn thiện hoặc được khởi động mặc địn
 trong profile `ai-service` và cần cấu hình credential riêng; xem
 [cấu hình AI](../ai-service/README.md#cấu-hình). Các profile này không cần cho
 lệnh khởi động Identity–Classroom–Work.
+
+Integration M1 đã có khung Django/health; bật riêng bằng
+`docker compose --profile integration-service up --build -d integration-service`.
+Điền `INTEGRATION_DB_USER`, `INTEGRATION_DB_PASSWORD` và
+`INTEGRATION_DJANGO_SECRET_KEY` trước; PostgreSQL startup chuẩn bị role/database
+trên cả volume mới và cũ. Health qua gateway ở `/api/integrations/healthz`;
+chưa có OAuth/webhook/đồng bộ. Xem [Integration M0/M1](../integration-service/foundation.md).
 
 ## Chạy riêng pipeline AI từ root
 
