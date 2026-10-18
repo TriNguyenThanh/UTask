@@ -3,7 +3,7 @@
 **Trạng thái: Đã triển khai local cho Identity–Classroom–Work.** Compose khai báo PostgreSQL, Redis, Kafka,
 Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chuẩn từ
 repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
-kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
+kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm sáu database
 được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
 `start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
 còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
@@ -14,7 +14,7 @@ Khi API container khởi động, entrypoint chạy migration Django rồi mới
 Gunicorn. Worker dùng cùng image nhưng bỏ qua migration; Compose đợi API tương
 ứng healthy trước khi chạy worker. Đã kiểm build/khởi động, dừng/khởi động lại
 và luồng HTTP/Kafka trên volume local hiện có; xem
-[nghiệm thu startup không có container chuẩn bị](../classroom-service/backend-validation.md#khởi-động-không-có-container-chuẩn-bị-riêng).
+nghiệm thu startup không có container chuẩn bị.
 Kết quả local không xác nhận staging hoặc các provider bên ngoài.
 
 ## Khởi động Identity, Classroom và Work
@@ -78,7 +78,7 @@ Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoả
 xem các điều kiện trong [tài liệu Identity](../identity-service/README.md).
 Thông tin cấu hình, secret và luồng áp dụng biến được mô tả tại
 [biến môi trường](environment.md); hiện trạng kết quả kiểm tra nếu có
-được ghi riêng trong [nghiệm thu backend Classroom](../classroom-service/backend-validation.md).
+được ghi riêng trong nghiệm thu backend Classroom.
 
 Staging tiếp tục chạy migration tuần tự trước khi cập nhật runtime theo
 [quy trình deploy](ci-cd.md). Khi API staging khởi động, entrypoint chạy

@@ -87,7 +87,7 @@ Broker mặc định retention 7 ngày qua `KAFKA_LOG_RETENTION_MS`; áp dụng 
 topic nghiệp vụ/DLQ không có override. Topic có cấu hình riêng phải kiểm tra
 thực tế. JSON Schema nằm trong `contracts/events/`; envelope triển khai dùng
 `data`. Kết quả HTTP/Kafka thật tại
-[nghiệm thu Classroom](../classroom-service/backend-validation.md), không xác nhận staging.
+nghiệm thu Classroom, không xác nhận staging.
 
 Compose khai báo Kafka 3.9.0, cấu hình KRaft, volume và healthcheck. Ngoài
 phạm vi Classroom–Work nêu trên, chưa xác minh producer/consumer runtime; AI bootstrap chưa
