@@ -138,12 +138,10 @@ def test_group_join_replay_survives_revoked_code_but_requires_membership(
     assert join_group(request, payload).data == response.data
 
 
-def test_assignment_replay_survives_changed_enrollment_and_lost_write_authority(
-    group, actors, command_request
-):
+def test_assignment_replay_rejects_lost_write_authority(group, actors, command_request):
     payload = {"user_id": actors["outsider"], "target_group_id": group.pk, "reason": "Phân công"}
     request = command_request(actors["teacher"], "/adjust/", roles=("TEACHER",))
-    response = adjust_member(request, group.class_section_id, payload)
+    adjust_member(request, group.class_section_id, payload)
     Enrollment.objects.filter(class_section=group.class_section, user_id=actors["outsider"]).update(
         status="LEFT", left_at=timezone.now()
     )
@@ -151,4 +149,6 @@ def test_assignment_replay_survives_changed_enrollment_and_lost_write_authority(
         class_section=group.class_section, user_id=actors["teacher"]
     ).update(status="LEFT", left_at=timezone.now())
     Enrollment.objects.create(class_section=group.class_section, user_id=actors["teacher"])
-    assert adjust_member(request, group.class_section_id, payload).data == response.data
+    with pytest.raises(ClassroomError) as denied:
+        adjust_member(request, group.class_section_id, payload)
+    assert denied.value.status_code == 403

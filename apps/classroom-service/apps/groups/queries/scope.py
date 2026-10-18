@@ -37,7 +37,7 @@ def membership_snapshot(group):
     }
 
 
-def group_snapshot(group_id, actor=None):
+def group_snapshot(group_id, actor=None, *, roles=()):
     group_class = get_object_or_404(StudyGroup.objects.only("class_section_id"), pk=group_id)
     with transaction.atomic():
         section = lock_class(group_class.class_section_id)
@@ -48,12 +48,14 @@ def group_snapshot(group_id, actor=None):
             status="ACTIVE",
         )
         if actor is not None:
-            require_group_read(group, actor)
+            require_group_read(group, actor, roles=roles)
         require_open(section)
         return membership_snapshot(group)
 
 
-def teacher_groups(actor):
+def teacher_groups(actor, *, roles=()):
+    if "TEACHER" not in roles:
+        return {"group_ids": []}
     return {
         "group_ids": [
             str(pk)
@@ -66,7 +68,7 @@ def teacher_groups(actor):
     }
 
 
-def feedback_scope(group_id, actor, project_id=None):
+def feedback_scope(group_id, actor, project_id=None, *, roles=()):
     group_class = get_object_or_404(StudyGroup.objects.only("class_section_id"), pk=group_id)
     with transaction.atomic():
         section = lock_class(group_class.class_section_id)
@@ -74,7 +76,7 @@ def feedback_scope(group_id, actor, project_id=None):
             StudyGroup.objects.select_for_update(), pk=group_id, class_section=section
         )
         if project_id is not None:
-            if not is_teacher(actor, section):
+            if not is_teacher(actor, section, roles=roles):
                 raise ClassroomError(
                     "PERMISSION_DENIED", "Bạn không còn phụ trách lớp học này.", 403
                 )
@@ -83,7 +85,7 @@ def feedback_scope(group_id, actor, project_id=None):
                     "RESOURCE_NOT_FOUND", "Chưa tìm thấy dự án thuộc nhóm học tập này.", 404
                 )
         else:
-            require_group_read(group, actor)
+            require_group_read(group, actor, roles=roles)
         teacher_ids = set(
             ClassTeacher.objects.filter(class_section=section, status="ACTIVE").values_list(
                 "user_id", flat=True

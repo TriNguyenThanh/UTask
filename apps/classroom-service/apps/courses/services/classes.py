@@ -49,14 +49,13 @@ def verified_teacher(request, user_id):
 
 
 def create_class(request, payload):
-    actor_roles(request)
+    require_role(request, "TEACHER", "SYSTEM_ADMIN")
     saved = lookup_receipt(receipt_scope(request, require_key(request)), payload)
     if saved is not None and saved.status == "COMPLETED":
         with transaction.atomic():
             section = lock_class(saved.class_section_id)
-            require_read(request, section)
+            require_manage(request, section)
             return replay_response(saved)
-    require_role(request, "TEACHER", "SYSTEM_ADMIN")
     teacher_id = payload.get("primary_teacher_id", request.user.id)
     if teacher_id != request.user.id and "SYSTEM_ADMIN" not in actor_roles(request):
         raise ClassroomError(
@@ -70,7 +69,7 @@ def create_class(request, payload):
         receipt = begin_receipt(request, payload)
         if receipt.status == "COMPLETED":
             section = lock_class(receipt.class_section_id)
-            require_read(request, section)
+            require_manage(request, section)
             return replay_response(receipt)
         course = get_object_or_404(
             Course.objects.select_for_update(), pk=payload["course_id"], archived_at__isnull=True
@@ -109,10 +108,10 @@ def change_class(request, class_id, payload, *, action="update"):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
+        require_manage(request, section)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_manage(request, section, teacher_only=action == "lock-grouping")
         check_version(section, payload["version"])
         if action == "update":
             values = {k: v for k, v in payload.items() if k != "version"}
@@ -195,10 +194,10 @@ def issue_class_code(request, class_id, payload):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
+        require_manage(request, section)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_manage(request, section)
         check_version(section, payload["version"])
         enabled = payload["enabled"]
         expires = payload.get("expires_at", timezone.now() + timedelta(days=7)) if enabled else None

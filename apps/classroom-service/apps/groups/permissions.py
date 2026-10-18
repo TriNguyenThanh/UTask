@@ -19,15 +19,19 @@ def active_member(group, actor):
     ).first()
 
 
-def require_group_read(group, actor):
-    if not active_member(group, actor) and not is_teacher(actor, group.class_section):
+def require_group_read(group, actor, *, roles=(), admin_allowed=False):
+    if admin_allowed and "SYSTEM_ADMIN" in roles:
+        return
+    if not active_member(group, actor) and not is_teacher(actor, group.class_section, roles=roles):
         raise ClassroomError("RESOURCE_NOT_FOUND", "Không tìm thấy nhóm học tập.", 404)
 
 
-def require_leader(group, actor, *, teacher_allowed=False):
+def require_leader(group, actor, *, teacher_allowed=False, roles=(), admin_allowed=False):
+    if admin_allowed and "SYSTEM_ADMIN" in roles:
+        return
     member = active_member(group, actor)
     if not (member and member.role == "LEADER") and not (
-        teacher_allowed and is_teacher(actor, group.class_section)
+        teacher_allowed and is_teacher(actor, group.class_section, roles=roles)
     ):
         raise ClassroomError(
             "LEADER_PERMISSION_REQUIRED",

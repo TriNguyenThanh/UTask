@@ -5,7 +5,15 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
 
-from apps.courses.permissions import actor_roles, require_open, require_read, require_role
+from apps.courses.models import ClassSection
+from apps.courses.permissions import (
+    actor_roles,
+    bearer,
+    require_manage,
+    require_open,
+    require_read,
+    require_role,
+)
 from apps.courses.services.classes import lock_class
 from apps.groups.models import GroupMember, StudyGroup
 from apps.groups.permissions import active_enrollment, require_group_read, require_leader
@@ -13,9 +21,18 @@ from apps.groups.queries.scope import membership_snapshot
 from apps.groups.serializers.groups import GroupSerializer
 from apps.messaging.services.audit import record_activity
 from apps.messaging.services.outbox import emit_event
-from apps.messaging.services.receipts import begin_receipt, finish_receipt, replay_response
+from apps.messaging.services.receipts import (
+    begin_receipt,
+    finish_receipt,
+    lookup_receipt,
+    receipt_scope,
+    replay_response,
+    require_key,
+)
 from common.access_codes import code_hash, generate_code
+from common.authentication import Actor
 from common.errors import ClassroomError
+from infrastructure.identity import IdentityClient
 
 
 def lock_group(group_id):
@@ -53,15 +70,38 @@ def publish_membership(section, group, actor_id, verb, *, reason=None, increment
 
 def create_group(request, payload):
     actor_roles(request)
+    leader_id = payload.get("leader_id", request.user.id)
+    on_behalf = leader_id != request.user.id
+    section = get_object_or_404(ClassSection, pk=payload["class_id"])
+    require_read(request, section)
+    if on_behalf:
+        require_manage(request, section)
+        saved = lookup_receipt(receipt_scope(request, require_key(request)), payload)
+        if saved is None or saved.status != "COMPLETED":
+            users = IdentityClient().users(bearer(request), [leader_id])
+            if (
+                not users
+                or str(users[0]["id"]) != str(leader_id)
+                or "STUDENT" not in users[0].get("roles", [])
+                or users[0].get("account_status") != "ACTIVE"
+            ):
+                raise ClassroomError(
+                    "INVALID_GROUP_LEADER", "Hãy chọn sinh viên có tài khoản đang hoạt động.", 422
+                )
+    else:
+        require_role(request, "STUDENT")
     with transaction.atomic():
         section = lock_class(payload["class_id"])
         require_read(request, section)
+        if on_behalf:
+            require_manage(request, section)
+        else:
+            require_role(request, "STUDENT")
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_role(request, "STUDENT")
         require_open(section, forming=True)
-        enrollment = active_enrollment(section, request.user)
+        enrollment = active_enrollment(section, Actor(leader_id))
         if GroupMember.objects.filter(enrollment=enrollment, status="ACTIVE").exists():
             raise ClassroomError(
                 "ALREADY_IN_GROUP", "Bạn đã tham gia một nhóm trong lớp học này.", 409
@@ -75,7 +115,7 @@ def create_group(request, payload):
             receipt,
             GroupSerializer(group).data,
             status=201,
-            message="Đã tạo nhóm và phân công bạn làm trưởng nhóm.",
+            message="Đã tạo nhóm và phân công trưởng nhóm.",
         )
 
 
@@ -83,11 +123,17 @@ def update_group(request, group_id, payload):
     actor_roles(request)
     with transaction.atomic():
         section, group = lock_group(group_id)
-        require_group_read(group, request.user)
+        require_group_read(group, request.user, roles=actor_roles(request), admin_allowed=True)
+        require_leader(
+            group,
+            request.user,
+            teacher_allowed=True,
+            roles=actor_roles(request),
+            admin_allowed=True,
+        )
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_leader(group, request.user, teacher_allowed=True)
         require_open(section)
         check_group_version(group, payload["version"])
         if group.status == "ARCHIVED":
@@ -107,11 +153,11 @@ def issue_invite_code(request, group_id, payload):
     actor_roles(request)
     with transaction.atomic():
         section, group = lock_group(group_id)
-        require_group_read(group, request.user)
+        require_group_read(group, request.user, roles=actor_roles(request))
+        require_leader(group, request.user, roles=actor_roles(request))
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
-        require_leader(group, request.user)
         require_open(section, forming=True)
         check_group_version(group, payload["version"])
         if group.status != "ACTIVE":
