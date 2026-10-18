@@ -1,7 +1,6 @@
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
-from apps.courses.permissions import bearer, require_read
+from apps.courses.permissions import actor_roles, bearer, require_read, visible_classes
 from apps.groups.models import GroupMember, GroupProjectLink, StudyGroup
 from apps.groups.permissions import require_group_read
 from apps.groups.serializers.groups import GroupSerializer, ProjectLinkSerializer
@@ -31,16 +30,7 @@ def list_groups(request, section):
 
 
 def visible_groups(request):
-    qs = StudyGroup.objects.filter(
-        Q(
-            class_section__teachers__user_id=request.user.id,
-            class_section__teachers__status="ACTIVE",
-        )
-        | Q(
-            class_section__enrollments__user_id=request.user.id,
-            class_section__enrollments__status="ACTIVE",
-        )
-    ).distinct()
+    qs = StudyGroup.objects.filter(class_section__in=visible_classes(request))
     status = list_status(request.query_params, {"ACTIVE", "ARCHIVED"})
     if status is not None:
         qs = qs.filter(status=status)
@@ -54,13 +44,13 @@ def visible_groups(request):
 
 def group_detail(request, group_id):
     group = get_object_or_404(StudyGroup.objects.select_related("class_section"), pk=group_id)
-    require_read(request, group.class_section)
+    require_group_read(group, request.user, roles=actor_roles(request), admin_allowed=True)
     return GroupSerializer(group).data
 
 
 def group_members(request, group_id):
     group = get_object_or_404(StudyGroup.objects.select_related("class_section"), pk=group_id)
-    require_group_read(group, request.user)
+    require_group_read(group, request.user, roles=actor_roles(request))
     status = list_status(request.query_params, {"ACTIVE", "LEFT", "REMOVED"})
     qs = GroupMember.objects.filter(group=group).select_related("enrollment")
     if status is not None:
@@ -93,7 +83,7 @@ def group_members(request, group_id):
 
 def group_projects(request, group_id):
     group = get_object_or_404(StudyGroup.objects.select_related("class_section"), pk=group_id)
-    require_group_read(group, request.user)
+    require_group_read(group, request.user, roles=actor_roles(request))
     rows, meta = paginate(
         GroupProjectLink.objects.filter(group=group),
         request.query_params,

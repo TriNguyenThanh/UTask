@@ -41,7 +41,7 @@ def test_feedback_and_mentions_bind_project_actor_and_current_teachers(group, ac
     GroupProjectLink.objects.create(
         class_section=group.class_section, group=group, project_id=project
     )
-    scope = feedback_scope(group.pk, Actor(actors["teacher"]), project)
+    scope = feedback_scope(group.pk, Actor(actors["teacher"]), project, roles={"TEACHER"})
     assert scope["project_id"] == str(project) and scope["actor_id"] == str(actors["teacher"])
     assert set(scope["mentionable_user_ids"]) == {
         str(actors[name]) for name in ["teacher", "leader", "member"]
@@ -51,7 +51,7 @@ def test_feedback_and_mentions_bind_project_actor_and_current_teachers(group, ac
         feedback_scope(group.pk, Actor(actors["member"]), project)
     assert denied.value.status_code == 403
     with pytest.raises(ClassroomError) as missing:
-        feedback_scope(group.pk, Actor(actors["teacher"]), uuid4())
+        feedback_scope(group.pk, Actor(actors["teacher"]), uuid4(), roles={"TEACHER"})
     assert missing.value.status_code == 404
     mentions = feedback_scope(group.pk, Actor(actors["member"]))
     assert mentions["mentionable_user_ids"] == [str(actors["teacher"])]
