@@ -88,7 +88,6 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertIn(gateway, command)
                 self.assertNotIn(outputs["gateway_service"], command)
 
-
     def test_ai_migration_runs_for_every_deployment_without_persistent_job(self):
         with deployment_runtime(services="identity-service ai-service") as (
             root,
