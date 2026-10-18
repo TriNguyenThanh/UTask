@@ -168,10 +168,10 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["common.renderers.EnvelopeJSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {
-        "dj_rest_auth": "30/min",
-        "registration": "5/min",
-        "recovery": "3/min",
-        "oauth": "10/min",
+        "dj_rest_auth": "3000/min",
+        "registration": "100/min",
+        "recovery": "300/min",
+        "oauth": "100/min",
     },
 }
 
