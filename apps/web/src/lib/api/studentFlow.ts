@@ -1,6 +1,8 @@
 import type { ApiClient } from "@/lib/api/client";
 import type { CourseDetail } from "@/features/courses/types";
 import type {
+  Issue,
+  IssueStatus,
   ProjectCode,
   ProjectSummary,
   ProjectWorkspace,
@@ -139,4 +141,38 @@ export function updateAccountSettingsRequest(
 
 export function disconnectGitHubRequest(client: ApiClient): Promise<void> {
   return client.request(`${WORK_ROOT}/me/github/disconnect`, { method: "POST" });
+}
+export interface MoveIssueInput {
+  status?: IssueStatus;
+  /** `null` moves the issue to the Product Backlog. */
+  sprintId?: string | null;
+  rank?: string;
+  /** Required by the server when the move changes the scope of an active sprint. */
+  reason?: string;
+  /** The version the client last saw; a stale one gets 409. */
+  version: number;
+}
+
+export function moveIssueRequest(
+  client: ApiClient,
+  projectId: string,
+  issueKey: string,
+  input: MoveIssueInput,
+): Promise<Issue> {
+  return client.request<Issue>(
+    `${WORK_ROOT}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueKey)}/move`,
+    { method: "POST", body: input },
+  );
+}
+
+export function setIssueBlockedRequest(
+  client: ApiClient,
+  projectId: string,
+  issueKey: string,
+  input: { blocked: boolean; reason?: string; version: number },
+): Promise<Issue> {
+  return client.request<Issue>(
+    `${WORK_ROOT}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueKey)}/blocked`,
+    { method: "POST", body: input },
+  );
 }

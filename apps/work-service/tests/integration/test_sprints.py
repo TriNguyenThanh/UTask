@@ -16,7 +16,7 @@ def test_sprint_scope_start_close_rollover_snapshot_and_replay(
     task = create(story_points=5)
     source = draft(leader, project["id"], "source")
     target = draft(leader, project["id"], "target")
-    scope_route = f"/api/v1/sprints/{source['id']}/tasks/"
+    scope_route = f"/sprints/{source['id']}/tasks/"
     add = leader.post(
         scope_route,
         {"action": "ADD", "task_ids": [task["id"]], "expected_version": 1},
@@ -35,7 +35,7 @@ def test_sprint_scope_start_close_rollover_snapshot_and_replay(
         == add.json()
     )
     start = leader.post(
-        f"/api/v1/projects/{project['id']}/sprints/{source['id']}/start/",
+        f"/projects/{project['id']}/sprints/{source['id']}/start/",
         {"expected_version": 2},
         format="json",
         HTTP_IDEMPOTENCY_KEY="start",
@@ -43,14 +43,14 @@ def test_sprint_scope_start_close_rollover_snapshot_and_replay(
     assert start.status_code == 200, start.content
     assert (
         leader.post(
-            f"/api/v1/projects/{project['id']}/sprints/{target['id']}/start/",
+            f"/projects/{project['id']}/sprints/{target['id']}/start/",
             {"expected_version": 1},
             format="json",
             HTTP_IDEMPOTENCY_KEY="other-start",
         ).json()["error"]["code"]
         == "ACTIVE_SPRINT_EXISTS"
     )
-    closed_route = f"/api/v1/sprints/{source['id']}/close/"
+    closed_route = f"/sprints/{source['id']}/close/"
     body = {"expected_version": 3, "target_sprint_id": target["id"]}
     closed = leader.post(closed_route, body, format="json", HTTP_IDEMPOTENCY_KEY="close")
     assert closed.status_code == 200, closed.content
@@ -83,14 +83,14 @@ def test_active_scope_requires_reason_and_rejoin_keeps_history(task_api, created
     sprint = draft(leader, project["id"], "Sprint")
     assert (
         leader.post(
-            f"/api/v1/projects/{project['id']}/sprints/{sprint['id']}/start/",
+            f"/projects/{project['id']}/sprints/{sprint['id']}/start/",
             {"expected_version": 1},
             format="json",
             HTTP_IDEMPOTENCY_KEY="start",
         ).status_code
         == 200
     )
-    route = f"/api/v1/sprints/{sprint['id']}/tasks/"
+    route = f"/sprints/{sprint['id']}/tasks/"
     body = {"action": "ADD", "task_ids": [task["id"]], "expected_version": 2}
     assert (
         leader.post(route, body, format="json", HTTP_IDEMPOTENCY_KEY="missing").json()["error"][

@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 def test_state_create_patch_default_tombstone_and_audit(created_project, client_for, actors):
     client = client_for(actors["leader"])
-    path = f"/api/v1/projects/{created_project['id']}/states/"
+    path = f"/projects/{created_project['id']}/states/"
     response = client.post(
         path,
         {"name": "QA", "color": "#123456", "sequence": 45000, "group": "REVIEW"},
@@ -38,7 +38,7 @@ def test_state_create_patch_default_tombstone_and_audit(created_project, client_
 def test_state_unique_scope_member_permissions_and_invalid_target(
     created_project, client_for, actors
 ):
-    path = f"/api/v1/projects/{created_project['id']}/states/"
+    path = f"/projects/{created_project['id']}/states/"
     payload = {"name": "QA", "color": "#123456", "sequence": 45000, "group": "REVIEW"}
     assert client_for(actors["member"]).post(path, payload, format="json").status_code == 403
     client = client_for(actors["leader"])

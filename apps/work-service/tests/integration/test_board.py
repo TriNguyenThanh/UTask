@@ -15,7 +15,7 @@ def test_board_all_columns_counts_keyset_ties_and_query_budget(
     created_project, board_tasks, client_for, actors
 ):
     client = client_for(actors["leader"])
-    path = f"/api/v1/projects/{created_project['id']}/kanban/"
+    path = f"/projects/{created_project['id']}/kanban/"
     with CaptureQueriesContext(connection) as queries:
         response = client.get(path, {"limit_per_column": 2})
     assert response.status_code == 200, response.content
@@ -42,7 +42,7 @@ def test_board_cursor_revision_scope_filter_and_tamper(
     created_project, board_tasks, client_for, actors
 ):
     client = client_for(actors["leader"])
-    path = f"/api/v1/projects/{created_project['id']}/kanban/"
+    path = f"/projects/{created_project['id']}/kanban/"
     column = next(
         c
         for c in client.get(path, {"limit_per_column": 1}).json()["data"]["columns"]
@@ -64,7 +64,7 @@ def test_board_filters_do_not_fan_out_and_hide_deleted_archived_tasks(
     created_project, board_tasks, client_for, actors
 ):
     client = client_for(actors["leader"])
-    path = f"/api/v1/projects/{created_project['id']}/kanban/"
+    path = f"/projects/{created_project['id']}/kanban/"
     assert (
         client.get(path, {"assignee_id": str(actors["leader"])}).json()["data"]["total_tasks"] == 1
     )
@@ -83,7 +83,7 @@ def test_board_cursor_cannot_be_reused_in_another_state_or_project(
     from apps.projects.models import ProjectMember
 
     client = client_for(actors["leader"])
-    path = f"/api/v1/projects/{created_project['id']}/kanban/"
+    path = f"/projects/{created_project['id']}/kanban/"
     columns = client.get(path, {"limit_per_column": 1}).json()["data"]["columns"]
     source = next(c for c in columns if c["has_more"])
     other_state = next(c for c in columns if c["state_id"] != source["state_id"])
@@ -107,7 +107,7 @@ def test_board_cursor_cannot_be_reused_in_another_state_or_project(
         is_default=True,
     )
     response = client.get(
-        f"/api/v1/projects/{other.pk}/kanban/states/{state.pk}/tasks/",
+        f"/projects/{other.pk}/kanban/states/{state.pk}/tasks/",
         {"cursor": source["next_cursor"]},
     )
     assert response.status_code == 400 and response.json()["error"]["code"] == "VALIDATION_ERROR"

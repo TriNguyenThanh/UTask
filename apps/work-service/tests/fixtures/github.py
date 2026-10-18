@@ -61,7 +61,7 @@ def github(created_project, actors, client_for, monkeypatch):
     )
     monkeypatch.setattr("apps.integrations.services.links.integration_client", lambda: gateway)
     leader = client_for(actors["leader"])
-    repo_route = f"/api/v1/projects/{project_id}/github/repository/"
+    repo_route = f"/projects/{project_id}/github/repository/"
     response = leader.post(
         repo_route,
         {"github_repo_id": "repo-1", "operation_id": "op-1", "expected_connection_generation": 0},

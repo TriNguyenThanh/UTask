@@ -110,7 +110,6 @@ jobs:
       validate_image: ${{ github.event_name == 'pull_request' }}
       postgres: ${{ matrix.postgres }}
       redis: ${{ matrix.redis }}
-      test_env: ${{ matrix.test_env }}
       django: ${{ matrix.django }}
 
   web:

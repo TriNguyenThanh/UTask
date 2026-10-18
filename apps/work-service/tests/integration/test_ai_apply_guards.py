@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 @pytest.mark.parametrize("kind", ["backlog", "action"])
 def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
     leader, task_route, create = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     if kind == "backlog":
         body = backlog_payload(project)
         route = task_route + "bulk-apply-ai/"
@@ -29,7 +29,7 @@ def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
                 "priority": "HIGH",
             }
         )
-        route = f"/api/v1/projects/{project.pk}/ai-actions/apply/"
+        route = f"/projects/{project.pk}/ai-actions/apply/"
         ai(project.pk, kind="ACTION", targets=[task["id"]])
     FixtureAI.proposals["proposal-1"] = object()
     before = effect_state(project.pk)
@@ -43,7 +43,7 @@ def test_wrong_type_ai_proof_is_rejected_without_any_effect(task_api, ai, kind):
 
 def test_ai_backlog_stale_project_version_preserves_counter_audit_and_receipt(task_api, ai):
     leader, task_route, _ = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     ai(project.pk)
     before = effect_state(project.pk)
     body = {**backlog_payload(project), "expected_project_version": 999}
@@ -56,7 +56,7 @@ def test_ai_backlog_stale_project_version_preserves_counter_audit_and_receipt(ta
 
 def test_ai_new_dependency_on_archived_applied_item_rolls_back_new_batch(task_api, ai):
     leader, task_route, _ = task_api
-    project = Project.objects.get(pk=task_route.split("/")[4])
+    project = Project.objects.get(pk=task_route.split("/")[2])
     ai(project.pk)
     body = backlog_payload(project)
     route = task_route + "bulk-apply-ai/"
@@ -65,7 +65,7 @@ def test_ai_new_dependency_on_archived_applied_item_rolls_back_new_batch(task_ap
     source = next(row for row in first.json()["data"]["affected_tasks"] if row["local_id"] == "a")
     assert (
         leader.post(
-            f"/api/v1/tasks/{source['id']}/archive/",
+            f"/tasks/{source['id']}/archive/",
             {"expected_version": source["version"]},
             format="json",
         ).status_code
@@ -102,7 +102,7 @@ def test_ai_action_requires_authoritative_live_target_after_approval(task_api, a
     before = effect_state(project_id)
     tasks = list(Task.objects.order_by("id").values())
     reply = leader.post(
-        f"/api/v1/projects/{project_id}/ai-actions/apply/",
+        f"/projects/{project_id}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="dead-target",
@@ -120,7 +120,7 @@ def test_approved_action_input_requires_kind_specific_field_before_verifier(task
     before = effect_state(task["project_id"])
     body = action_payload({"kind": kind, "task_id": task["id"], "expected_version": 1})
     reply = leader.post(
-        f"/api/v1/projects/{task['project_id']}/ai-actions/apply/",
+        f"/projects/{task['project_id']}/ai-actions/apply/",
         body,
         format="json",
         HTTP_IDEMPOTENCY_KEY="missing-action-field",

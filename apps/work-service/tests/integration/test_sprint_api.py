@@ -16,10 +16,10 @@ def test_sprint_gets_follow_draft_active_completed_and_frozen_history(
 ):
     leader, _, create = task_api
     task = create(story_points=5)
-    listing = f"/api/v1/projects/{created_project['id']}/sprints/"
+    listing = f"/projects/{created_project['id']}/sprints/"
     assert read(leader, listing, response_schema)["data"] == []
     sprint = draft(leader, created_project["id"], "Lifecycle")
-    detail = f"/api/v1/sprints/{sprint['id']}/"
+    detail = f"/sprints/{sprint['id']}/"
     assert read(leader, detail, response_schema)["data"] == sprint
     assert read(leader, listing, response_schema, {"status": "DRAFT"})["data"] == [sprint]
     assert sprint["started_at"] is None and sprint["closed_at"] is None
@@ -68,7 +68,7 @@ def test_sprint_gets_follow_draft_active_completed_and_frozen_history(
     assert history.end_reason == "CLOSED" and history.ended_at is not None
     assert frozen["scope_history"][0]["ended_at"] is None  # Captured before ending scope.
     changed = leader.patch(
-        f"/api/v1/tasks/{task['id']}/",
+        f"/tasks/{task['id']}/",
         {"story_points": 13, "expected_version": 1},
         format="json",
     )
@@ -85,7 +85,7 @@ def test_sprint_list_pagination_status_filter_and_archived_rows(
     created_project, actors, client_for, response_schema
 ):
     leader = client_for(actors["leader"])
-    listing = f"/api/v1/projects/{created_project['id']}/sprints/"
+    listing = f"/projects/{created_project['id']}/sprints/"
     drafts = [draft(leader, created_project["id"], str(i)) for i in range(3)]
     hidden = draft(leader, created_project["id"], "Archived")
     Sprint.objects.filter(pk=hidden["id"]).update(archived_at=timezone.now())
@@ -119,7 +119,7 @@ def test_sprint_close_failure_rolls_back_snapshot_scope_audit_and_receipt(
     leader, _, create = task_api
     task = create(story_points=5)
     sprint = draft(leader, created_project["id"], "Rollback close")
-    detail = f"/api/v1/sprints/{sprint['id']}/"
+    detail = f"/sprints/{sprint['id']}/"
     assert (
         leader.post(
             detail + "tasks/",
@@ -131,7 +131,7 @@ def test_sprint_close_failure_rolls_back_snapshot_scope_audit_and_receipt(
     )
     assert (
         leader.post(
-            f"/api/v1/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
+            f"/projects/{created_project['id']}/sprints/{sprint['id']}/start/",
             {"expected_version": 2},
             format="json",
             HTTP_IDEMPOTENCY_KEY="rollback-start",

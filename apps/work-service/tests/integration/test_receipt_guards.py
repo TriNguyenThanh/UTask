@@ -13,7 +13,7 @@ def receipt_scope(actors):
     return {
         "user_id": actors["leader"],
         "http_method": "POST",
-        "endpoint_path": "/api/v1/projects/",
+        "endpoint_path": "/projects/",
         "idempotency_key": "receipt-guard",
     }
 

@@ -111,13 +111,13 @@ def test_projection_validates_before_materialization_and_preserves_default_curso
 def test_selected_counts_match_live_children_comments_and_confirmed_files(task_api, storage):
     leader, route, create = task_api
     parent = create()
-    detail = f"/api/v1/tasks/{parent['id']}/"
+    detail = f"/tasks/{parent['id']}/"
     child = leader.post(
         detail + "subtasks/", {"title": "Child"}, format="json", HTTP_IDEMPOTENCY_KEY="child-count"
     )
     assert child.status_code == 201
     comment = leader.post(
-        "/api/v1/comments/", {"task_id": parent["id"], "content_html": "Feedback"}, format="json"
+        "/comments/", {"task_id": parent["id"], "content_html": "Feedback"}, format="json"
     )
     assert comment.status_code == 201
     row = pending(leader, detail + "attachments/")
@@ -140,12 +140,10 @@ def test_selected_counts_match_live_children_comments_and_confirmed_files(task_a
     }
     child_id = child.json()["data"]["id"]
     assert (
-        leader.delete(
-            f"/api/v1/tasks/{child_id}/", {"expected_version": 1}, format="json"
-        ).status_code
+        leader.delete(f"/tasks/{child_id}/", {"expected_version": 1}, format="json").status_code
         == 200
     )
-    assert leader.delete(f"/api/v1/comments/{comment.json()['data']['id']}/").status_code == 200
+    assert leader.delete(f"/comments/{comment.json()['data']['id']}/").status_code == 200
     projected = leader.get(route, params).json()["data"][0]
     assert projected == {
         "id": parent["id"],

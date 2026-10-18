@@ -67,14 +67,19 @@ migration đã trên nhánh gốc; migration mới được phép thêm. Gate n�
 đã merge, không xác định migration nào đã áp dụng trên từng VPS.
 
 Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
-profile cùng tên service; Kafka có profile `kafka` và được bật cùng profile Work.
-Workflow cấp profile từ kết quả nhận diện, không lấy `COMPOSE_PROFILES` tùy ý trên VPS.
+profile cùng tên service; Kafka Docker chỉ chạy khi bật profile `kafka`
+trong `COMPOSE_PROFILES` của `.env` trên VPS. Bỏ profile này khi dùng broker
+bên ngoài; worker không bắt buộc phụ thuộc broker Docker. Xem
+[cấu hình Kafka theo môi trường](environment.md#chọn-kafka-docker-hoặc-kafka-bên-ngoài).
+Workflow cấp profile app từ kết quả nhận diện; script deploy giữ thêm lựa chọn
+profile `kafka` của máy chủ.
 Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy để khởi động;
 backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
 
 `docker-compose.yml` dành cho local, có build context và port hỗ trợ phát triển.
 `docker-compose.staging.yml` là file độc lập dùng image đã phát hành, chỉ publish Nginx.
-PostgreSQL/Redis/Kafka vẫn thuộc stack staging; không dùng cấu hình này làm production.
+PostgreSQL/Redis vẫn thuộc stack staging; Kafka mặc định thuộc stack hoặc dùng
+broker bên ngoài theo profile `kafka`. Không dùng cấu hình này làm production.
 Hai file giữ project name `utask` và tên volume để server staging đang dùng có thể chuyển
 file mà không tạo một bộ dữ liệu khác. Không chạy cả hai stack trong cùng Docker host/project.
 
@@ -89,12 +94,22 @@ Workflow dùng chung nhận các input tùy chọn từ job gọi trong `ci.yml`
 | --- | --- | --- |
 | `postgres` | `false` | Khởi tạo PostgreSQL 16 tại `127.0.0.1:5432`, database `ci`, user `utask_ci`, password `ci-only-postgres-password`. |
 | `redis` | `false` | Khởi tạo Redis 7 tại `127.0.0.1:6379`. |
-| `test_env` | `{}` | JSON chứa biến kiểm thử không bí mật, truyền vào pytest và gate Django. |
 | `django` | `false` | Chạy system check, kiểm tra lệch model/migration và bảo vệ lịch sử migration trên PR. |
 
 Hai container thuộc riêng từng job trên runner tạm thời. Health checks phải đạt trước
 khi chạy các bước kiểm tra. Credential trên chỉ dành cho CI; không dùng secrets
-staging/production hoặc `.env` local cho pytest. `test_env` không phải cơ chế truyền secrets.
+staging/production hoặc `.env` local cho pytest. `x-ci.test_env` trong Compose
+chỉ chứa cấu hình kiểm thử, không phải cơ chế truyền secrets.
+
+Matrix truyền giữa các job chỉ chứa tên service và các cờ chọn PostgreSQL,
+Redis, Django. Không đưa `test_env` hoặc giá trị mật khẩu kiểm thử vào job output:
+GitHub có thể bỏ toàn bộ output khi nhận diện giá trị giống secret, khiến
+matrix không khởi tạo được dù job nhận diện service báo thành công.
+Sau checkout, mỗi job Python chạy `scripts/discover_services.py --write-test-env
+<service>` để đọc lại metadata của cùng commit và ghi vào `GITHUB_ENV` (tệp biến
+môi trường dành cho các bước tiếp theo trong chính job đó). Các bước tạo database
+kiểm thử, Django check và pytest nhận cùng cấu hình như CI local, không truyền
+credential qua output giữa các job và không in giá trị ra log.
 
 Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME=ci`,
 `IDENTITY_TEST_DB_NAME=test_identity_ci` cùng `IDENTITY_TEST_REDIS_URL` dùng Redis DB15.
@@ -114,6 +129,23 @@ Không so với `contracts/api/identity.openapi.json` khi artifact này không �
 repository; xem [cách xuất hợp đồng](../../contracts/api/README.md).
 
 ## Kiểm tra CI local trước khi đẩy mã
+
+### Classroom dùng nền CI chung
+
+Classroom được discovery nhận diện từ manifest, lockfile, Dockerfile và metadata
+Compose staging như các service khác. Thay đổi riêng AI chỉ chọn kiểm thử AI;
+thay đổi riêng Classroom chỉ chọn kiểm thử Classroom. Thay đổi cấu hình dùng
+chung chọn các service theo cơ chế hiện có. Matrix phát hành vẫn chứa mọi
+service đang bật như thiết kế gốc; không đổi chính sách phát hành trong lần
+tích hợp Classroom.
+
+Workflow Python chạy `uv run pytest` một lần cho collection mặc định của
+service; các thư mục unit/integration/contract chỉ tổ chức test, không tạo
+thêm matrix hoặc bước phân tầng chung. Các test E2E Classroom nằm riêng trong
+`apps/classroom-service/tests/e2e/`, được chạy khi chủ động gọi pytest với cấu
+hình E2E. CI và `ci_local.py` không tự khởi tạo cụm E2E và không cần image
+artifact mới để nối với release. Kết quả kiểm tra cấu hình không thay bằng
+chứng chạy GitHub Actions hoặc deploy staging thật.
 
 Chạy từ thư mục gốc repository:
 
