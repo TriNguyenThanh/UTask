@@ -17,9 +17,11 @@ SQL
 : "${CLASSROOM_DB_NAME:?Missing CLASSROOM_DB_NAME}"
 : "${INTEGRATION_DB_NAME:?Missing INTEGRATION_DB_NAME}"
 : "${NOTIFICATION_DB_NAME:?Missing NOTIFICATION_DB_NAME}"
+: "${AI_DB_NAME:?Missing AI_DB_NAME}"
 
 create_database "$IDENTITY_DB_NAME"
 create_database "$WORK_DB_NAME"
 create_database "$CLASSROOM_DB_NAME"
 create_database "$INTEGRATION_DB_NAME"
 create_database "$NOTIFICATION_DB_NAME"
+create_database "$AI_DB_NAME"
