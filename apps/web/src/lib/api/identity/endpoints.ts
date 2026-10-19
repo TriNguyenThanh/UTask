@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/lib/api/client";
-import type { CurrentUserDto, LoginDataDto, SessionDto } from "@/lib/api/identity/dto";
+import type { CurrentUserDto, LoginDataDto, LogoutAllDataDto, RefreshDataDto, SessionDto } from "@/lib/api/identity/dto";
 
 const ROOT = "/api/auth";
 
@@ -29,4 +29,27 @@ export async function revokeSession(client: ApiClient, sessionId: string) {
 export async function getMe(client: ApiClient) {
   const { data } = await client.requestEnvelope<CurrentUserDto>(`${ROOT}/users/me`);
   return data;
+}
+
+function csrfHeaders(csrfToken: string | null): HeadersInit | undefined {
+  return csrfToken ? { "X-CSRFToken": csrfToken } : undefined;
+}
+
+/** Cookie `refresh_token` (HttpOnly) tự đính kèm; backend bắt CSRF khi có cookie. */
+export async function refresh(client: ApiClient, csrfToken: string | null) {
+  const { data } = await client.requestEnvelope<RefreshDataDto>(`${ROOT}/refresh`, {
+    method: "POST",
+    body: {},
+    headers: csrfHeaders(csrfToken),
+  });
+  return { accessToken: data.access };
+}
+
+export async function logoutAll(client: ApiClient, csrfToken: string | null) {
+  const { data } = await client.requestEnvelope<LogoutAllDataDto>(`${ROOT}/logout-all`, {
+    method: "POST",
+    body: {},
+    headers: csrfHeaders(csrfToken),
+  });
+  return data.revoked_sessions_count;
 }

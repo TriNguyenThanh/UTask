@@ -218,3 +218,79 @@ describe("error mapping", () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 });
+
+describe("refreshSession", () => {
+  function unauthorized() {
+    return jsonResponse({ success: false, message: "x", error: { code: "INVALID_TOKEN" } }, { status: 401 });
+  }
+
+  function setupRefresh(responses: Response[], refreshSession: (failed: string) => Promise<string | null>) {
+    const queue = [...responses];
+    const fetchMock = vi.fn<typeof fetch>(async () => queue.shift() ?? unauthorized());
+    vi.stubGlobal("fetch", fetchMock);
+    const onUnauthorized = vi.fn();
+    const client = createApiClient({ baseUrl: "", getAccessToken: () => "old", onUnauthorized, refreshSession });
+    return { client, fetchMock, onUnauthorized };
+  }
+
+  it("retries once with the new token and keeps the session", async () => {
+    const refreshSession = vi.fn(async () => "new");
+    const { client, fetchMock, onUnauthorized } = setupRefresh(
+      [unauthorized(), jsonResponse({ success: true, data: { ok: 1 } })],
+      refreshSession,
+    );
+
+    const result = await client.requestEnvelope<{ ok: number }>("/api/x", { method: "POST", body: { a: 1 }, idempotencyKey: "k" });
+
+    expect(result.data).toEqual({ ok: 1 });
+    expect(refreshSession).toHaveBeenCalledWith("old");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retry = fetchMock.mock.calls[1][1];
+    const headers = new Headers(retry?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer new");
+    expect(headers.get("Idempotency-Key")).toBe("k");
+    expect(retry?.body).toBe('{"a":1}');
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("signs out when refresh says the session is gone", async () => {
+    const { client, fetchMock, onUnauthorized } = setupRefresh([unauthorized()], async () => null);
+
+    const error = await catchApiError(client.requestEnvelope("/api/x"));
+
+    expect(error.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not loop when the retried request is still 401", async () => {
+    const refreshSession = vi.fn(async () => "new");
+    const { client, fetchMock, onUnauthorized } = setupRefresh([unauthorized(), unauthorized()], refreshSession);
+
+    await catchApiError(client.requestEnvelope("/api/x"));
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the session and reports the original 401 when refresh fails transiently", async () => {
+    const { client, onUnauthorized } = setupRefresh([unauthorized()], async () => {
+      throw new ApiError({ status: 0, message: "mạng" });
+    });
+
+    const error = await catchApiError(client.requestEnvelope("/api/x"));
+
+    expect(error.status).toBe(401);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("does not refresh on non-401 errors", async () => {
+    const refreshSession = vi.fn(async () => "new");
+    const { client } = setupRefresh([jsonResponse({ success: false, error: { code: "X" } }, { status: 403 })], refreshSession);
+
+    await catchApiError(client.requestEnvelope("/api/x"));
+
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+});

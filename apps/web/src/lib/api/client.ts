@@ -6,6 +6,11 @@ export interface ApiClientOptions {
   baseUrl: string;
   getAccessToken: () => string | null;
   onUnauthorized: () => void;
+  /**
+   * Gọi khi 401 với `failedToken`. Trả token mới để thử lại đúng một lần, `null` khi
+   * phiên đã hết (→ `onUnauthorized`). Ném lỗi khi lỗi tạm thời: giữ phiên, báo lỗi gốc.
+   */
+  refreshSession?: (failedToken: string) => Promise<string | null>;
 }
 
 export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
@@ -146,15 +151,21 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   }
 }
 
-export function createApiClient({ baseUrl, getAccessToken, onUnauthorized }: ApiClientOptions): ApiClient {
+export function createApiClient({
+  baseUrl,
+  getAccessToken,
+  onUnauthorized,
+  refreshSession,
+}: ApiClientOptions): ApiClient {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   let lastUnauthorizedToken: string | null = null;
 
   async function execute(
     path: string,
     { idempotencyKey, ...options }: ApiRequestOptions,
+    retryToken?: string,
   ): Promise<{ status: number; payload: unknown }> {
-    const accessToken = getAccessToken();
+    const accessToken = retryToken ?? getAccessToken();
     const headers = new Headers(options.headers);
     headers.set("Accept", "application/json");
 
@@ -200,12 +211,7 @@ export function createApiClient({ baseUrl, getAccessToken, onUnauthorized }: Api
         ? normalizeFieldErrors(legacy.data)
         : {};
 
-    if (response.status === 401 && accessToken && lastUnauthorizedToken !== accessToken) {
-      lastUnauthorizedToken = accessToken;
-      onUnauthorized();
-    }
-
-    throw new ApiError({
+    const apiError = new ApiError({
       status: response.status,
       message: messageFromPayload(payload, response.status),
       fieldErrors,
@@ -214,6 +220,27 @@ export function createApiClient({ baseUrl, getAccessToken, onUnauthorized }: Api
       details: envelopeError?.details,
       retryAfterSeconds: parseRetryAfter(response),
     });
+
+    if (response.status === 401 && accessToken) {
+      // Mỗi request chỉ thử làm mới phiên một lần; lần thử lại vẫn 401 thì coi như hết phiên.
+      if (refreshSession && retryToken === undefined) {
+        let freshToken: string | null;
+        try {
+          freshToken = await refreshSession(accessToken);
+        } catch {
+          throw apiError;
+        }
+        if (freshToken) {
+          return execute(path, { ...options, idempotencyKey }, freshToken);
+        }
+      }
+      if (lastUnauthorizedToken !== accessToken) {
+        lastUnauthorizedToken = accessToken;
+        onUnauthorized();
+      }
+    }
+
+    throw apiError;
   }
 
   return {
