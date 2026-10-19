@@ -217,8 +217,6 @@ export function useDisconnectGitHub() {
     mutationFn: () => disconnectGitHubRequest(client),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studentFlowKeys.settings });
-      // Home reads GitHub sync state from /my-work/github — refresh it too.
-      queryClient.invalidateQueries({ queryKey: myWorkKeys.github });
     },
   });
 }
