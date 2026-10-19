@@ -185,7 +185,7 @@ export function AuthenticatedLayout() {
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const mainRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const [instructorProjectView, setInstructorProjectView] = useState(false);
   // The Teacher chrome (sidebar, top bar) is used only inside /teacher by an
@@ -287,20 +287,20 @@ export function AuthenticatedLayout() {
           inTeacherSpace={inTeacherSpace}
           onOpenMobileNav={() => setMobileOpen(true)}
         />
-        <main
-          ref={mainRef}
-          className="min-w-0 flex-1 pb-8 short:pb-4 lg:min-h-0 lg:overflow-y-auto"
-          id="main-content"
-        >
-          <TeacherChromeContext.Provider value={setInstructorProjectView}>
-            <PageTitleContext.Provider value={setPageTitle}>
-              <Outlet />
-            </PageTitleContext.Provider>
-          </TeacherChromeContext.Provider>
-        </main>
-        <footer className="shrink-0 border-t bg-background px-4 py-2.5 text-center text-[11px] text-muted-foreground lg:px-8">
-          UTask Academic Portal • Quản lý đồ án &amp; Nghiên cứu khoa học sinh viên
-        </footer>
+        {/* The scroll area holds both page and footer, so the footer sits at the
+            end of the content (or the viewport bottom when the page is short). */}
+        <div ref={mainRef} className="flex min-w-0 flex-1 flex-col lg:min-h-0 lg:overflow-y-auto">
+          <main className="min-w-0 flex-1 pb-8 short:pb-4" id="main-content">
+            <TeacherChromeContext.Provider value={setInstructorProjectView}>
+              <PageTitleContext.Provider value={setPageTitle}>
+                <Outlet />
+              </PageTitleContext.Provider>
+            </TeacherChromeContext.Provider>
+          </main>
+          <footer className="shrink-0 border-t bg-background px-4 py-2.5 text-center text-[11px] text-muted-foreground lg:px-8">
+            UTask Academic Portal • Quản lý đồ án &amp; Nghiên cứu khoa học sinh viên
+          </footer>
+        </div>
       </div>
 
       {/* Mobile drawer */}

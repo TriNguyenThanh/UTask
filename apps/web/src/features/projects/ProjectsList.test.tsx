@@ -151,7 +151,7 @@ describe("projects list route", () => {
     });
   });
 
-  it("clicking NEXUS navigates to its backlog", async () => {
+  it("clicking NEXUS navigates to its board", async () => {
     const user = userEvent.setup();
     const result = renderApp(<ProjectsRoute />, {
       route: "/projects",
@@ -165,12 +165,12 @@ describe("projects list route", () => {
     await user.click(nexusLink[0]);
     await waitFor(() => {
       expect(result.router.state.location.pathname).toBe(
-        "/projects/project-nexus/backlog",
+        "/projects/project-nexus/board",
       );
     });
   });
 
-  it("clicking DELI navigates to its backlog", async () => {
+  it("clicking DELI navigates to its board", async () => {
     const user = userEvent.setup();
     // Account-bound default scenario: DELI belongs to the member account.
     const result = renderApp(<ProjectsRoute />, {
@@ -186,8 +186,25 @@ describe("projects list route", () => {
     await user.click(deliLink[0]);
     await waitFor(() => {
       expect(result.router.state.location.pathname).toBe(
-        "/projects/project-deli/backlog",
+        "/projects/project-deli/board",
       );
+    });
+  });
+
+  it("offers one primary 'Vào dự án' action and no Backlog/GitHub shortcuts on the card", async () => {
+    const user = userEvent.setup();
+    const result = renderApp(<ProjectsRoute />, {
+      route: "/projects",
+      routes: fullRoutes(),
+    });
+
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
+    expect(screen.queryByRole("link", { name: /Kế hoạch Backlog/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Mã nguồn GitHub/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jira Board/)).not.toBeInTheDocument();
+    await user.click((await screen.findAllByRole("link", { name: /Vào dự án/ }))[0]);
+    await waitFor(() => {
+      expect(result.router.state.location.pathname).toMatch(/^\/projects\/[^/]+\/board$/);
     });
   });
 
