@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { loginErrorMessage } from "@/features/auth/errorMessages";
-import { resolveLoginTarget } from "@/features/auth/utils";
+import { readLoginNotice, resolveLoginTarget } from "@/features/auth/utils";
 import { ApiError } from "@/lib/api/errors";
 
 const loginSchema = z.object({
@@ -33,6 +33,7 @@ export function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
+  const notice = readLoginNotice(location.state);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -106,6 +107,12 @@ export function LoginForm() {
         </span>
         <div className="flex-grow border-t border-[#e5e3df]" />
       </div>
+
+      {notice ? (
+        <Alert className="mb-4 bg-white" role="status">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {submitError ? (
         <Alert className="mb-4 border-destructive/30 bg-white" variant="destructive">

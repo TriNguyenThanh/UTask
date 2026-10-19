@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { AuthUser } from "@/features/auth/types";
 import { isSafeInternalPath } from "@/lib/navigation/safeInternalPath";
 
@@ -43,4 +45,12 @@ export function resolveLoginTarget(state: unknown, user: AuthUser | null | undef
     return state.returnTo;
   }
   return defaultLandingPath(user);
+}
+
+const loginNoticeSchema = z.object({ notice: z.string().min(1) });
+
+/** Thông báo một lần truyền qua router state khi chuyển về `/login` (ví dụ sau khi đổi mật khẩu). */
+export function readLoginNotice(state: unknown): string | null {
+  const parsed = loginNoticeSchema.safeParse(state);
+  return parsed.success ? parsed.data.notice : null;
 }

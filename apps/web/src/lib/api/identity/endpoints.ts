@@ -1,5 +1,13 @@
 import type { ApiClient } from "@/lib/api/client";
-import type { CurrentUserDto, LoginDataDto, LogoutAllDataDto, RefreshDataDto, SessionDto } from "@/lib/api/identity/dto";
+import type {
+  CurrentUserDto,
+  LoginDataDto,
+  LogoutAllDataDto,
+  PasswordChangeDto,
+  ProfilePatchDto,
+  RefreshDataDto,
+  SessionDto,
+} from "@/lib/api/identity/dto";
 
 const ROOT = "/api/auth";
 
@@ -52,4 +60,14 @@ export async function logoutAll(client: ApiClient, csrfToken: string | null) {
     headers: csrfHeaders(csrfToken),
   });
   return data.revoked_sessions_count;
+}
+
+/** Backend chỉ trả một phần hồ sơ sau khi sửa, nên gọi `getMe` để lấy bản đầy đủ. */
+export async function patchMe(client: ApiClient, body: ProfilePatchDto) {
+  await client.requestEnvelope<unknown>(`${ROOT}/users/me`, { method: "PATCH", body });
+}
+
+/** Thành công thì mọi phiên của tài khoản bị thu hồi. */
+export async function changePassword(client: ApiClient, body: PasswordChangeDto) {
+  await client.requestEnvelope<unknown>(`${ROOT}/password-change`, { method: "POST", body });
 }

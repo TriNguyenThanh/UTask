@@ -20,6 +20,16 @@ describe("loginErrorMessage", () => {
     expect(loginErrorMessage(error(init))).toBe(expected);
   });
 
+  it("maps an unverified email reported as a validation error", () => {
+    const unverified = new ApiError({
+      status: 400,
+      message: "Từ máy chủ",
+      code: "VALIDATION_ERROR",
+      fieldErrors: { non_field_errors: ["E-mail is not verified."] },
+    });
+    expect(loginErrorMessage(unverified)).toBe("Email chưa được xác minh. Hãy kiểm tra email kích hoạt.");
+  });
+
   it("rounds Retry-After up to minutes on rate limit", () => {
     expect(loginErrorMessage(error({ status: 429, code: "RATE_LIMIT_EXCEEDED", retryAfterSeconds: 61 }))).toBe(
       "Bạn đã đăng nhập sai quá nhiều lần. Thử lại sau 2 phút.",
