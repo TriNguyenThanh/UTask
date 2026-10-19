@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import {
   DEMO_PASSWORD,
   MOCK_USERS,
@@ -15,14 +16,8 @@ function sleepFor(scenario: MockScenario): Promise<void> | undefined {
   return scenario === "slow-network" ? delay(1200) : undefined;
 }
 
-function parseTokenUserId(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  const match = /^Bearer mock-access:([^:]+):/.exec(header);
-  return match?.[1] ?? null;
-}
-
 function userForToken(db: MockDatabase, request: Request): AuthUser | null {
-  const userId = parseTokenUserId(request);
+  const userId = resolveMockUserId(request);
   return userId ? db.authUsersById[userId] ?? null : null;
 }
 

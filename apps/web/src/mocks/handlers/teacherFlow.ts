@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import {
   buildTeacherCourseDetail,
   STALE_AFTER_DAYS,
@@ -30,11 +31,6 @@ const ROOT = "/api/work/api/v1/teacher";
 
 const SERVER_ERROR = "Lỗi hệ thống, vui lòng thử lại sau.";
 
-function parseTokenUserId(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  return /^Bearer mock-access:([^:]+):/.exec(header)?.[1] ?? null;
-}
-
 function sleepFor(scenario: MockScenario): Promise<void> | undefined {
   return scenario === "slow-network" ? delay(1200) : undefined;
 }
@@ -58,7 +54,7 @@ export function createTeacherFlowHandlers(
     { failsInPartialError = false }: { failsInPartialError?: boolean } = {},
   ): Promise<Response> {
     await sleepFor(scenario);
-    const userId = parseTokenUserId(request);
+    const userId = resolveMockUserId(request);
     const account = userId ? db.authUsersById[userId] : undefined;
     if (!userId || !account) {
       return HttpResponse.json({ detail: "Phiên đăng nhập đã hết hạn." }, { status: 401 });
