@@ -23,6 +23,7 @@ import {
   type MockProjectViewer,
 } from "@/mocks/data/relationships";
 import type { MockRepository } from "@/mocks/data/storage";
+import { historyCourseIdsFor } from "@/mocks/data/courseHistory";
 
 const ROOT = "/api/work/api/v1";
 
@@ -103,7 +104,7 @@ function clockFor(viewer: MockProjectViewer): Date {
  * not unlock them (Teachers read classes through the /teacher/* endpoints).
  */
 function accessibleCoursesFor(userId: string): readonly string[] {
-  return enrolledCoursesFor(userId);
+  return [...enrolledCoursesFor(userId), ...historyCourseIdsFor(userId)];
 }
 
 /**

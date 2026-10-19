@@ -1,83 +1,19 @@
 import { GraduationCap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
-import { Badge } from "@/components/ui/badge";
+import { CourseCard } from "@/features/courses/components/CourseCard";
+import { CourseToolbar } from "@/features/courses/components/CourseToolbar";
+import {
+  groupBySemester,
+  listSemesters,
+  matchesFilters,
+  summarizeCourses,
+  type StatusFilter,
+} from "@/features/courses/lib/courseList";
 import { useMyWorkOverview } from "@/features/my-work/queries";
-import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
-
-function membershipBadge(membership: TeamMembership): {
-  label: string;
-  className: string;
-} {
-  switch (membership.status) {
-    case "none":
-      return {
-        label: "Cần lập nhóm",
-        className: "border-amber-200 bg-amber-50 text-amber-900",
-      };
-    case "pending":
-      return {
-        label: "Chờ duyệt",
-        className: "border-sky-200 bg-sky-50 text-sky-900",
-      };
-    case "assigned":
-      return membership.role === "leader"
-        ? {
-            label: "Trưởng nhóm",
-            className: "border-indigo-200 bg-indigo-50 text-indigo-900",
-          }
-        : {
-            label: "Thành viên",
-            className: "border-emerald-200 bg-emerald-50 text-emerald-900",
-          };
-  }
-}
-
-function courseCtaLabel(membership: TeamMembership): string {
-  if (membership.status === "none") return "Thành lập nhóm";
-  if (membership.status === "pending") return "Theo dõi yêu cầu";
-  return "Xem nhóm & Đề tài";
-}
-
-function CourseRow({ enrollment }: { enrollment: CourseEnrollment }) {
-  const badge = membershipBadge(enrollment.membership);
-  return (
-    <tr className="border-b transition-colors last:border-b-0 hover:bg-muted/40">
-      <td className="px-3 py-3">
-        <Badge variant="secondary" className="font-mono font-semibold">
-          {enrollment.courseCode}
-        </Badge>
-      </td>
-      <td className="px-3 py-3">
-        <Link
-          to={`/courses/${enrollment.courseId}/team`}
-          className="font-medium hover:text-primary"
-        >
-          {enrollment.courseName}
-        </Link>
-      </td>
-      <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
-        {enrollment.semester}
-      </td>
-      <td className="px-3 py-3">
-        <Badge variant="outline" className={badge.className}>
-          {badge.label}
-        </Badge>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <Link
-          to={`/courses/${enrollment.courseId}/team`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-        >
-          {courseCtaLabel(enrollment.membership)}
-        </Link>
-      </td>
-    </tr>
-  );
-}
 
 function NoCoursesState() {
   return (
@@ -96,6 +32,9 @@ function NoCoursesState() {
 
 export function Component() {
   const overviewQuery = useMyWorkOverview();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [semester, setSemester] = useState("all");
   const enrollments = overviewQuery.data?.enrollments ?? [];
 
   if (overviewQuery.isPending) {
@@ -113,29 +52,69 @@ export function Component() {
     );
   }
 
+  const semesters = listSemesters(enrollments);
+  // Số liệu và chip đếm theo học kỳ đang chọn, khớp với danh sách bên dưới.
+  const inSemester = enrollments.filter(
+    (enrollment) => semester === "all" || enrollment.semester === semester,
+  );
+  const counts = summarizeCourses(inSemester);
+  const visible = inSemester.filter((enrollment) =>
+    matchesFilters(enrollment, query, status, semester),
+  );
+
   return (
     <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+      {/* Tiêu đề hiển thị nằm ở Top bar. */}
+      <h1 className="sr-only">Môn học</h1>
+
       {enrollments.length === 0 ? (
         <NoCoursesState />
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b text-xs font-semibold text-muted-foreground">
-                <th scope="col" className="px-3 py-2.5">Mã môn</th>
-                <th scope="col" className="px-3 py-2.5">Tên môn học</th>
-                <th scope="col" className="hidden px-3 py-2.5 sm:table-cell">Học kỳ</th>
-                <th scope="col" className="px-3 py-2.5">Trạng thái nhóm</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrollments.map((enrollment) => (
-                <CourseRow key={enrollment.courseId} enrollment={enrollment} />
+        <section aria-labelledby="course-list-heading" className="space-y-4">
+          <h2 id="course-list-heading" className="text-sm font-bold">
+            Môn học của bạn
+          </h2>
+          <CourseToolbar
+            query={query}
+            onQueryChange={setQuery}
+            status={status}
+            onStatusChange={setStatus}
+            counts={counts}
+            semesters={semesters}
+            semester={semester}
+            onSemesterChange={setSemester}
+            shown={visible.length}
+            total={inSemester.length}
+          />
+          {visible.length === 0 ? (
+            <EmptyState
+              title="Không có môn học phù hợp"
+              description="Thử đổi từ khóa hoặc bỏ bớt bộ lọc."
+            />
+          ) : (
+            <div className="space-y-6">
+              {groupBySemester(visible).map((group, index) => (
+                <section
+                  key={group.semester}
+                  aria-labelledby={`semester-heading-${index}`}
+                  className="space-y-3"
+                >
+                  <h3
+                    id={`semester-heading-${index}`}
+                    className="border-b pb-2 text-sm font-semibold"
+                  >
+                    {group.semester}
+                  </h3>
+                  <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.courses.map((enrollment) => (
+                      <CourseCard key={enrollment.courseId} enrollment={enrollment} />
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

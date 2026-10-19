@@ -6,6 +6,7 @@ import type {
   MyWorkOverview,
   TeamMembership,
 } from "@/features/my-work/types";
+import { historyEnrollmentsFor } from "@/mocks/data/courseHistory";
 import { MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
 import {
   MOCK_TEAM_PROJECTS,
@@ -408,6 +409,9 @@ export function buildOverviewForUser(
       ];
     },
   );
+
+  // Past terms come after the current ones; they are read-only history.
+  enrollments.push(...historyEnrollmentsFor(userId));
 
   const tasks = tasksForUser(userId, now);
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LEADER_ID, MEMBER_ID, MOCK_USERS, STUDENT_ID, TEACHER2_ID, TEACHER3_ID, TEACHER_ID } from "@/mocks/data/database";
 import { LARGE_COURSE_ID } from "@/mocks/data/largeClass";
 import { MOCK_COURSE_META, MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
+import { currentSemesterEnrollments } from "@/features/my-work/currentSemester";
 import { buildOverviewForUser } from "@/mocks/data/myWork";
 import {
   MOCK_COURSE_INSTRUCTORS,
@@ -161,7 +162,8 @@ describe("Student view is derived from the graph", () => {
   it("enrolls each login account in the classes the graph lists", () => {
     for (const userId of LOGIN_STUDENT_IDS) {
       const overview = buildOverviewForUser(userId);
-      expect(overview.enrollments.map((e) => e.courseId).sort()).toEqual(
+      // Past-term history (courseHistory.ts) is deliberately outside the graph.
+      expect(currentSemesterEnrollments(overview).map((e) => e.courseId).sort()).toEqual(
         [...enrolledCoursesFor(userId)].sort(),
       );
     }
@@ -219,7 +221,7 @@ describe("Student view is derived from the graph", () => {
 describe("Teacher view matches the Student view", () => {
   it("shows each login student's team exactly as that student's own Home does", () => {
     for (const userId of LOGIN_STUDENT_IDS) {
-      for (const enrollment of buildOverviewForUser(userId).enrollments) {
+      for (const enrollment of currentSemesterEnrollments(buildOverviewForUser(userId))) {
         const row = buildTeacherStudents(enrollment.courseId).find((s) => s.userId === userId);
         expect(row, `${userId} in ${enrollment.courseId}`).toBeDefined();
         const { membership } = enrollment;

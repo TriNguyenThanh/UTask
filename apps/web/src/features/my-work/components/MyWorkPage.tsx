@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useMyWorkGitHub, useMyWorkOverview } from "@/features/my-work/queries";
 import { canOpenTeamWorkspace } from "@/features/my-work/permissions";
+import { currentSemesterEnrollments } from "@/features/my-work/currentSemester";
 import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
 import { DashboardSummary } from "@/features/my-work/components/DashboardSummary";
 import { PriorityBanner, derivePriorityAlert } from "@/features/my-work/components/PriorityBanner";
@@ -100,14 +101,14 @@ export function MyWorkPage() {
   const now = useMemo(() => new Date(), []);
 
   const overview = overviewQuery.data;
-  const enrollments = overview?.enrollments ?? [];
+  const enrollments = useMemo(() => currentSemesterEnrollments(overview), [overview]);
 
   const alert = useMemo(() => {
     if (!overview) {
       return null;
     }
-    return derivePriorityAlert(overview.enrollments, overview.sprints, overview.tasks, now);
-  }, [overview, now]);
+    return derivePriorityAlert(enrollments, overview.sprints, overview.tasks, now);
+  }, [overview, enrollments, now]);
 
   if (overviewQuery.isPending) {
     return <PageSkeleton label="Đang tải bàn làm việc" />;
@@ -128,7 +129,7 @@ export function MyWorkPage() {
     return <NoCoursesHome />;
   }
 
-  if (overview.enrollments.length === 0) {
+  if (enrollments.length === 0) {
     return <NoCoursesHome />;
   }
 
@@ -173,7 +174,7 @@ export function MyWorkPage() {
 
       <MyTasksSection
         tasks={overview.tasks}
-        courses={overview.enrollments.map((enrollment) => ({
+        courses={enrollments.map((enrollment) => ({
           id: enrollment.courseId,
           code: enrollment.courseCode,
         }))}
