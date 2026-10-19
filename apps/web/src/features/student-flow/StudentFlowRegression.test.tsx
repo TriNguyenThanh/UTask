@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouteObject } from "react-router-dom";
@@ -315,8 +315,9 @@ describe("membership-bound fixtures", () => {
     expect(
       screen.getByRole("link", { name: /Đăng nhập email \+ password/ }),
     ).toBeInTheDocument();
-    expect((await screen.findAllByText(/Bạn chưa tham gia nhóm nào/i)).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Yêu cầu tham gia Team PHOENIX/)).toBeInTheDocument();
+    const courses = await screen.findByRole("region", { name: "Môn học" });
+    expect(within(courses).getByText("Cần lập nhóm")).toBeInTheDocument();
+    expect(within(courses).getByText("Chờ duyệt")).toBeInTheDocument();
   });
 
   it("keeps the notifications list scoped to accessible projects", async () => {

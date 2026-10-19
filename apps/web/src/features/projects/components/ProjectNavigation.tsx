@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 
-import { cn } from "@/lib/utils";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 
 interface ProjectNavigationProps {
   projectId: string;
@@ -26,10 +26,7 @@ export function ProjectNavigation({
   const { pathname } = useLocation();
 
   return (
-    <nav
-      aria-label="Project navigation"
-      className="flex items-center gap-5 overflow-x-auto pt-2 text-sm"
-    >
+    <nav aria-label="Project navigation" className={`${segmentedTabsListClass} my-3`}>
       {tabs
         .filter((tab) => tab.id !== "settings" || canManageSettings)
         .map((tab) => {
@@ -40,12 +37,7 @@ export function ProjectNavigation({
               key={tab.id}
               to={to}
               aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "whitespace-nowrap border-b-2 pb-2 pt-1 transition-colors",
-                isActive
-                  ? "border-primary font-bold text-foreground"
-                  : "border-transparent font-medium text-muted-foreground hover:text-foreground focus-visible:text-foreground",
-              )}
+              className={segmentedTabClass(isActive)}
             >
               {tab.label}
             </Link>

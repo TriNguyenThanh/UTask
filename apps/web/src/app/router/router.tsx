@@ -34,24 +34,27 @@ export const appRoutes: RouteObject[] = [
       { path: "/", element: <HomeRedirect /> },
       {
         path: "/my-work",
-        handle: { crumb: "Trang Chủ" },
+        handle: { title: "Trang chủ" },
         lazy: () => import("@/features/my-work/routes/MyWorkRoute"),
       },
       {
         path: "/courses",
+        handle: { title: "Môn học" },
         lazy: () => import("@/features/courses/routes/CoursesRoute"),
       },
       {
         path: "/courses/:courseId/team",
+        handle: { title: "Môn học" },
         lazy: () => import("@/features/courses/routes/CourseTeamRoute"),
       },
       {
         path: "/projects",
-        handle: { crumb: "Dự án" },
+        handle: { title: "Dự án môn học" },
         lazy: () => import("@/features/projects/routes/ProjectsRoute"),
       },
       {
         path: "/projects/:projectId",
+        handle: { title: "Dự án" },
         lazy: () => import("@/features/projects/routes/ProjectWorkspaceLayout"),
         children: [
           { index: true, element: <Navigate to="backlog" replace /> },
@@ -81,41 +84,62 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "/teacher",
+        handle: { title: "Không gian giảng viên" },
         element: <RequireTeacherSpace />,
         children: [
-          { index: true, lazy: () => import("@/features/teacher/routes/TeacherHomeRoute") },
-          { path: "courses", lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute") },
-          { path: "courses/new", lazy: () => import("@/features/teacher/routes/TeacherCourseCreateRoute") },
+          {
+            index: true,
+            handle: { title: "Bàn làm việc giảng viên" },
+            lazy: () => import("@/features/teacher/routes/TeacherHomeRoute"),
+          },
+          {
+            path: "courses",
+            handle: { title: "Lớp phụ trách" },
+            lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute"),
+          },
+          {
+            path: "courses/new",
+            handle: { title: "Tạo lớp" },
+            lazy: () => import("@/features/teacher/routes/TeacherCourseCreateRoute"),
+          },
           {
             path: "courses/:courseId",
+            handle: { title: "Lớp phụ trách" },
             lazy: () => import("@/features/teacher/routes/TeacherCourseLayout"),
             children: [
               {
                 index: true,
+                handle: { title: "Tổng quan lớp" },
                 lazy: () => import("@/features/teacher/routes/TeacherCourseOverviewRoute"),
               },
               {
                 path: "students",
+                handle: { title: "Sinh viên" },
                 lazy: () => import("@/features/teacher/routes/TeacherCourseStudentsRoute"),
               },
               {
                 path: "students/import",
+                handle: { title: "Nhập sinh viên" },
                 lazy: () => import("@/features/teacher/routes/TeacherStudentImportRoute"),
               },
               {
                 path: "settings",
+                handle: { title: "Cài đặt lớp" },
                 lazy: () => import("@/features/teacher/routes/TeacherCourseSettingsRoute"),
               },
               {
                 path: "teams",
+                handle: { title: "Nhóm đồ án" },
                 lazy: () => import("@/features/teacher/routes/TeacherCourseTeamsRoute"),
               },
               {
                 path: "teams/:teamId",
+                handle: { title: "Chi tiết nhóm" },
                 lazy: () => import("@/features/teacher/routes/TeacherTeamDetailRoute"),
               },
               {
                 path: "oversight",
+                handle: { title: "Giám sát" },
                 lazy: () => import("@/features/teacher/routes/TeacherCourseOversightRoute"),
               },
             ],
@@ -124,18 +148,22 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "/notifications",
+        handle: { title: "Trung tâm Thông báo" },
         lazy: () => import("@/features/notifications/routes/NotificationsRoute"),
       },
       {
         path: "/settings/profile",
+        handle: { title: "Cài đặt Cá nhân & Tích hợp" },
         lazy: () => import("@/features/notifications/routes/SettingsProfileRoute"),
       },
       {
         path: "/settings/integrations",
+        handle: { title: "Cài đặt Cá nhân & Tích hợp" },
         lazy: () => import("@/features/notifications/routes/SettingsIntegrationsRoute"),
       },
       {
         path: "/settings/security",
+        handle: { title: "Cài đặt Cá nhân & Tích hợp" },
         lazy: () => import("@/features/notifications/routes/SettingsSecurityRoute"),
       },
       { path: "*", lazy: () => import("@/app/router/NotFoundRoute") },

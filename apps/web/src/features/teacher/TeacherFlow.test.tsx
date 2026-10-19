@@ -806,7 +806,8 @@ describe("Cache across accounts", () => {
     await screen.findByRole("region", { name: "Danh sách lớp" });
     expect(view.queryClient.getQueryCache().findAll({ queryKey: ["teacher"] }).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /Đăng xuất/, hidden: true }));
+    await user.click(screen.getAllByRole("button", { name: /@utask\.test/ })[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /Đăng xuất/ }));
     await waitFor(() => expect(pathname(view.router)).toBe("/login"));
     expect(view.queryClient.getQueryCache().findAll({ queryKey: ["teacher"] })).toHaveLength(0);
   });
@@ -895,7 +896,7 @@ describe("Navigation quality", () => {
   it("uses a Teacher top bar without Student actions", async () => {
     setup("/teacher");
     await screen.findByRole("heading", { name: "Bàn làm việc giảng viên" });
-    expect(screen.getByText("Không gian giảng viên", { selector: "p" })).toBeInTheDocument();
+    expect(within(screen.getAllByRole("banner")[0]).getByText("Bàn làm việc giảng viên")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Tạo task mới/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Đồng bộ Git/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Điểm danh QR")).not.toBeInTheDocument();
@@ -918,7 +919,7 @@ describe("Notifications for a teacher", () => {
 
   it("shows teacher2 nothing from SE330", async () => {
     setup("/notifications", teacher2TestSession);
-    await screen.findByRole("heading", { level: 1 });
+    await screen.findByRole("textbox", { name: "Tìm kiếm thông báo" });
     expect(screen.queryByText(/Lời mời ghép nhóm từ Team ORBIT/)).not.toBeInTheDocument();
   });
 
@@ -936,7 +937,7 @@ describe("Student Flow is unchanged for students", () => {
     setup("/my-work", studentTestSession);
     expect(await screen.findByText(/Team NEXUS · Leader/)).toBeInTheDocument();
     expect(screen.getByText(/Team DELI · Member/)).toBeInTheDocument();
-    expect(screen.getByText(/Yêu cầu tham gia Team PHOENIX/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Môn học" })).getByText("Chờ duyệt")).toBeInTheDocument();
   });
 
   it("shows the unteamed IT3090 formation view with the graph's classmates", async () => {

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouteObject } from "react-router-dom";
@@ -75,11 +75,14 @@ describe("my-work mixed scenario", () => {
     expect(screen.getByText(/Team NEXUS · Leader/)).toBeInTheDocument();
     expect(screen.getByText(/Team DELI · Member/)).toBeInTheDocument();
 
-    // Pending request surfaces with its team name.
-    expect(screen.getByText(/Yêu cầu tham gia Team PHOENIX/)).toBeInTheDocument();
-
-    // A course without team shows its own hint, not an empty dashboard.
-    expect(screen.getByText(/IT3090: Bạn chưa tham gia nhóm nào/i)).toBeInTheDocument();
+    // The latest-courses list shows each course with its own membership state.
+    const courses = screen.getByRole("region", { name: "Môn học" });
+    expect(within(courses).getByText("Chờ duyệt")).toBeInTheDocument();
+    expect(within(courses).getByText("Cần lập nhóm")).toBeInTheDocument();
+    expect(within(courses).getByRole("link", { name: "Kiểm thử Phần mềm SE331" })).toHaveAttribute(
+      "href",
+      "/courses/course-se331/team",
+    );
   });
 });
 
@@ -91,9 +94,8 @@ describe("my-work no-team scenario", () => {
       routes: myWorkRoutes(),
     });
 
-    expect(
-      await screen.findAllByText(/Bạn chưa tham gia nhóm nào/i),
-    ).toHaveLength(4);
+    const courses = await screen.findByRole("region", { name: "Môn học" });
+    expect(within(courses).getAllByText("Cần lập nhóm")).toHaveLength(4);
 
     // No fabricated sprint rows.
     expect(screen.queryByText(/Tiến độ Sprint$/)).not.toBeInTheDocument();
@@ -109,42 +111,13 @@ describe("my-work pending membership", () => {
       routes: myWorkRoutes(),
     });
 
-    expect((await screen.findAllByText(/Team PHOENIX/)).length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(/sẽ mở sau khi Leader duyệt/i),
-    ).toBeInTheDocument();
+    const courses = await screen.findByRole("region", { name: "Môn học" });
+    expect(within(courses).getAllByText("Chờ duyệt").length).toBeGreaterThan(0);
+    // The old pending card with its own copy is gone; Home only lists the course.
+    expect(screen.queryByText(/sẽ mở sau khi Leader duyệt/i)).not.toBeInTheDocument();
     // No "Vào Board" action for a pending member.
     const boardButtons = screen.queryAllByRole("link", { name: /Vào Board/ });
     expect(boardButtons).toHaveLength(0);
-  });
-});
-
-describe("role-based actions", () => {
-  it("hides leader-only create-task affordance from members", async () => {
-    useMyWorkScenario("my-work-member");
-    renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
-      route: "/my-work",
-      routes: myWorkRoutes(),
-    });
-    await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
-    const createButton = screen.getByRole("button", { name: /Tạo task mới/ });
-    expect(createButton).toBeDisabled();
-    expect(createButton).toHaveAttribute(
-      "title",
-      "Chỉ Leader nhóm mới có thể tạo task",
-    );
-  });
-
-  it("enables create-task affordance for leaders", async () => {
-    useMyWorkScenario("my-work-leader");
-    renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
-      route: "/my-work",
-      routes: myWorkRoutes(),
-    });
-    await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
-    const createButton = screen.getByRole("button", { name: /Tạo task mới/ });
-    expect(createButton).toBeDisabled(); // placeholder until Board slice exists
-    expect(createButton).toHaveAttribute("title", "Tạo task mới sẽ khả dụng ở slice Board");
   });
 });
 
@@ -177,42 +150,18 @@ describe("task and sprint interplay", () => {
   });
 });
 
-describe("github section resilience", () => {
-  it("shows retryable error for github while tasks still render", async () => {
+describe("home without GitHub activity", () => {
+  it("renders tasks and never shows or fails on the GitHub section", async () => {
     useMyWorkScenario("my-work-github-error");
     renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
       route: "/my-work",
       routes: myWorkRoutes(),
     });
 
-    // Task rows still appear despite the GitHub endpoint failing.
     expect(await screen.findByText("NEXUS-104")).toBeInTheDocument();
-    // GitHub section shows its own error with a retry button.
-    expect(
-      await screen.findByRole("button", { name: "Thử lại" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Không thể tải dữ liệu/i),
-    ).toBeInTheDocument();
-  });
-
-  it("recovers github section after retry succeeds", async () => {
-    useMyWorkScenario("my-work-github-error");
-    renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
-      route: "/my-work",
-      routes: myWorkRoutes(),
-    });
-    await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
-
-    // Flip to a healthy handler, then retry.
-    server.use(...createMyWorkHandlers("my-work-mixed", createMemoryRepository("my-work-mixed")));
-    const user = userEvent.setup();
-    const retry = await screen.findByRole("button", { name: "Thử lại" });
-    await user.click(retry);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Đồng bộ Webhook tự động/)).toBeInTheDocument();
-    });
+    expect(screen.queryByText(/Hoạt động GitHub/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Đồng bộ Webhook tự động/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Thử lại" })).not.toBeInTheDocument();
   });
 });
 

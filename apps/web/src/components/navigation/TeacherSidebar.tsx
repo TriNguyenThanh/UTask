@@ -1,4 +1,4 @@
-import { Bell, BookOpen, GraduationCap, Home, Settings } from "lucide-react";
+import { BookOpen, GraduationCap, Home } from "lucide-react";
 import { NavLink, useMatch } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isStudentAccount } from "@/features/auth/utils";
 import { courseLabel } from "@/features/teacher/components/shared";
+import { SidebarNavItem } from "@/components/navigation/SidebarNavItem";
 import { useTeacherCourses } from "@/lib/query/teacherFlowHooks";
 import { cn } from "@/lib/utils";
 
@@ -16,52 +17,46 @@ const COURSE_SECTIONS = [
   { label: "Giám sát", to: "/oversight", end: false },
 ] as const;
 
-const itemClass = ({ isActive }: { isActive: boolean }) =>
-  cn(
-    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-    isActive
-      ? "bg-accent font-semibold text-accent-foreground"
-      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-  );
+
 
 /**
  * Navigation for the Teacher space. It reads only Teacher data (the classes
  * this account is assigned to) — never the Student overview.
  */
-export function TeacherSidebar() {
+export function TeacherSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const { user } = useAuth();
   const courses = useTeacherCourses();
   const openCourseId = useMatch("/teacher/courses/:courseId/*")?.params.courseId;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto py-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 short:gap-3 overflow-y-auto overflow-x-hidden px-3 py-3 short:py-2">
       <nav aria-label="Điều hướng giảng viên" className="space-y-0.5">
-        <NavLink to="/teacher" end className={itemClass}>
-          <Home className="size-4" aria-hidden />
-          Trang chủ
-        </NavLink>
-        <NavLink to="/teacher/courses" end className={itemClass}>
-          <BookOpen className="size-4" aria-hidden />
-          Lớp phụ trách
-        </NavLink>
-        <NavLink to="/notifications" className={itemClass}>
-          <Bell className="size-4" aria-hidden />
-          Thông báo
-        </NavLink>
-        <NavLink to="/settings/profile" className={itemClass}>
-          <Settings className="size-4" aria-hidden />
-          Cài đặt tài khoản
-        </NavLink>
+        <SidebarNavItem to="/teacher" end icon={Home} label="Trang chủ" collapsed={collapsed} />
+        <SidebarNavItem
+          to="/teacher/courses"
+          end
+          icon={BookOpen}
+          label="Lớp phụ trách"
+          collapsed={collapsed}
+        />
         {isStudentAccount(user) ? (
-          <NavLink to="/my-work" className={itemClass}>
-            <GraduationCap className="size-4" aria-hidden />
-            Không gian sinh viên
-          </NavLink>
+          <SidebarNavItem
+            to="/my-work"
+            icon={GraduationCap}
+            label="Không gian sinh viên"
+            collapsed={collapsed}
+          />
         ) : null}
       </nav>
 
-      <div>
-        <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div
+        className={cn(
+          "transition-[opacity,visibility] duration-200",
+          collapsed && "invisible opacity-0",
+        )}
+        aria-hidden={collapsed}
+      >
+        <p className="whitespace-nowrap px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Lớp phụ trách
         </p>
         <CourseNavList courses={courses} openCourseId={openCourseId} />

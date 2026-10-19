@@ -1,14 +1,14 @@
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import {
   ArrowRight,
   Code,
   Flag,
   GraduationCap,
-  KanbanSquare,
-  ListTodo,
   Search,
   Settings,
   Users,
 } from "lucide-react";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -64,7 +64,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
     sprint && sprint.totalPoints > 0
       ? Math.round((sprint.completedPoints / sprint.totalPoints) * 100)
       : 0;
-  const backlogPath = `/projects/${project.projectId}/backlog`;
+  const boardPath = `/projects/${project.projectId}/board`;
   // canManageProjectSettings chỉ đọc role; aiEnabled không liên quan quyền settings.
   const canManageSettings = canManageProjectSettings({
     role: project.role,
@@ -111,7 +111,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
             {project.projectKey}
           </Badge>
           <Link
-            to={backlogPath}
+            to={boardPath}
             className="text-base font-bold leading-snug tracking-tight transition-colors hover:text-primary md:text-lg"
           >
             {project.name}
@@ -171,18 +171,6 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-            <Link to={backlogPath}>
-              <ListTodo className="size-3.5" aria-hidden />
-              Kế hoạch Backlog
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-            <Link to={`/projects/${project.projectId}/code`}>
-              <Code className="size-3.5" aria-hidden />
-              Mã nguồn GitHub
-            </Link>
-          </Button>
           {canManageSettings ? (
             <Button
               asChild
@@ -197,9 +185,8 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
             </Button>
           ) : null}
           <Button asChild size="sm" className="h-8 text-xs font-bold">
-            <Link to={`/projects/${project.projectId}/board`}>
-              <KanbanSquare className="size-3.5" aria-hidden />
-              Mở Jira Board
+            <Link to={boardPath}>
+              Vào dự án
               <ArrowRight className="size-3.5" aria-hidden />
             </Link>
           </Button>
@@ -216,7 +203,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 function ProjectsSkeleton() {
   return (
     <div
-      className="mx-auto max-w-5xl space-y-6 p-4 md:p-6"
+      className="page-container space-y-6 p-4 md:p-6"
       role="status"
       aria-label="Đang tải danh sách dự án"
     >
@@ -276,35 +263,16 @@ export default function ProjectsRoute() {
     : roleProjects;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-      {/* Page title */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-          Dự án Đồ án Môn học
-        </h1>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground md:text-sm">
-          Không gian làm việc Jira Software của các đồ án môn học trong học kỳ.
-          Theo dõi tiến độ Sprint và tích hợp mã nguồn Git theo thời gian thực.
-        </p>
-      </div>
-
+    <div className="page-container space-y-5 p-4 md:p-6">
+      <div className={cn("space-y-5", sectionPanelClass)}>
       {/* Current / archived tabs */}
-      <div
-        className="flex items-center gap-6 border-b"
-        role="tablist"
-        aria-label="Phạm vi thời gian"
-      >
+      <div className={segmentedTabsListClass} role="tablist" aria-label="Phạm vi thời gian">
         <button
           type="button"
           role="tab"
           aria-selected={tab === "current"}
           onClick={() => setTab("current")}
-          className={cn(
-            "flex items-center gap-2 border-b-2 pb-2.5 text-xs tracking-tight transition-colors",
-            tab === "current"
-              ? "border-primary font-bold text-primary"
-              : "border-transparent font-medium text-muted-foreground hover:text-foreground",
-          )}
+          className={segmentedTabClass(tab === "current")}
         >
           Kỳ hiện tại
           <Badge
@@ -320,12 +288,7 @@ export default function ProjectsRoute() {
           role="tab"
           aria-selected={tab === "archived"}
           onClick={() => setTab("archived")}
-          className={cn(
-            "flex items-center gap-2 border-b-2 pb-2.5 text-xs tracking-tight transition-colors",
-            tab === "archived"
-              ? "border-primary font-bold text-primary"
-              : "border-transparent font-medium text-muted-foreground hover:text-foreground",
-          )}
+          className={segmentedTabClass(tab === "archived")}
         >
           Đã lưu trữ
           <Badge
@@ -377,16 +340,6 @@ export default function ProjectsRoute() {
           ))}
         </div>
       </div>
-
-      {/* Result count */}
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Hiển thị{" "}
-        <span className="font-bold text-foreground">
-          {visible.length}/{tabProjects.length}
-        </span>{" "}
-        đồ án {tab === "current" ? "đang diễn ra" : "đã lưu trữ"}
-      </p>
-
       {/* Card list / empty states */}
       {tabProjects.length === 0 ? (
         tab === "current" ? (
@@ -440,6 +393,7 @@ export default function ProjectsRoute() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

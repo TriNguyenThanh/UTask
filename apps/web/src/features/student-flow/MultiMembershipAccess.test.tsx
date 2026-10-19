@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RouteObject } from "react-router-dom";
@@ -75,9 +75,10 @@ describe("multi-membership access (SV01, one session)", () => {
     // Sprint cards expose the per-class role, not a global account role.
     expect(screen.getByText(/Team NEXUS · Leader/)).toBeInTheDocument();
     expect(screen.getByText(/Team DELI · Member/)).toBeInTheDocument();
-    // Unteamed class A and pending request remain visible too.
-    expect(screen.getByText(/Bạn chưa tham gia nhóm nào/i)).toBeInTheDocument();
-    expect(screen.getByText(/Yêu cầu tham gia Team PHOENIX/)).toBeInTheDocument();
+    // Unteamed class and pending request remain visible in the course list.
+    const courses = screen.getByRole("region", { name: "Môn học" });
+    expect(within(courses).getByText("Cần lập nhóm")).toBeInTheDocument();
+    expect(within(courses).getByText("Chờ duyệt")).toBeInTheDocument();
   });
 
   it("deep-links into NEXUS and shows the leader UI there", async () => {

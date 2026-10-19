@@ -4,6 +4,7 @@ import type {
 } from "@/features/notifications/types";
 import type { CourseDetail, TeamMember } from "@/features/courses/types";
 
+import { historyCourseDetailFor } from "@/mocks/data/courseHistory";
 import { MEMBER_ID, STUDENT_ID } from "@/mocks/data/database";
 import { MOCK_COURSE_META, MOCK_PEOPLE, MOCK_TEAM_META } from "@/mocks/data/directory";
 import {
@@ -369,6 +370,8 @@ export function courseDetailForScenario(
   userId: string,
   now = new Date(ANCHOR_DATE),
 ): CourseDetail | null {
+  const past = historyCourseDetailFor(courseId, userId);
+  if (past) return past;
   switch (courseId) {
     case "course-se330":
       if (scenario === "student-no-team" || scenario === "student-join-pending") {
