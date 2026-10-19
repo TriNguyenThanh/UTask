@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  CheckCircle2,
   Clock,
   FileText,
   GitBranch,
@@ -14,6 +13,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { usePageTitle } from "@/app/layouts/PageTitleContext";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -864,9 +864,7 @@ function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
       <div className="space-y-2 border-b pb-5">
         <div className="flex items-center gap-2.5">
           <Badge className="tracking-wide">{course.courseCode}</Badge>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Nhóm Đồ án &amp; Đăng ký Đề tài
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">{course.courseName}</h1>
         </div>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>
@@ -912,9 +910,17 @@ function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
 /* Route component                                                     */
 /* ------------------------------------------------------------------ */
 
+function teamPageTitle(status: CourseDetail["membership"]["status"] | undefined): string {
+  if (status === "assigned") return "Nhóm đồ án & Đăng ký đề tài";
+  if (status === "pending") return "Yêu cầu tham gia nhóm";
+  if (status === "none") return "Thành lập nhóm đồ án";
+  return "Môn học";
+}
+
 export function Component() {
   const { courseId } = useParams();
   const courseQuery = useCourseDetail(courseId ?? "");
+  usePageTitle(teamPageTitle(courseQuery.data?.membership.status));
 
   if (courseQuery.isPending) {
     return <PageSkeleton label="Đang tải thông tin môn học" />;
@@ -924,14 +930,14 @@ export function Component() {
     const apiError =
       courseQuery.error instanceof ApiError ? courseQuery.error : null;
     return (
-      <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="page-container space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         {apiError?.status === 404 ? (
           <EmptyState
             title="Không tìm thấy môn học"
             description="Môn học này không tồn tại hoặc bạn chưa được đăng ký. Hãy kiểm tra lại đường dẫn hoặc quay lại danh sách môn học."
             action={
               <Button asChild variant="outline" size="sm">
-                <Link to="/courses">Về Môn học của tôi</Link>
+                <Link to="/courses">Về Kho môn học</Link>
               </Button>
             }
           />
@@ -948,13 +954,13 @@ export function Component() {
   const course = courseQuery.data;
   if (!course || !courseId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="page-container px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <EmptyState
           title="Không tìm thấy môn học"
           description="Không tải được thông tin môn học."
           action={
             <Button asChild variant="outline" size="sm">
-              <Link to="/courses">Về Môn học của tôi</Link>
+              <Link to="/courses">Về Kho môn học</Link>
             </Button>
           }
         />
@@ -963,10 +969,10 @@ export function Component() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 px-4 pt-7 sm:px-6 lg:px-8">
+    <div className="page-container space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <Breadcrumbs
         items={[
-          { label: "Môn học của tôi", to: "/courses" },
+          { label: "Kho môn học", to: "/courses" },
           { label: `${course.courseCode} — ${course.courseName}` },
         ]}
       />
@@ -977,10 +983,6 @@ export function Component() {
       ) : (
         <TeamHubView course={course} />
       )}
-      <footer className="flex items-center justify-center border-t pt-6 pb-6 text-xs text-muted-foreground">
-        <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden />
-        UTask Academic Portal • Quản lý đồ án &amp; Nghiên cứu khoa học sinh viên
-      </footer>
     </div>
   );
 }

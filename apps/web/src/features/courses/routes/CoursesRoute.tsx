@@ -1,83 +1,21 @@
-import { GraduationCap, Users } from "lucide-react";
-import { Link } from "react-router-dom";
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
+import { ChevronDown, GraduationCap } from "lucide-react";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
-import { Badge } from "@/components/ui/badge";
+import { CourseCard } from "@/features/courses/components/CourseCard";
+import { CourseToolbar } from "@/features/courses/components/CourseToolbar";
+import {
+  formatSemester,
+  listSemesters,
+  matchesFilters,
+  summarizeCourses,
+  type StatusFilter,
+} from "@/features/courses/lib/courseList";
 import { useMyWorkOverview } from "@/features/my-work/queries";
-import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
-
-function membershipBadge(membership: TeamMembership): {
-  label: string;
-  className: string;
-} {
-  switch (membership.status) {
-    case "none":
-      return {
-        label: "Cần lập nhóm",
-        className: "border-amber-200 bg-amber-50 text-amber-900",
-      };
-    case "pending":
-      return {
-        label: "Chờ duyệt",
-        className: "border-sky-200 bg-sky-50 text-sky-900",
-      };
-    case "assigned":
-      return membership.role === "leader"
-        ? {
-            label: "Trưởng nhóm",
-            className: "border-indigo-200 bg-indigo-50 text-indigo-900",
-          }
-        : {
-            label: "Thành viên",
-            className: "border-emerald-200 bg-emerald-50 text-emerald-900",
-          };
-  }
-}
-
-function courseCtaLabel(membership: TeamMembership): string {
-  if (membership.status === "none") return "Thành lập nhóm";
-  if (membership.status === "pending") return "Theo dõi yêu cầu";
-  return "Xem nhóm & Đề tài";
-}
-
-function CourseRow({ enrollment }: { enrollment: CourseEnrollment }) {
-  const badge = membershipBadge(enrollment.membership);
-  return (
-    <tr className="border-b transition-colors last:border-b-0 hover:bg-muted/40">
-      <td className="px-3 py-3">
-        <Badge variant="secondary" className="font-mono font-semibold">
-          {enrollment.courseCode}
-        </Badge>
-      </td>
-      <td className="px-3 py-3">
-        <Link
-          to={`/courses/${enrollment.courseId}/team`}
-          className="font-medium hover:text-primary"
-        >
-          {enrollment.courseName}
-        </Link>
-      </td>
-      <td className="hidden px-3 py-3 text-muted-foreground sm:table-cell">
-        {enrollment.semester}
-      </td>
-      <td className="px-3 py-3">
-        <Badge variant="outline" className={badge.className}>
-          {badge.label}
-        </Badge>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <Link
-          to={`/courses/${enrollment.courseId}/team`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-        >
-          {courseCtaLabel(enrollment.membership)}
-        </Link>
-      </td>
-    </tr>
-  );
-}
+import { cn } from "@/lib/utils";
 
 function NoCoursesState() {
   return (
@@ -96,6 +34,9 @@ function NoCoursesState() {
 
 export function Component() {
   const overviewQuery = useMyWorkOverview();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [showPast, setShowPast] = useState(false);
   const enrollments = overviewQuery.data?.enrollments ?? [];
 
   if (overviewQuery.isPending) {
@@ -104,7 +45,7 @@ export function Component() {
 
   if (overviewQuery.isError) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-7 sm:px-6 lg:px-8">
+      <div className="page-container px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
         <ErrorState
           error={overviewQuery.error}
           onRetry={() => void overviewQuery.refetch()}
@@ -113,46 +54,75 @@ export function Component() {
     );
   }
 
+  const [latestSemester] = listSemesters(enrollments);
+  // Mặc định chỉ học kỳ mới nhất; số liệu chip và danh sách cùng phạm vi này.
+  const inScope = showPast
+    ? enrollments
+    : enrollments.filter((enrollment) => enrollment.semester === latestSemester);
+  const counts = summarizeCourses(inScope);
+  const visible = inScope.filter((enrollment) => matchesFilters(enrollment, query, status));
+  const hasPast = listSemesters(enrollments).length > 1;
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 pt-7 sm:px-6 lg:px-8">
-      <div className="border-b pb-4">
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <GraduationCap className="size-6 text-primary" aria-hidden />
-          Môn học của tôi
-        </h1>
-        <p className="mt-1 text-xs font-medium text-muted-foreground">
-          Danh sách các học phần đồ án của bạn trong học kỳ hiện tại. Chọn một
-          môn để xem nhóm và đề tài.
-        </p>
-      </div>
+    <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
+      {/* Tiêu đề hiển thị nằm ở Top bar. */}
+      <h1 className="sr-only">Môn học</h1>
 
       {enrollments.length === 0 ? (
         <NoCoursesState />
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b text-xs font-semibold text-muted-foreground">
-                <th scope="col" className="px-3 py-2.5">Mã môn</th>
-                <th scope="col" className="px-3 py-2.5">Tên môn học</th>
-                <th scope="col" className="hidden px-3 py-2.5 sm:table-cell">Học kỳ</th>
-                <th scope="col" className="px-3 py-2.5">Trạng thái nhóm</th>
-                <th scope="col" className="px-3 py-2.5 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrollments.map((enrollment) => (
-                <CourseRow key={enrollment.courseId} enrollment={enrollment} />
+        <section aria-labelledby="course-list-heading" className={cn("space-y-5", sectionPanelClass)}>
+          <h2 id="course-list-heading" className="text-xl font-medium tracking-tight">
+            Môn học của bạn
+          </h2>
+          <CourseToolbar
+            query={query}
+            onQueryChange={setQuery}
+            status={status}
+            onStatusChange={setStatus}
+            counts={counts}
+          />
+          {visible.length === 0 ? (
+            <EmptyState
+              title="Không có môn học phù hợp"
+              description="Thử đổi từ khóa hoặc bỏ bớt bộ lọc."
+            />
+          ) : (
+            <div className="space-y-8">
+              {listSemesters(visible).map((semester) => (
+                <section key={semester} aria-label={formatSemester(semester)} className="space-y-3">
+                  <h3 className="text-base font-semibold text-foreground">
+                    {formatSemester(semester)}
+                  </h3>
+                  <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                    {visible
+                      .filter((enrollment) => enrollment.semester === semester)
+                      .map((enrollment) => (
+                        <CourseCard key={enrollment.courseId} enrollment={enrollment} />
+                      ))}
+                  </ul>
+                </section>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          )}
+          {hasPast ? (
+            <div className="flex justify-center border-t pt-4">
+              <button
+                type="button"
+                aria-expanded={showPast}
+                onClick={() => setShowPast((value) => !value)}
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-subtle"
+              >
+                {showPast ? "Ẩn học kỳ cũ" : "Xem học kỳ cũ"}
+                <ChevronDown
+                  className={cn("size-4 transition-transform", showPast && "rotate-180")}
+                  aria-hidden
+                />
+              </button>
+            </div>
+          ) : null}
+        </section>
       )}
-
-      <footer className="flex items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
-        <Users className="size-3.5" aria-hidden />
-        Trạng thái nhóm được cập nhật tự động theo dữ liệu học kỳ.
-      </footer>
     </div>
   );
 }

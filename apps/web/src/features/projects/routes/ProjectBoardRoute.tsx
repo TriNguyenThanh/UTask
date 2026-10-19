@@ -134,7 +134,7 @@ function BoardToolbar({
 }>) {
   const remainingDays = sprint ? daysLeft(sprint.endDate) : null;
   return (
-    <section className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-subtle bg-background px-6 py-3">
+    <section className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-subtle bg-background px-6 py-3 short:py-2">
       <div className="flex flex-wrap items-center gap-2.5">
         {sprint ? (
           <div className="mr-1 flex flex-wrap items-center gap-2">
@@ -232,7 +232,7 @@ export function Component() {
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-80 flex-1 flex-col">
       <BoardToolbar
         sprint={sprint}
         issues={workspace.issues}
@@ -280,7 +280,7 @@ export function Component() {
           />
         </div>
       ) : (
-        <div ref={setBoardElement} className="min-h-0 flex-1 overflow-x-auto bg-background p-6">
+        <div ref={setBoardElement} className="min-h-0 flex-1 overflow-x-auto bg-background p-6 short:p-3">
           <div className="flex h-full items-start gap-4">
             {COLUMNS.map((column) => (
               <BoardColumn

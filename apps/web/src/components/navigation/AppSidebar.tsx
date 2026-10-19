@@ -1,22 +1,12 @@
-import {
-  Bell,
-  CheckSquare2,
-  ChevronRight,
-  FolderKanban,
-  BookOpen,
-  GraduationCap,
-  QrCode,
-  Settings,
-  Users,
-} from "lucide-react";
+import { BookOpen, CheckSquare2, ChevronRight, FolderKanban, GraduationCap } from "lucide-react";
 import { NavLink, useParams } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
+import { SidebarNavItem } from "@/components/navigation/SidebarNavItem";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace } from "@/features/auth/utils";
+import { currentSemesterEnrollments } from "@/features/my-work/currentSemester";
 import { useMyWorkOverview } from "@/features/my-work/queries";
 import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
-import { useNotifications } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
 const membershipLabels: Record<TeamMembership["status"], string> = {
@@ -98,119 +88,41 @@ function CourseNavItem({ enrollment }: { enrollment: CourseEnrollment }) {
   );
 }
 
-export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
+export function AppSidebar({
+  collapsed = false,
+  courseListLabel,
+}: {
+  collapsed?: boolean;
+  courseListLabel?: string;
+}) {
   const { user } = useAuth();
   const { data: overview, isLoading } = useMyWorkOverview();
-  const enrollments = overview?.enrollments ?? [];
-  const { data: notifications } = useNotifications();
-  const unreadCount = notifications?.filter((item) => !item.read).length ?? 0;
+  const enrollments = currentSemesterEnrollments(overview);
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto py-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 short:gap-3 overflow-y-auto overflow-x-hidden px-3 py-3 short:py-2">
       <nav aria-label="Điều hướng chính" className="space-y-0.5">
-        <NavLink
-          to="/my-work"
-          className={({ isActive }) =>
-            cn(
-              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent font-semibold text-accent-foreground"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive ? (
-                <span
-                  className="absolute inset-y-1.5 left-0 w-[2.5px] rounded-r bg-primary"
-                  aria-hidden
-                />
-              ) : null}
-              <CheckSquare2 className="size-4" aria-hidden />
-              Trang chủ
-            </>
-          )}
-        </NavLink>
-        <NavLink
-          to="/courses"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent font-semibold text-accent-foreground"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )
-          }
-        >
-          <GraduationCap className="size-4" aria-hidden />
-          Môn học
-        </NavLink>
-        <NavLink
-          to="/projects"
-          className={({ isActive }) =>
-            cn(
-              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent font-semibold text-accent-foreground"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive ? (
-                <span
-                  className="absolute inset-y-1.5 left-0 w-[2.5px] rounded-r bg-primary"
-                  aria-hidden
-                />
-              ) : null}
-              <FolderKanban className="size-4" aria-hidden />
-              Dự án
-            </>
-          )}
-        </NavLink>
-        <NavLink
-          to="/settings/profile"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent font-semibold text-accent-foreground"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-            )
-          }
-        >
-          <Settings className="size-4" aria-hidden />
-          Cài đặt
-        </NavLink>
+        <SidebarNavItem to="/my-work" icon={CheckSquare2} label="Trang chủ" collapsed={collapsed} />
+        <SidebarNavItem to="/courses" icon={GraduationCap} label="Môn học" collapsed={collapsed} />
+        <SidebarNavItem to="/projects" icon={FolderKanban} label="Dự án" collapsed={collapsed} />
         {canUseTeacherSpace(user) ? (
-          <NavLink
+          <SidebarNavItem
             to="/teacher"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <BookOpen className="size-4" aria-hidden />
-            Không gian giảng viên
-          </NavLink>
+            icon={BookOpen}
+            label="Không gian giảng viên"
+            collapsed={collapsed}
+          />
         ) : null}
-        <NavLink
-          to="/notifications"
-          className="flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          <span className="flex items-center gap-3">
-            <Bell className="size-4" aria-hidden />
-            Thông báo
-          </span>
-          {unreadCount > 0 ? (
-            <Badge className="size-5 justify-center rounded-full px-0 text-[11px]">
-              {unreadCount}
-            </Badge>
-          ) : null}
-        </NavLink>
       </nav>
 
-      <div>
+      <div
+        className={cn(
+          "transition-[opacity,visibility] duration-200",
+          collapsed && "invisible opacity-0",
+        )}
+        aria-hidden={collapsed}
+      >
         <p className="flex items-center justify-between px-3 pb-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {courseListLabel ?? "Học kỳ hiện tại"}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">
@@ -229,25 +141,6 @@ export function AppSidebar({ courseListLabel }: { courseListLabel?: string }) {
             ))}
           </ul>
         )}
-      </div>
-
-      <div>
-        <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Tiện ích nhanh
-        </p>
-        <nav aria-label="Tiện ích nhanh" className="space-y-0.5">
-          <span
-            className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70"
-            title="GitHub Sync sẽ khả dụng ở slice sau"
-          >
-            <Users className="size-4" aria-hidden />
-            GitHub Sync
-          </span>
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
-            <QrCode className="size-4" aria-hidden />
-            Điểm danh QR
-          </span>
-        </nav>
       </div>
     </div>
   );

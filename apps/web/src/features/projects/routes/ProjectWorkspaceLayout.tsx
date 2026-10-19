@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/feedback/ErrorState";
 import { ForbiddenPage } from "@/components/feedback/ForbiddenPage";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { useRequestTeacherChrome } from "@/app/layouts/TeacherChromeContext";
+import { usePageTitle } from "@/app/layouts/PageTitleContext";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -15,6 +16,7 @@ import { ApiError } from "@/lib/api/errors";
 import { studentFlowKeys, useProjectWorkspace } from "@/lib/query/studentFlowHooks";
 import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types";
 import { isReadOnlyViewer } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
 
 /** Module heading per tab, shown under the project breadcrumb. */
@@ -68,6 +70,7 @@ export default function ProjectWorkspaceLayout() {
   const workspaceQuery = useProjectWorkspace(projectId);
   const requestTeacherChrome = useRequestTeacherChrome();
   const instructorView = workspaceQuery.data?.viewer.kind === "course-instructor";
+  usePageTitle(projectModuleTitles[moduleFromPathname(pathname)]);
 
   useEffect(() => {
     if (!instructorView) return;
@@ -146,8 +149,17 @@ export default function ProjectWorkspaceLayout() {
 
   return (
     <ProjectWorkspaceContext.Provider value={contextValue}>
-      <ProjectWorkspaceHeader workspace={workspaceData} />
-      <Outlet />
+      {/* On desktop the board fills the viewport under the header and scrolls
+          per column; other modules scroll as a whole inside <main>. */}
+      <div
+        className={cn(
+          "flex flex-col",
+          contextValue.activeModule === "board" ? "lg:h-full" : "min-h-full",
+        )}
+      >
+        <ProjectWorkspaceHeader workspace={workspaceData} />
+        <Outlet />
+      </div>
     </ProjectWorkspaceContext.Provider>
   );
 }
@@ -157,7 +169,7 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
   const teacherBase = `/teacher/courses/${workspace.courseId}`;
 
   return (
-    <header className="border-b px-4 pt-4 md:px-6">
+    <header className="shrink-0 border-b px-4 pt-4 short:pt-2 md:px-6">
       {readOnly ? (
         // Built from the workspace payload, so it is right on deep link and refresh.
         <Breadcrumbs
@@ -185,9 +197,7 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
       )}
       <div className="flex flex-wrap items-start justify-between gap-3 pt-2">
         <div>
-          <h1 className="text-lg font-bold tracking-tight">
-            {projectModuleTitles[activeModule]}
-          </h1>
+          <h1 className="sr-only">{projectModuleTitles[activeModule]}</h1>
           <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Môn: {workspace.courseCode}</span>
             <span aria-hidden>•</span>
