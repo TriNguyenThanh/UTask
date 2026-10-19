@@ -6,8 +6,9 @@ trong source. M3 chỉ xác minh danh tính, không lưu token. GitHub App insta
 webhook và đồng bộ chưa có. Hiện trạng chi tiết và
 cách kiểm tra tại [foundation](foundation.md).
 
-Điểm tiếp tục công việc: [checkpoint ngày 18/10/2026](checkpoint-2026-10-18.md)
-là bản chụp tiến độ, giới hạn xác minh và các bước kế tiếp tại thời điểm ghi nhận.
+Điểm tiếp tục công việc: [checkpoint ngày 19/10/2026](checkpoint-2026-10-19.md)
+ghi trạng thái hiện tại và trỏ tới [kế hoạch OAuth liên kết danh tính GitHub](plans/2026-10-19-github-identity-oauth.md).
+Checkpoint ngày 18/10/2026 vẫn được giữ làm bản chụp lịch sử.
 
 ## Nguồn chuẩn
 

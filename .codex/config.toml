@@ -1,8 +1,0 @@
-# Model điều phối mặc định của project; có thể đổi bằng model picker/CLI.
-model = "gpt-6.1-sol"
-model_reasoning_effort = "medium"
-
-# Model từng vai trò đặt tại .codex/agents/; quyền kế thừa phiên chính.
-[agents]
-enabled = true
-max_concurrent_threads_per_session = 3
