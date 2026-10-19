@@ -4,7 +4,7 @@
 refresh có fencing, GitHub App installation, webhook bền vững và worker có
 trong source. Cấu hình M4 mặc định tắt; GitHub thật và triển khai chưa được
 xác minh. Chi tiết tại [foundation](foundation.md), [API](api.md) và
-[checkpoint 19/10/2026](checkpoint-2026-10-19.md).
+[checkpoint 20/10/2026](checkpoint-2026-10-20.md).
 
 ## Nguồn chuẩn
 
@@ -43,6 +43,9 @@ hay GitHub App private key trong M4.
 - M3: OAuth consent PKCE và mapping account, trước đây không lưu token.
 - M4: chuyển consent sang GitHub App user authorization, lưu credential mã
   hóa có hạn, installation, webhook và jobs. Mốc triển khai thực tế chưa xác
-  minh; xem [checkpoint](checkpoint-2026-10-19.md).
+  minh; xem [checkpoint](checkpoint-2026-10-20.md).
 
 Các kế hoạch trong `plans/` là snapshot, không phải hợp đồng hiện hành.
+
+Phiên tiếp theo theo [kế hoạch nghiệm thu GitHub thật](plans/2026-10-20-github-live-acceptance.md):
+hoàn tất installation/repository, kiểm tra refresh, uninstall/revoke và kết nối lại.

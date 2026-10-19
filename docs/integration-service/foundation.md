@@ -4,6 +4,10 @@
 ngày 19/10/2026. Bộ kiểm thử và smoke Docker local đã chạy; GitHub thật và
 deploy thực tế **Chưa xác minh**.
 
+Cập nhật cấu hình và chẩn đoán Docker local ngày 20/10/2026 tại
+[checkpoint mới](checkpoint-2026-10-20.md); luồng installation GitHub thật
+vẫn chưa được nghiệm thu đầy đủ.
+
 ## Bằng chứng source
 
 | Phần | Trạng thái | Bằng chứng |
@@ -27,6 +31,16 @@ cặp token được mã hóa riêng và lưu cùng mapping. `INTEGRATION_GITHUB
 mặc định `false`; các biến M4 là `INTEGRATION_GITHUB_APP_ID`,
 `INTEGRATION_GITHUB_APP_SLUG`, `INTEGRATION_GITHUB_WEBHOOK_SECRET`,
 `INTEGRATION_CREDENTIAL_KEYS` và các OAuth client/redirect hiện hữu.
+Điền giá trị thật trong `.env` root ở local hoặc `.env` server ở staging;
+[mẫu cấu hình](../../.env.example) liệt kê các biến cần thiết.
+`INTEGRATION_GITHUB_APP_ID` là App ID, `INTEGRATION_GITHUB_APP_SLUG` là phần
+cuối URL `https://github.com/apps/<slug>`, còn `INTEGRATION_GITHUB_CLIENT_ID`
+và `INTEGRATION_GITHUB_CLIENT_SECRET` lấy từ phần Client ID/client secret
+của chính GitHub App đó. App ID khác Client ID. Không ghi secret thật vào source.
+Mapping [Integration env](../../infra/env/integration-service.env) truyền
+nguyên tên biến `INTEGRATION_GITHUB_*` cho API, migration, worker và Beat ở
+cả Compose local/staging. Sau khi đổi `.env`, tạo lại các container liên quan
+để nạp cấu hình; chỉ restart không cập nhật biến môi trường.
 `INTEGRATION_GITHUB_SETUP_URI` được kiểm tra khi mở luồng cài App: HTTPS hoặc
 HTTP loopback, không query/fragment/credential; URL cài App tạo từ slug. Key ring credential là JSON array Fernet; phần
 tử đầu tiên mã hóa mới, các phần tử sau giải mã cũ. Key ring phải khác

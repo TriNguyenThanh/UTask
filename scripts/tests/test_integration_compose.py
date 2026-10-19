@@ -17,6 +17,61 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class IntegrationComposeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_github_app_configuration_reaches_every_integration_process(self):
+        configured = {
+            "INTEGRATION_GITHUB_APP_ENABLED": "true",
+            "INTEGRATION_GITHUB_APP_ID": "123456",
+            "INTEGRATION_GITHUB_APP_SLUG": "utask-test-app",
+            "INTEGRATION_GITHUB_CLIENT_ID": "test-client-id",
+            "INTEGRATION_GITHUB_CLIENT_SECRET": "test-client-secret",
+        }
+        defaults = {key: "" for key in configured}
+        defaults["INTEGRATION_GITHUB_APP_ENABLED"] = "false"
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for expected in (defaults, configured):
+                with (
+                    self.subTest(
+                        filename=filename,
+                        enabled=expected["INTEGRATION_GITHUB_APP_ENABLED"],
+                    ),
+                    patch.dict(os.environ, {"COMPOSE_PROFILES": "", **expected}),
+                ):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            filename,
+                            "--profile",
+                            "integration-service",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    for name in (
+                        "integration-service",
+                        "integration-migrate",
+                        "integration-worker",
+                        "integration-beat",
+                    ):
+                        environment = services[name]["environment"]
+                        for key, value in expected.items():
+                            self.assertEqual(
+                                environment.get(key), value, f"{name}: {key}"
+                            )
+                        for legacy in ("APP_ENABLED", "APP_ID", "APP_SLUG"):
+                            self.assertNotIn(legacy, environment)
+
     def test_dedicated_credentials_and_preparation_gate_in_both_compose_files(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(filename=filename):
