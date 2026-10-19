@@ -19,7 +19,7 @@ export function TopBar({
   const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 shrink-0 short:h-12 items-center justify-between gap-3 border-b bg-background/80 px-4 backdrop-blur-sm lg:px-8">
+    <header className="sticky top-0 z-20 flex h-16 shrink-0 short:h-12 items-center justify-between gap-3 border-b bg-card px-4 lg:px-8">
       <div className="flex min-w-0 items-center gap-3">
         {onOpenMobileNav ? (
           <Button

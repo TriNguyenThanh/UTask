@@ -1,3 +1,4 @@
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import { ClipboardList } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -66,11 +67,11 @@ export function MyTasksSection({
   const overdueCount = tasksForBucket(tasks, "overdue", now).length;
 
   return (
-    <section id="my-tasks" aria-labelledby="my-tasks-title" className="space-y-3 scroll-mt-24">
+    <section id="my-tasks" aria-labelledby="my-tasks-title" className={`space-y-3 scroll-mt-24 ${sectionPanelClass}`}>
       <div className="flex flex-col gap-2 border-b pb-2.5 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="my-tasks-title" className="flex items-center gap-2 text-base font-bold">
           <ClipboardList className="size-5 text-primary" aria-hidden />
-          Nhiệm vụ của tôi (My Tasks)
+          Nhiệm vụ của tôi
         </h2>
         <div className="flex items-center gap-2">
           {courses.length > 1 ? (

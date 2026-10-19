@@ -1,3 +1,4 @@
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ export function LatestCoursesSection({
 }: Readonly<{ enrollments: readonly CourseEnrollment[] }>) {
   const shown = enrollments.slice(0, LATEST_COURSE_LIMIT);
   return (
-    <section aria-labelledby="latest-courses-heading" className="space-y-3">
+    <section aria-labelledby="latest-courses-heading" className={`space-y-3 ${sectionPanelClass}`}>
       <div className="flex items-center justify-between gap-3">
         <h2 id="latest-courses-heading" className="text-lg font-bold tracking-tight">
           Môn học

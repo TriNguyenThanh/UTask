@@ -1,3 +1,4 @@
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import { Timer } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -15,7 +16,7 @@ export function CourseSprintSection({
   isLoading: boolean;
 }) {
   return (
-    <section aria-labelledby="sprint-title" className="space-y-3 pt-2">
+    <section aria-labelledby="sprint-title" className={`space-y-3 ${sectionPanelClass}`}>
       <div className="flex items-center justify-between border-b pb-2.5">
         <h2 id="sprint-title" className="flex items-center gap-2 text-base font-bold">
           <Timer className="size-5 text-primary" aria-hidden />

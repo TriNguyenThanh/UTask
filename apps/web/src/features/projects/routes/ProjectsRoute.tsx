@@ -1,3 +1,4 @@
+import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import {
   ArrowRight,
   Code,
@@ -263,6 +264,7 @@ export default function ProjectsRoute() {
 
   return (
     <div className="page-container space-y-5 p-4 md:p-6">
+      <div className={cn("space-y-5", sectionPanelClass)}>
       {/* Current / archived tabs */}
       <div className={segmentedTabsListClass} role="tablist" aria-label="Phạm vi thời gian">
         <button
@@ -338,16 +340,6 @@ export default function ProjectsRoute() {
           ))}
         </div>
       </div>
-
-      {/* Result count */}
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Hiển thị{" "}
-        <span className="font-bold text-foreground">
-          {visible.length}/{tabProjects.length}
-        </span>{" "}
-        đồ án {tab === "current" ? "đang diễn ra" : "đã lưu trữ"}
-      </p>
-
       {/* Card list / empty states */}
       {tabProjects.length === 0 ? (
         tab === "current" ? (
@@ -401,6 +393,7 @@ export default function ProjectsRoute() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
