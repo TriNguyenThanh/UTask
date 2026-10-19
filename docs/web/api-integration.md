@@ -38,7 +38,7 @@ VITE_API_BASE_URL=
 | 1 | Đăng nhập, đăng xuất (thu hồi phiên hiện tại), `GET /users/me` | Đã triển khai |
 | 2 | Khôi phục phiên khi tải lại, tự làm mới access token, CSRF | Đã triển khai |
 | 3 | Hồ sơ, đổi mật khẩu, danh sách thiết bị, đăng xuất mọi thiết bị | Đã triển khai (chưa smoke trình duyệt) |
-| 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Chưa triển khai |
+| 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Đã triển khai ở mức form + request (end-to-end email chưa xác minh, chờ B3; chưa smoke trình duyệt) |
 | 5–8 | Classroom | Chưa triển khai |
 | 9+ | Work, Admin | Chưa triển khai |
 
@@ -86,6 +86,30 @@ mock cũ (`routes/SettingsProfileRoute.tsx`, `SettingsSecurityRoute.tsx`).
   kèm số phiên đã thu hồi. Nếu gọi lỗi, hiện cảnh báo máy chủ chưa thu hồi.
 - Cài đặt GitHub/thông báo vẫn là demo MSW (`Chưa triển khai` ở backend).
 
+## Đăng ký, kích hoạt, khôi phục mật khẩu (Phase 4)
+
+Các route công khai (`app/router/router.tsx`), luôn gọi API thật qua client;
+ở chế độ mock chúng gọi handler MSW cùng hợp đồng.
+
+| Route | Hành vi |
+|---|---|
+| `/register` | `POST /register` (`email, username, first_name, last_name, password1, password2`). Thành công (201) hiện "Đăng ký thành công, kiểm tra email"; không tự đăng nhập. `VALIDATION_ERROR` hiện theo trường |
+| `/auth/activate?key=` | `POST /activate {key}`. Thiếu `key` → màn "Liên kết kích hoạt không hợp lệ". Mục tùy chọn "Tài khoản do giảng viên tạo? Đặt mật khẩu" gửi thêm `new_password1/2` khi có điền. Link sai/hết hạn (404 `RESOURCE_NOT_FOUND` hoặc `INVALID_ACTIVATION_TOKEN`) kèm ô "Gửi lại email kích hoạt" (`POST /activation/resend`). `ACCOUNT_ALREADY_ACTIVE` hiện màn đã kích hoạt + link đăng nhập. Thành công → `/login` kèm thông báo |
+| `/forgot-password` | `POST /password-reset/request`. Luôn hiện "Nếu email tồn tại, bạn sẽ nhận được hướng dẫn." khi 2xx (không lộ email có tồn tại). 503/429 hiện lỗi và **không** báo đã gửi |
+| `/auth/reset?uid=&token=` | `POST /password-reset/confirm`. Thiếu `uid` hoặc `token` → màn link không hợp lệ. Token sai/hết hạn (lỗi trường `token`/`uid`) → thông báo kèm link "Yêu cầu liên kết mới". Thành công → `/login` kèm thông báo |
+
+Route cũ `/reset-password` đã bị xóa (không giữ alias); link email của backend
+dùng `/auth/reset` và `/auth/activate`. Trang đăng nhập có link "Đăng ký".
+Frontend chỉ kiểm tra tối thiểu (bắt buộc, ≥ 8 ký tự, khớp xác nhận); luật độ
+mạnh mật khẩu do backend quyết định và lỗi hiện theo trường.
+
+Link demo khi chạy mock: `/auth/activate?key=mock-activation-key` và
+`/auth/reset?uid=mock&token=mock-reset-token`.
+
+Chưa xác minh: email thật có tới hộp thư và đúng định dạng link không (B3);
+`ACCOUNT_ALREADY_ACTIVE` chỉ thấy trong mã provisioning của backend, còn kích
+hoạt lại link đã dùng thực tế có thể trả 404.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -102,6 +126,6 @@ mock cũ (`routes/SettingsProfileRoute.tsx`, `SettingsSecurityRoute.tsx`).
 ## Kiểm tra đã chạy
 
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
-sau Phase 3. Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
+sau Phase 4. Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
 Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất. **Chưa smoke
-trên trình duyệt** cho Phase 3 và cho refresh khi 401 hoặc hết hạn 15 phút.
+trên trình duyệt** cho Phase 3–4 và cho refresh khi 401 hoặc hết hạn 15 phút.

@@ -19,8 +19,18 @@ export const appRoutes: RouteObject[] = [
     errorElement: <RouteError />,
   },
   {
-    path: "/reset-password",
+    path: "/auth/reset",
     lazy: () => import("@/features/auth/routes/ResetPasswordRoute"),
+    errorElement: <RouteError />,
+  },
+  {
+    path: "/auth/activate",
+    lazy: () => import("@/features/auth/routes/ActivateAccountRoute"),
+    errorElement: <RouteError />,
+  },
+  {
+    path: "/register",
+    lazy: () => import("@/features/auth/routes/RegisterRoute"),
     errorElement: <RouteError />,
   },
   {

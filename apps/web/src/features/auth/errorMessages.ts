@@ -28,3 +28,34 @@ export function loginErrorMessage(error: ApiError): string {
       return error.message;
   }
 }
+
+/** Thông báo cho form khôi phục/gửi lại email; không bao giờ báo "đã gửi" khi lỗi. */
+export function recoveryErrorMessage(error: ApiError): string {
+  if (error.status === 503 || error.code === "IDENTITY_UNAVAILABLE") {
+    return "Tính năng tạm thời không khả dụng. Hãy thử lại sau.";
+  }
+  if (error.status === 429 || error.code === "RATE_LIMIT_EXCEEDED") {
+    return "Bạn thao tác quá nhiều lần. Hãy thử lại sau ít phút.";
+  }
+  return error.message;
+}
+
+export const NEUTRAL_RECOVERY_MESSAGE = "Nếu email tồn tại, bạn sẽ nhận được hướng dẫn.";
+
+/** Link kích hoạt sai/hết hạn: backend trả 404 RESOURCE_NOT_FOUND hoặc INVALID_ACTIVATION_TOKEN. */
+export function activationErrorMessage(error: ApiError): string {
+  switch (error.code) {
+    case "ACCOUNT_ALREADY_ACTIVE":
+      return "Tài khoản đã kích hoạt. Bạn có thể đăng nhập.";
+    case "RESOURCE_NOT_FOUND":
+    case "INVALID_ACTIVATION_TOKEN":
+      return "Liên kết kích hoạt không hợp lệ hoặc đã hết hạn.";
+    default:
+      return recoveryErrorMessage(error);
+  }
+}
+
+/** Token đặt lại mật khẩu sai/hết hạn nằm ở lỗi trường `token` hoặc `uid`. */
+export function isInvalidResetLink(error: ApiError): boolean {
+  return Boolean(error.fieldErrors.token?.length || error.fieldErrors.uid?.length || error.code === "INVALID_TOKEN");
+}

@@ -192,6 +192,11 @@ export function LoginForm() {
           </div>
         </form>
       </Form>
+
+      <p className="mt-6 text-center text-[13px] text-[#787586]">
+        Chưa có tài khoản?{" "}
+        <Link className="font-medium text-primary hover:underline" to="/register">Đăng ký</Link>
+      </p>
     </section>
   );
 }

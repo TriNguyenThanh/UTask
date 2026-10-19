@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { buildMockAuthUser } from "@/mocks/data/authUsers";
 import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import {
   DEMO_PASSWORD,
@@ -44,6 +45,10 @@ function fail(status: number, code: string, message: string, details: { field?: 
   );
 }
 
+/** Link demo: `/auth/activate?key=mock-activation-key`, `/auth/reset?uid=mock&token=mock-reset-token`. */
+export const MOCK_ACTIVATION_KEY = "mock-activation-key";
+export const MOCK_RESET_TOKEN = "mock-reset-token";
+
 const PROFILE_FIELDS = new Set([
   "first_name",
   "last_name",
@@ -79,6 +84,68 @@ export function createAuthHandlers(
   let sequence = 0;
 
   return [
+    http.post("/api/auth/register", async ({ request }) => {
+      await sleepFor(scenario);
+      const body = await request.json() as Record<string, string>;
+      const email = (body.email ?? "").trim().toLowerCase();
+      if (Object.values(db.authUsersById).some((user) => user.email.toLowerCase() === email)) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "email", issue: "A user is already registered with this e-mail address." }]);
+      }
+      if (body.password1 !== body.password2) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "password2", issue: "The two password fields didn't match." }]);
+      }
+      return HttpResponse.json(
+        {
+          success: true,
+          message: "Đăng ký thành công.",
+          data: {
+            user: buildMockAuthUser({ id: `mock-${email}`, email, display_name: `${body.last_name} ${body.first_name}`, roles: ["STUDENT"] }),
+            account_status: "PENDING_ACTIVATION",
+          },
+          meta: null,
+          error: null,
+        },
+        { status: 201 },
+      );
+    }),
+
+    http.post("/api/auth/activate", async ({ request }) => {
+      await sleepFor(scenario);
+      const body = await request.json() as Record<string, string>;
+      if (body.key !== MOCK_ACTIVATION_KEY) {
+        return fail(404, "RESOURCE_NOT_FOUND", "Invalid or expired activation key.");
+      }
+      return ok(null);
+    }),
+
+    http.post("/api/auth/activation/resend", async () => {
+      await sleepFor(scenario);
+      return ok({ detail: "If eligible, verification instructions have been queued." });
+    }),
+
+    http.post("/api/auth/password-reset/request", async () => {
+      await sleepFor(scenario);
+      if (scenario === "server-error") {
+        return fail(503, "IDENTITY_UNAVAILABLE", "Dịch vụ tạm thời không khả dụng.");
+      }
+      return ok({ detail: "Password reset e-mail has been sent." });
+    }),
+
+    http.post("/api/auth/password-reset/confirm", async ({ request }) => {
+      await sleepFor(scenario);
+      const body = await request.json() as Record<string, string>;
+      if (body.token !== MOCK_RESET_TOKEN) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.", [{ field: "token", issue: "Invalid value" }]);
+      }
+      if (body.new_password1 !== body.new_password2) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "new_password2", issue: "The two password fields didn't match." }]);
+      }
+      return ok(null);
+    }),
+
     http.post("/api/auth/login", async ({ request }) => {
       await sleepFor(scenario);
       if (scenario === "server-error") {
