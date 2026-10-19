@@ -1,3 +1,5 @@
+import { keepMockWorkerActive } from "@/mocks/keepWorkerActive";
+
 /**
  * MSW mock layer runs when explicitly enabled via VITE_ENABLE_MOCKS.
  *
@@ -16,4 +18,5 @@ export async function enableMocking() {
     onUnhandledFrame: "bypass",
     serviceWorker: { url: "/mockServiceWorker.js" },
   });
+  keepMockWorkerActive();
 }
