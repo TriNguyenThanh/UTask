@@ -13,7 +13,7 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 
 function setup(response: Response | Error, token: string | null = null) {
   const fetchMock = vi.fn<typeof fetch>(() =>
-    response instanceof Error ? Promise.reject(response) : Promise.resolve(response),
+    response instanceof Error ? Promise.reject(response) : Promise.resolve(response.clone()),
   );
   vi.stubGlobal("fetch", fetchMock);
   const onUnauthorized = vi.fn();

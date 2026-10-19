@@ -14,7 +14,7 @@ function personaFor(user: NonNullable<SessionEvent>["user"]): string {
   if (byEmail) {
     return byEmail.id;
   }
-  return user.roles?.includes("TEACHER") ? TEACHER_ID : STUDENT_ID;
+  return user.roles.includes("TEACHER") ? TEACHER_ID : STUDENT_ID;
 }
 
 export function lookupPersona(token: string): string | null {

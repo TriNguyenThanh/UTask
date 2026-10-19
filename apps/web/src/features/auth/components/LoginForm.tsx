@@ -17,12 +17,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { loginErrorMessage } from "@/features/auth/errorMessages";
 import { resolveLoginTarget } from "@/features/auth/utils";
 import { ApiError } from "@/lib/api/errors";
 
 const loginSchema = z.object({
   email: z.email("Nhập địa chỉ email hợp lệ."),
-  password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
+  password: z.string().min(1, "Nhập mật khẩu."),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -47,7 +48,7 @@ export function LoginForm() {
       navigate(resolveLoginTarget(location.state, user), { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
-        setSubmitError(error.message);
+        setSubmitError(loginErrorMessage(error));
         return;
       }
       setSubmitError("Không thể đăng nhập. Vui lòng thử lại.");
