@@ -21,6 +21,10 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def configured(settings):
     settings.INTEGRATION_CONSENT_KEY = Fernet.generate_key().decode()
+    settings.INTEGRATION_GITHUB_APP_ENABLED = True
+    settings.INTEGRATION_GITHUB_APP_ID = "12"
+    settings.INTEGRATION_GITHUB_APP_SLUG = "utask"
+    settings.INTEGRATION_CREDENTIAL_KEYS = [Fernet.generate_key().decode()]
     settings.INTEGRATION_GITHUB_CLIENT_ID = "client-id"
     settings.INTEGRATION_GITHUB_CLIENT_SECRET = "client-secret"
     settings.INTEGRATION_GITHUB_REDIRECT_URI = "https://utask.example/callback"

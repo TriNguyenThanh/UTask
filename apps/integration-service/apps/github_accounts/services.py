@@ -80,6 +80,9 @@ def unlink_github_account(*, user_id):
         GitHubPendingConsent.objects.filter(user_id=user_id, consumed_at__isnull=True).update(
             consumed_at=timezone.now(), encrypted_verifier=""
         )
+        from .credentials import revoke_credential
+
+        revoke_credential(user_id=user_id)
         account = GitHubAccount.objects.select_for_update().filter(user_id=user_id).first()
         if account is None or account.status == GitHubAccount.Status.REVOKED:
             return account

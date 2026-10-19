@@ -122,7 +122,12 @@ def test_production_loads_only_service_database_credentials(production_environme
     assert settings["database"]["PASSWORD"] == PRODUCTION_ENV["INTEGRATION_DB_PASSWORD"]
     assert settings["database"]["CONN_MAX_AGE"] == 0
     assert settings["database"]["OPTIONS"]["connect_timeout"] == 5
-    assert settings["apps"] == ["rest_framework", "apps.github_accounts.apps.GitHubAccountsConfig"]
+    assert settings["apps"] == [
+        "rest_framework",
+        "apps.github_accounts.apps.GitHubAccountsConfig",
+        "apps.github_installations",
+        "apps.github_jobs",
+    ]
 
 
 def test_test_settings_ignore_production_database(production_environment):

@@ -129,6 +129,7 @@ def storage(monkeypatch, account):
     generations.select_for_update.return_value.get.return_value.generation = 0
     monkeypatch.setattr(services.GitHubConsentGeneration, "objects", generations)
     monkeypatch.setattr(services.GitHubPendingConsent, "objects", MagicMock())
+    monkeypatch.setattr("apps.github_accounts.credentials.revoke_credential", MagicMock())
     monkeypatch.setattr(services.transaction, "atomic", nullcontext)
     monkeypatch.setattr(services.timezone, "now", lambda: NOW)
     return manager

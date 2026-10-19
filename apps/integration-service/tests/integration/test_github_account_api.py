@@ -56,6 +56,7 @@ def test_missing_link_is_unlinked_instead_of_using_identity_profile(client, acto
     assert response.json()["data"] == {
         "user_id": str(user_id),
         "status": "UNLINKED",
+        "authorization_status": "NOT_AUTHORIZED",
         "github_user_id": None,
         "github_username": None,
         "verified_at": None,

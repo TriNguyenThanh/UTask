@@ -15,8 +15,10 @@ from rest_framework.exceptions import ParseError
 from apps.github_accounts import consent
 from apps.github_accounts.models import GitHubAccount, GitHubConsentGeneration, GitHubPendingConsent
 from apps.github_accounts.services import link_verified_account, unlink_github_account
+from infrastructure.github_app import GitHubAppClient
 from infrastructure.github_oauth import GitHubOAuthUnavailable
 from infrastructure.identity import Principal
+from tests.factories import token_identity
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 START = "/api/v1/github/authorizations/start"
@@ -30,6 +32,10 @@ def configured(settings):
     settings.INTEGRATION_GITHUB_CLIENT_SECRET = "client-secret"
     settings.INTEGRATION_GITHUB_REDIRECT_URI = "https://utask.example/callback"
     settings.INTEGRATION_CONSENT_COOKIE_SECURE = True
+    settings.INTEGRATION_GITHUB_APP_ENABLED = True
+    settings.INTEGRATION_GITHUB_APP_ID = "12"
+    settings.INTEGRATION_GITHUB_APP_SLUG = "utask"
+    settings.INTEGRATION_CREDENTIAL_KEYS = [Fernet.generate_key().decode()]
 
 
 @pytest.fixture
@@ -74,7 +80,7 @@ def test_success_cookie_one_use_and_no_plaintext_secrets(client, actor, caplog):
     assert state not in str(GitHubPendingConsent.objects.values().get())
     assert cookie.value not in str(GitHubPendingConsent.objects.values().get())
     with patch.object(
-        consent.GitHubOAuthClient, "verify", return_value=("123", "Octo-Cat")
+        GitHubAppClient, "exchange", return_value=token_identity("123", "Octo-Cat")
     ) as provider:
         response = finish(client, state)
         replay = finish(client, state)
@@ -116,7 +122,7 @@ def test_invalid_bindings_never_exchange(client, actor, fault):
         begin(client)
     else:
         client.delete("/api/v1/github/account")
-    with patch.object(consent.GitHubOAuthClient, "verify") as provider:
+    with patch.object(GitHubAppClient, "exchange") as provider:
         response = finish(client, state)
     assert response.status_code == 400
     provider.assert_not_called()
@@ -129,7 +135,7 @@ def test_failure_consumes_and_erases_verifier(client, actor, fault):
     if fault == "ciphertext":
         GitHubPendingConsent.objects.update(encrypted_verifier="corrupted")
     with patch.object(
-        consent.GitHubOAuthClient, "verify", side_effect=GitHubOAuthUnavailable()
+        GitHubAppClient, "exchange", side_effect=GitHubOAuthUnavailable()
     ) as provider:
         response = finish(client, state)
         replay = finish(client, state)
@@ -154,7 +160,7 @@ def test_failure_consumes_and_erases_verifier(client, actor, fault):
     ],
 )
 def test_complete_validates_exact_body(client, actor, body):
-    with patch.object(consent.GitHubOAuthClient, "verify") as provider:
+    with patch.object(GitHubAppClient, "exchange") as provider:
         response = client.post(COMPLETE, body, content_type="application/json")
     assert response.status_code == 400
     provider.assert_not_called()
@@ -187,7 +193,7 @@ def test_identity_conflict_switch_refresh_unlink_and_relink(client, actor):
     for github_id, expected in [("123", 200), ("999", 409), ("123", 200)]:
         _, state = begin(client)
         with patch.object(
-            consent.GitHubOAuthClient, "verify", return_value=(github_id, "Octo-Cat")
+            GitHubAppClient, "exchange", return_value=token_identity(github_id, "Octo-Cat")
         ):
             assert finish(client, state).status_code == expected
     account = GitHubAccount.objects.get(user_id=user_id)
@@ -195,11 +201,11 @@ def test_identity_conflict_switch_refresh_unlink_and_relink(client, actor):
     for _ in range(2):
         assert client.delete("/api/v1/github/account").json()["data"]["source_version"] == 3
     _, state = begin(client)
-    with patch.object(consent.GitHubOAuthClient, "verify", return_value=("999", "Other")):
+    with patch.object(GitHubAppClient, "exchange", return_value=token_identity("999", "Other")):
         assert finish(client, state).status_code == 409
     unlink_github_account(user_id=other.user_id)
     _, state = begin(client)
-    with patch.object(consent.GitHubOAuthClient, "verify", return_value=("999", "Other")):
+    with patch.object(GitHubAppClient, "exchange", return_value=token_identity("999", "Other")):
         assert finish(client, state).status_code == 200
     account.refresh_from_db()
     assert account.source_version == 4 and account.github_user_id == "999"
@@ -224,9 +230,9 @@ def test_callback_in_provider_cannot_overwrite_delete(monkeypatch, existing):
         assert pending.consumed_at is not None and pending.encrypted_verifier == ""
         entered.set()
         assert release.wait(timeout=10)
-        return "123", "Octo"
+        return token_identity()
 
-    monkeypatch.setattr(consent.GitHubOAuthClient, "verify", provider)
+    monkeypatch.setattr(GitHubAppClient, "exchange", provider)
 
     def callback():
         close_old_connections()
@@ -270,7 +276,7 @@ def test_duplicate_completion_exchanges_once():
             connection.close()
 
     with (
-        patch.object(consent.GitHubOAuthClient, "verify", return_value=("123", "Octo")) as verify,
+        patch.object(GitHubAppClient, "exchange", return_value=token_identity()) as verify,
         ThreadPoolExecutor(max_workers=2) as pool,
     ):
         futures = [pool.submit(callback), pool.submit(callback)]
@@ -305,7 +311,7 @@ def test_first_link_and_delete_start_together_without_resurrection():
             connection.close()
 
     with (
-        patch.object(consent.GitHubOAuthClient, "verify", return_value=("123", "Octo")),
+        patch.object(GitHubAppClient, "exchange", return_value=token_identity()),
         ThreadPoolExecutor(max_workers=2) as pool,
     ):
         completion, deletion = pool.submit(callback), pool.submit(delete)
@@ -325,21 +331,27 @@ def test_new_consent_during_exchange_invalidates_old_completion():
 
     def provider(**kwargs):
         service_begin(user_id)
-        return "123", "Octo"
+        return token_identity()
 
-    with patch.object(consent.GitHubOAuthClient, "verify", side_effect=provider):
+    with patch.object(GitHubAppClient, "exchange", side_effect=provider):
         with pytest.raises(consent.ConsentConflict):
             consent.complete_consent(**arguments)
     assert not GitHubAccount.objects.exists()
     assert GitHubPendingConsent.objects.filter(consumed_at__isnull=True).count() == 1
 
 
-def test_real_provider_adapter_discards_token_after_identity_verification(client, actor, caplog):
+def test_real_provider_adapter_encrypts_token_after_identity_verification(client, actor, caplog):
     _, state = begin(client)
     sentinel = "sentinel-GitHub-access-token-never-persist"
     contexts = []
     for payload in (
-        {"access_token": sentinel, "token_type": "bearer"},
+        {
+            "access_token": sentinel,
+            "refresh_token": "ghr_secret",
+            "expires_in": 28800,
+            "refresh_token_expires_in": 15897600,
+            "token_type": "bearer",
+        },
         {"id": 123, "login": "Octo"},
     ):
         response = MagicMock()
@@ -348,7 +360,7 @@ def test_real_provider_adapter_discards_token_after_identity_verification(client
         context = MagicMock()
         context.__enter__.return_value = response
         contexts.append(context)
-    with patch("infrastructure.github_oauth.requests.request", side_effect=contexts) as request:
+    with patch("infrastructure.github_app.requests.request", side_effect=contexts) as request:
         response = finish(client, state)
     assert response.status_code == 200
     assert request.call_count == 2

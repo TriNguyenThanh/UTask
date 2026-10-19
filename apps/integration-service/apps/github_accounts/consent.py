@@ -12,14 +12,16 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ParseError
 
-from infrastructure.github_oauth import GitHubOAuthClient, GitHubOAuthUnavailable
+from infrastructure.github_app import GitHubAppClient
+from infrastructure.github_oauth import GitHubOAuthUnavailable
 
+from .credentials import encrypt_secret, require_enabled, retire_token, store_credential
 from .errors import (
     GitHubAccountSwitchRequiresUnlink,
     GitHubIdentityInUse,
     StaleGitHubVerification,
 )
-from .models import GitHubConsentGeneration, GitHubPendingConsent
+from .models import GitHubAuthorizationRevocation, GitHubConsentGeneration, GitHubPendingConsent
 from .services import link_verified_account
 from .validation import validate_user_id
 
@@ -61,11 +63,12 @@ def lock_generation(user_id):
 
 
 def start_consent(*, user_id, bearer):
+    require_enabled()
     user_id = validate_user_id(user_id)
     cipher = consent_cipher()
     state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
-    url = GitHubOAuthClient().authorization_url(
+    url = GitHubAppClient().authorization_url(
         state=state, code_challenge=challenge.rstrip(b"=").decode("ascii")
     )
     expires_at = timezone.now() + timedelta(seconds=CONSENT_TTL)
@@ -124,17 +127,45 @@ def consume_consent(*, user_id, bearer, state, nonce):
 def complete_consent(*, user_id, bearer, state, code, nonce):
     user_id = validate_user_id(user_id)
     pending, verifier = consume_consent(user_id=user_id, bearer=bearer, state=state, nonce=nonce)
-    github_user_id, github_username = GitHubOAuthClient().verify(code=code, verifier=verifier)
+    require_enabled()
+    identity = GitHubAppClient().exchange(code=code, verifier=verifier)
+    # Fence before actor lock: the same order as webhook authorization revocation.
+    # Retire an exchanged token even if a concurrent DELETE makes completion invalid.
+    conflict = None
     with transaction.atomic():
+        fence, _ = GitHubAuthorizationRevocation.objects.get_or_create(
+            github_user_id=identity.github_user_id
+        )
+        fence = GitHubAuthorizationRevocation.objects.select_for_update().get(pk=fence.pk)
         generation = lock_generation(user_id)
-        if generation.generation != pending.generation or pending.expires_at <= timezone.now():
-            raise ConsentConflict()
-        try:
-            return link_verified_account(
-                user_id=user_id,
-                github_user_id=github_user_id,
-                github_username=github_username,
-                verified_at=timezone.now(),
+        started_at = pending.expires_at - timedelta(seconds=CONSENT_TTL)
+        if (
+            generation.generation != pending.generation
+            or pending.expires_at <= timezone.now()
+            or (fence.revoked_at is not None and fence.revoked_at >= started_at)
+        ):
+            conflict = ConsentConflict()
+        else:
+            try:
+                with transaction.atomic():
+                    account = link_verified_account(
+                        user_id=user_id,
+                        github_user_id=identity.github_user_id,
+                        github_username=identity.github_username,
+                        verified_at=timezone.now(),
+                    )
+                    store_credential(user_id=user_id, identity=identity)
+            except (
+                GitHubIdentityInUse,
+                GitHubAccountSwitchRequiresUnlink,
+                StaleGitHubVerification,
+            ):
+                conflict = ConsentConflict()
+        if conflict:
+            retire_token(
+                encrypted_token=encrypt_secret(identity.access_token),
+                expires_at=identity.refresh_expires_at,
             )
-        except (GitHubIdentityInUse, GitHubAccountSwitchRequiresUnlink, StaleGitHubVerification):
-            raise ConsentConflict() from None
+    if conflict:
+        raise conflict
+    return account

@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from common.api_errors import integration_exception_handler
 from common.authentication import IdentityBearerAuthentication
 
+from .credentials import authorization_status
 from .models import GitHubAccount
 from .services import unlink_github_account
 
@@ -15,6 +16,7 @@ def account_data(user_id, account):
     return {
         "user_id": str(user_id),
         "status": account.status if account is not None else "UNLINKED",
+        "authorization_status": authorization_status(user_id=user_id, account=account),
         "github_user_id": account.github_user_id if linked else None,
         "github_username": account.github_username if linked else None,
         "verified_at": account.verified_at.isoformat() if linked else None,

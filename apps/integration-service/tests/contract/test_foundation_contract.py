@@ -86,6 +86,7 @@ def test_nonlinked_contract_hides_identity_and_keeps_version_rules(contract, sta
     data = {
         "user_id": str(USER_ID),
         "status": status,
+        "authorization_status": "REVOKED" if status == "REVOKED" else "NOT_AUTHORIZED",
         "github_user_id": None,
         "github_username": None,
         "verified_at": None,
