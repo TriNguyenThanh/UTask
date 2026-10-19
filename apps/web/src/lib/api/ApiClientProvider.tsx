@@ -12,12 +12,13 @@ export function ApiClientProvider({
   children: ReactNode;
   baseUrl?: string;
 }) {
-  const { accessToken, handleUnauthorized } = useAuth();
+  const { accessToken, handleUnauthorized, refreshAccessToken } = useAuth();
   const client = useMemo(() => createApiClient({
     baseUrl,
     getAccessToken: () => accessToken,
     onUnauthorized: handleUnauthorized,
-  }), [accessToken, baseUrl, handleUnauthorized]);
+    refreshSession: refreshAccessToken,
+  }), [accessToken, baseUrl, handleUnauthorized, refreshAccessToken]);
 
   return <ApiClientContext.Provider value={client}>{children}</ApiClientContext.Provider>;
 }

@@ -42,3 +42,12 @@ export interface LoginDataDto {
   refresh: string;
   user: CurrentUserDto;
 }
+
+export interface RefreshDataDto {
+  access: string;
+  access_expiration: string;
+}
+
+export interface LogoutAllDataDto {
+  revoked_sessions_count: number;
+}
