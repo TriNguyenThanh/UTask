@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DisabledAction } from "@/features/teacher/components/shared";
+import { StudentImportResults } from "@/features/teacher/components/StudentImportResults";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
+import { MAX_STUDENTS_PER_REQUEST } from "@/lib/api/classroom/endpoints";
+import { sendableRows, toStudentRow } from "@/features/teacher/lib/importRun";
+import { useStudentImport } from "@/lib/query/teacherClassHooks";
 import {
   MAX_IMPORT_ROWS,
   preflightImportFile,
@@ -162,11 +166,15 @@ export function Component() {
   const [problem, setProblem] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const real = course.classroom !== undefined;
+  const importer = useStudentImport(course.courseId);
+  const sendableStudents = preview ? sendableRows(preview.rows).map(toStudentRow) : [];
 
   async function chooseFile(file: File | undefined) {
     setPreview(null);
     setProblem(null);
     setOnlyProblems(false);
+    importer.reset();
     if (!file) return;
     // Refuse by name and size first: a huge or binary file is never read.
     const early = preflightImportFile(file.name, file.size);
@@ -187,7 +195,7 @@ export function Component() {
     }
   }
 
-  const step = preview ? 2 : 1;
+  const step = importer.run.phase === "idle" ? (preview ? 2 : 1) : 3;
 
   return (
     <div className="space-y-6">
@@ -216,10 +224,21 @@ export function Component() {
         ))}
       </ol>
 
-      <Alert className="border-amber-300 bg-amber-50 text-amber-950">
-        <AlertTitle>Chỉ kiểm tra định dạng, chưa nhập được</AlertTitle>
-        <AlertDescription>{IMPORT_UNAVAILABLE}</AlertDescription>
-      </Alert>
+      {real ? (
+        <Alert>
+          <AlertTitle>Gửi theo lô, kết quả từng dòng</AlertTitle>
+          <AlertDescription>
+            Danh sách được gửi theo lô tối đa {MAX_STUDENTS_PER_REQUEST} dòng. Email chưa có tài khoản sẽ được tạo
+            tài khoản chờ kích hoạt và nhận email kích hoạt; tài khoản giảng viên hoặc quản trị viên bị từ chối.
+            Không ai được đưa vào nhóm.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertTitle>Chỉ kiểm tra định dạng, chưa nhập được</AlertTitle>
+          <AlertDescription>{IMPORT_UNAVAILABLE}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -236,6 +255,7 @@ export function Component() {
               id={inputId}
               type="file"
               accept=".csv,text/csv,.xlsx"
+              disabled={importer.run.phase === "running"}
               onChange={(event) => {
                 void chooseFile(event.target.files?.[0]);
                 event.target.value = "";
@@ -297,10 +317,25 @@ export function Component() {
               <span>Chỉ hiện dòng có lỗi hoặc lưu ý</span>
             </label>
             <Preview preview={preview} onlyProblems={onlyProblems} />
+            {real && preview.errorCount > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {preview.errorCount} dòng lỗi định dạng sẽ không được gửi.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-              <DisabledAction reason={IMPORT_UNAVAILABLE} variant="default">
-                Xác nhận nhập
-              </DisabledAction>
+              {real ? (
+                <Button
+                  type="button"
+                  disabled={importer.run.phase !== "idle" || sendableStudents.length === 0}
+                  onClick={() => void importer.start(sendableStudents)}
+                >
+                  Xác nhận nhập ({sendableStudents.length} dòng)
+                </Button>
+              ) : (
+                <DisabledAction reason={IMPORT_UNAVAILABLE} variant="default">
+                  Xác nhận nhập
+                </DisabledAction>
+              )}
               <Button type="button" variant="ghost" onClick={() => void chooseFile(undefined)}>
                 Chọn file khác
               </Button>
@@ -314,18 +349,31 @@ export function Component() {
           <CardTitle className="text-base">3. Kết quả</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <output className="block text-sm text-muted-foreground">
-            Chưa có kết quả nào: file chưa được gửi. Khi có hợp đồng, báo cáo sẽ liệt kê từng dòng theo các nhóm
-            dưới đây; sinh viên chỉ được tính là đã thêm khi dòng đó báo đã thuộc lớp.
-          </output>
-          <ul aria-label="Các loại kết quả theo dòng" className="grid gap-2 sm:grid-cols-2">
-            {RESULT_LEGEND.map((item) => (
-              <li key={item.title} className="rounded-md border bg-background p-3 text-sm">
-                <Badge variant="outline">{item.title}</Badge>
-                <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
-              </li>
-            ))}
-          </ul>
+          {real ? (
+            importer.run.phase === "idle" ? (
+              <output className="block text-sm text-muted-foreground">
+                Chưa có kết quả: file chưa được gửi. Sau khi bấm xác nhận, từng dòng sẽ được báo là đã thêm, đã
+                thuộc lớp hoặc không thêm được kèm lý do.
+              </output>
+            ) : (
+              <StudentImportResults run={importer.run} onRetry={() => void importer.start(sendableStudents)} />
+            )
+          ) : (
+            <>
+              <output className="block text-sm text-muted-foreground">
+                Chưa có kết quả nào: file chưa được gửi. Khi có hợp đồng, báo cáo sẽ liệt kê từng dòng theo các nhóm
+                dưới đây; sinh viên chỉ được tính là đã thêm khi dòng đó báo đã thuộc lớp.
+              </output>
+              <ul aria-label="Các loại kết quả theo dòng" className="grid gap-2 sm:grid-cols-2">
+                {RESULT_LEGEND.map((item) => (
+                  <li key={item.title} className="rounded-md border bg-background p-3 text-sm">
+                    <Badge variant="outline">{item.title}</Badge>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

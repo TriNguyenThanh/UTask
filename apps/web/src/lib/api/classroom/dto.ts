@@ -111,3 +111,61 @@ export interface AccessCodeDto {
   expires_at: string | null;
   enabled: boolean;
 }
+
+/** Một dòng gửi lên `POST /classes/{id}/students/`. Identity từ chối khóa lạ nên chỉ gửi các khóa này. */
+export interface StudentRowInput {
+  row_number: number;
+  email?: string;
+  student_id?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export type AccountResult = "CREATED" | "EXISTING" | "FLAGGED" | "FAILED" | "NOT_REQUESTED";
+export type EnrollmentResult = "ENROLLED" | "ALREADY_ENROLLED" | "FAILED";
+
+/** Kết quả từng dòng; `reason` là mã lỗi của Identity hoặc Classroom (xem `importReasons`). */
+export interface ImportRowResultDto {
+  row_number: number | null;
+  user_id: string | null;
+  email: string | null;
+  student_id: string | null;
+  account_status: string | null;
+  account_result: AccountResult;
+  reason: string | null;
+  enrollment_id?: string;
+  enrollment_result: EnrollmentResult;
+}
+
+export interface ImportSummaryDto {
+  total_records: number;
+  enrolled: number;
+  already_enrolled: number;
+  failed: number;
+  created_accounts: number;
+  existing_accounts: number;
+  flagged: number;
+  duplicates: number;
+}
+
+export interface ImportResultDto {
+  summary: ImportSummaryDto;
+  results: ImportRowResultDto[];
+}
+
+export interface AdjustResultDto {
+  user_id: string;
+  group_id: string | null;
+}
+
+/** Lịch sử thay đổi; hình dạng `changes` chưa được backend chốt (B4f) nên không đọc nội dung. */
+export interface ActivityDto {
+  id: string;
+  class_section_id: string;
+  actor_user_id: string | null;
+  verb: string;
+  subject_type: string;
+  subject_id: string;
+  changes: Record<string, unknown>;
+  created_at: string;
+}

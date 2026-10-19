@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -6,6 +7,7 @@ import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddStudentDialog } from "@/features/teacher/components/AddStudentDialog";
+import { StudentExitDialog } from "@/features/teacher/components/StudentExitDialog";
 import { Input } from "@/components/ui/input";
 import { PersonAvatar, TeacherQueryError } from "@/features/teacher/components/shared";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
@@ -59,12 +61,26 @@ function roleCell(student: TeacherStudent) {
   return student.team.role === "leader" ? <Badge>Leader</Badge> : <span>Thành viên</span>;
 }
 
+function ExitButton({
+  student,
+  onExit,
+}: Readonly<{ student: TeacherStudent; onExit: (student: TeacherStudent) => void }>) {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={() => onExit(student)}>
+      Loại khỏi lớp
+      <span className="sr-only"> {student.name}</span>
+    </Button>
+  );
+}
+
 export function Component() {
   const course = useTeacherCourseContext();
   const students = useTeacherStudents(course.courseId);
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
   const filter = parseFilter(searchParams.get("team"));
+  const canExit = course.classroom !== undefined;
+  const [exiting, setExiting] = useState<TeacherStudent | null>(null);
 
   function setParam(key: string, value: string, empty: string) {
     const params = new URLSearchParams(searchParams);
@@ -121,7 +137,7 @@ export function Component() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <AddStudentDialog courseName={course.name} />
+          <AddStudentDialog course={course} />
           <Button asChild>
             <Link to={`/teacher/courses/${course.courseId}/students/import`}>Nhập danh sách</Link>
           </Button>
@@ -164,6 +180,7 @@ export function Component() {
                   <th scope="col" className="px-4 py-3 font-semibold">Email</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Nhóm</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Vai trò trong nhóm</th>
+                  {canExit ? <th scope="col" className="px-4 py-3 text-right font-semibold">Thao tác</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -182,6 +199,11 @@ export function Component() {
                     <td className="px-4 py-3 text-muted-foreground">{student.email}</td>
                     <td className="px-4 py-3">{teamCell(student)}</td>
                     <td className="px-4 py-3">{roleCell(student)}</td>
+                    {canExit ? (
+                      <td className="px-4 py-3 text-right">
+                        <ExitButton student={student} onExit={setExiting} />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -205,11 +227,15 @@ export function Component() {
                   <span className="text-muted-foreground">Nhóm: </span>
                   {teamCell(student)}
                 </p>
+                {canExit ? <ExitButton student={student} onExit={setExiting} /> : null}
               </li>
             ))}
           </ul>
         </>
       )}
+      {canExit ? (
+        <StudentExitDialog classId={course.courseId} student={exiting} onClose={() => setExiting(null)} />
+      ) : null}
     </div>
   );
 }

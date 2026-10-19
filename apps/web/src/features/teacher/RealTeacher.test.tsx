@@ -3,22 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createMemoryRepository } from "@/mocks/data/storage";
-import { createAuthHandlers } from "@/mocks/handlers/auth";
+import { fixture, main, record, setup } from "@/features/teacher/realTeacherTestkit";
 import { server } from "@/mocks/server";
-import {
-  buildClass,
-  buildCourse,
-  buildEnrollment,
-  buildGroup,
-  buildMember,
-  buildTeacher,
-  classroomHandlers,
-  envelope,
-  envelopeError,
-  type ClassroomFixture,
-} from "@/test/classroomHandlers";
-import { renderAppRoutes, teacherTestSession } from "@/test/render";
+import { buildClass, buildCourse, envelope, envelopeError } from "@/test/classroomHandlers";
 
 /**
  * Teacher class management against the (simulated) real Classroom service,
@@ -26,51 +13,6 @@ import { renderAppRoutes, teacherTestSession } from "@/test/render";
  */
 
 afterEach(() => vi.unstubAllEnvs());
-
-function fixture(overrides: Partial<ClassroomFixture> = {}): ClassroomFixture {
-  return {
-    classes: [buildClass()],
-    courses: [buildCourse(), buildCourse({ id: "course-2", code: "IT3090", name: "Cơ sở dữ liệu" })],
-    teachers: { "class-1": [buildTeacher({ user_id: "tu1" })] },
-    enrollments: {
-      "class-1": [buildEnrollment({ user_id: "u1" }), buildEnrollment({ id: "e2", user_id: "u2" })],
-    },
-    groups: { "class-1": [buildGroup({ id: "g1" })] },
-    members: { g1: [buildMember({ group_id: "g1", user_id: "u1", role: "LEADER" })] },
-    users: [
-      { id: "tu1", email: "d@utask.test", student_id: null, display_name: "TS. Đức", avatar_url: null, bio: null, roles: ["TEACHER"], account_status: "ACTIVE" },
-      { id: "11111111-1111-4111-8111-111111111111", email: "mai@utask.test", student_id: null, display_name: "ThS. Mai", avatar_url: null, bio: null, roles: ["TEACHER"], account_status: "ACTIVE" },
-    ],
-    ...overrides,
-  };
-}
-
-function setup(route: string, data: ClassroomFixture = fixture(), ...overrides: Parameters<typeof server.use>) {
-  vi.stubEnv("VITE_REAL_SERVICES", "auth,classroom");
-  server.use(...overrides, ...classroomHandlers(data), ...createAuthHandlers("default", createMemoryRepository("default")));
-  return renderAppRoutes(route, teacherTestSession);
-}
-
-async function main() {
-  return within(await screen.findByRole("main"));
-}
-
-interface Seen {
-  key: string | null;
-  body: Record<string, unknown>;
-}
-
-/** Records the JSON body and Idempotency-Key of each call, answers with `respond`. */
-function record(method: "post" | "patch", path: string, respond: () => Response): Seen[] {
-  const seen: Seen[] = [];
-  server.use(
-    http[method](path, async ({ request }) => {
-      seen.push({ key: request.headers.get("Idempotency-Key"), body: (await request.json()) as Record<string, unknown> });
-      return respond();
-    }),
-  );
-  return seen;
-}
 
 describe("real Teacher reads", () => {
   it("lists classes from Classroom with counts, and says plainly what it cannot know", async () => {

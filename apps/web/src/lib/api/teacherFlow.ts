@@ -80,6 +80,8 @@ export interface TeacherStudent {
   team: { teamId: string; name: string; role: "leader" | "member" } | null;
   /** Set when the student asked to join a team and is awaiting approval. */
   pendingTeam: { teamId: string; name: string } | null;
+  /** Only from the real Classroom service: the id the exit command needs. */
+  enrollmentId?: string;
 }
 
 export interface TeacherTeamProgress {
@@ -101,6 +103,8 @@ export interface TeacherTeam {
   leaders: { userId: string; name: string }[];
   members: TeacherTeamMember[];
   memberCount: number;
+  /** Only from the real Classroom service: `Group.source_version` the leader command needs. */
+  version?: number;
   maxMembers: number;
   project: { projectId: string; key: string; name: string } | null;
   /** Null when there is nothing to measure yet (not zero percent). */

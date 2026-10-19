@@ -193,6 +193,25 @@ describe("Team adjustment checks", () => {
     expect(validateMove({ ...base, studentId: "a-u0", fromTeam: team("a", 4, 2), toTeam: team("b", 3) }).ok).toBe(true);
   });
 
+  it("takes a student out of every team when asked to unassign, still protecting a sole Leader", () => {
+    const from = team("a", 4);
+    expect(validateMove({ ...base, studentId: "a-u2", fromTeam: from, toTeam: null, unassign: true }).ok).toBe(true);
+    const leader = validateMove({ ...base, studentId: "a-u0", fromTeam: from, toTeam: null, unassign: true });
+    expect(leader.ok).toBe(false);
+    expect(leader.errors.join(" ")).toContain("sẽ mất Leader");
+    const none = validateMove({ ...base, studentId: "x", fromTeam: null, toTeam: null, unassign: true });
+    expect(none.errors).toContain("Sinh viên chưa thuộc nhóm nào.");
+  });
+
+  it("describes the Leader swap rule only when asked, and refuses a person who already leads", () => {
+    const a = team("a", 4);
+    const swap = validateLeaderChange({ team: a, newLeaderId: "a-u1", leaderRule: "swap" });
+    expect(swap.ok).toBe(true);
+    expect(swap.warnings.join(" ")).toContain("trở thành thành viên thường");
+    expect(validateLeaderChange({ team: a, newLeaderId: "a-u1" }).warnings.join(" ")).toContain("chưa được nghiệp vụ chốt");
+    expect(validateLeaderChange({ team: a, newLeaderId: "a-u0", leaderRule: "swap" }).ok).toBe(false);
+  });
+
   it("warns, but does not block, when the source falls below the minimum or empties, and always notes history", () => {
     const small = validateMove({ ...base, studentId: "a-u2", fromTeam: team("a", 3), toTeam: team("b", 3) });
     expect(small.ok).toBe(true);

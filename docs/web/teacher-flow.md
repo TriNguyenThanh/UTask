@@ -2,6 +2,8 @@
 
 **Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch); Phase 2 (dashboard nhóm T08, workspace chỉ xem cho giảng viên) ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem); Phase 3–5 (form tạo lớp, cài đặt lớp, import CSV, nháp phản hồi, xem trước điều chỉnh nhóm, tín hiệu rủi ro) ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro), chỉ ở mức giao diện/demo. Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
 
+> **Cập nhật tích hợp (Phase 7–8):** câu "chưa có backend … thao tác ghi" ở trên mô tả thiết kế và dữ liệu Demo MSW. Khi `VITE_REAL_SERVICES` chứa `classroom`, giảng viên đọc và ghi lớp, sinh viên, nhóm và lịch sử qua Classroom thật; phạm vi, hợp đồng, giới hạn và việc cần backend ở [api-integration.md](api-integration.md). Giám sát, tín hiệu và project của nhóm vẫn chờ Work.
+
 Căn cứ: nhánh `fix/frontend-student-flow`, HEAD `c9df96b` (08/10/2026); phần
 Phase 1 nằm trong working tree, chưa commit. Mọi kết
 luận "hiện trạng" dưới đây dựa trên mã nguồn ở HEAD. Bằng chứng lấy từ nhánh

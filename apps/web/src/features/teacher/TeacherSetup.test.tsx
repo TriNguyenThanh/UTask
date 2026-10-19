@@ -385,7 +385,7 @@ describe("Team adjustment preview (T07)", () => {
     const { user, dialog } = await open();
     const confirm = await within(dialog).findByRole("button", { name: "Xác nhận thay đổi" });
     expect(confirm).toBeDisabled();
-    expect(confirm).toHaveAccessibleDescription(/chưa có hợp đồng API.*chính sách sĩ số/);
+    expect(confirm).toHaveAccessibleDescription(/dữ liệu mẫu/);
     await user.selectOptions(within(dialog).getByLabelText("Sinh viên"), within(dialog).getAllByRole("option")[1]);
     tracker.stop();
     expect(tracker.writes()).toEqual([]);
@@ -412,7 +412,7 @@ describe("Team adjustment preview (T07)", () => {
     await user.selectOptions(within(dialog).getByLabelText(/Leader mới của Team VISION/), within(dialog).getByRole("option", { name: "Vũ Ngọc Diệp" }));
     expect(await within(dialog).findByText(/Lịch sử thành viên và đóng góp cũ được giữ nguyên/)).toBeInTheDocument();
     expect(within(dialog).queryByText(/sẽ mất Leader/)).not.toBeInTheDocument();
-    expect(within(dialog).getByText("Đúng điều kiện cơ bản, nhưng việc xác nhận vẫn chưa khả dụng.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Đúng điều kiện cơ bản, nhưng dữ liệu mẫu không áp dụng thay đổi.")).toBeInTheDocument();
   });
 
   it("checks a new team's name and first Leader", async () => {

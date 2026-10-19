@@ -62,6 +62,7 @@ function sourceTeamFindings(
 
 /**
  * Move a student between teams, or seat an unteamed student (`fromTeam` null).
+ * With `unassign` the student leaves their team and joins none (`toTeam` null).
  * When the student is the only Leader of the team they leave, a replacement
  * from the remaining members is required so the team never loses its Leader.
  */
@@ -72,18 +73,23 @@ export function validateMove(input: {
   /** Leader to promote in the source team when the only Leader leaves. */
   replacementLeaderId: string | null;
   minMembers: number;
+  unassign?: boolean;
 }): Verdict {
-  const { studentId, fromTeam, toTeam, replacementLeaderId, minMembers } = input;
+  const { studentId, fromTeam, toTeam, replacementLeaderId, minMembers, unassign = false } = input;
   const errors: string[] = [];
   const warnings: string[] = [];
   if (!studentId) errors.push("Chọn sinh viên cần chuyển.");
-  if (!toTeam) errors.push("Chọn nhóm đích.");
-  if (!studentId || !toTeam) return verdict(errors, warnings);
+  if (unassign) {
+    if (studentId && !fromTeam) errors.push("Sinh viên chưa thuộc nhóm nào.");
+  } else if (!toTeam) {
+    errors.push("Chọn nhóm đích.");
+  }
+  if (!studentId || (unassign ? !fromTeam : !toTeam)) return verdict(errors, warnings);
 
-  if (fromTeam?.teamId === toTeam.teamId) {
+  if (toTeam && fromTeam?.teamId === toTeam.teamId) {
     errors.push("Sinh viên đã ở nhóm này.");
   }
-  if (toTeam.members.length >= toTeam.maxMembers) {
+  if (toTeam && toTeam.members.length >= toTeam.maxMembers) {
     errors.push(
       `${toTeam.name} đã đủ sĩ số tối đa (${toTeam.members.length}/${toTeam.maxMembers}). Giao diện không cho vượt sĩ số; ngoại lệ, nếu có, do nghiệp vụ quyết định ngoài màn này.`,
     );
@@ -98,8 +104,13 @@ export function validateMove(input: {
 }
 
 /** Make `newLeaderId` a Leader of `team`; the team must keep at least one Leader. */
-export function validateLeaderChange(input: { team: AdjustTeam | null; newLeaderId: string | null }): Verdict {
-  const { team, newLeaderId } = input;
+export function validateLeaderChange(input: {
+  team: AdjustTeam | null;
+  newLeaderId: string | null;
+  /** `swap`: the current Leader becomes a member (the real Classroom rule); otherwise the policy is undecided. */
+  leaderRule?: "undecided" | "swap";
+}): Verdict {
+  const { team, newLeaderId, leaderRule = "undecided" } = input;
   const errors: string[] = [];
   if (!team) errors.push("Chọn nhóm.");
   if (!newLeaderId) errors.push("Chọn thành viên làm Leader.");
@@ -112,7 +123,9 @@ export function validateLeaderChange(input: { team: AdjustTeam | null; newLeader
     errors.push(`${member.name} đã là Leader của ${team.name}.`);
   }
   return verdict(errors, [
-    "Cách xử lý Leader hiện tại (giữ hay chuyển thành thành viên) chưa được nghiệp vụ chốt. Nhóm luôn phải còn ít nhất một Leader.",
+    leaderRule === "swap"
+      ? "Leader hiện tại trở thành thành viên thường; nhóm luôn có đúng một Leader."
+      : "Cách xử lý Leader hiện tại (giữ hay chuyển thành thành viên) chưa được nghiệp vụ chốt. Nhóm luôn phải còn ít nhất một Leader.",
   ]);
 }
 

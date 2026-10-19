@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TeacherCourseDetail } from "@/lib/api/teacherFlow";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
+import { ActivityList } from "@/features/teacher/components/ActivityList";
 import { NoData, StatCard, activityText } from "@/features/teacher/components/shared";
 import { useTeacherTeams } from "@/lib/query/teacherFlowHooks";
 
@@ -24,7 +25,11 @@ export function Component() {
     return (
       <EmptyState
         title="Lớp chưa có sinh viên"
-        description="Lớp mới chưa có sinh viên hay nhóm là trạng thái hợp lệ. Việc thêm sinh viên sẽ khả dụng ở giai đoạn sau."
+        description={
+          course.classroom
+            ? "Thêm sinh viên hoặc nhập danh sách ở tab Sinh viên, hoặc cấp mã lớp ở Cài đặt để sinh viên tự vào."
+            : "Lớp mới chưa có sinh viên hay nhóm là trạng thái hợp lệ."
+        }
       />
     );
   }
@@ -146,6 +151,8 @@ export function Component() {
           </CardContent>
         </Card>
       </div>
+
+      {course.classroom ? <ActivityList scope={{ classId: course.courseId }} title="Lịch sử lớp" /> : null}
     </div>
   );
 }

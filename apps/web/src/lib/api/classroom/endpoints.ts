@@ -1,6 +1,8 @@
 import type { ApiClient } from "@/lib/api/client";
 import type {
   AccessCodeDto,
+  ActivityDto,
+  AdjustResultDto,
   ClassDto,
   ClassStatus,
   CourseDto,
@@ -8,9 +10,11 @@ import type {
   EnrollmentStatus,
   GroupDto,
   GroupStatus,
+  ImportResultDto,
   MemberDto,
   MemberStatus,
   ProjectLinkDto,
+  StudentRowInput,
   TeacherDto,
   TeacherRole,
   TeacherStatus,
@@ -18,6 +22,9 @@ import type {
 import { collectAllPages, MAX_PAGE_SIZE, type ListMeta } from "@/lib/api/pagination";
 
 const ROOT = "/api/classroom";
+
+/** Số mục lịch sử hiển thị; chỉ trang đầu, không phân trang tiếp. */
+const ACTIVITY_PAGE_SIZE = 50;
 
 interface PageQuery<S extends string> {
   cursor?: string | null;
@@ -94,11 +101,14 @@ interface CommandOptions {
   idempotencyKey: string;
 }
 
-/** Tạo nhóm; người gọi thành Trưởng nhóm. */
-export async function createGroup(client: ApiClient, input: { classId: string; name: string } & CommandOptions) {
+/** Tạo nhóm; người gọi thành Trưởng nhóm, hoặc `leaderId` khi giảng viên tạo hộ (sinh viên ACTIVE chưa có nhóm). */
+export async function createGroup(
+  client: ApiClient,
+  input: { classId: string; name: string; leaderId?: string } & CommandOptions,
+) {
   const { data } = await client.requestEnvelope<GroupDto>(`${ROOT}/groups/`, {
     method: "POST",
-    body: { class_id: input.classId, name: input.name },
+    body: { class_id: input.classId, name: input.name, leader_id: input.leaderId },
     idempotencyKey: input.idempotencyKey,
   });
   return data;
@@ -324,5 +334,73 @@ export async function assignTeacher(
       idempotencyKey: input.idempotencyKey,
     },
   );
+  return data;
+}
+
+/** Tối đa 100 dòng mỗi request; người gọi chia lô. Một Idempotency-Key cho một lô. */
+export const MAX_STUDENTS_PER_REQUEST = 100;
+
+export async function addStudents(
+  client: ApiClient,
+  classId: string,
+  students: readonly StudentRowInput[],
+  idempotencyKey: string,
+) {
+  const { data } = await client.requestEnvelope<ImportResultDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/students/`,
+    { method: "POST", body: { students }, idempotencyKey },
+  );
+  return data;
+}
+
+/** Giảng viên loại sinh viên khỏi lớp; kết thúc luôn thành viên nhóm của họ (trừ trưởng nhóm, xem `adjustMember`). */
+export async function exitEnrollment(
+  client: ApiClient,
+  classId: string,
+  enrollmentId: string,
+  input: { reason: string } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<EnrollmentDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/enrollments/${encodeURIComponent(enrollmentId)}/exit/`,
+    { method: "POST", body: { reason: input.reason }, idempotencyKey: input.idempotencyKey },
+  );
+  return data;
+}
+
+/** Chuyển sinh viên sang nhóm khác, xếp vào nhóm hoặc bỏ khỏi nhóm (`targetGroupId: null`). Trưởng nhóm phải có người kế nhiệm. */
+export async function adjustMember(
+  client: ApiClient,
+  classId: string,
+  input: { userId: string; targetGroupId: string | null; successorUserId?: string; reason: string } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<AdjustResultDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/adjust-member/`,
+    {
+      method: "POST",
+      body: {
+        user_id: input.userId,
+        target_group_id: input.targetGroupId,
+        successor_user_id: input.successorUserId,
+        reason: input.reason,
+      },
+      idempotencyKey: input.idempotencyKey,
+    },
+  );
+  return data;
+}
+
+/** Trang đầu của lịch sử (mới nhất trước, theo thứ tự backend trả); giảng viên của lớp hoặc admin. */
+export async function listClassActivities(client: ApiClient, classId: string) {
+  const { data } = await fetchPage<ActivityDto, never>(client, `/classes/${encodeURIComponent(classId)}/activities/`, {
+    pageSize: ACTIVITY_PAGE_SIZE,
+  });
+  return data;
+}
+
+/** Thành viên nhóm hoặc giảng viên của lớp đọc được. */
+export async function listGroupActivities(client: ApiClient, groupId: string) {
+  const { data } = await fetchPage<ActivityDto, never>(client, `/groups/${encodeURIComponent(groupId)}/activities/`, {
+    pageSize: ACTIVITY_PAGE_SIZE,
+  });
   return data;
 }
