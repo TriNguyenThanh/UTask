@@ -27,20 +27,40 @@ class IntegrationComposeTests(unittest.TestCase):
                 self.assertNotIn("./infra/env/database.env", api["env_file"])
                 self.assertIn("./infra/env/integration-service.env", api["env_file"])
                 self.assertEqual(
-                    api["depends_on"], {"postgres": {"condition": "service_healthy"}}
+                    api["depends_on"]["integration-migrate"]["condition"],
+                    "service_completed_successfully",
                 )
-                postgres = services["postgres"]
                 self.assertEqual(
-                    postgres["entrypoint"],
-                    ["/bin/sh", "/usr/local/bin/start-postgres.sh"],
+                    api["depends_on"]["redis"]["condition"], "service_healthy"
                 )
-                self.assertIn(
-                    "./infra/postgres/start-postgres.sh:/usr/local/bin/start-postgres.sh:ro",
-                    postgres["volumes"],
+                migration = services["integration-migrate"]
+                self.assertEqual(
+                    migration["command"],
+                    ["python", "manage.py", "migrate", "--noinput"],
                 )
-                self.assertIn(
-                    "/tmp/utask-postgres-ready", postgres["healthcheck"]["test"][1]
-                )
+                self.assertNotIn("./infra/env/database.env", migration["env_file"])
+                for name in ("integration-worker", "integration-beat"):
+                    process = services[name]
+                    self.assertEqual(
+                        process["depends_on"]["integration-migrate"]["condition"],
+                        "service_completed_successfully",
+                    )
+                    self.assertIn(
+                        "./infra/env/integration-service.env", process["env_file"]
+                    )
+                postgres = services["postgres"]
+                if filename == "docker-compose.yml":
+                    self.assertEqual(
+                        postgres["entrypoint"],
+                        ["/bin/sh", "/usr/local/bin/start-postgres.sh"],
+                    )
+                    self.assertIn(
+                        "./infra/postgres/start-postgres.sh:/usr/local/bin/start-postgres.sh:ro",
+                        postgres["volumes"],
+                    )
+                    self.assertIn(
+                        "/tmp/utask-postgres-ready", postgres["healthcheck"]["test"][1]
+                    )
         workflow = yaml.safe_load(
             (ROOT / ".github/workflows/release-staging.yml").read_text()
         )
@@ -84,7 +104,7 @@ class IntegrationComposeTests(unittest.TestCase):
                 if check["service"] == "integration-service"
             )
             self.assertTrue(check["postgres"])
-            self.assertFalse(check["redis"])
+            self.assertTrue(check["redis"])
             environment = json.loads(check["test_env"])
             self.assertEqual(environment["INTEGRATION_TEST_DB_USER"], "utask_ci")
             self.assertEqual(
@@ -93,6 +113,7 @@ class IntegrationComposeTests(unittest.TestCase):
             self.assertEqual(environment["TEST_DATABASE_NAME"], "integration_test")
             self.assertNotIn("INTEGRATION_TEST_DATABASE", environment)
             self.assertEqual(environment["INTEGRATION_TEST_DB_HOST"], "127.0.0.1")
+            self.assertEqual(environment["INTEGRATION_TEST_DB_PORT"], "5432")
             self.assertEqual(
                 environment["INTEGRATION_TEST_DB_PASSWORD"], "ci-only-postgres-password"
             )
@@ -113,13 +134,22 @@ class IntegrationComposeTests(unittest.TestCase):
                 nginx.index(location), nginx.index("location /api/integrations/ {")
             )
         self.assertIn("rewrite ^/api/integrations/(.*)$ /$1 break;", nginx)
+        webhook = nginx.index("location = /api/integrations/api/v1/github/webhooks {")
+        self.assertLess(webhook, nginx.index("location /api/integrations/ {"))
+        self.assertIn("client_max_body_size 25m;", nginx[webhook:])
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
     def test_resolved_runtime_never_receives_shared_admin_credentials(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with (
                 self.subTest(filename=filename),
-                patch.dict(os.environ, {"COMPOSE_PROFILES": ""}),
+                patch.dict(
+                    os.environ,
+                    {
+                        "COMPOSE_PROFILES": "",
+                        "INTEGRATION_REDIS_URL": "redis://redis:6379/9",
+                    },
+                ),
             ):
                 result = subprocess.run(
                     [
@@ -141,9 +171,8 @@ class IntegrationComposeTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                environment = json.loads(result.stdout)["services"][
-                    "integration-service"
-                ]["environment"]
+                services = json.loads(result.stdout)["services"]
+                environment = services["integration-service"]["environment"]
                 self.assertNotIn("POSTGRES_USER", environment)
                 self.assertNotIn("POSTGRES_PASSWORD", environment)
                 self.assertEqual(
@@ -151,6 +180,15 @@ class IntegrationComposeTests(unittest.TestCase):
                 )
                 self.assertEqual(environment["POSTGRES_HOST"], "postgres")
                 self.assertEqual(environment["DATABASE_NAME"], "integration_db")
+                for name in (
+                    "integration-service",
+                    "integration-worker",
+                    "integration-beat",
+                ):
+                    self.assertEqual(
+                        services[name]["environment"]["INTEGRATION_REDIS_URL"],
+                        "redis://redis:6379/9",
+                    )
 
     @unittest.skipUnless(shutil.which("docker"), "Docker is unavailable")
     def test_nginx_normalizes_internal_paths_and_preserves_public_boundaries(self):
