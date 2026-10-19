@@ -19,7 +19,6 @@ import { createMemoryRepository, type MockRepository } from "@/mocks/data/storag
 import type { MockScenario } from "@/mocks/scenarios";
 import { teacherKeys } from "@/lib/query/teacherFlowHooks";
 import {
-  legacyStudentTestSession,
   renderAppRoutes,
   studentTestSession,
   teacher2TestSession,
@@ -256,10 +255,8 @@ describe("Access: role, assignment, sidebar and deep link agree", () => {
     expect(await screen.findAllByText("Phạm Quốc Huy")).not.toHaveLength(0);
   });
 
-  it.each([
-    ["a student", studentTestSession],
-    ["a session saved before roles existed", legacyStudentTestSession],
-  ])("blocks %s from the Teacher area without issuing a Teacher request", async (_label, session) => {
+  it("blocks a student from the Teacher area without issuing a Teacher request", async () => {
+    const session = studentTestSession;
     const tracker = trackRequests();
     for (const route of ["/teacher", "/teacher/courses", "/teacher/courses/course-se330/students"]) {
       const view = setup(route, session);

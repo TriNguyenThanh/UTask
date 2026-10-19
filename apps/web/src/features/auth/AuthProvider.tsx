@@ -5,54 +5,35 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { loginRequest, logoutRequest, refreshRequest } from "@/features/auth/api/auth";
-import type { LoginPayload } from "@/features/auth/api/auth";
+import { deviceName } from "@/features/auth/deviceName";
+import { publishSession } from "@/features/auth/sessionEvents";
 import type { AuthSession, AuthStatus, AuthUser } from "@/features/auth/types";
 import { clearAllDrafts } from "@/features/teacher/lib/drafts";
 import { createApiClient } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
+import { listSessions, login as loginRequest, revokeSession } from "@/lib/api/identity/endpoints";
 
-const MOCK_REFRESH_TOKEN_KEY = "utask.mock.refresh-token";
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
 
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   accessToken: string | null;
   login(payload: LoginPayload): Promise<AuthUser>;
-  logout(): Promise<void>;
+  /** `revoked: false` khi chưa thu hồi được phiên trên máy chủ; phiên cục bộ luôn bị xóa. */
+  logout(): Promise<{ revoked: boolean }>;
   handleUnauthorized(): void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function mocksEnabled() {
-  // Mirror mocks/enableMocking.ts: run in any build when explicitly
-  // enabled, so a deployed mock demo also restores its session.
-  return import.meta.env.VITE_ENABLE_MOCKS === "true";
-}
-
-function readRefreshToken(): string | null {
-  try {
-    return sessionStorage.getItem(MOCK_REFRESH_TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeRefreshToken(token: string | null) {
-  try {
-    if (token) {
-      sessionStorage.setItem(MOCK_REFRESH_TOKEN_KEY, token);
-    } else {
-      sessionStorage.removeItem(MOCK_REFRESH_TOKEN_KEY);
-    }
-  } catch {
-    // In-memory auth remains functional when browser storage is unavailable.
-  }
-}
 
 export function AuthProvider({
   children,
@@ -64,92 +45,66 @@ export function AuthProvider({
   baseUrl?: string;
 }) {
   const queryClient = useQueryClient();
+  const [session, setSession] = useState<AuthSession | null>(initialSession ?? null);
+  const [status, setStatus] = useState<AuthStatus>(initialSession ? "authenticated" : "anonymous");
+  const sessionRef = useRef(session);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   const unauthenticatedClient = useMemo(() => createApiClient({
     baseUrl,
     getAccessToken: () => null,
     onUnauthorized: () => undefined,
   }), [baseUrl]);
-  const [session, setSession] = useState<AuthSession | null>(initialSession ?? null);
-  const [status, setStatus] = useState<AuthStatus>(initialSession ? "authenticated" : "restoring");
+  // 401 khi đăng xuất không cần xử lý thêm: phiên cục bộ vẫn bị xóa ngay sau đó.
+  const sessionClient = useMemo(() => createApiClient({
+    baseUrl,
+    getAccessToken: () => sessionRef.current?.accessToken ?? null,
+    onUnauthorized: () => undefined,
+  }), [baseUrl]);
 
   const clearSession = useCallback(() => {
-    writeRefreshToken(null);
     setSession(null);
     setStatus("anonymous");
     queryClient.clear();
+    publishSession(null);
   }, [queryClient]);
 
-  useEffect(() => {
-    if (initialSession) {
-      return;
-    }
-    if (!mocksEnabled()) {
-      setStatus("anonymous");
-      return;
-    }
-
-    const refreshToken = readRefreshToken();
-    if (!refreshToken) {
-      setStatus("anonymous");
-      return;
-    }
-
-    let active = true;
-    void refreshRequest(unauthenticatedClient, refreshToken)
-      .then((response) => {
-        if (!active) {
-          return;
-        }
-        setSession({
-          accessToken: response.access_token,
-          refreshToken,
-          user: response.user,
-        });
-        setStatus("authenticated");
-      })
-      .catch(() => {
-        if (active) {
-          clearSession();
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [clearSession, initialSession, unauthenticatedClient]);
-
   const login = useCallback(async (payload: LoginPayload) => {
-    const response = await loginRequest(unauthenticatedClient, payload);
-    const nextSession: AuthSession = {
-      accessToken: response.access_token,
-      refreshToken: response.refresh_token,
-      user: response.user,
-    };
-    if (mocksEnabled()) {
-      writeRefreshToken(response.refresh_token);
-    }
+    const { accessToken, user } = await loginRequest(unauthenticatedClient, {
+      ...payload,
+      deviceName: deviceName(),
+    });
     // A new sign-in starts from an empty cache so nothing fetched for a
     // previous account (or while anonymous) can be shown to this one.
     queryClient.clear();
-    setSession(nextSession);
+    setSession({ accessToken, user });
     setStatus("authenticated");
-    return response.user;
+    publishSession({ accessToken, user });
+    return user;
   }, [queryClient, unauthenticatedClient]);
 
   const logout = useCallback(async () => {
-    const refreshToken = session?.refreshToken;
+    let revoked = true;
     try {
-      if (refreshToken) {
-        await logoutRequest(unauthenticatedClient, refreshToken);
+      if (sessionRef.current) {
+        const current = (await listSessions(sessionClient)).find((item) => item.is_current);
+        if (current) {
+          await revokeSession(sessionClient, current.id);
+        }
       }
-    } catch {
-      // Logout is local-authoritative after best-effort token revocation.
+    } catch (error) {
+      // Phiên đã không còn trên máy chủ nghĩa là đã thu hồi.
+      revoked = error instanceof ApiError && error.code === "SESSION_NOT_FOUND";
     } finally {
       // An explicit sign-out also forgets unsent drafts; an expired session does not.
       clearAllDrafts();
       clearSession();
     }
-  }, [clearSession, session?.refreshToken, unauthenticatedClient]);
+    return { revoked };
+  }, [clearSession, sessionClient]);
 
   const value = useMemo<AuthContextValue>(() => ({
     status,

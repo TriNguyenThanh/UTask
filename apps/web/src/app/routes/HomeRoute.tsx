@@ -2,10 +2,10 @@ import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useAuth } from "@/features/auth/AuthProvider";
+import { useSignOut } from "@/features/auth/useSignOut";
 
 export function Component() {
-  const auth = useAuth();
+  const signOut = useSignOut();
 
   return (
     <main id="main-content" className="container py-8">
@@ -13,7 +13,7 @@ export function Component() {
         title="UTask"
         description="Luồng xác thực đã sẵn sàng. Các màn hình kế tiếp sẽ được xây từng slice."
       >
-        <Button variant="outline" onClick={() => void auth.logout()}>
+        <Button variant="outline" onClick={() => void signOut()}>
           <LogOut className="mr-2 size-4" aria-hidden />
           Đăng xuất
         </Button>

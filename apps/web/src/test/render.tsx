@@ -7,60 +7,30 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import type { AuthSession } from "@/features/auth/types";
+import { buildMockAuthUser } from "@/mocks/data/authUsers";
 import { LEADER_ID, MEMBER_ID, STUDENT_ID, TEACHER2_ID, TEACHER_ID } from "@/mocks/data/database";
 import { appRoutes } from "@/app/router/router";
 import { ApiClientProvider } from "@/lib/api/ApiClientProvider";
 import { createTestQueryClient } from "@/lib/query/client";
 export const leaderTestSession: AuthSession = {
   accessToken: `mock-access:${LEADER_ID}:test`,
-  refreshToken: `mock-refresh:${LEADER_ID}`,
-  user: {
-    id: LEADER_ID,
-    email: "leader@utask.test",
-    display_name: "Nguyễn Hoàng Nam",
-    global_role: "USER",
-    capabilities: ["project:create"],
-    roles: ["STUDENT"],
-  },
+  user: buildMockAuthUser({ id: LEADER_ID, email: "leader@utask.test", display_name: "Nguyễn Hoàng Nam", roles: ["STUDENT"] }),
 };
 
 export const memberTestSession: AuthSession = {
   accessToken: `mock-access:${MEMBER_ID}:test`,
-  refreshToken: `mock-refresh:${MEMBER_ID}`,
-  user: {
-    id: MEMBER_ID,
-    email: "member@utask.test",
-    display_name: "Đặng Thảo Linh",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["STUDENT"],
-  },
+  user: buildMockAuthUser({ id: MEMBER_ID, email: "member@utask.test", display_name: "Đặng Thảo Linh", roles: ["STUDENT"] }),
 };
 
 export const studentTestSession: AuthSession = {
   accessToken: `mock-access:${STUDENT_ID}:test`,
-  refreshToken: `mock-refresh:${STUDENT_ID}`,
-  user: {
-    id: STUDENT_ID,
-    email: "student@utask.test",
-    display_name: "Lê Minh Khoa",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["STUDENT"],
-  },
-};
-
-/** Sessions persisted before `roles` existed carry none and must stay plain students. */
-export const legacyStudentTestSession: AuthSession = {
-  ...studentTestSession,
-  user: { ...studentTestSession.user, roles: undefined },
+  user: buildMockAuthUser({ id: STUDENT_ID, email: "student@utask.test", display_name: "Lê Minh Khoa", roles: ["STUDENT"] }),
 };
 
 function teacherSession(userId: string, email: string, name: string): AuthSession {
   return {
     accessToken: `mock-access:${userId}:test`,
-    refreshToken: `mock-refresh:${userId}`,
-    user: { id: userId, email, display_name: name, global_role: "USER", capabilities: [], roles: ["TEACHER"] },
+    user: buildMockAuthUser({ id: userId, email, display_name: name, roles: ["TEACHER"] }),
   };
 }
 

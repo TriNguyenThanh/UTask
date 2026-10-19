@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { publishSession } from "@/features/auth/sessionEvents";
 import type { AuthUser } from "@/features/auth/types";
+import { buildMockAuthUser } from "@/mocks/data/authUsers";
 import { LEADER_ID, STUDENT_ID, TEACHER_ID } from "@/mocks/data/database";
 import { installPersonaBridge, lookupPersona } from "@/mocks/personaBridge";
 import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 
 function user(email: string, roles: NonNullable<AuthUser["roles"]>): AuthUser {
-  return { id: "real-id", email, display_name: "Real", global_role: "USER", capabilities: [], roles };
+  return buildMockAuthUser({ id: "real-id", email, display_name: "Real", roles });
 }
 
 function requestWith(authorization?: string): Request {

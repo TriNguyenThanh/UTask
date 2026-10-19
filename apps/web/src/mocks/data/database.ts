@@ -1,4 +1,5 @@
 import type { AuthUser } from "@/features/auth/types";
+import { buildMockAuthUser } from "@/mocks/data/authUsers";
 import type { Issue, IssueHistoryEntry } from "@/features/projects/types";
 import type { MockScenario } from "@/mocks/scenarios";
 
@@ -14,54 +15,12 @@ export const TEACHER3_ID = "00000000-0000-4000-8000-0000000000f5";
 export const DEMO_PASSWORD = "demo1234";
 
 export const MOCK_USERS: AuthUser[] = [
-  {
-    id: LEADER_ID,
-    email: "leader@utask.test",
-    display_name: "Nguyễn Hoàng Nam",
-    global_role: "USER",
-    capabilities: ["project:create"],
-    roles: ["STUDENT"],
-  },
-  {
-    id: MEMBER_ID,
-    email: "member@utask.test",
-    display_name: "Đặng Thảo Linh",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["STUDENT"],
-  },
-  {
-    id: STUDENT_ID,
-    email: "student@utask.test",
-    display_name: "Lê Minh Khoa",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["STUDENT"],
-  },
-  {
-    id: TEACHER_ID,
-    email: "teacher@utask.test",
-    display_name: "TS. Trần Minh Đức",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["TEACHER"],
-  },
-  {
-    id: TEACHER2_ID,
-    email: "teacher2@utask.test",
-    display_name: "ThS. Lê Thị Mai",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["TEACHER"],
-  },
-  {
-    id: TEACHER3_ID,
-    email: "teacher3@utask.test",
-    display_name: "TS. Phạm Quốc Bảo",
-    global_role: "USER",
-    capabilities: [],
-    roles: ["TEACHER"],
-  },
+  buildMockAuthUser({ id: LEADER_ID, email: "leader@utask.test", display_name: "Nguyễn Hoàng Nam", roles: ["STUDENT"] }),
+  buildMockAuthUser({ id: MEMBER_ID, email: "member@utask.test", display_name: "Đặng Thảo Linh", roles: ["STUDENT"] }),
+  buildMockAuthUser({ id: STUDENT_ID, email: "student@utask.test", display_name: "Lê Minh Khoa", roles: ["STUDENT"] }),
+  buildMockAuthUser({ id: TEACHER_ID, email: "teacher@utask.test", display_name: "TS. Trần Minh Đức", roles: ["TEACHER"] }),
+  buildMockAuthUser({ id: TEACHER2_ID, email: "teacher2@utask.test", display_name: "ThS. Lê Thị Mai", roles: ["TEACHER"] }),
+  buildMockAuthUser({ id: TEACHER3_ID, email: "teacher3@utask.test", display_name: "TS. Phạm Quốc Bảo", roles: ["TEACHER"] }),
 ];
 
 export interface MockProfileRecord {

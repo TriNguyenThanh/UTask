@@ -7,15 +7,14 @@ import { isSafeInternalPath } from "@/lib/navigation/safeInternalPath";
  * This is a capability check only. It decides which navigation and routes
  * are available; it grants NO access to any class. Reading a class needs an
  * assignment for that class, which only the server (or the demo mock)
- * decides. Sessions created before `roles` existed carry no roles and are
- * treated as plain students.
+ * decides.
  */
 export function canUseTeacherSpace(user: AuthUser | null | undefined): boolean {
-  return user?.roles?.includes("TEACHER") ?? false;
+  return user?.roles.includes("TEACHER") ?? false;
 }
 
 export function isStudentAccount(user: AuthUser | null | undefined): boolean {
-  return user?.roles?.includes("STUDENT") ?? false;
+  return user?.roles.includes("STUDENT") ?? false;
 }
 
 /**
@@ -24,7 +23,14 @@ export function isStudentAccount(user: AuthUser | null | undefined): boolean {
  * home and reaches the Teacher space through the sidebar link.
  */
 export function defaultLandingPath(user: AuthUser | null | undefined): string {
-  return canUseTeacherSpace(user) && !isStudentAccount(user) ? "/teacher" : "/my-work";
+  if (canUseTeacherSpace(user) && !isStudentAccount(user)) {
+    return "/teacher";
+  }
+  // Chưa có khu quản trị: tài khoản chỉ có SYSTEM_ADMIN không có dữ liệu sinh viên để hiển thị.
+  if (user?.roles.length === 1 && user.roles[0] === "SYSTEM_ADMIN") {
+    return "/settings/profile";
+  }
+  return "/my-work";
 }
 
 /**
