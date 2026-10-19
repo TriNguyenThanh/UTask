@@ -806,7 +806,8 @@ describe("Cache across accounts", () => {
     await screen.findByRole("region", { name: "Danh sách lớp" });
     expect(view.queryClient.getQueryCache().findAll({ queryKey: ["teacher"] }).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /Đăng xuất/, hidden: true }));
+    await user.click(screen.getAllByRole("button", { name: /@utask\.test/ })[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /Đăng xuất/ }));
     await waitFor(() => expect(pathname(view.router)).toBe("/login"));
     expect(view.queryClient.getQueryCache().findAll({ queryKey: ["teacher"] })).toHaveLength(0);
   });

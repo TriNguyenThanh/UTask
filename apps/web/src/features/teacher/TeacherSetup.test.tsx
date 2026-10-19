@@ -470,7 +470,9 @@ describe("Feedback drafts", () => {
     const { box } = await open("/teacher/courses/course-se330/teams/team-nexus");
     await userEvent.setup().type(box, "nháp chưa gửi");
     expect(Object.keys(sessionStorage).some((key) => key.startsWith("utask.draft."))).toBe(true);
-    await userEvent.setup().click(screen.getAllByRole("button", { name: /Đăng xuất/ })[0]);
+    const user = userEvent.setup();
+    await user.click(screen.getAllByRole("button", { name: /@utask\.test/ })[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /Đăng xuất/ }));
     await waitFor(() =>
       expect(Object.keys(sessionStorage).some((key) => key.startsWith("utask.draft."))).toBe(false),
     );
