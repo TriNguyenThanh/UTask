@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-import { cn } from "@/lib/utils";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 
 const settingsTabs = [
   { to: "/settings/profile", label: "Hồ sơ" },
@@ -14,29 +14,12 @@ const settingsTabs = [
 export function SettingsHeader() {
   return (
     <header className="space-y-4 short:space-y-2">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Cài đặt Cá nhân &amp; Tích hợp</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Quản lý hồ sơ định danh học vụ sinh viên và liên kết GitHub để ghi nhận đóng góp đồ án
-          tự động.
-        </p>
-      </div>
-      <nav
-        aria-label="Các trang cài đặt"
-        className="flex items-center gap-6 overflow-x-auto border-b"
-      >
+      <nav aria-label="Các trang cài đặt" className={segmentedTabsListClass}>
         {settingsTabs.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
-            className={({ isActive }) =>
-              cn(
-                "-mb-px whitespace-nowrap border-b-2 pb-2.5 short:pb-1.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "border-primary font-semibold text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )
-            }
+            className={({ isActive }) => segmentedTabClass(isActive)}
           >
             {tab.label}
           </NavLink>

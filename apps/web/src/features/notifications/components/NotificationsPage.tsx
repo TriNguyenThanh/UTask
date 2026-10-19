@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 import { toast } from "sonner";
 import {
   CheckCheck,
@@ -35,6 +36,7 @@ import {
   useMarkNotificationRead,
   useNotifications,
 } from "@/lib/query/studentFlowHooks";
+import { formatRelative, targetUrl } from "@/features/notifications/lib/format";
 import { cn } from "@/lib/utils";
 
 type CategoryFilter = "all" | NotificationCategory;
@@ -60,43 +62,6 @@ function categoryIcon(category: NotificationCategory) {
       return <GraduationCap className="size-5" aria-hidden />;
     case "task-pr":
       return <GitPullRequest className="size-5" aria-hidden />;
-  }
-}
-
-/** Relative time helper: "x phút trước" / "x giờ trước" / "x ngày trước". */
-function formatRelative(at: string, now: Date): string {
-  const diffMs = now.getTime() - new Date(at).getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "Vừa xong";
-  if (minutes < 60) return `${minutes} phút trước`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  const days = Math.floor(hours / 24);
-  return `${days} ngày trước`;
-}
-
-/**
- * Class-level notifications open the Student team page, which a teacher-only
- * account cannot use (it answers "not found"). Such an account is sent to the
- * class it manages instead. An account that is both teacher and student keeps
- * the Student page: the notification does not say in which capacity it was
- * delivered.
- */
-function targetUrl(target: NotificationActionTarget, teacherOnly: boolean): string {
-  switch (target.kind) {
-    case "team-hub":
-    case "team-formation":
-    case "join-request":
-    case "course-deadline":
-      return teacherOnly
-        ? `/teacher/courses/${target.courseId}`
-        : `/courses/${target.courseId}/team`;
-    case "board-issue":
-      return `/projects/${target.projectId}/board?issue=${target.issueKey}`;
-    case "code":
-      return `/projects/${target.projectId}/code`;
-    case "backlog":
-      return `/projects/${target.projectId}/backlog`;
   }
 }
 
@@ -183,31 +148,10 @@ export function NotificationsPage() {
 
   return (
     <div className="page-container space-y-4 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
-      <header className="flex flex-col justify-between gap-4 border-b pb-4 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">Trung tâm Thông báo</h1>
-            {unreadCount > 0 ? <Badge variant="secondary">{unreadCount} mới</Badge> : null}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Cập nhật học vụ, thành lập nhóm, công việc Jira và cảnh báo tiến độ thông minh
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start md:self-auto"
-          onClick={handleMarkAllRead}
-          disabled={unreadCount === 0 || markAllRead.isPending}
-        >
-          <CheckCheck className="size-4" aria-hidden />
-          Đánh dấu tất cả đã đọc
-        </Button>
-      </header>
 
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div
-          className="flex items-center gap-1 overflow-x-auto rounded-md bg-secondary p-0.5 text-xs font-medium"
+          className={segmentedTabsListClass}
           role="tablist"
           aria-label="Lọc thông báo theo loại"
         >
@@ -220,12 +164,7 @@ export function NotificationsPage() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setCategory(tab.id)}
-                className={cn(
-                  "flex items-center gap-1.5 whitespace-nowrap rounded px-3 py-1.5 transition-colors",
-                  active
-                    ? "bg-card font-semibold text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                className={segmentedTabClass(active)}
               >
                 {tab.label}
                 <span
@@ -267,6 +206,15 @@ export function NotificationsPage() {
               </SelectContent>
             </Select>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMarkAllRead}
+            disabled={unreadCount === 0 || markAllRead.isPending}
+          >
+            <CheckCheck className="size-4" aria-hidden />
+            Đánh dấu tất cả đã đọc
+          </Button>
         </div>
       </div>
 

@@ -4,12 +4,18 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isStudentAccount } from "@/features/auth/utils";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
-/**
- * Top bar of the Teacher space. It carries no Student actions (create task,
- * Git sync, search of tasks) and issues no requests of its own.
- */
-export function TeacherTopNavigation({ onOpenMobileNav }: Readonly<{ onOpenMobileNav?: () => void }>) {
+/** Top bar: tiêu đề mục đang xem + chuông thông báo; không có hành động nghiệp vụ. */
+export function TopBar({
+  title,
+  inTeacherSpace,
+  onOpenMobileNav,
+}: Readonly<{
+  title: string;
+  inTeacherSpace: boolean;
+  onOpenMobileNav?: () => void;
+}>) {
   const { user } = useAuth();
 
   return (
@@ -27,13 +33,16 @@ export function TeacherTopNavigation({ onOpenMobileNav }: Readonly<{ onOpenMobil
             <Menu className="size-4" aria-hidden />
           </Button>
         ) : null}
-        <p className="truncate text-sm font-semibold">Không gian giảng viên</p>
+        <p className="truncate text-base font-semibold tracking-tight">{title}</p>
       </div>
-      {isStudentAccount(user) ? (
-        <Button asChild variant="outline" size="sm">
-          <Link to="/my-work">Không gian sinh viên</Link>
-        </Button>
-      ) : null}
+      <div className="flex items-center gap-2">
+        {inTeacherSpace ? null : <NotificationBell />}
+        {inTeacherSpace && isStudentAccount(user) ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/my-work">Không gian sinh viên</Link>
+          </Button>
+        ) : null}
+      </div>
     </header>
   );
 }

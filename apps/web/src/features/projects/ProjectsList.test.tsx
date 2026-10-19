@@ -83,7 +83,7 @@ describe("projects list route", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" }),
+      await screen.findByRole("tablist", { name: "Phạm vi thời gian" }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/404|Không tìm thấy/)).not.toBeInTheDocument();
   });
@@ -95,7 +95,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     await user.click(screen.getByRole("link", { name: /^Dự án$/ }));
     await waitFor(() => {
       expect(result.router.state.location.pathname).toBe("/projects");
@@ -108,7 +108,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     // The workspace heading must never appear on the list page.
     expect(
       screen.queryByRole("heading", { name: "Backlog & Sprint Planning" }),
@@ -124,7 +124,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     await waitFor(() => {
       expect(screen.getByText(/Smart Supply Chain/i)).toBeInTheDocument();
       expect(
@@ -140,7 +140,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     const searchBox = screen.getByRole("searchbox", {
       name: "Tìm kiếm dự án theo tên, mã môn học hoặc project key",
     });
@@ -158,7 +158,7 @@ describe("projects list route", () => {
       routes: fullRoutes(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     const nexusLink = await screen.findAllByRole("link", {
       name: /Smart Supply Chain/i,
     });
@@ -179,7 +179,7 @@ describe("projects list route", () => {
       routes: fullRoutes(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     const deliLink = await screen.findAllByRole("link", {
       name: /Theo dõi Sức khỏe/i,
     });
@@ -221,7 +221,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     await waitFor(() => {
       expect(
         screen.getByText(/Chưa có dự án đồ án/),
@@ -236,7 +236,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     expect(screen.getByRole("link", { name: /^Dự án$/ }).className).toContain(
       "bg-accent",
     );
@@ -248,7 +248,7 @@ describe("projects list route", () => {
       routes: routesWithProjectsList(),
     });
 
-    await screen.findByRole("heading", { name: "Dự án Đồ án Môn học" });
+    await screen.findByRole("tablist", { name: "Phạm vi thời gian" });
     await waitFor(() => {
       expect(screen.getByText(/Smart Supply Chain/i)).toBeInTheDocument();
     });

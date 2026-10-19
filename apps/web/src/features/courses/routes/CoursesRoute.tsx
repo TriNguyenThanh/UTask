@@ -1,4 +1,4 @@
-import { GraduationCap, Users } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -115,17 +115,6 @@ export function Component() {
 
   return (
     <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
-      <div className="border-b pb-4">
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <GraduationCap className="size-6 text-primary" aria-hidden />
-          Môn học của tôi
-        </h1>
-        <p className="mt-1 text-xs font-medium text-muted-foreground">
-          Danh sách các học phần đồ án của bạn trong học kỳ hiện tại. Chọn một
-          môn để xem nhóm và đề tài.
-        </p>
-      </div>
-
       {enrollments.length === 0 ? (
         <NoCoursesState />
       ) : (
@@ -148,11 +137,6 @@ export function Component() {
           </table>
         </div>
       )}
-
-      <footer className="flex items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
-        <Users className="size-3.5" aria-hidden />
-        Trạng thái nhóm được cập nhật tự động theo dữ liệu học kỳ.
-      </footer>
     </div>
   );
 }

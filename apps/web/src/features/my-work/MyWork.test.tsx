@@ -119,35 +119,6 @@ describe("my-work pending membership", () => {
   });
 });
 
-describe("role-based actions", () => {
-  it("hides leader-only create-task affordance from members", async () => {
-    useMyWorkScenario("my-work-member");
-    renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
-      route: "/my-work",
-      routes: myWorkRoutes(),
-    });
-    await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
-    const createButton = screen.getByRole("button", { name: /Tạo task mới/ });
-    expect(createButton).toBeDisabled();
-    expect(createButton).toHaveAttribute(
-      "title",
-      "Chỉ Leader nhóm mới có thể tạo task",
-    );
-  });
-
-  it("enables create-task affordance for leaders", async () => {
-    useMyWorkScenario("my-work-leader");
-    renderApp(<RequireAuth><AuthenticatedLayout /></RequireAuth>, {
-      route: "/my-work",
-      routes: myWorkRoutes(),
-    });
-    await screen.findByRole("heading", { name: /Bàn làm việc của tôi/ });
-    const createButton = screen.getByRole("button", { name: /Tạo task mới/ });
-    expect(createButton).toBeDisabled(); // placeholder until Board slice exists
-    expect(createButton).toHaveAttribute("title", "Tạo task mới sẽ khả dụng ở slice Board");
-  });
-});
-
 describe("task and sprint interplay", () => {
   it("keeps sprint section visible when today has no tasks", async () => {
     useMyWorkScenario("my-work-empty-tasks");
