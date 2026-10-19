@@ -14,7 +14,11 @@ import {
   summarizeCourses,
   type StatusFilter,
 } from "@/features/courses/lib/courseList";
+import { JoinClassDialog } from "@/features/courses/components/JoinClassDialog";
 import { useMyWorkOverview } from "@/features/my-work/queries";
+import type { CourseEnrollment } from "@/features/my-work/types";
+import { isRealService } from "@/lib/config/services";
+import { useClassroomCourses } from "@/lib/query/classroomHooks";
 import { cn } from "@/lib/utils";
 
 function NoCoursesState() {
@@ -32,12 +36,34 @@ function NoCoursesState() {
   );
 }
 
+interface EnrollmentsSource {
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch: () => unknown;
+  enrollments: CourseEnrollment[];
+}
+
+function MockCourses() {
+  const overview = useMyWorkOverview();
+  return <CoursesView source={{ ...overview, enrollments: overview.data?.enrollments ?? [] }} />;
+}
+
+function RealCourses() {
+  const courses = useClassroomCourses();
+  return <CoursesView source={{ ...courses, enrollments: courses.data ?? [] }} canJoin />;
+}
+
 export function Component() {
-  const overviewQuery = useMyWorkOverview();
+  return isRealService("classroom") ? <RealCourses /> : <MockCourses />;
+}
+
+function CoursesView({ source, canJoin = false }: Readonly<{ source: EnrollmentsSource; canJoin?: boolean }>) {
+  const overviewQuery = source;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [showPast, setShowPast] = useState(false);
-  const enrollments = overviewQuery.data?.enrollments ?? [];
+  const enrollments = source.enrollments;
 
   if (overviewQuery.isPending) {
     return <PageSkeleton label="Đang tải danh sách môn học" />;
@@ -67,6 +93,11 @@ export function Component() {
     <div className="page-container space-y-6 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       {/* Tiêu đề hiển thị nằm ở Top bar. */}
       <h1 className="sr-only">Môn học</h1>
+      {canJoin ? (
+        <div className="flex justify-end">
+          <JoinClassDialog />
+        </div>
+      ) : null}
 
       {enrollments.length === 0 ? (
         <NoCoursesState />

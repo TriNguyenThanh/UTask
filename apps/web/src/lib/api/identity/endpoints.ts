@@ -10,6 +10,7 @@ import type {
   PasswordChangeDto,
   ProfilePatchDto,
   RefreshDataDto,
+  PublicUserDto,
   SessionDto,
 } from "@/lib/api/identity/dto";
 
@@ -95,4 +96,21 @@ export async function requestPasswordReset(client: ApiClient, email: string) {
 
 export async function confirmPasswordReset(client: ApiClient, body: PasswordResetConfirmDto) {
   await client.requestEnvelope<unknown>(`${ROOT}/password-reset/confirm`, { method: "POST", body });
+}
+
+/** Backend giới hạn 100 id mỗi lần gọi. */
+const USERS_BATCH_LIMIT = 100;
+
+/** Tra cứu hồ sơ công khai theo id; id không tồn tại bị bỏ qua. */
+export async function usersBatch(client: ApiClient, userIds: readonly string[]) {
+  const unique = [...new Set(userIds)];
+  const users: PublicUserDto[] = [];
+  for (let start = 0; start < unique.length; start += USERS_BATCH_LIMIT) {
+    const { data } = await client.requestEnvelope<{ users: PublicUserDto[] }>(`${ROOT}/users/batch`, {
+      method: "POST",
+      body: { user_ids: unique.slice(start, start + USERS_BATCH_LIMIT) },
+    });
+    users.push(...data.users);
+  }
+  return users;
 }

@@ -96,3 +96,15 @@ export interface PasswordResetConfirmDto {
   new_password1: string;
   new_password2: string;
 }
+
+/** Hồ sơ công khai từ `POST /users/batch`. */
+export interface PublicUserDto {
+  id: string;
+  email: string;
+  student_id: string | null;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  roles: string[];
+  account_status: string;
+}

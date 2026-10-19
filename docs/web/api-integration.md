@@ -1,7 +1,7 @@
 # Tích hợp API thật vào Web (Identity trước)
 
-**Trạng thái: Một phần.** Mới nối Identity Service (đăng nhập, phiên, hồ sơ,
-đổi mật khẩu, thiết bị). Classroom, Work và các màn còn lại vẫn chạy trên MSW.
+**Trạng thái: Một phần.** Đã nối Identity Service (đăng nhập, phiên, hồ sơ,
+đổi mật khẩu, thiết bị) và phần đọc của Classroom cho sinh viên. Work và các màn còn lại vẫn chạy trên MSW.
 Kế hoạch gốc theo từng Phase nằm trong lịch sử làm việc của đội; tài liệu này
 chỉ ghi hiện trạng đã có mã nguồn và kiểm thử.
 
@@ -13,7 +13,7 @@ Tạo `apps/web/.env.local` (không commit):
 
 ```
 VITE_ENABLE_MOCKS=true
-VITE_REAL_SERVICES=auth
+VITE_REAL_SERVICES=auth,classroom   # chỉ "auth" nếu chưa cần Classroom thật
 VITE_API_BASE_URL=
 # VITE_API_PROXY_TARGET=https://utask-api.u-code.dev   (mặc định là staging)
 ```
@@ -39,7 +39,8 @@ VITE_API_BASE_URL=
 | 2 | Khôi phục phiên khi tải lại, tự làm mới access token, CSRF | Đã triển khai |
 | 3 | Hồ sơ, đổi mật khẩu, danh sách thiết bị, đăng xuất mọi thiết bị | Đã triển khai (chưa smoke trình duyệt) |
 | 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Đã triển khai ở mức form + request (end-to-end email chưa xác minh, chờ B3; chưa smoke trình duyệt) |
-| 5–8 | Classroom | Chưa triển khai |
+| 5 | Classroom phía sinh viên: danh sách lớp, chi tiết lớp/nhóm của tôi, tham gia lớp bằng mã | Một phần (xem giới hạn; chưa smoke trình duyệt) |
+| 6–8 | Classroom: thao tác nhóm của sinh viên, quản lý lớp của giảng viên | Chưa triển khai |
 | 9+ | Work, Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
@@ -110,6 +111,36 @@ Chưa xác minh: email thật có tới hộp thư và đúng định dạng lin
 `ACCOUNT_ALREADY_ACTIVE` chỉ thấy trong mã provisioning của backend, còn kích
 hoạt lại link đã dùng thực tế có thể trả 404.
 
+## Classroom phía sinh viên (Phase 5)
+
+Bật bằng `VITE_REAL_SERVICES=auth,classroom`. Mã nằm ở `lib/api/classroom/`
+(`dto.ts`, `endpoints.ts`, `adapters.ts`, `loaders.ts`) và
+`lib/query/classroomHooks.ts`. `/courses` và `/courses/:courseId` chọn nguồn
+dữ liệu bằng `isRealService("classroom")`; lỗi không rơi về mock.
+
+| Màn | Nguồn thật | Ghi chú |
+|---|---|---|
+| `/courses` | `GET /classes/` + `GET /courses/` | Nhóm theo `Class.term`. `courseId` = `Class.id`; `courseCode` lấy từ `Course.code` (nối qua `Class.course`), thiếu thì dùng `Class.code`; `courseName` = `Class.name` |
+| Nhóm của tôi | `GET /classes/{id}/groups/` rồi `GET /groups/{id}/members/` từng nhóm | Không có API "nhóm của tôi": dò từng nhóm ACTIVE (tối đa 50, 5 request song song); 404 nghĩa là không phải nhóm của mình |
+| Giảng viên | `GET /classes/{id}/teachers/` + `POST /auth/users/batch` | ACTIVE, PRIMARY trước. Lỗi tra cứu → để trống, không làm hỏng trang |
+| Tham gia lớp | `POST /classes/join/ {code}` + `Idempotency-Key` | Khóa sinh mới mỗi lần mở hộp thoại; lỗi hiện `error.message` (mã sai, hết hạn 409…). Thành công → refetch danh sách |
+
+Giới hạn khi chạy thật (mỗi mục là dữ liệu mà API hiện không cung cấp):
+
+- Không có đề tài (`team.topic = null`): mục Đề tài ẩn.
+- Không có kỹ năng/trách nhiệm: hai cột ẩn khi không ai có dữ liệu.
+- Không có trạng thái chờ duyệt, không có hạn đăng ký nhóm.
+- Sinh viên không đọc được danh sách ghi danh (403) và không đọc được thành
+  viên nhóm khác (404): `classSize = null` (ẩn "Sĩ số lớp"), `formation = null`
+  (thay hai bảng "nhóm còn chỗ" và "bạn học chưa có nhóm" bằng thông báo).
+- `repository`, `projectId`, `projectKey` = `null` (chưa nối Work/Integration).
+
+Chưa làm (Phase 6): tạo nhóm, vào nhóm bằng mã mời, rời/chuyển trưởng nhóm,
+nên các nút đó ở màn nhóm vẫn là phiên bản mock hoặc bị vô hiệu.
+
+Chưa xác minh: chạy thật với sinh viên đã ghi danh (chưa có tài khoản/mã lớp
+trên staging); enum trạng thái suy ra từ ràng buộc DB vì OpenAPI không khai báo.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -117,7 +148,10 @@ hoạt lại link đã dùng thực tế có thể trả 404.
 | B1 | Chưa có tài khoản TEACHER trên staging |
 | B2 | Endpoint CSRF sạch và `CSRF_TRUSTED_ORIGINS`/`SECURE_PROXY_SSL_HEADER`; nếu không, refresh từ origin production có `Origin` sẽ bị 403 |
 | B3 | Xác nhận gửi email và định dạng link kích hoạt/đặt lại mật khẩu, `IDENTITY_FRONTEND_URL` |
-| B4–B7 | Khoảng trống schema Classroom/Work (xem kế hoạch từng Phase khi tới lượt) |
+| B4 | Schema Classroom: khai báo enum trong OpenAPI; khóa của `profile` (`display_name, email, student_id, avatar_url`); khóa `students[]`/`results[]` khi import; cấu trúc `Activity.changes` |
+| B5 | Thêm vào API: `Group.member_count`, `Group.leader_id`, `Class.enrolled_count`, `Class.grouped_count`, `Class.primary_teacher_id`, course `{id, code, name}` nhúng trong Class, và "nhóm của tôi" của lớp. Hiện sinh viên không biết số thành viên/trưởng nhóm của nhóm khác và phải dò từng nhóm |
+| B6 | Tính năng UI chưa có API: đề tài, yêu cầu gia nhập chờ duyệt, hạn đăng ký nhóm, kỹ năng cần/trách nhiệm, giám sát của giảng viên, tổng quan My Work, thông báo, GitHub |
+| B7 | Khoảng trống Work (xem kế hoạch Phase 9+ khi tới lượt) |
 | B8 | Ngữ nghĩa `preferences`; giá trị `refresh` trong body đăng nhập (frontend bỏ qua) |
 | B9 | Tra cứu người dùng theo email |
 | Mới | Đăng nhập email chưa xác minh trả `VALIDATION_ERROR` "E-mail is not verified." thay vì `ACCOUNT_PENDING_ACTIVATION`; đăng ký mật khẩu nhận mọi tên miền trong khi OAuth sinh viên yêu cầu `.edu.vn` |
@@ -126,6 +160,6 @@ hoạt lại link đã dùng thực tế có thể trả 404.
 ## Kiểm tra đã chạy
 
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
-sau Phase 4. Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
+sau Phase 5 (44 file / 662 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
 Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất. **Chưa smoke
-trên trình duyệt** cho Phase 3–4 và cho refresh khi 401 hoặc hết hạn 15 phút.
+trên trình duyệt** cho Phase 3–5 và cho refresh khi 401 hoặc hết hạn 15 phút.
