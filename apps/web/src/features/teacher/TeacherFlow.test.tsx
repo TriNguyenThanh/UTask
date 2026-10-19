@@ -94,10 +94,10 @@ describe("Teacher home (T01)", () => {
     expect(value("Lớp phụ trách")).toHaveTextContent(String(summaries.length));
     expect(value("Nhóm")).toHaveTextContent(String(summaries.reduce((n, c) => n + c.teamCount, 0)));
     expect(value("Chưa có nhóm")).toHaveTextContent(
-      String(summaries.reduce((n, c) => n + c.studentsWithoutTeam, 0)),
+      String(summaries.reduce((n, c) => n + (c.studentsWithoutTeam ?? 0), 0)),
     );
     expect(value("Nhóm chưa có project")).toHaveTextContent(
-      String(summaries.reduce((n, c) => n + c.teamsWithoutProject, 0)),
+      String(summaries.reduce((n, c) => n + (c.teamsWithoutProject ?? 0), 0)),
     );
     // Overdue comes from the same formula as the team dashboard, with its denominator.
     const overdue = summaries.flatMap((c) => (c.overdue ? [c.overdue] : []));
@@ -588,7 +588,7 @@ describe("Teams (T07)", () => {
     const value = (label: string) => within(stats).getByRole("group", { name: label });
     expect(value("Tổng số sinh viên")).toHaveTextContent(String(summary.studentCount));
     expect(value("Chưa có nhóm")).toHaveTextContent(String(summary.studentsWithoutTeam));
-    expect(value("Đã có nhóm")).toHaveTextContent(String(summary.studentCount - summary.studentsWithoutTeam));
+    expect(value("Đã có nhóm")).toHaveTextContent(String(summary.studentCount - (summary.studentsWithoutTeam ?? 0)));
     expect(value("Quy định sĩ số")).toHaveTextContent("3–5");
   });
 

@@ -1,3 +1,8 @@
+import { ClassInfoForm } from "@/features/teacher/components/ClassInfoForm";
+import { ClassJoinCodeCard } from "@/features/teacher/components/ClassJoinCodeCard";
+import { ClassStateCard } from "@/features/teacher/components/ClassStateCard";
+import { ClassTeachersCard } from "@/features/teacher/components/ClassTeachersCard";
+import type { ClassroomCourseDetail } from "@/lib/api/teacherFlow";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyJoinCodeButton } from "@/features/teacher/components/JoinCode";
@@ -21,12 +26,27 @@ function Fact({ label, children }: Readonly<{ label: string; children: React.Rea
 }
 
 /**
- * T10. Read-only on purpose: the only write-looking controls (change or
- * disable the join code) are disabled with their reason. Having an API to
- * create a class says nothing about editing or deleting one, so no edit or
- * delete control exists here.
+ * T10. With the demo data it is read-only on purpose: no API existed to edit a
+ * class. With the real Classroom service every card below sends a real command.
  */
+function RealSettings({ course }: Readonly<{ course: ClassroomCourseDetail }>) {
+  return (
+    <div className="max-w-3xl space-y-6">
+      <ClassInfoForm course={course} />
+      <ClassStateCard course={course} />
+      <ClassJoinCodeCard course={course} />
+      <ClassTeachersCard course={course} />
+    </div>
+  );
+}
+
 export function Component() {
+  const course = useTeacherCourseContext();
+  return course.classroom ? <RealSettings course={{ ...course, classroom: course.classroom }} /> : <DemoSettings />;
+}
+
+/** Demo data: the only write-looking controls are disabled with their reason. */
+function DemoSettings() {
   const course = useTeacherCourseContext();
 
   return (

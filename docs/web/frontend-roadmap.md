@@ -264,7 +264,7 @@ Phân loại: **Sẵn sàng** = nối thật được ngay; **Sau đổi nhỏ**
 | Quản trị tài khoản | — | — | `admin/users`… | Quyết định nghiệp vụ Admin | **FE chưa có** — 5 |
 | Liên kết GitHub (OAuth), avatar | Nút ngắt GitHub (MSW) | MSW | OAuth/avatar sau cờ | Cờ tắt; cấu hình OAuth | **Chặn backend** (cấu hình) — 6 |
 | Project, Board, Backlog, task, Sprint, comment | Workspace | Demo MSW | — (Work) | Phụ lục A | **Làm sau** |
-| Lớp, nhóm, Teacher T01–T10 | `/courses`, `/teacher` | Demo MSW; `/courses` có chế độ Classroom thật (một phần, xem [api-integration](api-integration.md)) | — (Classroom) | Phụ lục A | **Làm sau** |
+| Lớp, nhóm, Teacher T01–T10 | `/courses`, `/teacher` | Demo MSW; `/courses` và `/teacher` (lớp, tạo lớp, cài đặt lớp) có chế độ Classroom thật (một phần, xem [api-integration](api-integration.md)) | — (Classroom) | Phụ lục A | **Làm sau** |
 | Thông báo, My Work, GitHub, AI, khóa AI dự án | Nhiều màn | Demo MSW | — | Phụ lục A | **Làm sau** |
 
 ## 5. Lộ trình tích hợp Identity

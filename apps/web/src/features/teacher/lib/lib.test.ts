@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { courseFormSchema, emptyCourseForm } from "@/features/teacher/lib/courseForm";
+import { classErrorMessage, STALE_CLASS_MESSAGE } from "@/features/teacher/lib/classErrors";
+import {
+  NEW_COURSE,
+  classCreateSchema,
+  classEditSchema,
+  courseFormSchema,
+  emptyClassCreateForm,
+  emptyCourseForm,
+} from "@/features/teacher/lib/courseForm";
+import { ApiError } from "@/lib/api/errors";
 import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
@@ -261,5 +270,68 @@ describe("Drafts", () => {
     });
     expect(readDraft("k")).toBe("");
     expect(() => writeDraft("k", "v")).not.toThrow();
+  });
+});
+
+describe("classCreateSchema", () => {
+  const valid = {
+    ...emptyClassCreateForm,
+    courseChoice: "course-1",
+    classCode: "SE330.P11",
+    name: "Đồ án chuyên ngành",
+    term: "HK1 2026–2027",
+    startsOn: "2026-09-01",
+    endsOn: "2027-01-15",
+  };
+
+  function messages(values: unknown): Record<string, string> {
+    const result = classCreateSchema.safeParse(values);
+    if (result.success) return {};
+    return Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]));
+  }
+
+  it("accepts an existing course with a class code", () => {
+    expect(classCreateSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("asks for a course choice and a class code", () => {
+    const found = messages({ ...valid, courseChoice: "", classCode: "" });
+    expect(found.courseChoice).toBeTruthy();
+    expect(found.classCode).toBeTruthy();
+  });
+
+  it("requires a code and a name only when the course is new, and checks the code characters", () => {
+    expect(messages({ ...valid, courseChoice: NEW_COURSE })).toMatchObject({
+      newCourseCode: "Nhập mã môn.",
+      newCourseName: "Nhập tên môn.",
+    });
+    expect(messages({ ...valid, courseChoice: NEW_COURSE, newCourseCode: "SE 330", newCourseName: "Đồ án" }).newCourseCode).toMatch(/chỉ gồm/);
+    expect(classCreateSchema.safeParse({ ...valid, courseChoice: NEW_COURSE, newCourseCode: "SE330", newCourseName: "Đồ án" }).success).toBe(true);
+  });
+
+  it("applies the backend length limits and the date and size rules", () => {
+    expect(messages({ ...valid, classCode: "A".repeat(51) }).classCode).toMatch(/50/);
+    expect(messages({ ...valid, endsOn: "2026-08-01" }).endsOn).toMatch(/Ngày kết thúc/);
+    expect(messages({ ...valid, minMembers: "7", maxMembers: "6" }).maxMembers).toMatch(/lớn hơn hoặc bằng/);
+    expect(messages({ ...valid, minMembers: "0" }).minMembers).toMatch(/từ 1 trở lên/);
+  });
+});
+
+describe("classEditSchema", () => {
+  it("reuses the date and size rules of the create form", () => {
+    const base = { name: "Đồ án", term: "HK1 2026", startsOn: "2026-09-01", endsOn: "2027-01-15", minMembers: "1", maxMembers: "6" };
+    expect(classEditSchema.safeParse(base).success).toBe(true);
+    expect(classEditSchema.safeParse({ ...base, maxMembers: "abc" }).success).toBe(false);
+    expect(classEditSchema.safeParse({ ...base, endsOn: "2026-01-01" }).success).toBe(false);
+  });
+});
+
+describe("classErrorMessage", () => {
+  it("uses the shared stale message for a version conflict and the server's words otherwise", () => {
+    const conflict = new ApiError({ status: 409, code: "VERSION_CONFLICT", message: "Lớp học đã thay đổi." });
+    const invalid = new ApiError({ status: 422, code: "INVALID_TEACHER", message: "Hãy chọn giảng viên có tài khoản đang hoạt động." });
+    expect(classErrorMessage(conflict)).toBe(STALE_CLASS_MESSAGE);
+    expect(classErrorMessage(invalid)).toBe("Hãy chọn giảng viên có tài khoản đang hoạt động.");
+    expect(classErrorMessage(new Error("x"))).toMatch(/Không thể thực hiện/);
   });
 });

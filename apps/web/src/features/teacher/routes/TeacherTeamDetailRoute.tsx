@@ -13,6 +13,7 @@ import {
   ProgressMeter,
   SignalList,
   TeacherQueryError,
+  WorkDataUnavailable,
   activityText,
   formatDate,
 } from "@/features/teacher/components/shared";
@@ -313,7 +314,7 @@ function TeamBody({ detail }: Readonly<{ detail: TeacherTeamDetail }>) {
   );
 }
 
-export function Component() {
+function DemoTeamDetail() {
   const { teamId = "" } = useParams();
   const course = useTeacherCourseContext();
   const team = useTeacherTeam(course.courseId, teamId);
@@ -356,4 +357,9 @@ export function Component() {
       <TeamBody detail={detail} />
     </div>
   );
+}
+
+export function Component() {
+  const course = useTeacherCourseContext();
+  return course.classroom ? <WorkDataUnavailable title="Chi tiết nhóm" /> : <DemoTeamDetail />;
 }

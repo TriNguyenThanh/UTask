@@ -1,29 +1,24 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useBlocker } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { ClassCreateForm } from "@/features/teacher/components/ClassCreateForm";
 import { DisabledAction } from "@/features/teacher/components/shared";
+import { UnsavedChangesGuard } from "@/features/teacher/components/UnsavedChangesGuard";
 import {
   COURSE_CREATE_UNAVAILABLE,
   courseFormSchema,
   emptyCourseForm,
   type CourseFormValues,
 } from "@/features/teacher/lib/courseForm";
+import { isRealService } from "@/lib/config/services";
 
 /**
  * T03. The form is complete and checks everything it can check on its own;
@@ -36,7 +31,7 @@ const CHECK_MESSAGES = {
   invalid: "Còn thông tin chưa đúng, xem các thông báo cạnh từng ô.",
 } as const;
 
-export function Component() {
+function DemoCreateForm() {
   const [checked, setChecked] = useState<"idle" | "valid" | "invalid">("idle");
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseFormSchema),
@@ -44,22 +39,6 @@ export function Component() {
     mode: "onChange",
   });
   const dirty = form.formState.isDirty;
-
-  // Leaving with edits asks first, whichever way the person leaves.
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  // In-app navigation is covered by the blocker; closing the tab or refreshing
-  // is not, so the browser's own prompt covers that.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
 
   async function checkInformation() {
     const valid = await form.trigger();
@@ -214,24 +193,11 @@ export function Component() {
         </form>
       </Form>
 
-      <Dialog open={blocker.state === "blocked"} onOpenChange={(open) => !open && blocker.reset?.()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rời khỏi trang?</DialogTitle>
-            <DialogDescription>
-              Thông tin bạn đã nhập chưa được lưu ở đâu cả và sẽ mất nếu rời trang.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => blocker.reset?.()}>
-              Ở lại và tiếp tục nhập
-            </Button>
-            <Button variant="destructive" onClick={() => blocker.proceed?.()}>
-              Rời trang
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UnsavedChangesGuard dirty={dirty} />
     </div>
   );
+}
+
+export function Component() {
+  return isRealService("classroom") ? <ClassCreateForm /> : <DemoCreateForm />;
 }
