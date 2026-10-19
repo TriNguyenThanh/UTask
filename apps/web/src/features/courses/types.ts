@@ -64,7 +64,8 @@ export interface CourseDetail {
   instructorName: string;
   /** Allowed team size range. */
   teamSize: { min: number; max: number };
-  classSize: { total: number; teamed: number };
+  /** `null` khi API không cho đọc (sinh viên không đọc được danh sách ghi danh). */
+  classSize: { total: number; teamed: number } | null;
   membership: TeamMembership;
   teamFormation: {
     mode: "self-select" | "join-code" | "instructor-assigned";
@@ -79,7 +80,8 @@ export interface CourseDetail {
     memberCount: number;
     maxMembers: number;
     members: TeamMember[];
-    topic: TopicProposal;
+    /** `null` khi chưa có API đề tài (chế độ service thật). */
+    topic: TopicProposal | null;
     /** Repository full name once the project is provisioned. */
     repository: string | null;
     /** Project key once the topic is approved and workspace provisioned. */

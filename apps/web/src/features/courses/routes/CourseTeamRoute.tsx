@@ -9,6 +9,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -40,6 +41,8 @@ import type {
 } from "@/features/courses/types";
 import { ApiError } from "@/lib/api/errors";
 import { canCreateTeam, canSubmitTopic, type CoursePermissionContext } from "@/lib/permissions";
+import { isRealService } from "@/lib/config/services";
+import { useClassroomCourseDetail } from "@/lib/query/classroomHooks";
 import { useCourseDetail, useCreateTeam } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
@@ -434,15 +437,19 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
             <span>
               Sĩ số nhóm: <strong className="text-foreground">{course.teamSize.min}–{course.teamSize.max} sinh viên</strong>
             </span>
-            <span aria-hidden>•</span>
-            <span>
-              Sĩ số lớp: <strong className="text-foreground">{course.classSize.total} sinh viên</strong>{" "}
-              (<span className="font-medium text-emerald-700">{course.classSize.teamed} đã có nhóm</span>,{" "}
-              <span className="font-semibold text-amber-700">
-                {course.classSize.total - course.classSize.teamed} chưa có nhóm
-              </span>
-              )
-            </span>
+            {course.classSize ? (
+              <>
+                <span aria-hidden>•</span>
+                <span>
+                  Sĩ số lớp: <strong className="text-foreground">{course.classSize.total} sinh viên</strong>{" "}
+                  (<span className="font-medium text-emerald-700">{course.classSize.teamed} đã có nhóm</span>,{" "}
+                  <span className="font-semibold text-amber-700">
+                    {course.classSize.total - course.classSize.teamed} chưa có nhóm
+                  </span>
+                  )
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
         {allowCreate || deadlinePassed || !course.teamFormation.selfCreateAllowed ? (
@@ -460,10 +467,17 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
 
       <DeadlineBanner course={course} />
 
-      <OpenTeamsSection openTeams={course.formation?.openTeams ?? []} />
-      <UnassignedClassmatesSection
-        classmates={course.formation?.unassignedClassmates ?? []}
-      />
+      {course.formation ? (
+        <>
+          <OpenTeamsSection openTeams={course.formation.openTeams} />
+          <UnassignedClassmatesSection classmates={course.formation.unassignedClassmates} />
+        </>
+      ) : (
+        <EmptyState
+          title="Bạn chưa có nhóm"
+          description="Danh sách nhóm đang mở và bạn học chưa có nhóm chưa khả dụng. Hãy xin mã mời từ Trưởng nhóm hoặc chờ Giảng viên xếp nhóm."
+        />
+      )}
 
       <CreateTeamDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
     </div>
@@ -691,8 +705,9 @@ function TopicSection({
   permissionCtx: CoursePermissionContext;
 }>) {
   const team = course.team;
-  if (!team) return null;
-  const topic = team.topic;
+  const topic = team?.topic;
+  // Chế độ service thật chưa có API đề tài: ẩn cả mục.
+  if (!team || !topic) return null;
   const status = TOPIC_STATUS[topic.status];
   const isDraft = topic.status === "draft";
   const editableByLeader = canSubmitTopic(permissionCtx, isDraft ? null : topic.status);
@@ -743,6 +758,8 @@ function TopicSection({
 }
 
 function MembersSection({ teamName, members }: Readonly<{ teamName: string; members: TeamMember[] }>) {
+  // Kỹ năng/trách nhiệm chưa có API ở chế độ thật: ẩn hai cột khi không ai có dữ liệu.
+  const showSkills = members.some((member) => member.skill !== "" || member.responsibility !== "");
   return (
     <section className="space-y-3" aria-labelledby="members-heading">
       <div className="flex items-center justify-between pb-1">
@@ -765,8 +782,12 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
               <th scope="col" className="px-2 py-3">Thành viên</th>
               <th scope="col" className="px-4 py-3">MSSV</th>
               <th scope="col" className="px-4 py-3">Email trường</th>
-              <th scope="col" className="px-4 py-3">Vai trò chuyên môn</th>
-              <th scope="col" className="px-4 py-3">Trách nhiệm trong đồ án</th>
+              {showSkills ? (
+                <>
+                  <th scope="col" className="px-4 py-3">Vai trò chuyên môn</th>
+                  <th scope="col" className="px-4 py-3">Trách nhiệm trong đồ án</th>
+                </>
+              ) : null}
               <th scope="col" className="px-2 py-3 text-right">Vai trò</th>
             </tr>
           </thead>
@@ -791,12 +812,16 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
                 </td>
                 <td className="px-4 py-3.5 font-mono font-medium">{member.studentId}</td>
                 <td className="px-4 py-3.5 text-muted-foreground">{member.email}</td>
-                <td className="px-4 py-3.5">
-                  <span className="inline-block rounded bg-muted px-2 py-0.5 font-medium">
-                    {member.skill}
-                  </span>
-                </td>
-                <td className="px-4 py-3.5 text-muted-foreground">{member.responsibility}</td>
+                {showSkills ? (
+                  <>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-block rounded bg-muted px-2 py-0.5 font-medium">
+                        {member.skill}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground">{member.responsibility}</td>
+                  </>
+                ) : null}
                 <td className="px-2 py-3.5 text-right">
                   {member.role === "leader" ? (
                     <Badge className="text-[10px] font-bold">TRƯỞNG NHÓM</Badge>
@@ -917,9 +942,26 @@ function teamPageTitle(status: CourseDetail["membership"]["status"] | undefined)
   return "Môn học";
 }
 
+function MockCourseTeam({ courseId }: Readonly<{ courseId: string }>) {
+  return <CourseTeamPage courseId={courseId} courseQuery={useCourseDetail(courseId)} />;
+}
+
+function RealCourseTeam({ courseId }: Readonly<{ courseId: string }>) {
+  return <CourseTeamPage courseId={courseId} courseQuery={useClassroomCourseDetail(courseId)} />;
+}
+
 export function Component() {
-  const { courseId } = useParams();
-  const courseQuery = useCourseDetail(courseId ?? "");
+  const { courseId = "" } = useParams();
+  return isRealService("classroom") ? <RealCourseTeam courseId={courseId} /> : <MockCourseTeam courseId={courseId} />;
+}
+
+function CourseTeamPage({
+  courseId,
+  courseQuery,
+}: Readonly<{
+  courseId: string;
+  courseQuery: UseQueryResult<CourseDetail>;
+}>) {
   usePageTitle(teamPageTitle(courseQuery.data?.membership.status));
 
   if (courseQuery.isPending) {
