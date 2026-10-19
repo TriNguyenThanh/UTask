@@ -1,145 +1,71 @@
 # API Integration Service
 
-**Trạng thái: Một phần.** `/healthz` và API đọc/thu hồi liên kết GitHub cá
-nhân, OAuth consent và GitHub provider có trong source. Các API dữ liệu
-Project chưa triển khai. [Hợp đồng OpenAPI](../../contracts/api/integration-service-v1.yaml)
-là hợp đồng máy đọc được; phần dưới mô tả hiện trạng và mục tiêu, không thay
-thế schema hợp đồng.
+**Trạng thái: Một phần.** Các route dưới đây có trong source; GitHub thật và
+runtime production chưa xác minh. Contract máy đọc được ở
+[OpenAPI 1.3.0](../../contracts/api/integration-service-v1.yaml). Path tính từ root server,
+chưa gồm prefix gateway. Response thành công dùng `{success:true,data:...}`.
 
-[Phạm vi và quyền](scope-access.md) là nguồn chuẩn về quyền caller và quyền sở
-hữu. Xác thực user dùng Identity `GET /users/me`; không có OAuth proof
-exchange hoặc API mapping Identity trong luồng Integration.
+## Account và consent
 
-## 1. API đã có trong source
-
-Các path dưới đây tính từ root server Integration, chưa bao gồm prefix gateway.
-
-| Method và path | Trạng thái | Hành vi đã kiểm tra trong source |
+| Method và path | Trạng thái | Hành vi |
 | --- | --- | --- |
-| GET/HEAD `/healthz` | Đã triển khai | Health DB; xem [foundation](foundation.md) |
-| GET `/api/v1/github/account` | Đã triển khai trong source | Đọc account của actor hiện tại; không nhận query hoặc body; `Cache-Control: private, no-store` |
-| DELETE `/api/v1/github/account` | Đã triển khai trong source | Thu hồi liên kết và vô hiệu consent của actor; lặp lại giữ nguyên account version |
-| POST `/api/v1/github/authorizations/start` | Đã triển khai trong source | Không nhận query/body; trả `authorization_url`, `expires_at` và đặt cookie nonce |
-| POST `/api/v1/github/authorizations/complete` | Đã triển khai trong source | Chỉ nhận JSON `code`, `state`; kiểm nonce/Bearer và trả account đã xác minh |
+| GET/HEAD `/healthz` | Đã triển khai | Health database |
+| GET `/api/v1/github/account` | Đã triển khai trong source | Account actor hiện tại; không query/body |
+| DELETE `/api/v1/github/account` | Đã triển khai trong source | Thu hồi mapping/credential, hủy consent; giao revoke token thành job |
+| POST `/api/v1/github/authorizations/start` | Đã triển khai trong source | Mở consent GitHub App hiện hành, trả `authorization_url`, `expires_at`, đặt nonce cookie |
+| POST `/api/v1/github/authorizations/complete` | Đã triển khai trong source | Nhận đúng `code`, `state`; xác minh và lưu credential mã hóa |
 
-Hai route account xác thực `Authorization: Bearer <token>` bằng cách chuyển
-Bearer tới Identity `GET /users/me`. Identity kiểm JWT/session và trả
-`data.id`; Integration dùng UUID đó làm `user_id`. Client không được truyền
-`user_id`, và endpoint từ chối query hoặc request body.
+Account trả `user_id`, `status`, `authorization_status`, `github_user_id`,
+`github_username`, `verified_at`, `linked_at`, `revoked_at`, `source_version`.
+Trạng thái authorization: `NOT_AUTHORIZED`, `ACTIVE`, `REAUTH_REQUIRED`,
+`REVOKED`. Khi account chưa link, các trường GitHub và thời điểm xác minh là
+null; `status=UNLINKED`, `source_version=0`. Khi account bị thu hồi, ID/login
+không được trả như account đang link. Response riêng tư có
+`Cache-Control: private, no-store`.
 
-Response thành công được tạo từ source theo envelope sau. Trường GitHub và
-thời điểm xác minh rỗng khi trạng thái không phải `LINKED`; account chưa có
-record trả `UNLINKED`, `source_version: 0`.
+Consent giữ state một lần, PKCE S256, cookie `utask_github_consent` HttpOnly,
+SameSite=Lax, path `/`, TTL 600 giây và Secure mặc định. Complete cần cùng
+Bearer UTask và nonce browser. Provider exchange lấy user ID/login từ GitHub;
+credential access và refresh được mã hóa trong Integration. Token không xuất
+hiện trong response hoặc log. Lỗi refresh mơ hồ yêu cầu consent lại.
 
-```json
-{
-  "success": true,
-  "data": {
-    "user_id": "11111111-1111-4111-8111-111111111111",
-    "status": "LINKED",
-    "github_user_id": "12345",
-    "github_username": "octocat",
-    "verified_at": "2026-10-18T06:30:00+00:00",
-    "linked_at": "2026-10-18T06:30:00+00:00",
-    "revoked_at": null,
-    "source_version": 1
-  }
-}
-```
+## Installation và repository
 
-DELETE chỉ thu hồi mapping Integration và vô hiệu consent đang chờ; không gọi
-GitHub để revoke token vì M3 không lưu token. Response DELETE giữ cùng dạng account
-data. Route này không đổi OAuth link trong Identity và không ảnh hưởng quyền
-Project/Task trong Work.
+| Method và path | Trạng thái | Request / kết quả |
+| --- | --- | --- |
+| POST `/api/v1/github/installations/start` | Đã triển khai trong source | Không query/body; trả `installation_url`, `expires_at`, đặt cookie nonce |
+| POST `/api/v1/github/installations/complete` | Đã triển khai trong source | JSON đúng `state`, `installation_id` (chuỗi ID số dương), `setup_action` (`install`, `update`, `request`) |
+| GET `/api/v1/github/installations` | Đã triển khai trong source | Query tùy chọn `page` (mặc định 1) và `per_page` (mặc định 30, tối đa 100); trả `{items,next_page}` |
+| GET `/api/v1/github/installations/{installation_id}/repositories` | Đã triển khai trong source | Cùng phân trang; trả `{items,next_page}` với item `repository_id`, `name`, `full_name`, `private` |
 
-## 2. Xác thực Identity hiện có
+Complete ràng buộc actor, Bearer, nonce, state, generation và credential
+version. Với `setup_action=request`, kết quả là
+`{status:"PENDING_APPROVAL",installation_id}`; không khẳng định installation
+đã hoạt động. Với install/update, Integration kiểm tra installation và
+repository access qua GitHub ngay lúc gọi, rồi trả `status:"ACTIVE"` cùng
+metadata installation: `installation_id`, `app_id`, `account` (`id`, `login`,
+`type`), `repository_selection`, `suspended_at`. Cache metadata chỉ là gợi ý;
+không cấp quyền truy cập. Danh sách installation/repository được lấy live,
+không cache quyền. Khi xác minh installation trong complete, scan tối đa 10
+trang × 100; quá giới hạn trả lỗi khả dụng thay vì kết luận không tìm thấy.
 
-`INTEGRATION_IDENTITY_URL` mặc định là `http://identity-service:8000`.
-Integration gọi `GET {base}/users/me` với đúng Bearer của request; timeout kết
-nối/đọc lần lượt 2/3 giây, không theo redirect, giới hạn response 64 KiB.
-Identity 401/403 thành lỗi xác thực; lỗi upstream hoặc response sai thành lỗi
-khả dụng Identity. Đây là xác minh actor qua API Identity hiện có, không phải
-JWT validation cục bộ hay thêm Integration vào session-status allowlist.
+## Webhook và lỗi
 
-Hiện chưa xác minh luồng xuyên service đang chạy. Unit test xác nhận cách gọi,
-giới hạn và ánh xạ lỗi; không chứng minh Identity/Gateway thực tế.
+POST `/api/v1/github/webhooks` không nhận Bearer/query, chỉ nhận
+`application/json` và header `X-Hub-Signature-256`, `X-GitHub-Delivery`,
+`X-GitHub-Event`. Payload tối đa 25 MiB. Chữ ký HMAC-SHA256 được kiểm trên raw
+body trước khi parse; delivery được lưu bền vững trước khi trả 202 với
+`{delivery_id}`. Hỗ trợ `ping`, `installation`, `installation_repositories`,
+`github_app_authorization`; event không hỗ trợ được đánh dấu bỏ qua sau khi
+xác thực và lưu.
 
-## 3. OAuth consent cá nhân M3
+Các API user được xác thực qua Identity `GET /users/me`; không nhận `user_id`
+từ caller. Errors dùng envelope `success:false,error:{code,message}`. Cấu hình
+GitHub App mặc định tắt; khi tắt hoặc thiếu cấu hình, provider route đóng với
+503. Thông tin cấu hình và giới hạn xem [foundation](foundation.md).
 
-**Đã triển khai trong source; chưa xác minh OAuth GitHub thực tế.** Hai route
-POST yêu cầu Bearer được Identity `/users/me` xác minh. Consent không cần
-`project_id`, vai trò leader hoặc quyền Work. Response thành công dùng envelope
-`success: true, data: ...` và `Cache-Control: private, no-store`.
+## Ngoài phạm vi đã triển khai
 
-Start không nhận query/body, trả URL `https://github.com/login/oauth/authorize`
-với state, redirect đã cấu hình và PKCE S256; không yêu cầu scope repository.
-Cookie `utask_github_consent` chứa browser nonce, `HttpOnly`, `SameSite=Lax`,
-path `/`, TTL 600 giây và `Secure` mặc định. Mỗi actor chỉ có một consent mới
-nhất còn dùng được; start mới vô hiệu consent trước.
-
-Complete chỉ nhận `code`, `state` và cần cookie nonce cùng Bearer đã dùng lúc
-start. Identity `/users/me` không cung cấp session ID, nên Integration ràng
-buộc chính xác access Bearer bằng HMAC-SHA256 với khóa consent, đồng thời kiểm
-actor, hash state/nonce và thời hạn. Refresh access token giữa luồng yêu cầu
-start consent mới. State dùng một lần: được đánh dấu consumed và xóa verifier
-mã hóa trước khi gọi provider; timeout hoặc lỗi provider vẫn phải start lại.
-
-Provider exchange code tại GitHub, sau đó gọi `https://api.github.com/user`
-để lấy ID số nguyên dương và login hợp lệ; không lấy danh tính từ client.
-Cả hai request không theo redirect, timeout kết nối/đọc 2/3 giây và giới hạn
-response 64 KiB. Token chỉ được dùng trong adapter rồi bỏ, không lưu, trả về
-hoặc ghi log. Complete thành công trả account data như GET và xóa cookie.
-
-Generation của actor được kiểm lại sau exchange. DELETE tăng generation và
-hủy pending consent kể cả khi chưa có mapping, nên callback đến muộn không
-thể tạo lại liên kết. Nếu đang `LINKED`, đổi sang GitHub ID khác cần unlink
-trước; GitHub ID đang được actor khác liên kết cũng bị từ chối.
-
-| HTTP | Trường hợp |
-| --- | --- |
-| 400 | Payload/query sai; state hết hạn, replay, sai actor/Bearer hoặc nonce |
-| 401 | Thiếu hoặc sai Bearer, phiên bị Identity từ chối |
-| 409 | Generation thay đổi, consent hết hạn sau exchange, xung đột account hoặc cần unlink trước |
-| 503 | Identity/storage không khả dụng; cấu hình consent/provider sai, timeout hoặc response GitHub không hợp lệ |
-
-Lỗi dùng envelope `success: false, error: {code, message}`; lỗi provider có mã
-`GITHUB_UNAVAILABLE`, thông báo chung không chứa credential.
-
-Cấu hình bắt buộc: `INTEGRATION_GITHUB_CLIENT_ID`,
-`INTEGRATION_GITHUB_CLIENT_SECRET`, `INTEGRATION_GITHUB_REDIRECT_URI` và
-`INTEGRATION_CONSENT_KEY`. Khóa consent là Fernet key: 32 byte ngẫu nhiên được
-mã hóa base64url; dùng riêng cho Integration để mã hóa verifier PKCE tạm thời.
-Redirect dùng HTTPS; HTTP chỉ chấp nhận loopback phục vụ phát triển.
-`INTEGRATION_CONSENT_COOKIE_SECURE` mặc định `true`, chỉ đặt `false` khi chạy
-localhost qua HTTP. Thiếu hoặc sai cấu hình làm luồng đóng với 503.
-
-M3 không lưu/refresh/revoke token, không liệt kê repository hoặc cấp quyền
-Project. Không dùng callback Identity, SocialAccount/profile hoặc proof
-exchange làm nguồn mapping. Unit test provider dùng mock; chưa có bằng chứng
-OAuth end-to-end với GitHub hay Identity thật.
-
-## 4. Tích hợp Work và dữ liệu Project
-
-Work Service vẫn sở hữu quyền Project, ProjectMember, Task và mọi mutation
-nghiệp vụ. Integration không đọc DB Work. Có thể dùng các GET Work hiện có để
-lấy snapshot đọc gồm `/projects/{id}/`, `/tasks/{id}/` và
-`/projects/{id}/members/`; snapshot này không bảo đảm authorize hoặc CAS cho
-thay đổi.
-
-Không mở API chọn repository, prepare/confirm, link Task hay mutation Project
-chỉ dựa trên các GET đó. Nếu Work chưa có contract hỗ trợ một thao tác, thao
-tác vẫn chưa khả dụng; không yêu cầu sửa code Work trong phạm vi Integration
-này. Work adapter hiện `UnavailableIntegration`, nên chưa có tích hợp runtime.
-
-## 5. Các API chưa có
-
-Các luồng sau vẫn **Chưa triển khai**; path/payload chỉ được thêm khi có
-contract đã chốt:
-
-- GitHub App installation, repository discovery, webhook và đồng bộ.
-- API Integration cho facts/reference/context Work hoặc AI.
-- Command thay đổi Project, prepare/confirm/abort và durable dispatch.
-- Kafka outbox publisher/consumer.
-
-Không coi route minh họa trong baseline, kế hoạch cũ hoặc snapshot ở `plans/`
-là API đang chạy hay schema được phê duyệt.
+Project/Task mutation, Work authorization/CAS, AI context, Kafka và đồng bộ
+GitHub không được cung cấp bởi các route này. Chúng là **Chưa triển khai**;
+không suy ra từ metadata account hoặc installation.

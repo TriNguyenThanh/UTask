@@ -1,114 +1,130 @@
 # Integration: hiện trạng và cách kiểm tra
 
-**Trạng thái: Một phần.** Đối chiếu source, cấu hình và test trong worktree
-ngày 19/10/2026. Chưa xác minh deploy Identity/Integration, GitHub OAuth App,
-GitHub API hoặc môi trường VPS.
+**Trạng thái: Một phần.** Đã đối chiếu source và cấu hình M4 trong worktree
+ngày 19/10/2026. Bộ kiểm thử và smoke Docker local đã chạy; GitHub thật và
+deploy thực tế **Chưa xác minh**.
 
-## Các phần đã có
+## Bằng chứng source
 
-| Phần | Trạng thái | Bằng chứng và giới hạn |
+| Phần | Trạng thái | Bằng chứng |
 | --- | --- | --- |
-| Runtime Django/DRF, health và cấu hình | Đã triển khai | `apps/integration-service/`, Compose profile, Nginx và test khung; xem README service |
-| PostgreSQL Integration riêng | Đã triển khai một phần | Role/database riêng trong bootstrap; migration account hiện có. Không suy ra đã tách toàn PostgreSQL cluster |
-| GitHub account mapping | Đã triển khai một phần | `GitHubAccount` migration, validation và service link/unlink; model giữ UUID `user_id` logic, status `LINKED`/`REVOKED`, metadata thời gian/version |
-| API account | Đã triển khai trong source | GET/DELETE `/api/v1/github/account`; auth dùng Identity `GET /users/me`; API-level PostgreSQL tests trong `tests/integration/test_github_account_api.py` |
-| Xác thực Bearer qua Identity | Đã triển khai một phần | Adapter gửi Bearer tới `http://identity-service:8000/users/me`, timeout 2/3 giây và parse `data.id`; chưa xác minh chạy xuyên service |
-| OAuth consent và provider M3 | Đã triển khai trong source | `consent.py`, `consent_api.py`, `github_oauth.py`, pending consent/generation; identity-only, không lưu/refresh/revoke token; chưa xác minh GitHub thật |
-| Work/AI, GitHub App, webhook, sync, Kafka | Chưa triển khai | Work integration adapter mặc định `UnavailableIntegration`; chưa có runtime Integration tương ứng |
+| Account, API, xác thực actor | Đã triển khai trong source | `github_accounts/{models,api,services}.py`, `config/urls.py`; Identity adapter |
+| GitHub App user consent | Đã triển khai trong source | `consent.py` dùng exchange qua `GitHubAppClient`, lưu mapping và credential trong transaction |
+| Credential bảo vệ | Đã triển khai trong source | `GitHubCredential`; Fernet `MultiFernet`, access/refresh expiration, `rotate_github_credentials` |
+| Refresh fencing | Đã triển khai trong source | claim/version/generation; lock được nhả trước HTTP; response cũ bị từ chối/revoke |
+| Account unlink | Đã triển khai trong source | revoke local ngay, tăng version, tạo `REVOKE_TOKEN` durable job |
+| Installation/repository | Đã triển khai trong source | start/complete, actor/Bearer/nonce/state binding, live provider checks, pagination |
+| Webhook | Đã triển khai trong source | raw-body HMAC-SHA256, giới hạn 25 MiB, delivery ID/fingerprint durable; authorization revoke thu hồi local credential đồng bộ |
+| Jobs | Đã triển khai trong source | PostgreSQL `GitHubJob`, claim/lease/version, Celery task payload chỉ ID; retry hữu hạn; replay command |
+| Runtime/deployment | Một phần | Compose API, migration gate, worker, Beat và Redis broker có; chưa xác minh deploy |
+| GitHub/Identity thật | Chưa xác minh | Tests mock không chứng minh upstream/provider thật |
 
-## Mốc và quyết định hiện hành
+## Hành vi và cấu hình
 
-- **M0 — Đã chốt:** Integration sở hữu mapping GitHub cá nhân, consent và
-  credential. Identity xác thực UTask user qua API hiện có. Quyết định hiện
-  hành ghi trong [ADR-004](../adr/004-integration-github-account-ownership.md);
-  phần mapping/proof và API Identity/Work cũ trong ADR-003 đã bị thay thế.
-- **M1 — Đã triển khai một phần:** bảng `GitHubAccount`, migration,
-  persistence/service layer và GET/DELETE account.
-- **M2 — Đã triển khai một phần:** adapter Bearer → Identity `/users/me` có
-  source. Tích hợp thật giữa service chưa được xác minh.
-- **M3 — Đã triển khai trong source:** personal OAuth App consent PKCE S256 và
-  provider `/user` để hoàn tất link account. Không lưu token; không có
-  refresh/revoke token hoặc repository access.
-- GitHub App installation, webhook, sync và mutation/project workflow chưa
-  nằm trong phần đã triển khai.
+M4 chuyển luồng account consent hiện hành sang GitHub App user authorization:
+code exchange trả access/refresh token có hạn, `/user` xác minh identity, cả
+cặp token được mã hóa riêng và lưu cùng mapping. `INTEGRATION_GITHUB_APP_ENABLED`
+mặc định `false`; các biến M4 là `INTEGRATION_GITHUB_APP_ID`,
+`INTEGRATION_GITHUB_APP_SLUG`, `INTEGRATION_GITHUB_WEBHOOK_SECRET`,
+`INTEGRATION_CREDENTIAL_KEYS` và các OAuth client/redirect hiện hữu.
+`INTEGRATION_GITHUB_SETUP_URI` được kiểm tra khi mở luồng cài App: HTTPS hoặc
+HTTP loopback, không query/fragment/credential; URL cài App tạo từ slug. Key ring credential là JSON array Fernet; phần
+tử đầu tiên mã hóa mới, các phần tử sau giải mã cũ. Key ring phải khác
+`INTEGRATION_CONSENT_KEY`. Thứ tự đổi khóa: thêm khóa mới đầu danh sách, chạy
+`manage.py rotate_github_credentials`, giữ khóa cũ trong ring cho đến khi
+hoàn tất.
 
-Các kế hoạch trong `plans/` là snapshot thiết kế cũ, không phải nguồn chuẩn
-cho ownership/contract hiện hành. Không tự động migrate hoặc nhập mapping
-Identity/Work legacy.
+Refresh chỉ bắt đầu khi access sắp hết hạn; fencing gồm actor generation,
+credential version và claim. Nếu response refresh thất lạc, credential yêu
+cầu consent lại vì GitHub có thể đã xoay cặp token. DELETE account xóa token
+khỏi credential row và giao token cũ cho revoke job. Webhook
+`github_app_authorization` action `revoked` tăng generation, hủy consent chờ
+và thu hồi credential local ngay trong lúc lưu delivery.
 
-## Kiểm thử đã có
+Webhook khác được xử lý qua inbox bền vững. Beat dispatch mỗi 5 giây; job có
+lease 60 giây, tối đa 5 lần thử, backoff; cleanup hằng ngày dọn payload
+delivery đã hoàn tất/ignored sau 30 ngày và token revoke quá hạn. Dedupe
+fingerprint được giữ. Khi tắt feature, job REVOKE_TOKEN vẫn được xử lý; phải
+giữ OAuth client và credential key ring cho tới khi giao việc thu hồi xong. Replay thủ công:
+`python manage.py replay_github_job <id>`; chỉ nhận ID, không nhận secret.
 
-Unit tests tại `apps/integration-service/tests/unit/test_github_accounts.py`
-bao phủ validation, link/unlink, account switch, verification cũ, conflict,
-idempotency và version behavior. Integration tests tại
-`apps/integration-service/tests/integration/test_github_accounts.py` cần
-PostgreSQL test riêng và bao phủ DB constraints, unique active mapping,
-concurrency và persistence. API tests tại
-`apps/integration-service/tests/integration/test_github_account_api.py` bao phủ
-đọc/thu hồi account actor hiện tại, query/body giả mạo, thiếu Bearer, Identity
-không khả dụng và method chưa hỗ trợ. Ngày 18/10/2026, bộ kiểm thử Integration
-đã chạy với PostgreSQL 16 tạm riêng: **242 passed**. Ruff, Django system check
-và kiểm tra migration drift đều đạt.
+Installation setup URL được tạo từ App slug và state. Callback của GitHub App
+frontend chuyển `state`, `installation_id`, `setup_action` về POST
+`/api/v1/github/installations/complete`; đây không phải OAuth callback
+`code/state`. `setup_action=request` lưu phản hồi pending approval, không coi
+là installation active. Installation/repository list gọi GitHub live. Kiểm
+tra installation khi complete scan tối đa 10 trang × 100, vượt giới hạn thì
+trả lỗi khả dụng.
 
-Image Docker đã build và khởi động với PostgreSQL tạm: migration và bảng
-thuộc role Integration không có superuser/CREATEDB/CREATEROLE hoặc quyền
-CONNECT database Identity. Smoke HTTP qua Identity stub cục bộ đạt health,
-401, GET/DELETE account, DELETE lặp lại và 503 khi upstream không khả dụng.
-Kết quả này không chứng minh tích hợp Identity hoặc GitHub thật.
+## Bằng chứng kiểm tra
 
-Identity client có unit tests cho Bearer forward, URL/response validation,
-timeout, lỗi 401/403 và upstream unavailable. Các test đó không chứng minh
-deployment hoặc OAuth GitHub thật.
+Source tests tồn tại tại `tests/unit/test_github_credentials.py`,
+`test_github_app.py`, `test_github_installation_api.py` và
+`tests/integration/test_github_credentials.py`,
+`test_github_installations.py`, `test_github_consent.py`; chúng dùng mock hoặc
+PostgreSQL test, không xác minh GitHub thật. Kết quả M4 ngày 19/10/2026 trên PostgreSQL 16 tạm riêng: **524 passed**,
+bao gồm unit, API/contract, persistence và race. Ruff lint/format, Django
+system check, migration drift và `git diff --check` đạt. Mười một test hạ tầng
+Integration và smoke script đạt.
 
-## Cách kiểm tra
+Image `utask/integration-service:github-app-m4-check` build thành công. Smoke
+local bằng image trên database riêng `integration_m4_smoke` và Redis tạm đã
+áp dụng migration, kiểm health/401, nhận webhook có chữ ký với 202, Beat giao
+job qua Redis, worker đổi metadata thành DELETED/version 2 và delivery lặp
+không ghi lại. Smoke không gọi GitHub hoặc Identity thật.
 
-Lệnh local khung được mô tả tại
-[hướng dẫn service](README.md). Khi cần chạy kiểm thử account, dùng PostgreSQL
-test riêng theo cấu hình trong `apps/integration-service/config/settings/test.py`;
-không dùng database runtime hay database thật của dự án.
+Lượt CI đầu tiên của M4 dừng tại 5 lỗi cấu hình AI có sẵn ở HEAD `27181d7`.
+Lượt sửa CI tiếp theo đã khôi phục profile AI local và tách giá trị local khỏi
+fixture staging: **107 test hạ tầng đạt**, kiểm tra Compose local/staging,
+script PostgreSQL và Nginx đạt. Cổng PostgreSQL test Integration được khai
+báo rõ là `5432` trong metadata CI, không dùng mặc định local `55443`.
+Lượt CI local tiếp theo dùng virtualenv ngoài repo và PostgreSQL/Redis tạm:
+AI **293**, Classroom **455**, Identity **304**, Integration **524**, Work
+**737** test đạt; lint/format và Django check/migration drift đều đạt.
+Frontend lint/typecheck đạt; build chạy riêng đạt. CI toàn repo chưa xanh:
+lượt test frontend có 3 ca thất bại ở KanbanBoard/TeacherSetup/TeacherWorkspace;
+chạy lại 3 file thì 2 file đạt, TeacherWorkspace còn lỗi điều hướng/Breadcrumb.
+Chạy riêng TeacherWorkspace tiếp theo: **28 passed**. Các ca frontend đều có
+lượt retry đạt, nhưng suite chung chưa ổn định; chưa kết luận nguyên nhân.
+Không có thay đổi source frontend trong đợt sửa CI này. Không dùng kết quả
+lịch sử M3 làm bằng chứng M4.
 
-## Cơ chế M3 đã đối chiếu source
+Compose root/staging có `integration-migrate` làm dependency thành công trước
+API, worker và Beat; worker và Beat phụ thuộc PostgreSQL/Redis healthy. Đây là
+cấu hình source, chưa chứng minh staging đã chạy. Hướng dẫn khung tại
+[README Integration](README.md); không dùng database runtime khi chạy test.
 
-`GitHubPendingConsent` giữ hash state/nonce, HMAC access Bearer, generation,
-verifier mã hóa Fernet và hạn 600 giây. Chỉ consent mới nhất dùng được.
-`GitHubConsentGeneration` là khóa/watermark riêng cho actor kể cả trước khi có
-account. DELETE tăng generation và hủy pending consent; complete kiểm lại sau
-exchange để chặn late first-link. Không giữ khóa database trong request GitHub.
+## Giới hạn
 
-State consumed và verifier được xóa trước exchange. Complete kiểm actor,
-đúng access Bearer đã được Identity `/users/me` xác minh và cookie browser
-nonce. Vì Identity không trả session ID, refresh access Bearer yêu cầu start
-mới. Cookie `utask_github_consent` có `HttpOnly`, `SameSite=Lax`, path `/`,
-`Secure` mặc định và TTL 600 giây.
+Không có thay đổi Work, Identity, AI, UI, Kafka, GitHub App private key hoặc
+domain sync trong M4. Work authorization/mutation và AI context vẫn
+**Chưa triển khai**. Xem [scope](scope-access.md) và [API](api.md).
 
-Provider chỉ gọi HTTPS GitHub exchange và `/user`, không theo redirect,
-timeout 2/3 giây, response tối đa 64 KiB. Mapping nhận ID/login từ provider,
-không nhận từ client. Không lưu token. Cấu hình khóa Fernet riêng, OAuth App và
-cờ cookie xem [API](api.md). Lỗi cấu hình/provider đóng luồng với 503.
 
-Ngày 19/10/2026, toàn bộ suite Integration đạt **362 passed** trên PostgreSQL
-16 tạm riêng, gồm 65 provider unit test và kiểm thử consent/API/contract/race.
-Test đi qua adapter thật với HTTP mock xác nhận token chỉ dùng gọi `/user`,
-không xuất hiện trong DB, response hoặc log. Các test không chứng minh OAuth
-GitHub thực tế; số 242 ở trên là kết quả lịch sử M1/M2.
+## Smoke GitHub thật (chạy riêng)
 
-Ruff lint/format, Django system check và migration drift đạt. Docker image
-`utask/integration-service:oauth-m3-check` build thành công; migration mới áp
-dụng thành công trong image trên database tạm riêng. Không deploy runtime.
+Hoàn tất consent/cài App bằng tài khoản test trước, rồi đặt
+`INTEGRATION_SMOKE_URL` (root Integration hoặc gateway `/api/integrations`),
+`INTEGRATION_SMOKE_BEARER` và tùy chọn `INTEGRATION_SMOKE_INSTALLATION_ID`.
+Từ root repo chạy:
 
-CI toàn repo đã thử bằng `python scripts/ci_local.py --skip-images` nhưng dừng
-ở discovery: `docker-compose.staging.yml` thiếu `x-deploy.gateway_health_path`
-cho Integration. Cấu hình này đã thiếu ở HEAD trước thay đổi M3; chưa xác minh
-các bước CI sau discovery. GitNexus impact/detect_changes đã chạy và báo
-CRITICAL tại unlink; graph còn trả tham chiếu symbol không khớp source nên
-không coi graph là bằng chứng bao phủ đầy đủ. Review source và kiểm thử
-PostgreSQL là bằng chứng cho phạm vi M3 đã kiểm tra.
+```bash
+uv run --project apps/integration-service python scripts/smoke_integration_github.py
+```
 
-## Giới hạn tích hợp Work
+Script chỉ GET account/installation/repository, không theo redirect và không
+in Bearer hoặc response cá nhân. Chưa chạy script với GitHub thật trong M4;
+OAuth/refresh/revoke và callback thật vẫn cần nghiệm thu riêng.
 
-Work sở hữu Project/Task và quyền nghiệp vụ. Integration chỉ có thể dùng các
-API GET Work hiện hành cho snapshot `/projects/{id}/`, `/tasks/{id}/` và
-`/projects/{id}/members/`; các API đọc không bảo đảm quyền ghi hoặc CAS. Không
-mở luồng mutation/prepare-confirm nếu contract Work chưa có; adapter hiện
-`UnavailableIntegration`. Không có yêu cầu sửa Work trong phạm vi tài liệu
-Integration này.
+
+## Phân tích ảnh hưởng cuối thay đổi
+
+GitNexus đã rebuild toàn graph. `detect_changes --scope all --limit 1000`
+chạy với index Git tạm để bao gồm file mới, không stage vào index của người
+dùng: 59 file; risk **CRITICAL**. Lượt rebuild ghi nhận 381 symbol/46 flow;
+lượt incremental sau đó trả 224 symbol/561 flow, nên không coi số liệu graph
+là bằng chứng nhất quán hoặc xác nhận thay đổi an toàn. Các luồng
+ảnh hưởng gồm consent, credential refresh, account unlink, installation và
+provider. Đã review source và kiểm thử hồi quy cho các luồng này; graph vẫn
+có giới hạn phân giải và cắt bớt luồng trong quá trình index, không phải bằng
+chứng bao phủ toàn hệ thống. Không commit hoặc deploy trong thay đổi này.

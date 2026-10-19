@@ -173,6 +173,14 @@ nano .env
 chmod 600 .env
 ```
 
+Khi bật AI trên staging, đặt `AI_ENVIRONMENT=staging` và `MOCK_TEST=false`
+trong `.env` VPS. `.env.example` khai báo `development`/`true` cho local;
+không giữ hai giá trị đó khi sao chép mẫu sang staging. Nếu hai biến trống
+hoặc chưa khai báo, Compose staging dùng mặc định `staging`/`false`, còn
+Compose local dùng `development`/`true`. Giá trị đã điền trong `.env` hoặc
+export ở shell được ưu tiên hơn mặc định; cả API, worker và dispatcher nhận
+cùng cấu hình. Đã kiểm tra nội suy Compose, chưa xác minh deploy thật.
+
 Workflow đọc `.env` này nhưng không upload hoặc ghi đè nó. Secrets GitHub như khóa SSH
 và token GHCR phục vụ triển khai; chúng không tự trở thành biến của ứng dụng.
 
