@@ -1,23 +1,26 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Info, LockKeyhole, RotateCcwKey, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Info, RotateCcwKey, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { applyFieldErrors } from "@/features/auth/formErrors";
+import { isInvalidResetLink, recoveryErrorMessage } from "@/features/auth/errorMessages";
+import { useApiClient } from "@/lib/api/ApiClientProvider";
+import { ApiError } from "@/lib/api/errors";
+import { confirmPasswordReset } from "@/lib/api/identity/endpoints";
 import { cn } from "@/lib/utils";
 
 const emailSchema = z.email();
+export const RESET_DONE_NOTICE = "Đặt lại mật khẩu thành công. Hãy đăng nhập bằng mật khẩu mới.";
 const resetPasswordSchema = z.object({
-  password: z.string()
-    .min(8, "Mật khẩu phải có ít nhất 8 ký tự.")
-    .regex(/[A-Z]/, "Mật khẩu phải có ít nhất một chữ hoa.")
-    .regex(/[a-z]/, "Mật khẩu phải có ít nhất một chữ thường.")
-    .regex(/\d/, "Mật khẩu phải có ít nhất một chữ số."),
+  // Luật độ mạnh đầy đủ do backend quyết định; ở đây chỉ chặn lỗi hiển nhiên.
+  password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự."),
   confirmPassword: z.string().min(1, "Nhập lại mật khẩu mới."),
 }).refine(({ password, confirmPassword }) => password === confirmPassword, {
   message: "Mật khẩu xác nhận không trùng khớp.",
@@ -28,11 +31,14 @@ const STRENGTH_BARS = [0, 1, 2] as const;
 
 type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
-export function ResetPasswordForm() {
+export function ResetPasswordForm({ uid, token }: { uid: string; token: string }) {
+  const client = useApiClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [linkInvalid, setLinkInvalid] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [showIntegrationNotice, setShowIntegrationNotice] = useState(false);
   const form = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
@@ -53,6 +59,33 @@ export function ResetPasswordForm() {
   const strengthLabel = password.length === 0 ? "Chưa nhập" : strengthScore === 4 ? "Mạnh" : strengthScore >= 2 ? "Trung bình" : "Yếu";
   const strengthColor = strengthScore === 4 ? "bg-emerald-500" : strengthScore >= 2 ? "bg-amber-500" : "bg-red-500";
 
+  async function submit(values: ResetPasswordValues) {
+    setSubmitError(null);
+    setLinkInvalid(false);
+    try {
+      await confirmPasswordReset(client, {
+        uid,
+        token,
+        new_password1: values.password,
+        new_password2: values.confirmPassword,
+      });
+      navigate("/login", { replace: true, state: { notice: RESET_DONE_NOTICE } });
+    } catch (error) {
+      if (!(error instanceof ApiError)) {
+        setSubmitError("Không thể đặt lại mật khẩu. Vui lòng thử lại.");
+        return;
+      }
+      if (isInvalidResetLink(error)) {
+        setLinkInvalid(true);
+        return;
+      }
+      const shown = applyFieldErrors(form, error, { new_password1: "password", new_password2: "confirmPassword" });
+      if (!shown) {
+        setSubmitError(recoveryErrorMessage(error));
+      }
+    }
+  }
+
   return (
     <section className="w-full max-w-[400px]" aria-labelledby="reset-password-title">
       <Link className="group mb-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:text-[#4837c4]" to="/login">
@@ -68,7 +101,7 @@ export function ResetPasswordForm() {
           Thiết lập mật khẩu mới
         </h1>
         <p className="text-sm leading-relaxed text-[#787586]">
-          Nhập mật khẩu mới tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và chữ số.
+          Nhập mật khẩu mới tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.
         </p>
         <div className="mt-3.5 flex items-center gap-2 rounded-md border border-[#e7e5e0] bg-white px-3 py-1.5 text-xs text-[#787586]">
           <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -77,18 +110,22 @@ export function ResetPasswordForm() {
         </div>
       </div>
 
-      {showIntegrationNotice ? (
-        <Alert className="mb-5 border-primary/20 bg-primary/5 text-[#1a1c1c]">
-          <Info className="text-primary" aria-hidden="true" />
-          <AlertTitle className="text-primary">Chưa kết nối dịch vụ đặt lại mật khẩu</AlertTitle>
+      {linkInvalid ? (
+        <Alert className="mb-5 border-destructive/30 bg-white" variant="destructive">
           <AlertDescription>
-            Giao diện và validation đã sẵn sàng, nhưng Identity API chưa cung cấp endpoint xác nhận token. Mật khẩu chưa thay đổi.
+            Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.{" "}
+            <Link className="font-medium underline" to="/forgot-password">Yêu cầu liên kết mới</Link>
           </AlertDescription>
+        </Alert>
+      ) : null}
+      {submitError ? (
+        <Alert className="mb-5 border-destructive/30 bg-white" variant="destructive">
+          <AlertDescription>{submitError}</AlertDescription>
         </Alert>
       ) : null}
 
       <Form {...form}>
-        <form className="space-y-5" onSubmit={form.handleSubmit(() => setShowIntegrationNotice(true))} noValidate>
+        <form className="space-y-5" onSubmit={form.handleSubmit(submit)} noValidate>
           <FormField
             control={form.control}
             name="password"
@@ -184,8 +221,8 @@ export function ResetPasswordForm() {
           />
 
           <div className="pt-2">
-            <Button className="h-11 w-full rounded-lg font-semibold" type="submit">
-              Cập nhật mật khẩu &amp; Đăng nhập ngay
+            <Button className="h-11 w-full rounded-lg font-semibold" type="submit" disabled={form.formState.isSubmitting}>
+              Cập nhật mật khẩu
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
@@ -194,7 +231,7 @@ export function ResetPasswordForm() {
 
       <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-[#e7e5e0] bg-white p-3.5 text-xs leading-relaxed text-[#787586]">
         <Info className="mt-0.5 size-[18px] shrink-0 text-primary" aria-hidden="true" />
-        Liên kết khôi phục chỉ nên có hiệu lực một lần trong 24 giờ. Backend phải thu hồi các phiên cũ sau khi cập nhật mật khẩu.
+        Liên kết khôi phục chỉ dùng được một lần và có thời hạn. Sau khi đặt lại, hãy đăng nhập bằng mật khẩu mới.
       </div>
 
       <div id="academic-support" className="mt-8 text-center">

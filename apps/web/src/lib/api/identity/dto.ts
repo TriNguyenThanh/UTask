@@ -68,3 +68,31 @@ export interface PasswordChangeDto {
   new_password1: string;
   new_password2: string;
 }
+
+export interface RegisterDto {
+  email: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  password1: string;
+  password2: string;
+}
+
+export interface RegisterDataDto {
+  user: CurrentUserDto;
+  account_status: string;
+}
+
+/** `key` lấy từ link email; `new_password1/2` chỉ cần với tài khoản do giảng viên tạo (chưa có mật khẩu). */
+export interface ActivateDto {
+  key: string;
+  new_password1?: string;
+  new_password2?: string;
+}
+
+export interface PasswordResetConfirmDto {
+  uid: string;
+  token: string;
+  new_password1: string;
+  new_password2: string;
+}

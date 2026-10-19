@@ -3,6 +3,10 @@ import type {
   CurrentUserDto,
   LoginDataDto,
   LogoutAllDataDto,
+  ActivateDto,
+  PasswordResetConfirmDto,
+  RegisterDataDto,
+  RegisterDto,
   PasswordChangeDto,
   ProfilePatchDto,
   RefreshDataDto,
@@ -70,4 +74,25 @@ export async function patchMe(client: ApiClient, body: ProfilePatchDto) {
 /** Thành công thì mọi phiên của tài khoản bị thu hồi. */
 export async function changePassword(client: ApiClient, body: PasswordChangeDto) {
   await client.requestEnvelope<unknown>(`${ROOT}/password-change`, { method: "POST", body });
+}
+
+export async function register(client: ApiClient, body: RegisterDto) {
+  const { data } = await client.requestEnvelope<RegisterDataDto>(`${ROOT}/register`, { method: "POST", body });
+  return data;
+}
+
+export async function activate(client: ApiClient, body: ActivateDto) {
+  await client.requestEnvelope<unknown>(`${ROOT}/activate`, { method: "POST", body });
+}
+
+export async function resendActivation(client: ApiClient, email: string) {
+  await client.requestEnvelope<unknown>(`${ROOT}/activation/resend`, { method: "POST", body: { email } });
+}
+
+export async function requestPasswordReset(client: ApiClient, email: string) {
+  await client.requestEnvelope<unknown>(`${ROOT}/password-reset/request`, { method: "POST", body: { email } });
+}
+
+export async function confirmPasswordReset(client: ApiClient, body: PasswordResetConfirmDto) {
+  await client.requestEnvelope<unknown>(`${ROOT}/password-reset/confirm`, { method: "POST", body });
 }
