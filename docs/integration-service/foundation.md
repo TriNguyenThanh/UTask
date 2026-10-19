@@ -1,7 +1,7 @@
 # Integration: hiện trạng và cách kiểm tra
 
 **Trạng thái: Một phần.** Đối chiếu source, cấu hình và test trong worktree
-ngày 18/10/2026. Chưa xác minh deploy Identity/Integration, GitHub OAuth App,
+ngày 19/10/2026. Chưa xác minh deploy Identity/Integration, GitHub OAuth App,
 GitHub API hoặc môi trường VPS.
 
 ## Các phần đã có
@@ -13,7 +13,7 @@ GitHub API hoặc môi trường VPS.
 | GitHub account mapping | Đã triển khai một phần | `GitHubAccount` migration, validation và service link/unlink; model giữ UUID `user_id` logic, status `LINKED`/`REVOKED`, metadata thời gian/version |
 | API account | Đã triển khai trong source | GET/DELETE `/api/v1/github/account`; auth dùng Identity `GET /users/me`; API-level PostgreSQL tests trong `tests/integration/test_github_account_api.py` |
 | Xác thực Bearer qua Identity | Đã triển khai một phần | Adapter gửi Bearer tới `http://identity-service:8000/users/me`, timeout 2/3 giây và parse `data.id`; chưa xác minh chạy xuyên service |
-| OAuth consent, provider và token adapter | Chưa triển khai | Chưa có callback/start/complete, gọi GitHub, token lưu trữ hoặc token revoke |
+| OAuth consent và provider M3 | Đã triển khai trong source | `consent.py`, `consent_api.py`, `github_oauth.py`, pending consent/generation; identity-only, không lưu/refresh/revoke token; chưa xác minh GitHub thật |
 | Work/AI, GitHub App, webhook, sync, Kafka | Chưa triển khai | Work integration adapter mặc định `UnavailableIntegration`; chưa có runtime Integration tương ứng |
 
 ## Mốc và quyết định hiện hành
@@ -26,8 +26,9 @@ GitHub API hoặc môi trường VPS.
   persistence/service layer và GET/DELETE account.
 - **M2 — Đã triển khai một phần:** adapter Bearer → Identity `/users/me` có
   source. Tích hợp thật giữa service chưa được xác minh.
-- **M3 — Thiết kế mục tiêu:** personal OAuth consent, GitHub provider/token
-  adapter, xác minh/refresh/revoke credential và hoàn tất link account.
+- **M3 — Đã triển khai trong source:** personal OAuth App consent PKCE S256 và
+  provider `/user` để hoàn tất link account. Không lưu token; không có
+  refresh/revoke token hoặc repository access.
 - GitHub App installation, webhook, sync và mutation/project workflow chưa
   nằm trong phần đã triển khai.
 
@@ -66,11 +67,42 @@ Lệnh local khung được mô tả tại
 test riêng theo cấu hình trong `apps/integration-service/config/settings/test.py`;
 không dùng database runtime hay database thật của dự án.
 
-Trước khi nối callback M3, phải thêm cơ chế hủy pending consent hoặc generation
-riêng. Hiện DELETE khi chưa có account không tạo bản ghi/watermark: kết quả
-xác minh đầu tiên đến muộn vẫn có thể được helper lưu. Chưa có public route
-gọi helper link; kiểm thử M3 phải bổ sung late first-link sau DELETE và
-first-link/DELETE đồng thời trước khi mở callback.
+## Cơ chế M3 đã đối chiếu source
+
+`GitHubPendingConsent` giữ hash state/nonce, HMAC access Bearer, generation,
+verifier mã hóa Fernet và hạn 600 giây. Chỉ consent mới nhất dùng được.
+`GitHubConsentGeneration` là khóa/watermark riêng cho actor kể cả trước khi có
+account. DELETE tăng generation và hủy pending consent; complete kiểm lại sau
+exchange để chặn late first-link. Không giữ khóa database trong request GitHub.
+
+State consumed và verifier được xóa trước exchange. Complete kiểm actor,
+đúng access Bearer đã được Identity `/users/me` xác minh và cookie browser
+nonce. Vì Identity không trả session ID, refresh access Bearer yêu cầu start
+mới. Cookie `utask_github_consent` có `HttpOnly`, `SameSite=Lax`, path `/`,
+`Secure` mặc định và TTL 600 giây.
+
+Provider chỉ gọi HTTPS GitHub exchange và `/user`, không theo redirect,
+timeout 2/3 giây, response tối đa 64 KiB. Mapping nhận ID/login từ provider,
+không nhận từ client. Không lưu token. Cấu hình khóa Fernet riêng, OAuth App và
+cờ cookie xem [API](api.md). Lỗi cấu hình/provider đóng luồng với 503.
+
+Ngày 19/10/2026, toàn bộ suite Integration đạt **362 passed** trên PostgreSQL
+16 tạm riêng, gồm 65 provider unit test và kiểm thử consent/API/contract/race.
+Test đi qua adapter thật với HTTP mock xác nhận token chỉ dùng gọi `/user`,
+không xuất hiện trong DB, response hoặc log. Các test không chứng minh OAuth
+GitHub thực tế; số 242 ở trên là kết quả lịch sử M1/M2.
+
+Ruff lint/format, Django system check và migration drift đạt. Docker image
+`utask/integration-service:oauth-m3-check` build thành công; migration mới áp
+dụng thành công trong image trên database tạm riêng. Không deploy runtime.
+
+CI toàn repo đã thử bằng `python scripts/ci_local.py --skip-images` nhưng dừng
+ở discovery: `docker-compose.staging.yml` thiếu `x-deploy.gateway_health_path`
+cho Integration. Cấu hình này đã thiếu ở HEAD trước thay đổi M3; chưa xác minh
+các bước CI sau discovery. GitNexus impact/detect_changes đã chạy và báo
+CRITICAL tại unlink; graph còn trả tham chiếu symbol không khớp source nên
+không coi graph là bằng chứng bao phủ đầy đủ. Review source và kiểm thử
+PostgreSQL là bằng chứng cho phạm vi M3 đã kiểm tra.
 
 ## Giới hạn tích hợp Work
 

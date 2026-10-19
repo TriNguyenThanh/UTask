@@ -1,7 +1,7 @@
 # API Integration Service
 
 **Trạng thái: Một phần.** `/healthz` và API đọc/thu hồi liên kết GitHub cá
-nhân có route trong source. OAuth consent, GitHub provider và các API dữ liệu
+nhân, OAuth consent và GitHub provider có trong source. Các API dữ liệu
 Project chưa triển khai. [Hợp đồng OpenAPI](../../contracts/api/integration-service-v1.yaml)
 là hợp đồng máy đọc được; phần dưới mô tả hiện trạng và mục tiêu, không thay
 thế schema hợp đồng.
@@ -18,7 +18,9 @@ Các path dưới đây tính từ root server Integration, chưa bao gồm pref
 | --- | --- | --- |
 | GET/HEAD `/healthz` | Đã triển khai | Health DB; xem [foundation](foundation.md) |
 | GET `/api/v1/github/account` | Đã triển khai trong source | Đọc account của actor hiện tại; không nhận query hoặc body; `Cache-Control: private, no-store` |
-| DELETE `/api/v1/github/account` | Đã triển khai trong source | Thu hồi liên kết của actor hiện tại; lặp lại là idempotent |
+| DELETE `/api/v1/github/account` | Đã triển khai trong source | Thu hồi liên kết và vô hiệu consent của actor; lặp lại giữ nguyên account version |
+| POST `/api/v1/github/authorizations/start` | Đã triển khai trong source | Không nhận query/body; trả `authorization_url`, `expires_at` và đặt cookie nonce |
+| POST `/api/v1/github/authorizations/complete` | Đã triển khai trong source | Chỉ nhận JSON `code`, `state`; kiểm nonce/Bearer và trả account đã xác minh |
 
 Hai route account xác thực `Authorization: Bearer <token>` bằng cách chuyển
 Bearer tới Identity `GET /users/me`. Identity kiểm JWT/session và trả
@@ -45,8 +47,8 @@ record trả `UNLINKED`, `source_version: 0`.
 }
 ```
 
-DELETE chỉ thu hồi mapping Integration; endpoint chưa gọi GitHub để revoke
-token vì OAuth/token adapter chưa có. Response DELETE giữ cùng dạng account
+DELETE chỉ thu hồi mapping Integration và vô hiệu consent đang chờ; không gọi
+GitHub để revoke token vì M3 không lưu token. Response DELETE giữ cùng dạng account
 data. Route này không đổi OAuth link trong Identity và không ảnh hưởng quyền
 Project/Task trong Work.
 
@@ -62,24 +64,59 @@ JWT validation cục bộ hay thêm Integration vào session-status allowlist.
 Hiện chưa xác minh luồng xuyên service đang chạy. Unit test xác nhận cách gọi,
 giới hạn và ánh xạ lỗi; không chứng minh Identity/Gateway thực tế.
 
-## 3. API mục tiêu: OAuth consent cá nhân
+## 3. OAuth consent cá nhân M3
 
-**Thiết kế mục tiêu M3; chưa có route hoặc provider adapter.** Integration sẽ
-sở hữu consent GitHub cá nhân và vòng đời credential cần cho quyền theo user.
-Consent không cần `project_id`, quyền leader hoặc quyền ghi Project. Kết quả
-link account thuộc Integration; schema chi tiết phải theo hợp đồng OpenAPI đã
-chốt, không suy rộng từ các ví dụ route cũ.
+**Đã triển khai trong source; chưa xác minh OAuth GitHub thực tế.** Hai route
+POST yêu cầu Bearer được Identity `/users/me` xác minh. Consent không cần
+`project_id`, vai trò leader hoặc quyền Work. Response thành công dùng envelope
+`success: true, data: ...` và `Cache-Control: private, no-store`.
 
-Luồng mục tiêu cần bảo vệ state/PKCE, ràng buộc callback với user/session,
-xác minh danh tính và quyền token với GitHub, lưu credential theo chính sách
-bảo vệ bí mật, không trả token ra client, log, event hay context AI; thu hồi
-liên kết phải chặn việc tiếp tục dùng credential tương ứng. Chi tiết provider,
-scopes, refresh/revoke semantics và response chỉ được coi là quyết định khi
-có trong hợp đồng hiện hành. Chưa có mã kiểm chứng OAuth end-to-end.
+Start không nhận query/body, trả URL `https://github.com/login/oauth/authorize`
+với state, redirect đã cấu hình và PKCE S256; không yêu cầu scope repository.
+Cookie `utask_github_consent` chứa browser nonce, `HttpOnly`, `SameSite=Lax`,
+path `/`, TTL 600 giây và `Secure` mặc định. Mỗi actor chỉ có một consent mới
+nhất còn dùng được; start mới vô hiệu consent trước.
 
-Không dùng endpoint OAuth callback của Identity làm nguồn mapping; không gọi
-Identity SocialAccount/profile hay API mapping nội bộ; không đổi code thành
-proof để Identity sở hữu GitHub mapping.
+Complete chỉ nhận `code`, `state` và cần cookie nonce cùng Bearer đã dùng lúc
+start. Identity `/users/me` không cung cấp session ID, nên Integration ràng
+buộc chính xác access Bearer bằng HMAC-SHA256 với khóa consent, đồng thời kiểm
+actor, hash state/nonce và thời hạn. Refresh access token giữa luồng yêu cầu
+start consent mới. State dùng một lần: được đánh dấu consumed và xóa verifier
+mã hóa trước khi gọi provider; timeout hoặc lỗi provider vẫn phải start lại.
+
+Provider exchange code tại GitHub, sau đó gọi `https://api.github.com/user`
+để lấy ID số nguyên dương và login hợp lệ; không lấy danh tính từ client.
+Cả hai request không theo redirect, timeout kết nối/đọc 2/3 giây và giới hạn
+response 64 KiB. Token chỉ được dùng trong adapter rồi bỏ, không lưu, trả về
+hoặc ghi log. Complete thành công trả account data như GET và xóa cookie.
+
+Generation của actor được kiểm lại sau exchange. DELETE tăng generation và
+hủy pending consent kể cả khi chưa có mapping, nên callback đến muộn không
+thể tạo lại liên kết. Nếu đang `LINKED`, đổi sang GitHub ID khác cần unlink
+trước; GitHub ID đang được actor khác liên kết cũng bị từ chối.
+
+| HTTP | Trường hợp |
+| --- | --- |
+| 400 | Payload/query sai; state hết hạn, replay, sai actor/Bearer hoặc nonce |
+| 401 | Thiếu hoặc sai Bearer, phiên bị Identity từ chối |
+| 409 | Generation thay đổi, consent hết hạn sau exchange, xung đột account hoặc cần unlink trước |
+| 503 | Identity/storage không khả dụng; cấu hình consent/provider sai, timeout hoặc response GitHub không hợp lệ |
+
+Lỗi dùng envelope `success: false, error: {code, message}`; lỗi provider có mã
+`GITHUB_UNAVAILABLE`, thông báo chung không chứa credential.
+
+Cấu hình bắt buộc: `INTEGRATION_GITHUB_CLIENT_ID`,
+`INTEGRATION_GITHUB_CLIENT_SECRET`, `INTEGRATION_GITHUB_REDIRECT_URI` và
+`INTEGRATION_CONSENT_KEY`. Khóa consent là Fernet key: 32 byte ngẫu nhiên được
+mã hóa base64url; dùng riêng cho Integration để mã hóa verifier PKCE tạm thời.
+Redirect dùng HTTPS; HTTP chỉ chấp nhận loopback phục vụ phát triển.
+`INTEGRATION_CONSENT_COOKIE_SECURE` mặc định `true`, chỉ đặt `false` khi chạy
+localhost qua HTTP. Thiếu hoặc sai cấu hình làm luồng đóng với 503.
+
+M3 không lưu/refresh/revoke token, không liệt kê repository hoặc cấp quyền
+Project. Không dùng callback Identity, SocialAccount/profile hoặc proof
+exchange làm nguồn mapping. Unit test provider dùng mock; chưa có bằng chứng
+OAuth end-to-end với GitHub hay Identity thật.
 
 ## 4. Tích hợp Work và dữ liệu Project
 

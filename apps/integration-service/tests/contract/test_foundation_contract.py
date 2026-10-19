@@ -150,8 +150,6 @@ def test_health_runtime_matches_contract(client, contract, unavailable):
     "path",
     [
         "/api/v1/internal/oauth/github/exchange",
-        "/api/v1/github/authorizations/start",
-        "/api/v1/github/authorizations/complete",
         "/api/v1/github/installations/confirm",
         "/api/v1/webhooks/github",
     ],

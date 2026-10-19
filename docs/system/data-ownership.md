@@ -25,7 +25,12 @@ sở hữu mapping tài khoản GitHub của user; Identity chỉ xác thực t�
 UTask/phiên qua API hiện có. `GitHubAccount.user_id` là UUID logic, không FK tới
 Identity, không lấy mapping GitHub legacy/Profile làm nguồn đúng và không tự
 chuyển dữ liệu cũ. Model/migration và API đọc/thu hồi mapping đã có trong
-Integration; OAuth/provider/token adapter chưa triển khai. Source Identity
+Integration. M3 có OAuth App identity-only, pending consent và provider `/user`
+trong source; không lưu GitHub token. State/nonce lưu dạng hash, verifier tạm
+mã hóa Fernet bằng khóa riêng Integration; consent gắn actor và chính access
+Bearer đã được Identity xác minh (không có session ID từ `/users/me`).
+Generation của actor chặn callback đến sau DELETE kể cả chưa có mapping.
+OAuth thực tế chưa xác minh; xem [API Integration](../integration-service/api.md). Source Identity
 legacy giữ nguyên, không làm dependency cho luồng Integration mới.
 
 Các ID xuyên service như `user_id`, `group_id`, `project_id` chỉ là tham

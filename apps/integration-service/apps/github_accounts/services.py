@@ -6,7 +6,7 @@ from .errors import (
     GitHubIdentityInUse,
     StaleGitHubVerification,
 )
-from .models import GitHubAccount
+from .models import GitHubAccount, GitHubConsentGeneration, GitHubPendingConsent
 from .validation import validate_user_id, validate_verified_identity
 
 
@@ -73,6 +73,13 @@ def unlink_github_account(*, user_id):
     """Revoke only this user's binding; repeated revocation leaves its version unchanged."""
     user_id = validate_user_id(user_id)
     with transaction.atomic():
+        generation, _ = GitHubConsentGeneration.objects.get_or_create(user_id=user_id)
+        generation = GitHubConsentGeneration.objects.select_for_update().get(pk=generation.pk)
+        generation.generation += 1
+        generation.save(update_fields=["generation"])
+        GitHubPendingConsent.objects.filter(user_id=user_id, consumed_at__isnull=True).update(
+            consumed_at=timezone.now(), encrypted_verifier=""
+        )
         account = GitHubAccount.objects.select_for_update().filter(user_id=user_id).first()
         if account is None or account.status == GitHubAccount.Status.REVOKED:
             return account

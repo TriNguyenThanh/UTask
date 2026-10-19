@@ -39,3 +39,11 @@ REST_FRAMEWORK = {
 INTEGRATION_IDENTITY_URL = os.environ.get(
     "INTEGRATION_IDENTITY_URL", "http://identity-service:8000"
 )
+INTEGRATION_GITHUB_CLIENT_ID = os.environ.get("INTEGRATION_GITHUB_CLIENT_ID", "")
+INTEGRATION_GITHUB_CLIENT_SECRET = os.environ.get("INTEGRATION_GITHUB_CLIENT_SECRET", "")
+INTEGRATION_GITHUB_REDIRECT_URI = os.environ.get("INTEGRATION_GITHUB_REDIRECT_URI", "")
+INTEGRATION_CONSENT_KEY = os.environ.get("INTEGRATION_CONSENT_KEY", "")
+# Local HTTP development may opt out; staging/production keep Secure enabled.
+INTEGRATION_CONSENT_COOKIE_SECURE = (
+    os.environ.get("INTEGRATION_CONSENT_COOKIE_SECURE", "true").lower() != "false"
+)

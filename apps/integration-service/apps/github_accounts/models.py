@@ -49,3 +49,21 @@ class GitHubAccount(models.Model):
                 condition=~Q(user_id=UUID(int=0)), name="ck_github_account_user_id"
             ),
         ]
+
+
+class GitHubConsentGeneration(models.Model):
+    """Stable lock/tombstone even before the user's first account link."""
+
+    user_id = models.UUIDField(primary_key=True)
+    generation = models.PositiveBigIntegerField(default=0)
+
+
+class GitHubPendingConsent(models.Model):
+    state_hash = models.CharField(max_length=64, primary_key=True)
+    user_id = models.UUIDField(db_index=True)
+    session_hash = models.CharField(max_length=64)
+    nonce_hash = models.CharField(max_length=64)
+    generation = models.PositiveBigIntegerField()
+    encrypted_verifier = models.TextField()
+    expires_at = models.DateTimeField(db_index=True)
+    consumed_at = models.DateTimeField(null=True)

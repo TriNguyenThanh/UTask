@@ -124,6 +124,11 @@ def storage(monkeypatch, account):
     manager.select_for_update.return_value.get.return_value = account
     manager.select_for_update.return_value.filter.return_value.first.return_value = account
     monkeypatch.setattr(services.GitHubAccount, "objects", manager)
+    generations = MagicMock()
+    generations.get_or_create.return_value = (MagicMock(), False)
+    generations.select_for_update.return_value.get.return_value.generation = 0
+    monkeypatch.setattr(services.GitHubConsentGeneration, "objects", generations)
+    monkeypatch.setattr(services.GitHubPendingConsent, "objects", MagicMock())
     monkeypatch.setattr(services.transaction, "atomic", nullcontext)
     monkeypatch.setattr(services.timezone, "now", lambda: NOW)
     return manager
@@ -243,6 +248,12 @@ def test_unlink_revokes_only_requested_user_and_increments_once(account, storage
     assert account.source_version == 2
     assert account.revoked_at == NOW
     account.save.assert_called_once()
+    generation = services.GitHubConsentGeneration.objects.select_for_update().get.return_value
+    assert generation.generation == 1
+    generation.save.assert_called_once_with(update_fields=["generation"])
+    services.GitHubPendingConsent.objects.filter.assert_called_once_with(
+        user_id=USER_ID, consumed_at__isnull=True
+    )
 
 
 @pytest.mark.parametrize("exists", [False, True])

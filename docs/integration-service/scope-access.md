@@ -1,8 +1,9 @@
 # Phạm vi và quyền truy cập Integration Service
 
 **Trạng thái: Một phần.** Quyền sở hữu account và xác thực actor được chốt;
-API GET/DELETE account cùng persistence có trong source. Consent GitHub,
-credential và các luồng Project còn là mục tiêu. [API](api.md) ghi chi tiết
+API GET/DELETE account, persistence, consent PKCE và GitHub OAuth App provider
+có trong source. M3 chỉ liên kết danh tính, không lưu token; các luồng Project
+còn là mục tiêu. [API](api.md) ghi chi tiết
 route; [foundation](foundation.md) ghi bằng chứng source/test.
 
 ## 1. Quyền sở hữu
@@ -26,7 +27,7 @@ role hoặc quyền Work.
 
 ## 2. Xác thực actor
 
-API account nhận Bearer từ caller. Integration gọi endpoint Identity hiện có
+API account và consent nhận Bearer từ caller. Integration gọi endpoint Identity hiện có
 `GET /users/me`, chuyển tiếp Bearer; Identity tự kiểm JWT/session và trả user
 ID tại `data.id`. Integration dùng ID đó làm actor và chỉ đọc/thu hồi account
 của actor hiện tại. `user_id` trong query/body không được chấp nhận.
@@ -47,9 +48,9 @@ minh.
 | --- | --- | --- |
 | Đọc account GitHub của mình | Bearer hợp lệ; actor lấy từ Identity `/users/me` | Đã có route trong source |
 | Thu hồi liên kết account của mình | Bearer hợp lệ; chỉ mapping actor hiện tại bị thu hồi | Đã có route trong source; thao tác GitHub token revoke chưa có |
-| Liên kết/đổi GitHub account cá nhân | Consent/provider xác minh GitHub; nếu đang LINKED thì đổi account theo quy tắc unlink trước | Chưa có HTTP OAuth consent; service helper chỉ nhận dữ liệu đã xác minh, chưa nối với provider |
+| Liên kết/đổi GitHub account cá nhân | Consent/provider xác minh GitHub; nếu đang LINKED thì đổi account theo quy tắc unlink trước | Đã có start/complete và GitHub `/user` provider trong source |
 | Đọc hoặc thu hồi account người khác | Không cho phép qua API user | Không có route theo `user_id` |
-| Thực hiện OAuth consent | Chính user UTask đã xác thực; không cần Project/leader | Thiết kế mục tiêu M3 |
+| Thực hiện OAuth consent | Chính user UTask đã xác thực; cùng access Bearer và browser nonce; không cần Project/leader | Đã triển khai trong source; chưa xác minh OAuth thật |
 | Liệt kê installation/repository cá nhân | Consent và credential hiện hành, quyền user GitHub còn hiệu lực | Chưa triển khai |
 | Đọc snapshot Work cho Project | API REST GET thuộc Work và phạm vi được contract cho phép | Tích hợp runtime chưa có; GET không cấp quyền ghi |
 | Ghi Project/Task/TaskGitHubLink hoặc prepare/confirm | Contract Work có sẵn, quyền và CAS được Work bảo đảm | Chưa mở; không dùng snapshot GET để suy quyền ghi |
@@ -75,15 +76,25 @@ publisher Integration.
 
 ## 5. Credential và thu hồi
 
-`GitHubAccount` đang lưu mapping và metadata xác minh; hiện model không có
-trường token. OAuth consent/token adapter và nơi lưu credential chưa được
-triển khai. Khi có consent, credential thuộc Integration, phải được bảo vệ và
-không trả về trong API, log, event hoặc context AI.
+`GitHubAccount` lưu mapping và metadata xác minh, không có trường token.
+M3 dùng GitHub OAuth App để exchange code và đọc `/user`; token chỉ tồn tại
+trong adapter rồi bỏ, không lưu/refresh/revoke và không đưa vào response, log,
+event hoặc context AI. Liên kết này không cấp repository access.
+
+Pending consent thuộc Integration, TTL 600 giây; chỉ consent mới nhất của mỗi
+actor dùng được. State/nonce lưu dạng hash; PKCE verifier mã hóa Fernet bằng
+`INTEGRATION_CONSENT_KEY` riêng, xóa khi consumed. Cookie nonce có `HttpOnly`,
+`SameSite=Lax`, path `/` và `Secure` mặc định. Complete phải khớp actor và
+HMAC của chính access Bearer dùng lúc start. `/users/me` không trả session ID;
+refresh access Bearer yêu cầu consent mới. State được consumed trước exchange,
+nên lỗi provider cũng không cho dùng lại. Chi tiết cấu hình tại [API](api.md).
 
 DELETE `/api/v1/github/account` đánh dấu mapping `REVOKED`, ghi `revoked_at`
-và tăng `source_version`; gọi lại không tăng version. Hiện DELETE chưa thể
-thu hồi token ở GitHub do token adapter chưa có. Thu hồi account không gỡ GitHub
-App installation dùng chung và không thay quyền/membership trong Work.
+và tăng `source_version`; gọi lại giữ nguyên account version. Mỗi DELETE tăng
+generation của actor và hủy pending consent kể cả chưa có account. Complete
+kiểm lại generation sau exchange để chặn callback đến muộn ghi mapping.
+Thu hồi account không revoke token GitHub vì M3 không giữ token, không gỡ
+GitHub App installation và không thay quyền/membership Work.
 
 Không tự động import account/mapping từ các model hoặc API legacy. Chuyển đổi
 dữ liệu cần quyết định riêng về consent và xác minh; không suy ra quyền từ một
@@ -96,8 +107,9 @@ mapping cũ.
 - Unit test bao phủ validation, idempotency, conflict, stale verification và
   hành vi revoke; test integration cần PostgreSQL bao phủ constraint, race
   đồng thời, uniqueness và persistence.
-- Chưa có GitHub OAuth client/token adapter, consent endpoint, provider
-  verification hay revoke GitHub token.
+- Đã có `consent.py`, `consent_api.py`, provider `github_oauth.py` và model
+  pending consent/generation. Unit test provider dùng mock; OAuth thực tế chưa
+  xác minh. Revoke token, repository, GitHub App installation chưa triển khai.
 - Work adapter hiện `UnavailableIntegration`. Adapter cũ không được xem là
   Integration đã tích hợp.
 - Identity và Work có source legacy liên quan GitHub. Chúng được giữ nguyên;
@@ -110,8 +122,8 @@ mapping cũ.
   `user_id` do client gửi; Identity 401/403 và timeout không cấp quyền.
 - GET chưa liên kết trả `UNLINKED`; DELETE liên kết trả `REVOKED`; DELETE lặp
   không đổi version; account khác không bị tác động.
-- Khi triển khai consent: state/PKCE/callback gắn đúng actor, account GitHub
-  đang LINKED không bị âm thầm đổi; credential không lộ; revoke chặn tái sử
-  dụng credential.
+- Consent phải giữ state/PKCE/callback đúng actor/Bearer/nonce; account đang
+  LINKED không bị âm thầm đổi; credential không lộ; DELETE chặn callback đến
+  muộn kể cả first-link. Xem kết quả chạy tại [foundation](foundation.md).
 - Luồng Project phải dùng contract Work đã chốt và kiểm tra quyền/CAS. Snapshot
   GET hoặc quyền OAuth cá nhân không đủ để cho phép mutation.

@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: UTask Integration API
-  version: 1.1.0
+  version: 1.2.0
   description: >-
     Integration sở hữu GitHub account mapping. Health và GET/DELETE account
-    đã triển khai; OAuth consent thuộc M3 và chưa có route/provider adapter.
+    và OAuth App identity-only M3 đã có trong source; không lưu token GitHub.
     Xác thực actor qua Identity GET /users/me hiện có, không cần sửa Identity.
     Không dùng Identity OAuth proof/mapping hoặc endpoint Work chưa triển khai.
 servers:
@@ -65,8 +65,9 @@ paths:
         Không nhận query/body hoặc actor ID. Transaction chỉ đổi row của user
         hiện tại. Lần thu hồi đầu tăng source_version, lần lặp lại giữ nguyên.
         Không gỡ installation dùng chung, không đổi Identity hoặc Work.
-        Hiện chỉ thu hồi mapping local; chưa có credential/provider adapter để
-        gọi GitHub revoke token. Không tạo row khi user chưa có mapping.
+        Chỉ thu hồi mapping local; M3 không lưu token nên không gọi GitHub revoke.
+        Luôn vô hiệu hóa consent bằng generation/tombstone kể cả chưa có mapping.
+        Không tạo GitHubAccount khi user chưa có mapping.
       responses:
         '200': {$ref: '#/components/responses/Account'}
         '400': {$ref: '#/components/responses/InvalidRequest'}
@@ -85,35 +86,42 @@ paths:
   /api/v1/github/authorizations/start:
     post:
       operationId: startOwnGitHubConsent
-      summary: Thiết kế M3 — bắt đầu consent GitHub App của cá nhân
-      x-utask-status: design-not-implemented-m3
+      summary: Bắt đầu consent GitHub OAuth App cá nhân
+      x-utask-status: implemented
       security: [{ActorBearer: []}]
       description: >-
-        Chưa có route. Không cần project_id/leader/Identity GitHub link.
+        Không nhận query/body; không cần project_id/leader/Identity GitHub link.
         State dùng một lần TTL 10 phút, binding actor/session/browser nonce,
-        PKCE S256 và redirect URI cấu hình allowlist chính xác. Integration
-        giữ verifier. Cookie nonce HttpOnly, SameSite=Lax, Secure ở staging.
+        PKCE S256 và redirect URI cố định trong cấu hình OAuth App. Integration
+        mã hóa verifier bằng khóa consent riêng. Session binding là HMAC của
+        Bearer đã xác minh; refresh Bearer cần consent mới. Cookie nonce
+        utask_github_consent HttpOnly, SameSite=Lax, Secure mặc định, path=/,
+        Max-Age=600. Consent mới thay thế consent trước của actor. Không yêu
+        cầu scope repository; URL không chứa token hoặc verifier.
       responses:
         '200':
           description: URL GitHub authorize đã ràng buộc state, không token.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ConsentStartResponse'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
         '401': {$ref: '#/components/responses/Unauthenticated'}
         '503': {$ref: '#/components/responses/Unavailable'}
   /api/v1/github/authorizations/complete:
     post:
       operationId: completeOwnGitHubConsent
-      summary: Thiết kế M3 — xác minh GitHub và lưu mapping ở Integration
-      x-utask-status: design-not-implemented-m3
+      summary: Xác minh danh tính GitHub và lưu mapping ở Integration
+      x-utask-status: implemented
       security: [{ActorBearer: []}]
       description: >-
-        Chưa có route/provider adapter. Kiểm actor/session/state/cookie lại,
+        Kiểm Bearer với Identity, actor/session/state/cookie và TTL trước exchange;
         đổi code theo registration Integration và gọi GitHub /user bằng token
-        mới; ID/login phải từ provider, không từ JSON client. State chỉ dùng
-        một lần; timeout exchange không xác định yêu cầu flow mới. Trùng GitHub
+        mới; ID/login phải từ provider, không từ JSON client. State được consume
+        trước exchange, xóa verifier tạm; timeout hoặc lỗi cần consent mới. Trùng GitHub
         ID active của user khác hoặc đổi ID đang liên kết trả 409. Không trả
-        token/code/verifier; credential tương lai chỉ lưu mã hóa tại Integration.
+        token/code/verifier; token chỉ dùng tạm để gọi /user rồi bỏ, không lưu
+        access/refresh token. DELETE tăng generation kể cả chưa có mapping;
+        callback đến muộn không thể link lại. Không cấp repository access.
       requestBody:
         required: true
         content:
@@ -264,7 +272,7 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
     Unavailable:
-      description: Identity hoặc DB lỗi; không cấp quyền hoặc trả chi tiết upstream.
+      description: Identity, GitHub, cấu hình consent hoặc DB lỗi; không trả chi tiết upstream.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
