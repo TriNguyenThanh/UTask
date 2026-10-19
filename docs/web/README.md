@@ -26,6 +26,8 @@ Xem thêm:
 - [Board và Backlog: kéo thả](kanban-board.md) — cách đổi trạng thái, thứ tự và
   Sprint của issue (Demo MSW), quyền theo vai trò, trợ năng, nhu cầu gửi Project
   Service.
+- [Tích hợp API thật](api-integration.md) — cách chạy với Identity thật, hiện
+  trạng từng Phase, việc cần backend.
 - [Lộ trình frontend](frontend-roadmap.md) — hiện trạng backend và frontend,
   các mảng công việc, thứ tự các đợt từ mock sang tích hợp thật.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,

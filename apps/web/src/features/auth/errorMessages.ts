@@ -12,6 +12,11 @@ export function loginErrorMessage(error: ApiError): string {
     return "Dịch vụ đăng nhập tạm thời không khả dụng.";
   }
 
+  // Backend trả email chưa xác minh dưới dạng VALIDATION_ERROR, không phải ACCOUNT_PENDING_ACTIVATION.
+  if (error.fieldErrors.non_field_errors?.some((message) => /not verified/i.test(message))) {
+    return "Email chưa được xác minh. Hãy kiểm tra email kích hoạt.";
+  }
+
   switch (error.code) {
     case "INVALID_CREDENTIALS":
       return "Email hoặc mật khẩu không đúng.";

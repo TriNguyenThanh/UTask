@@ -37,12 +37,23 @@ function readRefreshCookie(): string {
   return entry ? entry.slice(REFRESH_COOKIE.length + 1) : "";
 }
 
-function fail(status: number, code: string, message: string) {
+function fail(status: number, code: string, message: string, details: { field?: string; issue: string }[] = []) {
   return HttpResponse.json(
-    { success: false, message, data: null, meta: null, error: { code, details: [] } },
+    { success: false, message, data: null, meta: null, error: { code, details } },
     { status },
   );
 }
+
+const PROFILE_FIELDS = new Set([
+  "first_name",
+  "last_name",
+  "phone_number",
+  "bio",
+  "academic_year",
+  "faculty",
+  "timezone",
+  "preferences",
+]);
 
 function userForToken(db: MockDatabase, request: Request): AuthUser | null {
   const userId = resolveMockUserId(request);
@@ -159,6 +170,59 @@ export function createAuthHandlers(
         setRefreshCookie("", 0);
       }
       sessions.delete(sessionId);
+      return ok(null);
+    }),
+
+    http.patch("/api/auth/users/me", async ({ request }) => {
+      await sleepFor(scenario);
+      const user = userForToken(db, request);
+      if (!user) {
+        return fail(401, "AUTHENTICATION_REQUIRED", "Yêu cầu thông tin xác thực để thực hiện thao tác.");
+      }
+      const body = await request.json() as Record<string, unknown>;
+      if ("student_id" in body) {
+        return fail(403, "STUDENT_ID_IMMUTABLE", "Không được tự sửa MSSV.");
+      }
+      const unknown = Object.keys(body).filter((key) => !PROFILE_FIELDS.has(key));
+      if (unknown.length > 0) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          unknown.map((field) => ({ field, issue: "Unknown field." })));
+      }
+      const updated = { ...user, ...body };
+      updated.display_name = `${updated.last_name} ${updated.first_name}`.trim();
+      db.authUsersById[user.id] = updated;
+      return ok({
+        display_name: updated.display_name,
+        phone_number: updated.phone_number,
+        bio: updated.bio,
+        preferences: updated.preferences,
+      });
+    }),
+
+    http.post("/api/auth/password-change", async ({ request }) => {
+      await sleepFor(scenario);
+      if (scenario === "server-error") {
+        return fail(503, "IDENTITY_UNAVAILABLE", "Dịch vụ tạm thời không khả dụng.");
+      }
+      const user = userForToken(db, request);
+      if (!user) {
+        return fail(401, "AUTHENTICATION_REQUIRED", "Yêu cầu thông tin xác thực để thực hiện thao tác.");
+      }
+      const body = await request.json() as Record<string, string>;
+      if (body.old_password !== DEMO_PASSWORD) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "old_password", issue: "Your old password was entered incorrectly." }]);
+      }
+      if (body.new_password1 !== body.new_password2) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "new_password2", issue: "The two password fields didn't match." }]);
+      }
+      for (const [id, session] of sessions) {
+        if (session.userId === user.id) {
+          sessions.delete(id);
+        }
+      }
+      setRefreshCookie("", 0);
       return ok(null);
     }),
 

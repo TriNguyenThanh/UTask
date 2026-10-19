@@ -50,6 +50,8 @@ interface AuthContextValue {
    * ném lỗi khi lỗi tạm thời (mạng, 5xx) để giữ phiên.
    */
   refreshAccessToken(failedToken?: string): Promise<string | null>;
+  /** Cập nhật hồ sơ đang hiển thị (sau khi sửa hồ sơ) mà không đổi phiên. */
+  setUser(user: AuthUser): void;
   handleUnauthorized(): void;
 }
 
@@ -229,6 +231,17 @@ export function AuthProvider({
     }
   }, [baseUrl, clearSession, sessionClient]);
 
+  const setUser = useCallback((user: AuthUser) => {
+    const current = sessionRef.current;
+    if (!current) {
+      return;
+    }
+    const next = { ...current, user };
+    sessionRef.current = next;
+    setSession(next);
+    publishSession(next);
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => ({
     status,
     user: session?.user ?? null,
@@ -237,8 +250,9 @@ export function AuthProvider({
     logout,
     logoutAll,
     refreshAccessToken,
+    setUser,
     handleUnauthorized: clearSession,
-  }), [clearSession, login, logout, logoutAll, refreshAccessToken, session, status]);
+  }), [clearSession, login, logout, logoutAll, refreshAccessToken, session, setUser, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

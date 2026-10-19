@@ -51,3 +51,20 @@ export interface RefreshDataDto {
 export interface LogoutAllDataDto {
   revoked_sessions_count: number;
 }
+
+/** Trường `PATCH /users/me` cho phép sửa; MSSV và email chỉ đọc (gửi `student_id` bị 403). */
+export interface ProfilePatchDto {
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string | null;
+  bio?: string | null;
+  academic_year?: string | null;
+  faculty?: string | null;
+  timezone?: string;
+}
+
+export interface PasswordChangeDto {
+  old_password: string;
+  new_password1: string;
+  new_password2: string;
+}
