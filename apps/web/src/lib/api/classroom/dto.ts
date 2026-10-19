@@ -102,3 +102,12 @@ export interface ProjectLinkDto {
   project_id: string;
   linked_at: string;
 }
+
+/** Kết quả cấp/tắt mã. `code` (mã thô) chỉ có đúng một lần, ngay lúc cấp. */
+export interface AccessCodeDto {
+  id: string;
+  version: number;
+  code?: string;
+  expires_at: string | null;
+  enabled: boolean;
+}

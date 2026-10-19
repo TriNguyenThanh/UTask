@@ -39,6 +39,11 @@ import type {
   TopicProposal,
   UnassignedClassmate,
 } from "@/features/courses/types";
+import { CreateGroupDialog } from "@/features/courses/components/CreateGroupDialog";
+import { InviteCodeCard } from "@/features/courses/components/InviteCodeCard";
+import { JoinGroupDialog } from "@/features/courses/components/JoinGroupDialog";
+import { useGroupCommands } from "@/features/courses/hooks/useGroupCommands";
+import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/errors";
 import { canCreateTeam, canSubmitTopic, type CoursePermissionContext } from "@/lib/permissions";
 import { isRealService } from "@/lib/config/services";
@@ -452,6 +457,8 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
             ) : null}
           </div>
         </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+        {isRealService("classroom") ? <JoinGroupDialog /> : null}
         {allowCreate || deadlinePassed || !course.teamFormation.selfCreateAllowed ? (
           <Button
             className="shrink-0"
@@ -463,6 +470,7 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
             Tạo nhóm mới
           </Button>
         ) : null}
+        </div>
       </div>
 
       <DeadlineBanner course={course} />
@@ -479,7 +487,11 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
         />
       )}
 
-      <CreateTeamDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      {isRealService("classroom") ? (
+        <CreateGroupDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      ) : (
+        <CreateTeamDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      )}
     </div>
   );
 }
@@ -757,7 +769,17 @@ function TopicSection({
   );
 }
 
-function MembersSection({ teamName, members }: Readonly<{ teamName: string; members: TeamMember[] }>) {
+interface MemberManagement {
+  selfUserId: string;
+  onTransfer: (member: TeamMember) => void;
+  onRemove: (member: TeamMember) => void;
+}
+
+function MembersSection({
+  teamName,
+  members,
+  manage,
+}: Readonly<{ teamName: string; members: TeamMember[]; manage?: MemberManagement }>) {
   // Kỹ năng/trách nhiệm chưa có API ở chế độ thật: ẩn hai cột khi không ai có dữ liệu.
   const showSkills = members.some((member) => member.skill !== "" || member.responsibility !== "");
   return (
@@ -771,9 +793,11 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
             {members.length} sinh viên • Trưởng nhóm phụ trách liên lạc giảng viên
           </p>
         </div>
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          Danh sách đã khóa
-        </span>
+        {manage ? null : (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            Danh sách đã khóa
+          </span>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
@@ -789,6 +813,7 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
                 </>
               ) : null}
               <th scope="col" className="px-2 py-3 text-right">Vai trò</th>
+              {manage ? <th scope="col" className="px-2 py-3 text-right">Thao tác</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -829,6 +854,20 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
                     <Badge variant="secondary" className="text-[10px] font-semibold">Thành viên</Badge>
                   )}
                 </td>
+                {manage ? (
+                  <td className="px-2 py-3.5 text-right">
+                    {member.role === "member" && member.userId !== manage.selfUserId ? (
+                      <div className="flex justify-end gap-1.5">
+                        <Button type="button" size="xs" variant="outline" onClick={() => manage.onTransfer(member)}>
+                          Chuyển quyền
+                        </Button>
+                        <Button type="button" size="xs" variant="outline" onClick={() => manage.onRemove(member)}>
+                          Loại
+                        </Button>
+                      </div>
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -868,6 +907,8 @@ function RepositoryCard({ repository }: Readonly<{ repository: string }>) {
 
 function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
   const team = course.team;
+  const { user } = useAuth();
+  const commands = useGroupCommands(team);
   if (!team) {
     return (
       <EmptyState
@@ -917,8 +958,36 @@ function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
         </p>
       </div>
 
+      {commands.enabled ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {team.isLeader && team.version !== undefined ? (
+            <div className="min-w-64 max-w-md flex-1">
+              <InviteCodeCard groupId={team.teamId} version={team.version} expiresAt={team.inviteExpiresAt ?? null} />
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={commands.requestLeave}
+            disabled={team.isLeader}
+            title={team.isLeader ? "Hãy chuyển quyền Trưởng nhóm trước khi rời nhóm." : undefined}
+          >
+            Rời nhóm
+          </Button>
+        </div>
+      ) : null}
+
       <TopicSection course={course} permissionCtx={permissionCtx} />
-      <MembersSection teamName={team.teamName} members={team.members} />
+      <MembersSection
+        teamName={team.teamName}
+        members={team.members}
+        manage={
+          commands.enabled && team.isLeader && user
+            ? { selfUserId: user.id, onTransfer: commands.requestTransfer, onRemove: commands.requestRemove }
+            : undefined
+        }
+      />
+      {commands.dialog}
 
       {team.repository ? (
         <section className="pt-2">

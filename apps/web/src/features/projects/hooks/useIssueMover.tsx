@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import {
   ReasonDialog,
-} from "@/features/projects/components/ReasonDialog";
+} from "@/components/feedback/ReasonDialog";
 import type {
   IssueMenuGroup,
 } from "@/features/projects/components/IssueActionsMenu";

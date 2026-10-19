@@ -96,6 +96,8 @@ export function toCourseDetail(input: {
       ? {
           teamId: mine.group.id,
           teamName: mine.group.name,
+          version: mine.group.source_version,
+          inviteExpiresAt: mine.group.invite_expires_at,
           isLeader: self?.role === "LEADER",
           memberCount: members.length,
           maxMembers: cls.group_max_size,
