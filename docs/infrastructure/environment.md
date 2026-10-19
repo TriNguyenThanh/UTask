@@ -100,8 +100,8 @@ Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
 gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
 không thay đổi nội dung sự kiện.
 
-AI Service chỉ dùng `infra/env/ai-service.env` cho biến thường/cờ chế độ
-và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
+AI Service nhận toàn bộ cấu hình từ `.env` root; `infra/env/ai-service.env`
+chỉ ánh xạ các biến vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
 không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
 export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY`
@@ -182,7 +182,7 @@ và token GHCR phục vụ triển khai; chúng không tự trở thành biến 
 | `IDENTITY_DB_NAME`, `IDENTITY_DJANGO_SECRET_KEY`, `IDENTITY_*` | Identity: `DATABASE_NAME`, `DJANGO_SECRET_KEY` và cấu hình riêng |
 | `WORK_DB_NAME`, `WORK_DJANGO_SECRET_KEY`                       | Work khi bật profile của service                                 |
 | `CLASSROOM_DB_NAME`, `CLASSROOM_DJANGO_SECRET_KEY`             | Classroom khi bật                                                |
-| `INTEGRATION_DB_NAME`, `INTEGRATION_DJANGO_SECRET_KEY`         | Integration khi bật                                              |
+| `INTEGRATION_DB_NAME`, `INTEGRATION_DB_USER`, `INTEGRATION_DB_PASSWORD`, `INTEGRATION_DJANGO_SECRET_KEY`, `INTEGRATION_IDENTITY_URL` | Integration khi bật |
 | `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
 
 Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
