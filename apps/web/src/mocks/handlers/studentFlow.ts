@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import type { MockScenario } from "@/mocks/scenarios";
 import {
   accountSettingsForScenario,
@@ -35,11 +36,6 @@ function sleepFor(scenario: MockScenario): Promise<void> | undefined {
   return scenario === "slow-network" || scenario === "student-loading"
     ? delay(1200)
     : undefined;
-}
-
-function parseTokenUserId(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  return /^Bearer mock-access:([^:]+):/.exec(header)?.[1] ?? null;
 }
 
 /**
@@ -245,7 +241,7 @@ async function resolveIssueWrite(
   params: Record<string, string | readonly string[] | undefined>,
 ): Promise<Response | WriteContext> {
   await sleepFor(scenario);
-  const userId = parseTokenUserId(request);
+  const userId = resolveMockUserId(request);
   if (!userId) return unauthorized();
   const status = errorStatus(scenario);
   if (status) {
@@ -455,7 +451,7 @@ export function createStudentFlowHandlers(
     // Courses & teams
     http.get(`${ROOT}/courses`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -465,7 +461,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/courses/:courseId`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -483,7 +479,7 @@ export function createStudentFlowHandlers(
     }),
     http.post(`${ROOT}/courses/:courseId/teams`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -569,7 +565,7 @@ export function createStudentFlowHandlers(
     // Projects
     http.get(`${ROOT}/projects`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -597,7 +593,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) {
@@ -624,7 +620,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId/issues/:issueKey`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) {
@@ -649,7 +645,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId/code`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "server-error" || scenario === "student-partial-error") {
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
@@ -671,7 +667,7 @@ export function createStudentFlowHandlers(
     // others hide.
     http.get(`${ROOT}/notifications`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "server-error" || scenario === "student-partial-error") {
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
@@ -685,7 +681,7 @@ export function createStudentFlowHandlers(
       );
     }),
     http.post(`${ROOT}/notifications/:id/read`, ({ params, request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const id = String(params.id);
       if (!visibleNotifications(scenario, userId).some((notification) => notification.id === id)) {
@@ -699,7 +695,7 @@ export function createStudentFlowHandlers(
       return new HttpResponse(null, { status: 204 });
     }),
     http.post(`${ROOT}/notifications/read-all`, ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const read = new Set(db.notificationReadByUser[userId] ?? []);
       for (const notification of visibleNotifications(scenario, userId)) {
@@ -713,7 +709,7 @@ export function createStudentFlowHandlers(
     // Settings — account fields stored per user.
     http.get(`${ROOT}/me/settings`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -744,7 +740,7 @@ export function createStudentFlowHandlers(
       });
     }),
     http.patch(`${ROOT}/me/settings`, async ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       let payload: Record<string, unknown>;
       try {
@@ -783,7 +779,7 @@ export function createStudentFlowHandlers(
       return new HttpResponse(null, { status: 204 });
     }),
     http.post(`${ROOT}/me/github/disconnect`, ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       db.githubDisconnectedByUser[userId] = true;
       repository.save();
@@ -793,7 +789,7 @@ export function createStudentFlowHandlers(
     // Project settings (leader-only, BYOK AI provider state)
     http.get(`${ROOT}/projects/:projectId/settings`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "student-forbidden") {
         return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
@@ -829,7 +825,7 @@ export function createStudentFlowHandlers(
       });
     }),
     http.put(`${ROOT}/projects/:projectId/settings/ai-key`, async ({ params, request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const projectId = String(params.projectId);
       const viewer = projectViewerOf(db, userId, projectId, scenario);

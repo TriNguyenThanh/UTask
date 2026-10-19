@@ -1,4 +1,5 @@
 import { keepMockWorkerActive } from "@/mocks/keepWorkerActive";
+import { installPersonaBridge } from "@/mocks/personaBridge";
 
 /**
  * MSW mock layer runs when explicitly enabled via VITE_ENABLE_MOCKS.
@@ -19,4 +20,6 @@ export async function enableMocking() {
     serviceWorker: { url: "/mockServiceWorker.js" },
   });
   keepMockWorkerActive();
+  // Phần còn chạy MSW cần persona demo cho access token thật.
+  installPersonaBridge();
 }
