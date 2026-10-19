@@ -3,8 +3,6 @@ import {
   Code,
   Flag,
   GraduationCap,
-  KanbanSquare,
-  ListTodo,
   Search,
   Settings,
   Users,
@@ -65,7 +63,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
     sprint && sprint.totalPoints > 0
       ? Math.round((sprint.completedPoints / sprint.totalPoints) * 100)
       : 0;
-  const backlogPath = `/projects/${project.projectId}/backlog`;
+  const boardPath = `/projects/${project.projectId}/board`;
   // canManageProjectSettings chỉ đọc role; aiEnabled không liên quan quyền settings.
   const canManageSettings = canManageProjectSettings({
     role: project.role,
@@ -112,7 +110,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
             {project.projectKey}
           </Badge>
           <Link
-            to={backlogPath}
+            to={boardPath}
             className="text-base font-bold leading-snug tracking-tight transition-colors hover:text-primary md:text-lg"
           >
             {project.name}
@@ -172,18 +170,6 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-            <Link to={backlogPath}>
-              <ListTodo className="size-3.5" aria-hidden />
-              Kế hoạch Backlog
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-            <Link to={`/projects/${project.projectId}/code`}>
-              <Code className="size-3.5" aria-hidden />
-              Mã nguồn GitHub
-            </Link>
-          </Button>
           {canManageSettings ? (
             <Button
               asChild
@@ -198,9 +184,8 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
             </Button>
           ) : null}
           <Button asChild size="sm" className="h-8 text-xs font-bold">
-            <Link to={`/projects/${project.projectId}/board`}>
-              <KanbanSquare className="size-3.5" aria-hidden />
-              Mở Jira Board
+            <Link to={boardPath}>
+              Vào dự án
               <ArrowRight className="size-3.5" aria-hidden />
             </Link>
           </Button>
@@ -278,7 +263,6 @@ export default function ProjectsRoute() {
 
   return (
     <div className="page-container space-y-5 p-4 md:p-6">
-      {/* Page title */}
       {/* Current / archived tabs */}
       <div className={segmentedTabsListClass} role="tablist" aria-label="Phạm vi thời gian">
         <button
