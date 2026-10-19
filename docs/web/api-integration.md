@@ -40,7 +40,8 @@ VITE_API_BASE_URL=
 | 3 | Hồ sơ, đổi mật khẩu, danh sách thiết bị, đăng xuất mọi thiết bị | Đã triển khai (chưa smoke trình duyệt) |
 | 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Đã triển khai ở mức form + request (end-to-end email chưa xác minh, chờ B3; chưa smoke trình duyệt) |
 | 5 | Classroom phía sinh viên: danh sách lớp, chi tiết lớp/nhóm của tôi, tham gia lớp bằng mã | Một phần (xem giới hạn; chưa smoke trình duyệt) |
-| 6–8 | Classroom: thao tác nhóm của sinh viên, quản lý lớp của giảng viên | Chưa triển khai |
+| 6 | Classroom: sinh viên tạo nhóm, vào nhóm bằng mã, cấp/tắt mã mời, rời nhóm, chuyển Trưởng nhóm, loại thành viên | Đã triển khai ở mức form + request (chưa smoke trình duyệt) |
+| 7–8 | Classroom: quản lý lớp của giảng viên | Chưa triển khai |
 | 9+ | Work, Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
@@ -135,11 +136,35 @@ Giới hạn khi chạy thật (mỗi mục là dữ liệu mà API hiện khôn
   (thay hai bảng "nhóm còn chỗ" và "bạn học chưa có nhóm" bằng thông báo).
 - `repository`, `projectId`, `projectKey` = `null` (chưa nối Work/Integration).
 
-Chưa làm (Phase 6): tạo nhóm, vào nhóm bằng mã mời, rời/chuyển trưởng nhóm,
-nên các nút đó ở màn nhóm vẫn là phiên bản mock hoặc bị vô hiệu.
-
 Chưa xác minh: chạy thật với sinh viên đã ghi danh (chưa có tài khoản/mã lớp
 trên staging); enum trạng thái suy ra từ ràng buộc DB vì OpenAPI không khai báo.
+
+## Sinh viên thao tác nhóm (Phase 6)
+
+Chỉ có ở `VITE_REAL_SERVICES` chứa `classroom`; chế độ mock giữ form cũ. Mọi
+lệnh gửi `Idempotency-Key` mới (UUID) cho mỗi ý định: hộp thoại tạo nhóm/tham
+gia nhóm sinh khóa khi mở, các lệnh có lý do sinh khóa khi bấm xác nhận. Không
+cập nhật lạc quan; chỉ refetch sau thành công và cả khi gặp 409.
+
+| Thao tác | API | Ghi chú |
+|---|---|---|
+| Tạo nhóm | `POST /groups/ {class_id, name}` | Chỉ nhập tên nhóm: cỡ nhóm cấu hình theo lớp; mô tả và kỹ năng cần tuyển chưa có API. Nút tạo bị vô hiệu khi lớp đã chốt nhóm hoặc không mở. Lỗi `name` hiện dưới ô nhập |
+| Tham gia nhóm | `POST /groups/join/ {code}` | Nút "Tham gia nhóm bằng mã" ở màn chưa có nhóm. Lỗi (`ACCESS_CODE_EXPIRED`, `GROUP_FULL`, `ALREADY_IN_GROUP`…) hiện lời của server |
+| Mã mời | `POST /groups/{id}/invite-code/ {version, enabled}` | Chỉ Trưởng nhóm thấy. Mã thô chỉ có trong kết quả lúc cấp: hiện một lần kèm nút sao chép và cảnh báo, không lưu; tải lại trang là mất. Trạng thái bật/tắt lấy từ `invite_expires_at` |
+| Rời nhóm | `POST /groups/{id}/leave/ {version, reason}` | Trưởng nhóm bị vô hiệu nút (backend trả `LEADER_SUCCESSOR_REQUIRED`); lớp đã chốt nhóm trả `GROUPING_LOCKED` |
+| Chuyển Trưởng nhóm / Loại thành viên | `POST .../transfer-leader/`, `.../remove-member/ {version, reason, user_id}` | Chỉ Trưởng nhóm thấy nút, trên hàng của thành viên khác |
+
+`version` = `Group.source_version` của nhóm đang hiển thị. `VERSION_CONFLICT`
+hiện "Dữ liệu nhóm đã thay đổi, hãy thử lại." và refetch; lỗi khác giữ lời của
+server. Lý do dùng `components/feedback/ReasonDialog` (chuyển từ
+`features/projects`, đã có sẵn trước đó): bắt buộc 3–500 ký tự, chặt hơn mức tối
+thiểu 1 ký tự của backend. UI chỉ ẩn nút theo vai trò; quyền do backend quyết
+định.
+
+`patchGroup` (đổi tên/lưu trữ nhóm) đã có hàm gọi và test nhưng chưa có giao
+diện vì màn hiện tại không có chức năng đổi tên nhóm.
+
+Chưa xác minh: chạy thật với staging (chưa có sinh viên đã ghi danh để thử).
 
 ## Việc cần backend (tổng hợp)
 
@@ -160,6 +185,6 @@ trên staging); enum trạng thái suy ra từ ràng buộc DB vì OpenAPI khôn
 ## Kiểm tra đã chạy
 
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
-sau Phase 5 (44 file / 662 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
+sau Phase 6 (47 file / 689 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
 Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất. **Chưa smoke
-trên trình duyệt** cho Phase 3–5 và cho refresh khi 401 hoặc hết hạn 15 phút.
+trên trình duyệt** cho Phase 3–6 và cho refresh khi 401 hoặc hết hạn 15 phút.

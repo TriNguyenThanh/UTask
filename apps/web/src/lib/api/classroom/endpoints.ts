@@ -1,5 +1,6 @@
 import type { ApiClient } from "@/lib/api/client";
 import type {
+  AccessCodeDto,
   ClassDto,
   CourseDto,
   EnrollmentDto,
@@ -85,4 +86,107 @@ export async function joinClass(client: ApiClient, code: string, idempotencyKey:
     idempotencyKey,
   });
   return data;
+}
+
+interface CommandOptions {
+  idempotencyKey: string;
+}
+
+/** Tạo nhóm; người gọi thành Trưởng nhóm. */
+export async function createGroup(client: ApiClient, input: { classId: string; name: string } & CommandOptions) {
+  const { data } = await client.requestEnvelope<GroupDto>(`${ROOT}/groups/`, {
+    method: "POST",
+    body: { class_id: input.classId, name: input.name },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+export async function joinGroup(client: ApiClient, input: { code: string } & CommandOptions) {
+  const { data } = await client.requestEnvelope<GroupDto>(`${ROOT}/groups/join/`, {
+    method: "POST",
+    body: { code: input.code },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+export async function patchGroup(
+  client: ApiClient,
+  groupId: string,
+  input: { version: number; name?: string; status?: GroupStatus } & CommandOptions,
+) {
+  const { idempotencyKey, ...body } = input;
+  const { data } = await client.requestEnvelope<GroupDto>(`${ROOT}/groups/${encodeURIComponent(groupId)}/`, {
+    method: "PATCH",
+    body,
+    idempotencyKey,
+  });
+  return data;
+}
+
+/** Cấp mã mới (`enabled: true`, hạn mặc định 7 ngày) hoặc tắt mã. Mã thô chỉ có trong kết quả cấp. */
+export async function issueGroupInviteCode(
+  client: ApiClient,
+  groupId: string,
+  input: { version: number; enabled: boolean; expiresAt?: string } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<AccessCodeDto>(
+    `${ROOT}/groups/${encodeURIComponent(groupId)}/invite-code/`,
+    {
+      method: "POST",
+      body: { version: input.version, enabled: input.enabled, expires_at: input.expiresAt },
+      idempotencyKey: input.idempotencyKey,
+    },
+  );
+  return data;
+}
+
+type MemberCommand = "leave" | "remove-member" | "transfer-leader";
+
+async function memberCommand(
+  client: ApiClient,
+  groupId: string,
+  command: MemberCommand,
+  body: { version: number; reason: string; user_id?: string },
+  idempotencyKey: string,
+) {
+  const { data } = await client.requestEnvelope<GroupDto>(`${ROOT}/groups/${encodeURIComponent(groupId)}/${command}/`, {
+    method: "POST",
+    body,
+    idempotencyKey,
+  });
+  return data;
+}
+
+export function leaveGroup(client: ApiClient, groupId: string, input: { version: number; reason: string } & CommandOptions) {
+  return memberCommand(client, groupId, "leave", { version: input.version, reason: input.reason }, input.idempotencyKey);
+}
+
+export function transferLeader(
+  client: ApiClient,
+  groupId: string,
+  input: { version: number; reason: string; userId: string } & CommandOptions,
+) {
+  return memberCommand(
+    client,
+    groupId,
+    "transfer-leader",
+    { version: input.version, reason: input.reason, user_id: input.userId },
+    input.idempotencyKey,
+  );
+}
+
+export function removeMember(
+  client: ApiClient,
+  groupId: string,
+  input: { version: number; reason: string; userId: string } & CommandOptions,
+) {
+  return memberCommand(
+    client,
+    groupId,
+    "remove-member",
+    { version: input.version, reason: input.reason, user_id: input.userId },
+    input.idempotencyKey,
+  );
 }
