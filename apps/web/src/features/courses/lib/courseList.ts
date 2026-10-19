@@ -16,14 +16,26 @@ export function membershipBadge(membership: TeamMembership): {
 } {
   switch (membership.status) {
     case "none":
-      return { label: "Cần lập nhóm", className: "border-amber-200 bg-amber-50 text-amber-900" };
+      return {
+        label: "Cần lập nhóm",
+        className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      };
     case "pending":
-      return { label: "Chờ duyệt", className: "border-sky-200 bg-sky-50 text-sky-900" };
+      return {
+        label: "Chờ duyệt",
+        className: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+      };
     case "assigned":
       // Vai trò thuộc về nhóm của riêng môn học này, không phải của tài khoản.
       return membership.role === "leader"
-        ? { label: "Trưởng nhóm", className: "border-indigo-200 bg-indigo-50 text-indigo-900" }
-        : { label: "Thành viên", className: "border-emerald-200 bg-emerald-50 text-emerald-900" };
+        ? {
+            label: "Trưởng nhóm",
+            className: "border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+          }
+        : {
+            label: "Thành viên",
+            className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+          };
   }
 }
 
@@ -43,10 +55,8 @@ export function matchesFilters(
   enrollment: CourseEnrollment,
   query: string,
   status: StatusFilter,
-  semester: string,
 ): boolean {
   if (status !== "all" && enrollment.membership.status !== status) return false;
-  if (semester !== "all" && enrollment.semester !== semester) return false;
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
   return `${enrollment.courseCode} ${enrollment.courseName}`.toLowerCase().includes(needle);
@@ -67,14 +77,10 @@ export function listSemesters(enrollments: readonly CourseEnrollment[]): string[
   return [...new Set(enrollments.map((enrollment) => enrollment.semester))].sort(compareSemesterDesc);
 }
 
-/** Nhóm theo học kỳ, học kỳ mới nhất trước; giữ thứ tự gốc trong cùng học kỳ. */
-export function groupBySemester(
-  enrollments: readonly CourseEnrollment[],
-): { semester: string; courses: CourseEnrollment[] }[] {
-  return listSemesters(enrollments).map((semester) => ({
-    semester,
-    courses: enrollments.filter((enrollment) => enrollment.semester === semester),
-  }));
+/** "HK1 2026–2027" → "Học kỳ 1 · 2026–2027"; nhãn lạ giữ nguyên. */
+export function formatSemester(label: string): string {
+  const match = /^HK(\d)\s+(.+)$/.exec(label);
+  return match ? `Học kỳ ${match[1]} · ${match[2]}` : label;
 }
 
 /**

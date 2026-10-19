@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { CourseCard } from "@/features/courses/components/CourseCard";
 import {
   compareSemesterDesc,
-  groupBySemester,
   listSemesters,
   summarizeCourses,
 } from "@/features/courses/lib/courseList";
@@ -69,7 +68,7 @@ describe("courses repository", () => {
     expect(screen.queryByText("Quản lý môn học và các nhóm dự án của bạn")).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Tổng quan môn học" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Môn học của bạn" })).toBeInTheDocument();
-    expect(screen.getByText(/Hiển thị/)).toHaveTextContent(`${total}/${total}`);
+    expect(screen.queryByText(/Hiển thị/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Đồ án IoT IT3090" })).toHaveAttribute(
       "href",
       "/courses/course-it3090/team",
@@ -137,47 +136,42 @@ describe("courses repository", () => {
     expect(cards()).toHaveLength(total);
   });
 
-  it("lists past terms newest first and filters by semester together with search and status", async () => {
+  it("shows only the latest term, and reveals older terms newest first on demand", async () => {
     const { cards } = await openCourses();
     const user = userEvent.setup();
-    const select = screen.getByRole("combobox", { name: "Lọc theo học kỳ" });
-    const options = within(select).getAllByRole("option").map((option) => option.textContent);
-    expect(options).toEqual([
-      "Mọi học kỳ",
-      "HK1 2026–2027",
-      "HK2 2025–2026",
-      "HK1 2025–2026",
-      "HK2 2024–2025",
-    ]);
-    // One section per term, current term first; each holds only its own courses.
-    const headings = screen.getAllByRole("heading", { level: 3 });
-    expect(headings.map((node) => node.firstChild?.textContent)).toEqual([
-      "HK1 2026–2027",
-      "HK2 2025–2026",
-      "HK1 2025–2026",
-      "HK2 2024–2025",
-    ]);
-    const second = headings[1].closest("section") as HTMLElement;
-    expect(within(second).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(second).getByRole("link", { name: "Cơ sở Dữ liệu Nâng cao DB220" })).toBeInTheDocument();
-
-    await user.selectOptions(select, "HK2 2025–2026");
-    expect(cards()).toHaveLength(2);
+    expect(screen.getByRole("heading", { level: 3, name: "Học kỳ 1 · 2026–2027" })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
-    expect(screen.getByText(/Hiển thị/)).toHaveTextContent("2/2");
+    for (const card of cards()) expect(card).toHaveTextContent("HK1 2026–2027");
+    expect(screen.queryByRole("link", { name: "Lập trình Web WEB150" })).not.toBeInTheDocument();
 
-    await user.type(screen.getByRole("searchbox", { name: /Tìm môn học/ }), "DB220");
-    expect(cards()).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: /^Cần lập nhóm · 0$/ }));
-    expect(await screen.findByText("Không có môn học phù hợp")).toBeInTheDocument();
-  });
+    const toggle = screen.getByRole("button", { name: /Xem học kỳ cũ/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const latestCount = cards().length;
+    await user.click(toggle);
 
-  it("links a past course to its own team page", async () => {
-    renderApp(<CoursesRoute />, { route: "/courses", session: leaderTestSession });
-    await screen.findByRole("heading", { level: 1, name: "Môn học" });
+    expect(screen.getByRole("button", { name: "Ẩn học kỳ cũ" })).toHaveAttribute("aria-expanded", "true");
+    expect(cards()).toHaveLength(latestCount + 4);
+    // One section per term, newest first.
+    expect(screen.getAllByRole("heading", { level: 3 }).map((node) => node.textContent)).toEqual([
+      "Học kỳ 1 · 2026–2027",
+      "Học kỳ 2 · 2025–2026",
+      "Học kỳ 1 · 2025–2026",
+      "Học kỳ 2 · 2024–2025",
+    ]);
+    const semesters = cards().map((card) => /HK\d \d{4}–\d{4}/.exec(card.textContent ?? "")?.[0]);
+    expect(semesters[0]).toBe("HK1 2026–2027");
+    expect(semesters.at(-1)).toBe("HK2 2024–2025");
+    expect(semesters).toEqual([...semesters].sort((a, b) => compareSemesterDesc(a!, b!)));
+    // Past course links to its own team page.
     expect(screen.getByRole("link", { name: "Lập trình Web WEB150" })).toHaveAttribute(
       "href",
       "/courses/course-hist-web150/team",
     );
+
+    // Search reaches past terms only while they are shown.
+    await user.type(screen.getByRole("searchbox", { name: /Tìm môn học/ }), "DB220");
+    expect(cards()).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Ẩn học kỳ cũ" }));
+    expect(await screen.findByText("Không có môn học phù hợp")).toBeInTheDocument();
   });
 });
