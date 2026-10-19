@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 import requests
 from django.conf import settings
@@ -9,6 +10,39 @@ logger = logging.getLogger(__name__)
 
 
 class IdentityClient:
+    def current_user(self, token):
+        if not isinstance(token, str) or not token:
+            raise WorkError("IDENTITY_UNAVAILABLE", "Chưa thể xác minh tài khoản của bạn.", 503)
+        try:
+            response = requests.get(
+                settings.IDENTITY_BASE_URL + "/users/me",
+                headers={"Authorization": "Bearer " + token},
+                timeout=settings.BACKEND_HTTP_TIMEOUT,
+                allow_redirects=False,
+            )
+            if response.status_code != 200:
+                raise ValueError("Identity current-user request refused")
+            body = response.json()
+            data = (
+                body.get("data") if isinstance(body, dict) and body.get("success") is True else None
+            )
+            if (
+                not isinstance(data, dict)
+                or not isinstance(data.get("id"), str)
+                or not isinstance(data.get("roles"), list)
+                or any(not isinstance(role, str) for role in data["roles"])
+            ):
+                raise ValueError("Invalid current-user response")
+            UUID(data["id"])
+            return data
+        except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+            logger.warning(
+                "Identity dependency failed operation=current-user error=%s", type(exc).__name__
+            )
+            raise WorkError(
+                "IDENTITY_UNAVAILABLE", "Chưa thể xác minh tài khoản của bạn.", 503
+            ) from exc
+
     def jwks(self):
         try:
             response = requests.get(

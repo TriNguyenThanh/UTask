@@ -105,8 +105,10 @@ và `.env` root cho secret. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
 không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
 export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY`
-vào các process AI; PostgreSQL AI nhận `AI_DB_PASSWORD`. Compose root ghi đè
-URL DB sang `ai-postgres` và broker sang Redis DB1, tránh `localhost` trong container.
+vào các process AI. Compose root dùng chung container `postgres` cho mọi service,
+AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
+`POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
+`postgres` và broker sang Redis DB1, tránh `localhost` trong container.
 CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
 [cấu hình AI](../ai-service/README.md#cấu-hình) và
 [mock data](../ai-service/mock-data.md).
@@ -125,15 +127,12 @@ docker compose -p utask config --quiet
 dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
 Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
 sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
-Staging cũng dùng wrapper PostgreSQL này: deploy upload `start-postgres.sh`,
-health chỉ sẵn sàng sau preparation, kể cả volume đã có dữ liệu. Script tạo
-role Integration và cập nhật mật khẩu từ `INTEGRATION_DB_PASSWORD`; cấu hình
-thiếu/trùng hoặc role có đặc quyền gây dừng trước khi app chạy migration.
 `start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
 `kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
 bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
-Staging không dùng wrapper Kafka local; migration chạy tuần tự trước runtime
-theo [quy trình CI/CD](ci-cd.md).
+Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
+khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
+trước runtime theo [quy trình CI/CD](ci-cd.md).
 
 Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
 Django, token hoặc thông tin xác thực môi trường dùng chung.
@@ -147,20 +146,11 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
   Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
 
-**Một phần:** Integration dùng `INTEGRATION_DB_USER`/`INTEGRATION_DB_PASSWORD`
-riêng, không fallback `POSTGRES_USER`/`POSTGRES_PASSWORD`. Container app chỉ
-nhận host/port, `DATABASE_NAME`, credential Integration và cấu hình Django.
-Script chuẩn bị role không đặc quyền, database/schema riêng và đóng PUBLIC
-CONNECT/TEMP ở các database quản lý, `postgres` và `template1`. Custom role cần
-được GRANT rõ ràng trước vận hành nếu trước đây dựa PUBLIC CONNECT; database
-ngoài danh sách repo phải tự đóng ACL để không cấp lại quyền cho login khác.
-Role Integration cũ có đặc quyền, membership hoặc sở hữu DB khác bị từ chối;
-không tự hạ quyền role đang dùng chung.
-
-Identity/Work/Classroom còn dùng credential chung `POSTGRES_*`; baseline yêu
-cầu tiếp tục tách từng service. Hai biến Integration DB credential là đầu vào
-bắt buộc của PostgreSQL startup, kể cả khi profile app Integration đang tắt.
-Điền giá trị riêng vào `.env` trước cập nhật local/staging; không dùng mật khẩu mẫu.
+**Một phần:** các service Django local/staging hiện dùng chung `POSTGRES_USER` và
+`POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
+yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
+hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
+khoảng trống triển khai, không phải lựa chọn bảo mật production.
 
 AI đã có Celery broker qua Redis; Kafka client và R2 tùy service vẫn là
 công nghệ mục tiêu theo baseline; biến môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
@@ -269,7 +259,9 @@ khi có đủ credential và callback theo [tài liệu Identity](../identity-se
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
 chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
-chạy script qua cơ chế khởi tạo volume mới. Sửa `.env` không tự đổi tên database hoặc
+chạy script qua cơ chế khởi tạo volume mới; khi deploy có AI, script còn chạy lại
+trên PostgreSQL đã healthy để bổ sung database AI còn thiếu trước migration.
+Sửa `.env` không tự đổi tên database hoặc
 chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
@@ -278,14 +270,24 @@ Local giữ cờ và biến thường trong `infra/env/ai-service.env`. Staging 
 `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; dùng giá trị cấu hình staging trong
 `.env` server theo các override được khai báo ở Compose. Không bật mock ở staging.
 
-`AI_DB_PASSWORD` bắt buộc khi khởi động PostgreSQL AI lần đầu. Password phải dùng
-được trong URL, hoặc cung cấp `AI_DATABASE_URL` với password percent-encode.
+Root Compose chỉ có một container PostgreSQL 16 (`postgres`), với các database
+riêng cho từng service. AI dùng `AI_DB_NAME=ai_context_db`; tên này được truyền
+qua `infra/env/postgres.env` cho script khởi tạo database. Không còn container
+`ai-postgres` trong Compose local/staging. `AI_DB_PASSWORD` chỉ còn phục vụ
+Compose standalone của AI, không được dùng để khởi động stack root.
+
+URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết nối database
+riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
+`AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
+tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
 `AI_CREDENTIAL_KEY` phải giống nhau cho các process; JWT chọn public key hoặc
 JWKS, cùng issuer/audience đúng từ Identity; LLM cần model/base URL/key và REST
 adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
 Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
 
-Không truyền toàn bộ `.env` chung vào container. PostgreSQL AI dùng volume
-`ai_database` riêng; đổi password `.env` không tự thay password role đã lưu trong
-volume. Redis DB1 là broker AI; Redis DB0 dành cấu hình Identity. Đổi file
-Compose hoặc chuyển từ stack AI riêng không tự chuyển database/queue cũ.
+Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự
+thay password role đã lưu trong volume PostgreSQL. Redis DB1 là broker AI;
+Redis DB0 dành cấu hình Identity. Đổi Compose không tự chuyển dữ liệu AI cũ
+từ volume `ai_database` hoặc stack standalone vào database chung. Giữ volume
+cũ để kiểm tra/backup; không chạy `down -v`. Nếu AI từng có dữ liệu, cần xuất
+và khôi phục có chủ đích trước khi sử dụng database đích.

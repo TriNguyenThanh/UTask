@@ -3,7 +3,7 @@
 **Trạng thái: Đã triển khai local cho Identity–Classroom–Work.** Compose khai báo PostgreSQL, Redis, Kafka,
 Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chuẩn từ
 repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
-kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm năm database
+kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm sáu database
 được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
 `start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
 còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
@@ -13,9 +13,8 @@ có container chuẩn bị riêng. Compose chỉ báo hai service này healthy s
 Khi API container khởi động, entrypoint chạy migration Django rồi mới chạy
 Gunicorn. Worker dùng cùng image nhưng bỏ qua migration; Compose đợi API tương
 ứng healthy trước khi chạy worker. Đã kiểm build/khởi động, dừng/khởi động lại
-và luồng HTTP/Kafka trên volume local hiện có; ghi chú nghiệm thu startup là
-bản local `backend-validation.md`, không thuộc checkout Git theo
-[quy ước tài liệu Classroom](../classroom-service/README.md).
+và luồng HTTP/Kafka trên volume local hiện có; xem
+nghiệm thu startup không có container chuẩn bị.
 Kết quả local không xác nhận staging hoặc các provider bên ngoài.
 
 ## Khởi động Identity, Classroom và Work
@@ -79,8 +78,7 @@ Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoả
 xem các điều kiện trong [tài liệu Identity](../identity-service/README.md).
 Thông tin cấu hình, secret và luồng áp dụng biến được mô tả tại
 [biến môi trường](environment.md); hiện trạng kết quả kiểm tra nếu có
-được ghi riêng trong bản local `backend-validation.md`, theo
-[quy ước tài liệu Classroom](../classroom-service/README.md).
+được ghi riêng trong nghiệm thu backend Classroom.
 
 Staging tiếp tục chạy migration tuần tự trước khi cập nhật runtime theo
 [quy trình deploy](ci-cd.md). Khi API staging khởi động, entrypoint chạy
@@ -92,16 +90,9 @@ trong profile `ai-service` và cần cấu hình credential riêng; xem
 [cấu hình AI](../ai-service/README.md#cấu-hình). Các profile này không cần cho
 lệnh khởi động Identity–Classroom–Work.
 
-Integration M1 đã có khung Django/health; bật riêng bằng
-`docker compose --profile integration-service up --build -d integration-service`.
-Điền `INTEGRATION_DB_USER`, `INTEGRATION_DB_PASSWORD` và
-`INTEGRATION_DJANGO_SECRET_KEY` trước; PostgreSQL startup chuẩn bị role/database
-trên cả volume mới và cũ. Health qua gateway ở `/api/integrations/healthz`;
-chưa có OAuth/webhook/đồng bộ. Xem [Integration M0/M1](../integration-service/foundation.md).
-
 ## Chạy riêng pipeline AI từ root
 
-Điền `AI_DB_PASSWORD`, `AI_CREDENTIAL_KEY`, credential JWT và LLM trong `.env`
+Điền `AI_DB_NAME`, `AI_CREDENTIAL_KEY`, credential JWT và LLM trong `.env`
 theo [cấu hình AI](../ai-service/README.md#cấu-hình). Password DB phải dùng được
 trong URL; nếu có ký tự đặc biệt, đặt `AI_DATABASE_URL` với password đã percent-encode.
 Từ repository root:
@@ -112,16 +103,19 @@ docker compose exec ai-service python -c "import urllib.request; print(urllib.re
 docker compose logs --tail 100 ai-service ai-worker ai-dispatcher
 ```
 
-Compose tự khởi động `ai-postgres`, Redis và `ai-migrate`. Migration Alembic
-phải thành công trước khi ba process chạy. Các process AI dùng chung image;
+Compose dùng container `postgres` chung và Redis. Entry point (script chạy trước
+lệnh chính của container) của API chạy Alembic trước Uvicorn; migration phải
+thành công thì API mới khởi động. Worker và dispatcher đợi API healthy, không
+chạy migration. Không có container `ai-migrate`. Các process AI dùng chung image;
 worker local dùng concurrency 2. API vẫn mang tên `ai-service` để Nginx định tuyến.
 Lệnh chạy riêng trên chưa khởi động Nginx và không publish cổng API; kiểm tra
 bằng `exec` như trên. Nếu cần gọi API trực tiếp từ host, dùng
 [Compose riêng AI](../ai-service/README.md#chạy-bằng-compose-riêng-của-ai).
 
-PostgreSQL AI là instance 17 riêng, user `ai_service`, database `ai_context_db`,
-volume `ai_database`; không thay đổi PostgreSQL/volume của các service Django.
-Broker dùng Redis chung tại DB1, còn request/result nằm trong PostgreSQL AI.
+AI dùng database riêng `AI_DB_NAME` (mặc định `ai_context_db`) trên container
+PostgreSQL 16 chung, dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` hiện có. Script
+khởi tạo bổ sung database này nếu chưa có, không thay đổi dữ liệu các database
+khác. Broker dùng Redis chung tại DB1, request/result nằm trong database AI.
 Redis DB1 là phân vùng logic, không phải ranh giới phân quyền. API, worker và
 dispatcher dùng cùng cấu hình/credential. Không chờ Work/Integration ở mức
 Compose; khi tắt mock, REST adapter vẫn từ chối nếu domain thiếu cấu hình hoặc lỗi.

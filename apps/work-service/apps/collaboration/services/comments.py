@@ -3,6 +3,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound
 
 from apps.collaboration.models import Comment, CommentMention
+from apps.collaboration.permissions import admin_feedback_access
 from apps.collaboration.queries import comment_queryset
 from apps.collaboration.serializers import CommentSerializer
 from apps.collaboration.serializers.events import (
@@ -34,9 +35,10 @@ def comment_command(
         project = lock_project(project_id)
         member = active_member(project, actor)
         if member is None:
-            if not isinstance(teacher, VerifiedFeedbackScope):
+            if isinstance(teacher, VerifiedFeedbackScope):
+                teacher.validate(actor, project)
+            elif not admin_feedback_access(actor, project):
                 raise NotFound("Không tìm thấy đối tượng bình luận yêu cầu.")
-            teacher.validate(actor, project)
         task = (
             Task.objects.select_for_update()
             .filter(pk=task_id, project=project, deleted_at__isnull=True)
@@ -110,7 +112,8 @@ def comment_command(
                     user_id=actor.id,
                     content_html=html,
                     content_stripped=text,
-                    is_teacher_feedback=teacher and member is None,
+                    is_teacher_feedback=isinstance(teacher, VerifiedFeedbackScope)
+                    and member is None,
                 )
                 verb, status = "created", 201
             CommentMention.objects.filter(comment=comment, user_id__in=previous - mentions).delete()

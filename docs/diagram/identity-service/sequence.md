@@ -56,7 +56,7 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 
 ## SQ-ID-01 — Đăng ký Student pending
 
-![Đăng ký Student pending](assets/SQ-ID-01.svg)
+Đăng ký Student pending
 
 Nguồn: [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py);
 kiểm thử: [test_registration.py](../../../apps/identity-service/tests/test_registration.py).
@@ -103,7 +103,7 @@ note over U,D : Mail key/DB lỗi rollback signup; không anonymous receipt.\nK�
 
 ## SQ-ID-02 — Login bằng Django Auth và Axes
 
-![Login bằng Django Auth và Axes](assets/SQ-ID-02.svg)
+Login bằng Django Auth và Axes
 
 Nguồn: [authentication/serializers/auth.py](../../../apps/identity-service/authentication/serializers/auth.py);
 kiểm thử: [test_login.py](../../../apps/identity-service/tests/test_login.py).
@@ -164,7 +164,7 @@ note over X,D : 5 lần sai/15 phút; không đổi account_status hay revoke ph
 
 ## SQ-ID-03 — Refresh JWT trên session ổn định
 
-![Refresh JWT trên session ổn định](assets/SQ-ID-03.svg)
+Refresh JWT trên session ổn định
 
 Nguồn: [authentication/services/session_service.py](../../../apps/identity-service/authentication/services/session_service.py);
 kiểm thử: [test_rotation.py](../../../apps/identity-service/tests/test_rotation.py).
@@ -221,7 +221,7 @@ note over U,D : session_id và token_family ổn định; family_exp không vư�
 
 ## SQ-ID-04 — Kiểm tra phiên và boundary quyền tài nguyên
 
-![Kiểm tra phiên và boundary quyền tài nguyên](assets/SQ-ID-04.svg)
+Kiểm tra phiên và boundary quyền tài nguyên
 
 Nguồn: [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
@@ -273,7 +273,7 @@ note over S,D : Không đọc identity_db từ consumer; không distributed lock
 
 ## SQ-ID-05 — Logout hiện tại, tất cả và thiết bị từ xa
 
-![Logout hiện tại, tất cả và thiết bị từ xa](assets/SQ-ID-05.svg)
+Logout hiện tại, tất cả và thiết bị từ xa
 
 Nguồn: [authentication/views/devices.py](../../../apps/identity-service/authentication/views/devices.py);
 kiểm thử: [test_devices.py](../../../apps/identity-service/tests/test_devices.py).
@@ -329,7 +329,7 @@ note over U,D : Không đổi user thành blocked; login sau tạo family mới.
 
 ## SQ-ID-06 — Yêu cầu reset qua form thư viện và outbox
 
-![Yêu cầu reset qua form thư viện và outbox](assets/SQ-ID-06.svg)
+Yêu cầu reset qua form thư viện và outbox
 
 Nguồn: [authentication/services/password_service.py](../../../apps/identity-service/authentication/services/password_service.py);
 kiểm thử: [test_password_errors.py](../../../apps/identity-service/tests/test_password_errors.py).
@@ -381,7 +381,7 @@ note over F,D : Không bảng reset token/hash/used. Request mới không tự v
 
 ## SQ-ID-07 — Reset confirm bằng generator và SetPasswordForm
 
-![Reset confirm bằng generator và SetPasswordForm](assets/SQ-ID-07.svg)
+Reset confirm bằng generator và SetPasswordForm
 
 Nguồn: [authentication/services/password_service.py](../../../apps/identity-service/authentication/services/password_service.py);
 kiểm thử: [test_password_errors.py](../../../apps/identity-service/tests/test_password_errors.py).
@@ -427,7 +427,7 @@ note over U,D : Không used/used_at. Password hash đổi làm token cũ không 
 
 ## SQ-ID-08 — Đổi password và thu hồi mọi phiên
 
-![Đổi password và thu hồi mọi phiên](assets/SQ-ID-08.svg)
+Đổi password và thu hồi mọi phiên
 
 Nguồn: [authentication/services/password_service.py](../../../apps/identity-service/authentication/services/password_service.py);
 kiểm thử: [test_flows.py](../../../apps/identity-service/tests/test_flows.py).
@@ -474,7 +474,7 @@ note over U,D : Access/refresh cũ không còn hợp lệ tại Identity; reset 
 
 ## SQ-ID-09 — Xác minh email và kích hoạt, sau đó login riêng
 
-![Xác minh email và kích hoạt, sau đó login riêng](assets/SQ-ID-09.svg)
+Xác minh email và kích hoạt, sau đó login riêng
 
 Nguồn: [accounts/services/registration.py](../../../apps/identity-service/accounts/services/registration.py);
 kiểm thử: [test_flows.py](../../../apps/identity-service/tests/test_flows.py).
@@ -524,7 +524,7 @@ note over U,D : Account ineligible400 INVALID_ACTIVATION_TOKEN; password400 VALI
 
 ## SQ-ID-10 — Import/enrollment — thiết kế mục tiêu ngoài Identity
 
-![Import/enrollment — thiết kế mục tiêu ngoài Identity](assets/SQ-ID-10.svg)
+Import/enrollment — thiết kế mục tiêu ngoài Identity
 
 Nguồn: [accounts/services/provisioning.py](../../../apps/identity-service/accounts/services/provisioning.py);
 kiểm thử: [test_provisioning.py](../../../apps/identity-service/tests/test_provisioning.py).
@@ -568,7 +568,7 @@ note over C,I : Chưa xác minh source/runtime Classroom import.\nIdentity commi
 
 ## SQ-ID-11 — Provisioning: receipt và ordered locks
 
-![Provisioning: receipt và ordered locks](assets/SQ-ID-11.svg)
+Provisioning: receipt và ordered locks
 
 Nguồn: [accounts/services/provisioning.py](../../../apps/identity-service/accounts/services/provisioning.py);
 kiểm thử: [test_provisioning.py](../../../apps/identity-service/tests/test_provisioning.py).
@@ -632,7 +632,7 @@ note over C,D : Hạ tầng lỗi rollback batch, không đổi thành row fail2
 
 ## SQ-ID-12 — Resend activation nội bộ cho Classroom
 
-![Resend activation nội bộ cho Classroom](assets/SQ-ID-12.svg)
+Resend activation nội bộ cho Classroom
 
 Nguồn: [accounts/services/provisioning.py](../../../apps/identity-service/accounts/services/provisioning.py);
 kiểm thử: [test_provisioning.py](../../../apps/identity-service/tests/test_provisioning.py).
@@ -680,7 +680,7 @@ note over C,D : Không query enrollment/classroom_db trong Identity.\nKhông res
 
 ## SQ-ID-13 — Google OAuth: context, allauth và các transaction riêng
 
-![Google OAuth: context, allauth và các transaction riêng](assets/SQ-ID-13.svg)
+Google OAuth: context, allauth và các transaction riêng
 
 Nguồn: [accounts/services/oauth_accounts.py](../../../apps/identity-service/accounts/services/oauth_accounts.py);
 kiểm thử: [test_oauth_adapters.py](../../../apps/identity-service/tests/test_oauth_adapters.py).
@@ -737,7 +737,7 @@ note over I,D : Không outer TX account/link + JWT. Lỗi issuance có thể gi�
 
 ## SQ-ID-14 — GitHub qua Integration và OAuth unlink
 
-![GitHub qua Integration và OAuth unlink](assets/SQ-ID-14.svg)
+GitHub qua Integration và OAuth unlink
 
 Nguồn: [accounts/services/oauth_accounts.py](../../../apps/identity-service/accounts/services/oauth_accounts.py);
 kiểm thử: [test_oauth_adapters.py](../../../apps/identity-service/tests/test_oauth_adapters.py).
@@ -805,7 +805,7 @@ note over I,N : Chỉ Integration gọi GitHub API; Identity không gọi provid
 
 ## SQ-ID-15 — PATCH hồ sơ: chỉ mutation thật mới phát event
 
-![PATCH hồ sơ: chỉ mutation thật mới phát event](assets/SQ-ID-15.svg)
+PATCH hồ sơ: chỉ mutation thật mới phát event
 
 Nguồn: [accounts/services/profiles.py](../../../apps/identity-service/accounts/services/profiles.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
@@ -849,7 +849,7 @@ note over I,D : Không HTTP/Kafka trong TX. Projection consumer là boundary m�
 
 ## SQ-ID-16 — Avatar receipt bound user và session
 
-![Avatar receipt bound user và session](assets/SQ-ID-16.svg)
+Avatar receipt bound user và session
 
 Nguồn: [accounts/services/avatars.py](../../../apps/identity-service/accounts/services/avatars.py);
 kiểm thử: [test_avatars.py](../../../apps/identity-service/tests/test_avatars.py).
@@ -912,7 +912,7 @@ note over I,D : Session ID ổn định qua refresh; receipt vẫn bound cùng t
 
 ## SQ-ID-17 — Admin status/restore: mọi mutation thu hồi phiên
 
-![Admin status/restore: mọi mutation thu hồi phiên](assets/SQ-ID-17.svg)
+Admin status/restore: mọi mutation thu hồi phiên
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
@@ -963,7 +963,7 @@ note over U,D : Restore không tự ACTIVE hay revive phiên.\nKhông DELETE use
 
 ## SQ-ID-18 — Admin role và revoke credential
 
-![Admin role và revoke credential](assets/SQ-ID-18.svg)
+Admin role và revoke credential
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
@@ -1012,7 +1012,7 @@ note over I,D : Actor=target đổi role khác có thể revoke chính credentia
 
 ## SQ-ID-19 — Ghi outbox hiện hành và handoff mục tiêu
 
-![Ghi outbox hiện hành và handoff mục tiêu](assets/SQ-ID-19.svg)
+Ghi outbox hiện hành và handoff mục tiêu
 
 Nguồn: [messaging/outbox.py](../../../apps/identity-service/messaging/outbox.py);
 kiểm thử: [test_audit.py](../../../apps/identity-service/tests/test_audit.py).
@@ -1058,7 +1058,7 @@ note over K,N : Handoff là thiết kế mục tiêu, không chứng minh Kafka/
 
 ## SQ-ID-20 — JWKS một khóa RS256 hiện hành
 
-![JWKS một khóa RS256 hiện hành](assets/SQ-ID-20.svg)
+JWKS một khóa RS256 hiện hành
 
 Nguồn: [authentication/adapters/session_tokens.py](../../../apps/identity-service/authentication/adapters/session_tokens.py);
 kiểm thử: [test_jwt.py](../../../apps/identity-service/tests/test_jwt.py).
@@ -1094,7 +1094,7 @@ note over C,S : SimpleJWT header alg/typ; không kid. Private key không chia s�
 
 ## SQ-ID-21 — Đọc hồ sơ, batch, sessions và admin list
 
-![Đọc hồ sơ, batch, sessions và admin list](assets/SQ-ID-21.svg)
+Đọc hồ sơ, batch, sessions và admin list
 
 Nguồn: [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
@@ -1141,7 +1141,7 @@ note over I,D : Device id/family ổn định; is_current theo family.\nPublic/b
 
 ## SQ-ID-22 — Resend activation public
 
-![Resend activation public](assets/SQ-ID-22.svg)
+Resend activation public
 
 Nguồn: [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py);
 kiểm thử: [test_flows.py](../../../apps/identity-service/tests/test_flows.py).
@@ -1186,7 +1186,7 @@ note over U,D : Key lỗi503 cho known/unknown; email sai400; throttle429.\nKhô
 
 ## SQ-ID-23 — GitHub mapping nội bộ cho reconciliation
 
-![GitHub mapping nội bộ cho reconciliation](assets/SQ-ID-23.svg)
+GitHub mapping nội bộ cho reconciliation
 
 Nguồn: [accounts/views/internal.py](../../../apps/identity-service/accounts/views/internal.py);
 kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).

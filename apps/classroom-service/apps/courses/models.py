@@ -7,6 +7,7 @@ from django.utils import timezone
 
 class Course(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    created_by_id = models.UUIDField(null=True, editable=False)
     code = models.CharField(max_length=50)
     name = models.CharField(max_length=200)
     archived_at = models.DateTimeField(null=True)

@@ -40,7 +40,7 @@ def require_capacity(section, group):
 
 
 def join_group(request, payload):
-    actor_roles(request)
+    require_role(request, "STUDENT")
     saved = lookup_receipt(receipt_scope(request, require_key(request)), payload)
     candidate = (
         get_object_or_404(StudyGroup, pk=saved.response_body["data"]["id"])
@@ -54,7 +54,7 @@ def join_group(request, payload):
         section, group = lock_group(candidate.pk)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
-            require_group_read(group, request.user)
+            require_group_read(group, request.user, roles=actor_roles(request))
             return replay_response(receipt)
         require_role(request, "STUDENT")
         enrollment = active_enrollment(section, request.user)
@@ -115,7 +115,19 @@ def change_member(request, group_id, payload, *, action):
     actor_roles(request)
     with transaction.atomic():
         section, group = lock_group(group_id)
-        require_group_read(group, request.user)
+        require_group_read(
+            group, request.user, roles=actor_roles(request), admin_allowed=action == "remove-member"
+        )
+        if action in {"remove-member", "transfer-leader"}:
+            require_leader(
+                group,
+                request.user,
+                teacher_allowed=True,
+                roles=actor_roles(request),
+                admin_allowed=action == "remove-member",
+            )
+        elif active_member(group, request.user) is None:
+            raise ClassroomError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
@@ -124,7 +136,6 @@ def change_member(request, group_id, payload, *, action):
             raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
         check_group_version(group, payload["version"])
         if action == "transfer-leader":
-            require_leader(group, request.user, teacher_allowed=True)
             transfer_leader(group, payload["user_id"])
             publish_membership(
                 section,
@@ -135,7 +146,6 @@ def change_member(request, group_id, payload, *, action):
             )
         else:
             if action == "remove-member":
-                require_leader(group, request.user)
                 member = get_object_or_404(
                     GroupMember,
                     group=group,
@@ -172,10 +182,10 @@ def adjust_member(request, class_id, payload):
     with transaction.atomic():
         section = lock_class(class_id)
         require_read(request, section)
+        require_manage(request, section)
         saved = lookup_receipt(receipt_scope(request, require_key(request)), payload)
         if saved is not None and saved.status == "COMPLETED":
             return replay_response(begin_receipt(request, payload, section))
-        require_manage(request, section, teacher_only=True)
         enrollment = get_object_or_404(
             Enrollment, class_section=section, user_id=payload["user_id"], status="ACTIVE"
         )

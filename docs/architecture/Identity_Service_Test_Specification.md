@@ -412,4 +412,4 @@ tổ hợp input/status hoặc25/25đồng nghĩa mọi nhánh đều được t
 | POST | `/api/v1/internal/auth/session-status` | 200 | Pass |
 | GET | `/api/v1/internal/users/{user_id}/oauth/GITHUB` | 200 | Pass |
 
-[JUnit06/10](../temp/identity-completion-full.xml), [matrix máy đọc](../temp/identity-default-api-test-matrix.json), [hướng dẫn Identity](../identity-service/README.md).
+JUnit06/10, matrix máy đọc, [hướng dẫn Identity](../identity-service/README.md).

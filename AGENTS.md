@@ -74,7 +74,7 @@ môn có ích cho loại công việc tương ứng.
   cho task khó hoặc khi model đang cấu hình không khả dụng.
 - Dùng subagent cho các phần việc độc lập khi có lợi cho tốc độ hoặc chất
   lượng; việc nhỏ hoặc các bước phụ thuộc nối tiếp do agent chính xử lý.
-- Chọn vai trò trong `~/.codex/agents/`; quy trình và cách sử dụng tại
+- Chọn vai trò trong `.codex/agents/`; quy trình và cách sử dụng tại
   [hướng dẫn subagent](docs/system/subagents.md).
   Nếu tool không có lựa chọn custom role, đọc file vai trò và truyền model/
   reasoning cùng hướng dẫn/phạm vi khi spawn context mới; tên task không tự
@@ -90,9 +90,8 @@ môn có ích cho loại công việc tương ứng.
 - Bản bàn giao chỉ gồm mục tiêu, file được giao, quyết định/contract đã chốt,
   bằng chứng file:dòng, tiêu chí chấp nhận và kiểm tra cần chạy. Không sao chép
   toàn bộ source, hội thoại hoặc log; subagent tự đọc phần cần thiết.
-- Chạy các task độc lập song song trong giới hạn hai subagent theo cấu hình
-  global Codex; chờ dependency trước task phụ thuộc. Tái sử dụng subagent cho
-  follow-up cùng task để tránh
+- Chạy các task độc lập song song trong giới hạn ba subagent; chờ dependency
+  trước task phụ thuộc. Tái sử dụng subagent cho follow-up cùng task để tránh
   điều tra lại; chỉ spawn mới khi đổi phạm vi hoặc context đã không còn phù hợp.
 - Subagent trả bản tóm tắt tối đa khoảng 250 từ khi đủ để bàn giao, dẫn tới
   file/bằng chứng thay vì dán log dài. Agent chính giữ quyết định, dependency,

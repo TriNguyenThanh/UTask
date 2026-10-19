@@ -8,6 +8,11 @@ backend Classroom (bản local `backend-validation.md`), tách khỏi hình thi�
 **Nghiệp vụ đã chốt:** Giảng viên tạo lớp → Sinh viên vào lớp, lập nhóm và tự
 chọn đề tài → Trưởng nhóm tạo dự án ở Work → Giảng viên theo dõi dự án của lớp.
 
+**Quyền đã chốt:** `PRIMARY` và `CO_TEACHER` ngang quyền; Teacher cần role
+`TEACHER` cùng phân công `ACTIVE`, và bị thu hồi quyền ngay khi phân công kết
+thúc. Admin chỉ có quyền Classroom được chọn theo từng thao tác; bảng chuẩn là
+quyền và phạm vi đã chốt.
+
 **Quyết định chính:** mỗi nhóm có nhiều dự án hoạt động đồng thời. Classroom
 lưu `GROUP_PROJECT_LINKS`; đề tài, thời hạn và công việc nằm ở Work. Chi tiết
 điều chỉnh và phần triển khai còn thiếu tại [ghi chú Classroom](../../classroom-service/README.md#rest-nội-bộ-và-kafka).
@@ -28,7 +33,7 @@ Trong hình dùng tên tiếng Việt: Hệ thống lớp học = Classroom; H�
 
 ## 1. Căn cứ và phạm vi
 
-Đọc [baseline](../../architecture/UTask_Architecture_Technology_Baseline%20%281%29.md)
+Đọc [baseline](../../architecture/README.md)
 mục 4.3, 8–11, 17 và 29; [ADR-001](../../adr/001-adopt-architecture-baseline.md),
 [ownership](../../system/data-ownership.md), [giao tiếp](../../system/communication.md)
 và yêu cầu (đầu vào local `UTask - Phân tích thiết kế yêu cầu.md`)
@@ -36,13 +41,15 @@ US-1.2–1.4, US-2.1–2.5, US-4.4 và mục 8.
 
 | Phạm vi | Cần làm |
 | --- | --- |
-| P0 | Môn học/lớp; quyền giảng viên; mã lớp; ghi danh; thêm một hoặc nhiều sinh viên bằng JSON; giao diện đọc Excel và cho xem trước; tạo/tham gia nhóm; mã mời, loại thành viên/chuyển Trưởng nhóm; Giảng viên chốt nhóm; xác minh nhóm/quyền cho Work; sự kiện đổi thành viên qua Kafka; liên kết dự án do nhóm tự chọn đề tài |
+| P0 | Môn học/lớp; quyền Teacher theo phân công; mã lớp; ghi danh; thêm một hoặc nhiều sinh viên bằng JSON; giao diện đọc Excel và cho xem trước; tạo/tham gia nhóm; mã mời, loại thành viên/chuyển Trưởng nhóm; xác minh nhóm/quyền cho Work; sự kiện đổi thành viên qua Kafka; liên kết dự án do nhóm tự chọn đề tài |
 | P1 | Giảng viên phân/chuyển/loại sinh viên, kể cả sau khi chốt nhóm; xử lý nhóm ngoại lệ và xác minh quyền nhận xét/nhắc tên |
 | P2 | Điểm danh/điểm số vẫn thuộc Classroom; thiết kế bảng khi triển khai học vụ, theo yêu cầu mục 8.3/8.5 |
 
-Chuyển Trưởng nhóm là P0; Giảng viên đúng lớp cũng có quyền chuyển theo yêu
-cầu mục 1.2. Phân/chuyển nhóm ngoại lệ thuộc P1 theo US-2.5. Đọc Excel và xem
-trước thuộc Web; phía máy chủ Classroom chỉ nhận danh sách đã có cấu trúc.
+Chuyển Trưởng nhóm là P0. Teacher có phân công ACTIVE và Admin đều được điều
+chỉnh thành viên trong lớp theo quyền đã chốt. Admin không có quyền cấp mã mời,
+đọc danh sách thành viên nhóm, chuyển Trưởng nhóm hoặc đọc danh sách dự án liên
+kết. Phân/chuyển nhóm ngoại lệ thuộc P1 theo US-2.5. Đọc Excel và xem trước
+thuộc Web; phía máy chủ Classroom chỉ nhận danh sách đã có cấu trúc.
 
 MVP giữ mỗi sinh viên tối đa một nhóm đang hoạt động trong lớp và một mã
 mời hiện hành mỗi nhóm. Một lớp có nhiều dự án thông qua các nhóm. **Đã triển
@@ -132,8 +139,9 @@ và test compatibility. Không lấy số version trang docs `latest` làm versi
 | Teacher feedback P1 | [VerifiedFeedbackScope](../../../apps/work-service/infrastructure/collaboration_scope.py) | Trả facts actor/project/group/version/expiry; Work adapter dựng dataclass, không thêm dịch vụ ký token |
 | Kafka/receipt | [Work messaging](../../../apps/work-service/apps/messaging/models.py) | Tái sử dụng ý tưởng và test pattern có chọn lọc trong package Classroom; không import model/DB Work |
 
-**Đã triển khai backend** Identity–Classroom–Work trong phạm vi kế hoạch P0/P1.
-Kiểm thử HTTP/Kafka thật và giới hạn xác minh tại trang nghiệm thu. Giao diện
+**Đã triển khai trong source hiện tại:** Identity–Classroom–Work trong phạm vi
+kế hoạch P0/P1. Test quyền được bổ sung trong worktree nhưng kết quả chạy chưa
+xác nhận. Kiểm thử HTTP/Kafka thật và giới hạn xác minh tại trang nghiệm thu. Giao diện
 và P2 ngoài phạm vi lần triển khai này; không suy kiểm thử fixture thành E2E.
 
 [Migration Work](../../../apps/work-service/apps/projects/migrations/0002_multiple_group_projects.py)
@@ -189,9 +197,10 @@ Các quyết định sau là đầu vào của kế hoạch, không còn là câ
 - Sau khi chốt, Trưởng nhóm vẫn được loại thành viên thường của nhóm mình;
   Giảng viên phụ trách được phân, chuyển hoặc loại sinh viên trong đúng lớp.
   Mọi thao tác phải giữ Trưởng nhóm, giới hạn tối đa, lý do và lịch sử.
-- Quản trị viên hệ thống được tạo lớp và thêm sinh viên. Khi tạo lớp thay,
-  Quản trị viên phải chỉ định một Giảng viên đang hoạt động làm người phụ
-  trách chính; vai trò Quản trị viên không tự cấp quyền xem nội dung dự án.
+- Admin được tạo lớp và thêm sinh viên; khi tạo lớp thay, Admin chỉ định một
+  Teacher đang hoạt động làm người phụ trách chính. Các quyền Admin khác được
+  giới hạn theo từng thao tác tại bảng chuẩn; Admin không tự có quyền đọc nội
+  dung dự án Work.
 - Classroom không tạo liên kết dự án mới khi lớp hoặc nhóm đã đóng/lưu trữ.
   Liên kết lịch sử đã có vẫn được giữ.
 - Work chỉ áp dụng thay đổi thành viên cho các dự án đang hoạt động; không

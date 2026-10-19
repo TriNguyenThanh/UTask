@@ -1,4 +1,4 @@
-from apps.courses.permissions import require_manage
+from apps.courses.permissions import actor_roles, require_manage
 from apps.groups.models import StudyGroup
 from apps.groups.permissions import require_group_read
 from apps.messaging.models import Activity
@@ -12,7 +12,7 @@ def class_activities(request, section, group_id=None):
         from django.shortcuts import get_object_or_404
 
         group = get_object_or_404(StudyGroup, pk=group_id, class_section=section)
-        require_group_read(group, request.user)
+        require_group_read(group, request.user, roles=actor_roles(request), admin_allowed=True)
         qs = qs.filter(subject_type="StudyGroup", subject_id=group_id)
     else:
         require_manage(request, section)

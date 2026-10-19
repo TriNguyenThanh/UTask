@@ -37,6 +37,108 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    def test_discovery_gateway_json_is_decoded_before_remote_compose_commands(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+        gateway_input = workflow["jobs"]["release-staging"]["with"]["gateway_service"]
+        self.assertEqual(
+            gateway_input, "${{ fromJSON(needs.changes.outputs.gateway_service) }}"
+        )
+        self.assertEqual(
+            RELEASE["jobs"]["deploy-staging"]["env"]["STAGING_GATEWAY_SERVICE"],
+            "${{ inputs.gateway_service }}",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output"
+            result = subprocess.run(
+                [
+                    shutil.which("python3") or shutil.which("python"),
+                    str(ROOT / "scripts/discover_services.py"),
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "GITHUB_OUTPUT": str(output),
+                    "SHARED_CHANGED": "true",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            # GitHub's fromJSON evaluates this JSON string before workflow_call.
+            gateway = json.loads(outputs["gateway_service"])
+        compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
+        self.assertIn(gateway, compose["services"])
+        with deployment_runtime() as (root, env, calls):
+            env["gateway_service"] = gateway
+            env["EXPECTED_GATEWAY_SERVICE"] = gateway
+            result = run_staging_deploy(root, env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            commands = docker_calls(calls)
+            gateway_commands = [
+                command
+                for command in commands
+                if "nginx" in command and ("-t" in command or "-s" in command)
+            ]
+            self.assertEqual(len(gateway_commands), 3)
+            for command in gateway_commands:
+                self.assertIn(gateway, command)
+                self.assertNotIn(outputs["gateway_service"], command)
+
+    def test_ai_migration_runs_for_every_deployment_without_persistent_job(self):
+        with deployment_runtime(services="identity-service ai-service") as (
+            root,
+            env,
+            calls,
+        ):
+            for _ in range(2):
+                result = run_staging_deploy(root, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            commands = docker_calls(calls)
+            migrations = [
+                command for command in commands if "/app/.venv/bin/alembic" in command
+            ]
+            self.assertEqual(len(migrations), 2)
+            self.assertTrue(
+                all(
+                    "run" in command and "--rm" in command and "--no-deps" in command
+                    for command in migrations
+                )
+            )
+            self.assertFalse(any("ai-migrate" in command for command in commands))
+
+    def test_ai_database_preparation_failure_stops_before_migrations_and_rollout(self):
+        with deployment_runtime(
+            services="identity-service ai-service",
+            fail_on="database-preparation",
+            fail_code=74,
+        ) as (root, env, calls):
+            result = run_staging_deploy(root, env)
+            self.assertEqual(result.returncode, 74, result.stderr)
+            commands = docker_calls(calls)
+            preparation = next(
+                i
+                for i, command in enumerate(commands)
+                if "/docker-entrypoint-initdb.d/init-databases.sh" in command
+            )
+            self.assertTrue(
+                any(
+                    "up" in command and "--wait" in command
+                    for command in commands[:preparation]
+                )
+            )
+            self.assertFalse(
+                any(
+                    "--exit-code-from" in command
+                    or "migrate" in command
+                    or "up" in command
+                    for command in commands[preparation + 1 :]
+                )
+            )
+
     def test_remote_deploy_continues_after_compose_run_consumes_stdin(self):
         with deployment_runtime(
             services="identity-service sample-service worker-service",
@@ -363,12 +465,16 @@ class StagingDeploymentTests(unittest.TestCase):
         compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
             "services"
         ]
-        migration = compose["ai-migrate"]
+        migration = {
+            "profiles": ["ai-service"],
+            "image": compose["ai-service"]["image"],
+            "x-deploy": {"role": "migration", "application": "ai-service"},
+        }
         self.assertNotIn("healthcheck", migration)
         outputs = self.validate(
             ["identity-service", "ai-service"], fastapi=["ai-service"]
         )
-        self.assertNotIn("ai-migrate", outputs["infrastructure_services"])
+        self.assertNotIn("sample-migration", outputs["infrastructure_services"])
         for overrides in ({"application": "missing-service"}, {"image": "other:fixed"}):
             invalid = {**migration, "x-deploy": dict(migration["x-deploy"])}
             if "application" in overrides:
@@ -382,7 +488,7 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.validate(
                     ["identity-service", "ai-service"],
                     fastapi=["ai-service"],
-                    extra_runtime={"ai-migrate": invalid},
+                    extra_runtime={"sample-migration": invalid},
                 )
 
     def test_dispatcher_requires_healthcheck_even_when_migration_is_one_shot(self):
@@ -416,21 +522,23 @@ class StagingDeploymentTests(unittest.TestCase):
         compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
         services = compose["services"]
         api = services["ai-service"]
-        for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-migrate"):
+        for name in ("ai-service", "ai-worker", "ai-dispatcher"):
             with self.subTest(name=name):
                 service = services[name]
                 self.assertEqual(service["profiles"], ["ai-service"])
                 self.assertEqual(service["image"], api["image"])
                 self.assertEqual(service["environment"], api["environment"])
-                if name != "ai-migrate":
+                for dependency in ("postgres", "redis"):
                     self.assertEqual(
-                        service["depends_on"]["ai-migrate"]["condition"],
-                        "service_completed_successfully",
+                        service["depends_on"][dependency]["condition"],
+                        "service_healthy",
                     )
-        self.assertEqual(
-            services["ai-migrate"]["command"], ["alembic", "upgrade", "head"]
-        )
-        self.assertEqual(services["ai-migrate"]["restart"], "no")
+                if name != "ai-service":
+                    self.assertEqual(
+                        service["depends_on"]["ai-service"]["condition"],
+                        "service_healthy",
+                    )
+        self.assertNotIn("ai-migrate", services)
         self.assertNotIn("work-service", api["depends_on"])
         self.assertNotIn("integration-service", api["depends_on"])
 
@@ -471,7 +579,7 @@ class StagingDeploymentTests(unittest.TestCase):
                     check=True,
                 )
                 compose = json.loads(result.stdout)
-                for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-migrate"):
+                for name in ("ai-service", "ai-worker", "ai-dispatcher"):
                     runtime = compose["services"][name]["environment"]
                     self.assertEqual(json.loads(runtime["AI_CONTEXT_URLS"]), maps)
                     self.assertEqual(json.loads(runtime["AI_AUTHORIZATION_URLS"]), maps)
@@ -560,21 +668,35 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertEqual(result.returncode, failure, result.stderr)
                 commands = docker_calls(calls)
                 ai_migrations = [
-                    command for command in commands if "--exit-code-from" in command
+                    command
+                    for command in commands
+                    if "/app/.venv/bin/alembic" in command
                 ]
                 if "ai-service" in selected.split():
                     self.assertEqual(len(ai_migrations), 1)
                     migration = ai_migrations[0]
-                    self.assertIn("up", migration)
+                    self.assertIn("run", migration)
                     self.assertIn("--no-deps", migration)
-                    self.assertIn("--force-recreate", migration)
+                    self.assertIn("--rm", migration)
+                    self.assertIn("--interactive=false", migration)
                     self.assertEqual(
-                        migration[-3:], ["--exit-code-from", "ai-migrate", "ai-migrate"]
+                        migration[-4:],
+                        ["ai-service", "/app/.venv/bin/alembic", "upgrade", "head"],
                     )
                     self.assertNotIn("-d", migration)
                     index = commands.index(migration)
                     dependencies = next(c for c in commands[:index] if "up" in c)
-                    self.assertIn("ai-postgres", dependencies)
+                    self.assertIn("postgres", dependencies)
+                    self.assertFalse(any("ai-postgres" in c for c in commands))
+                    preparation = next(
+                        c
+                        for c in commands
+                        if "/docker-entrypoint-initdb.d/init-databases.sh" in c
+                    )
+                    self.assertLess(
+                        commands.index(dependencies), commands.index(preparation)
+                    )
+                    self.assertLess(commands.index(preparation), index)
                     self.assertIn("redis", dependencies)
                     self.assertIn("--wait", dependencies)
                     after = commands[index + 1 :]
@@ -932,7 +1054,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         "work-group-consumer",
                     }
                     if service == "work-service"
-                    else {"ai-service", "ai-worker", "ai-dispatcher", "ai-migrate"},
+                    else {"ai-service", "ai-worker", "ai-dispatcher"},
                 )
                 self.assertTrue(
                     all(

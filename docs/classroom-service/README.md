@@ -59,13 +59,19 @@ Các quyết định chính:
   đã nêu ma trận constraint, khóa ngoại cùng lớp và chỉ mục migration đầu tiên.
 - Mã vào lớp/mã mời là chuỗi ngẫu nhiên; chỉ lưu HMAC-SHA-256 và giá trị đang
   dùng là duy nhất trong từng loại để một mã xác định đúng một lớp/nhóm.
-- Teacher authority phải đến từ quan hệ lớp hiện hành; global role không tự cấp
-  quyền trên mọi lớp.
+- Quyền Teacher trên lớp cần đồng thời role `TEACHER` và phân công
+  `ClassTeacher` đang `ACTIVE`; `PRIMARY` và `CO_TEACHER` có quyền ngang nhau.
+  Hủy phân công làm mất quyền ngay, kể cả khi Work gọi scope nội bộ.
 - Giảng viên phụ trách chủ động chốt nhóm. Sau khi chốt, Leader vẫn được loại
   thành viên thường; Giảng viên được phân/chuyển/loại trong đúng lớp với lý do,
   lịch sử, giới hạn tối đa và quy tắc giữ Trưởng nhóm.
-- Quản trị viên hệ thống được tạo lớp và thêm sinh viên nhưng không tự trở
-  thành Giảng viên hoặc có quyền xem nội dung dự án.
+- Admin hệ thống giữ các quyền đã chọn trong bảng quyền chuẩn.
+  Phần bổ sung được chốt lần này gồm LH10 loại ghi danh người khác, LH13 chốt
+  lập nhóm, LH15 điều chỉnh thành viên; NH01 xem mọi nhóm, NH02 tạo
+  nhóm thay cho Leader được chỉ định, NH03/NH04/NH09/NH12 lần lượt xem chi tiết,
+  sửa nhóm, loại thành viên và xem lịch sử. Với NH03, sinh viên chỉ xem nhóm
+  đang là thành viên ACTIVE của chính mình. Các API NH05/NH07/NH10/NH11 không
+  có nhánh Admin. Admin không vì thế có quyền đọc toàn bộ nội dung Work.
 - Classroom gọi API Identity đã có để cấp/tìm tài khoản khi thêm danh sách sinh viên;
   không đọc hoặc ghi `identity_db`.
 - Work lấy snapshot/scope cần phản hồi qua REST và nhận membership event qua
@@ -96,32 +102,45 @@ ngoại ghép bảo đảm thành viên, ghi danh và liên kết cùng lớp.
 
 Gateway công khai duy nhất `/api/classroom/`, bỏ tiền tố trước khi proxy.
 Các đường dưới đây là tài nguyên tương đối. Lệnh có chống lặp nhận
-`Idempotency-Key` UUID; lệnh cập nhật kiểm phiên bản. Cùng khóa/nội dung trả
-kết quả cũ khi còn quyền đọc; mã thô không có trong GET hoặc receipt.
+`Idempotency-Key` UUID; lệnh cập nhật kiểm phiên bản. Replay chỉ được xử lý
+sau guard quyền hiện hành của chính thao tác đó; kiểm tra nghiệp vụ nào nằm
+sau receipt có thể không chạy lại cho replay. Cùng khóa nhưng khác nội dung bị
+từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể xem
+[luồng xử lý và replay](../diagram/classroom-service/sequence.md#3-quy-tắc-kỹ-thuật-chung-dành-cho-người-triển-khai).
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
-| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực, ghi danh mục bởi Admin |
+| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin mọi môn |
 | Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động |
-| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Phụ trách/quản trị lớp; chốt nhóm bởi giảng viên phụ trách |
+| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; Admin có các quyền trạng thái/phân công được đánh dấu trong bảng chuẩn, gồm LH13 |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
 | Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm sinh viên |
-| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/` | Student ghi danh tạo khi đang lập nhóm; đọc theo phạm vi lớp |
-| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `leave/`, `remove-member/`, `transfer-leader/` | Trưởng nhóm quản lý; giảng viên đúng lớp được chuyển trưởng nhóm |
-| Điều chỉnh P1 | `classes/{id}/adjust-member/` | Giảng viên phân/chuyển/loại, có lý do và người kế nhiệm khi cần |
+| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/` | NH01 Admin xem mọi nhóm; NH02 Teacher/Admin tạo thay Leader đang ghi danh; NH03 Student chỉ xem nhóm mình đang là thành viên ACTIVE |
+| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `leave/`, `remove-member/`, `transfer-leader/` | Admin không có quyền NH05/NH07/NH10; NH09 cho phép Admin loại thành viên |
+| Điều chỉnh P1 | `classes/{id}/adjust-member/` | Teacher đang được phân công hoặc Admin; có lý do và xử lý kế nhiệm Leader |
 | Liên kết | `groups/{id}/projects/` | Thành viên đúng nhóm hoặc giảng viên đúng lớp |
-| Lịch sử | `classes/{id}/activities/`, `groups/{id}/activities/` | Giảng viên đúng lớp hoặc thành viên theo phạm vi lịch sử nhóm |
+| Lịch sử | `classes/{id}/activities/`, `groups/{id}/activities/` | Giảng viên đúng lớp hoặc Admin; thành viên chỉ xem lịch sử đúng nhóm |
+
+Chi tiết các lựa chọn đã duyệt và phần để lại nằm tại
+bảng quyền ngày 18/10/2026. `PRIMARY` và `CO_TEACHER`
+có quyền ngang nhau trong lớp; Admin chỉ có quyền được chọn cho từng thao tác.
 
 [OpenAPI Classroom](../../contracts/api/classroom-service.yaml) được sinh từ
 triển khai thật. Envelope giữ `success/message/data/meta/error`, thông báo
 tiếng Việt. Danh sách lớp, giảng viên lớp, ghi danh, nhóm, thành viên, liên
 kết và lịch sử có trang mặc định 20, tối đa 100; cursor gắn phạm vi/bộ lọc.
 Danh mục Course sắp theo mã/ID, chưa phân trang do model không có trường thời gian.
+`Course.created_by_id` là UUID tùy chọn, tham chiếu logic tới Identity và chỉ đọc
+trên API. Teacher chỉ sửa/ngừng dùng môn mình tạo; Admin có thể quản lý mọi môn.
+Môn cũ có `created_by_id=NULL` chỉ Admin được sửa/ngừng dùng.
 
 Xác thực dùng JWT RS256/JWKS và kiểm phiên qua Identity. Vai trò toàn cục đọc
 từ `/users/me` trong request; phân công hiện hành mới cấp quyền giảng viên
-trên lớp. `/users/batch` bổ sung hồ sơ; `account_status` cùng `roles` xác minh
-Teacher đang hoạt động khi phân công, không cấp quyền dự án cho Admin.
+trên lớp. `/users/batch` bổ sung hồ sơ và xác minh `account_status` cùng `roles`
+khi chọn giảng viên hoặc tạo nhóm thay sinh viên. Quyền giảng viên cần role
+`TEACHER` hiện hành và phân công lớp `ACTIVE`; mất một trong hai điều kiện sẽ
+mất quyền, kể cả API nội bộ cấp phạm vi giảng viên cho Work. Role Admin không
+tự cấp quyền giảng viên hay quyền đọc dự án Work.
 
 Thêm sinh viên nhận JSON `students` gồm 1–100 đối tượng. Receipt `PREPARED`
 và khóa upstream ổn định được commit trước lời gọi Identity ngoài khóa dữ
@@ -178,6 +197,9 @@ Bearer; Beat quét dự án hoạt động mỗi 300 giây để bù crash/Redis
 commit. Không thêm bảng job, không tạo Project để bù liên kết trễ.
 
 ## Cấu hình và chạy
+
+Quyền ghi danh mục Course và hành vi của `created_by_id` được mô tả cùng bảng
+quyền API ở mục [API backend và quyền](#api-backend-và-quyền).
 
 Classroom nhận cấu hình theo pipeline `.env` → `infra/env/classroom-service.env`
 → Compose `env_file` → settings; xem [tài liệu biến môi trường](../infrastructure/environment.md).

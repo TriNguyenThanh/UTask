@@ -4,37 +4,42 @@ Subagent là agent được phiên chính giao một phần việc có mục ti�
 rõ ràng. Đây là công cụ phát triển trong repo, tách biệt với agent nghiệp vụ
 của AI Service.
 
-**Trạng thái: Đã triển khai cấu hình global trên máy hiện tại.** Cấu hình nằm
-trong `~/.codex/`, không được lưu trong repo và áp dụng cho các project Codex
-của tài khoản này. Mức tiết kiệm token/thời gian qua nhiều task **Chưa xác minh**.
+**Trạng thái: Một phần.** Repo đã có model/reasoning theo vai trò và quy tắc
+bàn giao context. Cấu hình được kiểm tra bằng Codex CLI local; model/reasoning
+được đối chiếu với danh mục CLI. Đã review chính sách context và cấu hình bằng
+subagent với context mới qua tool trực tiếp. Việc thực thi Reviewer với model
+Sol mới và việc client tự nạp/thực thi toàn bộ custom role,
+cũng như mức tiết kiệm token/thời gian thực tế, **Chưa xác minh**.
 
 ## Cấu hình
 
-- Cấu hình `~/.codex/config.toml` bật subagent, giới hạn tối đa hai thread con
-  mở đồng thời và đặt Luna mức reasoning thấp làm mặc định.
-- Mỗi file TOML trong `~/.codex/agents/` định nghĩa một vai trò bằng `name`,
+- [Cấu hình project](../../.codex/config.toml) bật subagent và giới hạn tối đa
+  ba thread subagent mở đồng thời, không tính agent chính.
+- Mỗi file TOML trong `.codex/agents/` định nghĩa một vai trò bằng `name`,
   `description` và `developer_instructions`, kèm `model` và
-  `model_reasoning_effort` (độ sâu suy luận) riêng. Model của agent chính
-  không bị cấu hình này thay đổi.
+  `model_reasoning_effort` (độ sâu suy luận) riêng. Model của agent chính đặt
+  trong cấu hình project; có thể đổi bằng model picker hoặc CLI.
 - Subagent kế thừa quyền, provider và MCP của phiên chính. Yêu cầu chỉ đọc
   trong vai trò explorer/reviewer là quy tắc hành vi, không phải sandbox riêng.
-- Mở phiên Codex mới sau khi cập nhật file global để nạp lại vai trò.
+- Cấu hình project chỉ được nạp khi project được Codex đánh dấu tin cậy.
+  Mở phiên Codex mới tại root repo sau khi cập nhật cấu hình; không giả định
+  phiên đang chạy đã nạp các vai trò mới.
 
-Cấu trúc dựa trên [hướng dẫn subagent chính thức của OpenAI](https://developers.openai.com/codex/subagents)
-và [tham chiếu cấu hình](https://developers.openai.com/codex/config-reference/).
+Cấu trúc dựa trên [hướng dẫn subagent chính thức của OpenAI](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+và [tham chiếu cấu hình](https://learn.chatgpt.com/docs/config-file/config-reference).
 Nếu client cũ chưa hỗ trợ custom agent TOML, cập nhật client trước khi dùng.
 
 ## Vai trò
 
 | Vai trò | Khi dùng | Phạm vi mặc định |
 | --- | --- | --- |
-| `utask_explorer` | Định vị code, truy vết luồng, thu thập bằng chứng | Chỉ đọc |
-| `utask_backend` | Django/DRF, nghiệp vụ và test backend | Service nghiệp vụ được giao; hiện có `apps/identity-service/` |
-| `utask_frontend` | React/Vite, giao diện và test | `apps/web/` |
-| `utask_ai` | FastAPI/ADK, pipeline, context tools và test | `apps/ai-service/`; tài liệu AI khi được giao |
-| `utask_infra` | Compose, Nginx, CI, Dockerfile và script | File hạ tầng được giao |
-| `utask_docs` | Tài liệu tiếng Việt, hợp đồng đã chốt | File được giao trong `docs/` hoặc `contracts/` |
-| `utask_reviewer` | Review lỗi, quyền, hồi quy và thiếu test | Chỉ đọc |
+| [utask_explorer](../../.codex/agents/utask_explorer.toml) | Định vị code, truy vết luồng, thu thập bằng chứng | Chỉ đọc |
+| [utask_backend](../../.codex/agents/utask_backend.toml) | Django/DRF, nghiệp vụ và test backend | Service nghiệp vụ được giao; hiện có `apps/identity-service/` |
+| [utask_frontend](../../.codex/agents/utask_frontend.toml) | React/Vite, giao diện và test | `apps/web/` |
+| [utask_ai](../../.codex/agents/utask_ai.toml) | FastAPI/ADK, pipeline, context tools và test | `apps/ai-service/`; tài liệu AI khi được giao |
+| [utask_infra](../../.codex/agents/utask_infra.toml) | Compose, Nginx, CI, Dockerfile và script | File hạ tầng được giao |
+| [utask_docs](../../.codex/agents/utask_docs.toml) | Tài liệu tiếng Việt, hợp đồng đã chốt | File được giao trong `docs/` hoặc `contracts/` |
+| [utask_reviewer](../../.codex/agents/utask_reviewer.toml) | Review lỗi, quyền, hồi quy và thiếu test | Chỉ đọc |
 
 Phạm vi trong bảng là gợi ý phân công; danh sách file trong task cụ thể xác
 định quyền sửa. Không tạo backend chưa có chỉ vì đã xuất hiện trong baseline.
@@ -45,15 +50,16 @@ không nạp toàn bộ tài liệu/skill mặc định.
 
 | Vai trò | Model | Reasoning | Mục đích lựa chọn |
 | --- | --- | --- | --- |
-| `utask_explorer` | `gpt-6-luna` | `low` | Định vị code và lấy bằng chứng gọn |
-| `utask_docs` | `gpt-6-luna` | `low` | Cập nhật tài liệu theo bằng chứng đã chốt |
-| `utask_infra` | `gpt-6-luna` | `low` | Cấu hình hạ tầng và CI trong phạm vi nhỏ |
-| `utask_reviewer` | `gpt-6-luna` | `medium` | Tìm lỗi/hồi quy độc lập, chỉ đọc |
-| `utask_frontend` | `gpt-6.1-sol` | `low` | Triển khai giao diện và kiểm thử |
-| `utask_backend` | `gpt-6.1-sol` | `low` | Nghiệp vụ, quyền truy cập và test backend |
-| `utask_ai` | `gpt-6.1-sol` | `medium` | Pipeline và ranh giới context cần suy luận thêm |
+| Điều phối chính | `gpt-6.1-sol` | `medium` | Phân công, chốt quyết định, tổng hợp và kiểm tra kết quả |
+| `utask_explorer` | `gpt-6-luna` | `high` | Task khám phá có câu hỏi và phạm vi rõ ràng |
+| `utask_docs` | `gpt-6-luna` | `high` | Cập nhật/tổng hợp tài liệu từ bằng chứng đã xác định |
+| `utask_frontend` | `gpt-6.1-sol` | `medium` | Triển khai giao diện và kiểm thử |
+| `utask_backend` | `gpt-6.1-sol` | `high` | Nghiệp vụ, quyền truy cập và nhánh lỗi backend |
+| `utask_ai` | `gpt-6.1-sol` | `high` | Pipeline, workflow, context boundary và phục hồi lỗi |
+| `utask_infra` | `gpt-6.1-sol` | `medium` | Cấu hình hạ tầng, CI và kiểm tra triển khai |
+| `utask_reviewer` | `gpt-6.1-sol` | `high` | Review có rủi ro hoặc thay đổi qua nhiều lớp |
 
-Đây là lựa chọn theo độ khó, không yêu cầu mỗi vai trò dùng một
+Đây là lựa chọn của project theo độ khó, không yêu cầu mỗi vai trò dùng một
 model không trùng nhau. Theo yêu cầu của người dùng, không chọn hoặc spawn
 model Astra, kể cả khi nâng model hay xử lý model không khả dụng. Cấu hình
 hiện chỉ dùng Sol và Luna.
@@ -105,7 +111,7 @@ thể tăng tổng token vì mỗi agent có model/tool work riêng. Chạy song
 giảm thời gian khi task độc lập; tránh đọc/điều tra/kiểm thử lặp không cần thiết.
 Chỉ nâng reasoning khi độ khó hoặc kết quả kiểm tra yêu cầu; không dùng Max/
 Ultra mặc định để tìm cách tiết kiệm token. Xem
-[hướng dẫn subagent](https://developers.openai.com/codex/subagents).
+[hướng dẫn subagent](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 Mức tiết kiệm phải đo trên task tương đương bằng token/usage của cả nhóm và
 thời gian hoàn tất, đồng thời giữ chất lượng và kết quả kiểm thử. Repo chưa có
@@ -124,11 +130,10 @@ benchmark chứng minh phần trăm tiết kiệm.
 4. Agent triển khai chạy impact trước khi sửa, bổ sung unit test và chạy kiểm
    tra theo [quy tắc repo](../../AGENTS.md). Subagent báo nhu cầu ngoài phạm vi
    về agent chính, không tự mở rộng task. Các phần triển khai độc lập chạy
-   song song, tối đa hai subagent. Không khởi động bước phụ thuộc trước khi có
+   song song, tối đa ba subagent. Không khởi động bước phụ thuộc trước khi có
    kết quả/contract đã chốt; không chạy nhiều bộ test trên cùng database ghi.
-5. Sau khi nhận đủ kết quả, agent chính đọc diff, xử lý khác biệt và chỉ giao
-   reviewer khi có rủi ro đáng kể hoặc cần review độc lập. Chạy kiểm tra phù hợp
-   cho thay đổi kết hợp; chạy
+5. Sau khi nhận đủ kết quả, agent chính đọc diff, xử lý khác biệt và giao reviewer
+   kiểm tra kết quả ổn định. Chạy kiểm tra phù hợp cho thay đổi kết hợp; chạy
    GitNexus `detect_changes` trước khi commit nếu task có yêu cầu commit.
 
 Subagent trả báo cáo tiếng Việt gồm file đã sửa hoặc bằng chứng đã đọc, kết
@@ -140,12 +145,10 @@ Agent chính chịu trách nhiệm kết quả cuối. Subagent không tự comm
 Mở Codex tại root repo và giao task bằng tên vai trò, ví dụ:
 
 ```text
-Chỉ spawn subagent nếu có phần việc độc lập đáng để chạy song song. Dùng role
-phù hợp và model/reasoning đã cấu hình; tối đa hai subagent, không spawn lồng
-nhau. Dùng context mới và bàn giao mục tiêu, file, contract, tiêu chí nghiệm
-thu; không gửi lịch sử/source/log dài. Không sửa trùng file. Báo cáo tối đa
-250 từ, có file:dòng và kiểm tra thực tế. Agent chính tổng hợp, đọc diff và
-chạy kiểm tra tích hợp.
+Dùng model theo cấu hình từng vai trò. Mặc định context mới, chỉ truyền bản
+bàn giao ngắn và file cần đọc; kế thừa khi cần lịch sử quyết định. Chạy các
+phần độc lập song song, tối đa ba subagent, không sửa chồng file. Mỗi subagent
+trả tóm tắt kèm bằng chứng và kiểm tra; agent chính tổng hợp và xác minh.
 ```
 
 ```text
@@ -168,5 +171,5 @@ xong, dùng utask_reviewer review lỗi và các nhánh kiểm thử còn thiế
 
 Trong Codex CLI, dùng `/subagents` để xem hoặc chuyển giữa các thread.
 Subagent phù hợp khi các phần việc có thể chạy độc lập; task nhỏ không cần
-spawn thêm agent. Mỗi subagent dùng thêm token, nên giới hạn hai thread là mức
-tối đa của project và không yêu cầu mọi task dùng đủ hai vai trò.
+spawn thêm agent. Mỗi subagent dùng thêm token, nên giới hạn ba thread là mức
+mặc định của project và không yêu cầu mọi task dùng đủ ba vai trò.

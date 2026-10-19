@@ -2,6 +2,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.courses.permissions import actor_roles
 from apps.groups.queries.scope import feedback_scope, group_snapshot, teacher_groups
 from apps.groups.serializers.scope import (
     FeedbackRequestSerializer,
@@ -29,7 +30,8 @@ class GroupSnapshotView(APIView):
     )
     def get(self, request, group_id):
         return success_response(
-            group_snapshot(group_id, request.user), message="Đã xác minh danh sách thành viên nhóm."
+            group_snapshot(group_id, request.user, roles=actor_roles(request)),
+            message="Đã xác minh danh sách thành viên nhóm.",
         )
 
 
@@ -62,7 +64,8 @@ class TeacherGroupsView(APIView):
     )
     def get(self, request):
         return success_response(
-            teacher_groups(request.user), message="Đã xác minh các nhóm thuộc lớp đang phụ trách."
+            teacher_groups(request.user, roles=actor_roles(request)),
+            message="Đã xác minh các nhóm thuộc lớp đang phụ trách.",
         )
 
 
@@ -81,7 +84,12 @@ class FeedbackScopeView(APIView):
         serializer = FeedbackRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return success_response(
-            feedback_scope(group_id, request.user, serializer.validated_data["project_id"]),
+            feedback_scope(
+                group_id,
+                request.user,
+                serializer.validated_data["project_id"],
+                roles=actor_roles(request),
+            ),
             message="Đã xác minh quyền nhận xét và những người có thể nhắc tên.",
         )
 
@@ -95,6 +103,6 @@ class MentionScopeView(APIView):
     )
     def get(self, request, group_id):
         return success_response(
-            feedback_scope(group_id, request.user),
+            feedback_scope(group_id, request.user, roles=actor_roles(request)),
             message="Đã xác minh những người có thể nhắc tên.",
         )

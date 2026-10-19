@@ -29,7 +29,7 @@ def test_snapshot_checks_actor_scope_before_exposing_class_state(
     monkeypatch.setattr(scope, "lock_class", lambda *args: section)
     monkeypatch.setattr(scope, "membership_snapshot", lambda *args: {"source_version": 1})
 
-    def read(*args):
+    def read(*args, **kwargs):
         if not can_read:
             raise ClassroomError("RESOURCE_NOT_FOUND", "Không tìm thấy nhóm học tập.", 404)
 

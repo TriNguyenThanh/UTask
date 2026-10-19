@@ -41,9 +41,21 @@ def identity(monkeypatch, signing_key):
         "active": True,
         "keys": [json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(signing_key.public_key()))],
         "calls": [],
+        "roles": {},
     }
 
     def get(url, **kwargs):
+        if url.endswith("/users/me"):
+            claims = jwt.decode(
+                kwargs["headers"]["Authorization"].split()[1],
+                options={"verify_signature": False},
+            )
+            return Reply(
+                {
+                    "success": True,
+                    "data": {"id": claims["sub"], "roles": state["roles"].get(claims["sub"], [])},
+                }
+            )
         assert url.endswith("/.well-known/jwks.json")
         assert kwargs["timeout"] == settings.BACKEND_HTTP_TIMEOUT
         return Reply({"keys": state["keys"]})

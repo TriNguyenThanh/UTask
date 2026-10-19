@@ -83,6 +83,10 @@ class ClassStateView(APIView):
 class ClassGroupingLockView(APIView):
     @extend_schema(
         request=VersionSerializer,
+        description=(
+            "Teacher có global role TEACHER và phân công ACTIVE, hoặc Admin, được chốt nhóm; "
+            "PRIMARY và CO_TEACHER có quyền ngang nhau."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("ClassGroupingLockViewResponse", ClassSerializer),

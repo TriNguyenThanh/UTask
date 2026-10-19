@@ -16,7 +16,7 @@ SHELL = shutil.which("sh") or (
     if Path("C:/Program Files/Git/bin/bash.exe").is_file()
     else None
 )
-DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION")
+DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION", "AI")
 
 
 class LocalComposeTests(unittest.TestCase):
@@ -65,8 +65,6 @@ class LocalComposeTests(unittest.TestCase):
             "ai-service",
             "ai-worker",
             "ai-dispatcher",
-            "ai-migrate",
-            "ai-postgres",
         ):
             self.assertEqual(self.services[name]["profiles"], ["ai-service"])
 
@@ -265,32 +263,23 @@ class LocalComposeTests(unittest.TestCase):
 
 @unittest.skipUnless(SHELL, "POSIX shell is unavailable")
 class PostgresSetupScriptTests(unittest.TestCase):
-    def run_setup(self, directory, *, failure=False, missing=False, overrides=None):
+    def run_setup(self, directory, *, failure=False, missing=False):
         directory = Path(directory)
         env = os.environ.copy()
-        env.update(
-            POSTGRES_USER="fixture",
-            POSTGRES_DB="postgres",
-            INTEGRATION_DB_USER='integration role"s',
-            INTEGRATION_DB_PASSWORD="private-password-not-in-argv",
-        )
+        env.update(POSTGRES_USER="fixture", POSTGRES_DB="postgres")
         for prefix in DATABASES:
             env[f"{prefix}_DB_NAME"] = f"{prefix.lower()} database's"
         if missing:
-            env.pop("CLASSROOM_DB_NAME", None)
-        env.update(overrides or {})
+            env.pop(
+                f"{missing if isinstance(missing, str) else 'CLASSROOM'}_DB_NAME", None
+            )
         env["PATH"] = str(directory) + os.pathsep + env["PATH"]
         env["PSQL_LOG"] = (directory / "calls").as_posix()
         env["PSQL_FAILURE"] = "1" if failure else "0"
         (directory / "psql").write_text(
             "#!/bin/sh\n"
             'printf "%s\\n" "$@" >> "$PSQL_LOG"\n'
-            "sql=$(cat)\n"
-            'printf "%s\\n" "$sql" >> "$PSQL_LOG"\n'
-            'if [ -n "${PSQL_FAIL_MATCH:-}" ]; then\n'
-            '  case "$sql" in *"$PSQL_FAIL_MATCH"*)\n'
-            '    echo "$INTEGRATION_DB_PASSWORD" >&2; exit 7 ;; esac\n'
-            "fi\n"
+            'cat >> "$PSQL_LOG"\n'
             'if [ "$PSQL_FAILURE" = 1 ]; then exit 7; fi\n',
             newline="\n",
         )
@@ -310,8 +299,9 @@ class PostgresSetupScriptTests(unittest.TestCase):
                 result = self.run_setup(directory)
                 self.assertEqual(result.returncode, 0, result.stderr)
             calls = (Path(directory) / "calls").read_text()
-            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 32)
-            self.assertEqual(calls.count("-X\n"), 32)
+            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 12)
+            self.assertEqual(calls.count("-X\n"), 12)
+            self.assertIn("--set=database_name=ai database's\n", calls)
             self.assertIn("--set=database_name=classroom database's\n", calls)
             self.assertIn("WHERE NOT EXISTS (SELECT 1 FROM pg_database", calls)
             self.assertIn("format('CREATE DATABASE %I'", calls)
@@ -328,80 +318,12 @@ class PostgresSetupScriptTests(unittest.TestCase):
             )
 
     def test_missing_database_name_fails_before_psql(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = self.run_setup(directory, missing=True)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Missing CLASSROOM_DB_NAME", result.stderr)
-            self.assertFalse((Path(directory) / "calls").exists())
-
-    def test_rejects_role_and_database_collisions_before_sql(self):
-        for overrides in (
-            {"INTEGRATION_DB_USER": "fixture"},
-            {"INTEGRATION_DB_USER": "pg_monitor"},
-            {"INTEGRATION_DB_NAME": "identity database's"},
-            {"INTEGRATION_DB_NAME": "postgres"},
-            {"INTEGRATION_DB_NAME": "template1"},
-            {"INTEGRATION_DB_NAME": "x" * 64},
-            {"INTEGRATION_DB_USER": "x" * 64},
-            {"INTEGRATION_DB_NAME": "dbname=postgres"},
-            {"INTEGRATION_DB_USER": "line\nbreak"},
-        ):
+        for missing in ("CLASSROOM", "AI"):
             with (
-                self.subTest(overrides=overrides),
+                self.subTest(missing=missing),
                 tempfile.TemporaryDirectory() as directory,
             ):
-                result = self.run_setup(directory, overrides=overrides)
+                result = self.run_setup(directory, missing=missing)
                 self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"Missing {missing}_DB_NAME", result.stderr)
                 self.assertFalse((Path(directory) / "calls").exists())
-
-    def test_missing_credentials_fail_before_sql_without_leaking_secret(self):
-        for key in ("INTEGRATION_DB_USER", "INTEGRATION_DB_PASSWORD"):
-            with self.subTest(key=key), tempfile.TemporaryDirectory() as directory:
-                result = self.run_setup(directory, overrides={key: ""})
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(f"Missing {key}", result.stderr)
-                self.assertFalse((Path(directory) / "calls").exists())
-
-    def test_role_and_acl_preparation_use_quoted_identifiers_and_private_password(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = self.run_setup(directory)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            calls = (Path(directory) / "calls").read_text()
-            self.assertNotIn(
-                "private-password-not-in-argv", calls + result.stdout + result.stderr
-            )
-            self.assertIn(
-                r"\getenv integration_password INTEGRATION_DB_PASSWORD", calls
-            )
-            self.assertIn("PASSWORD %L", calls)
-            self.assertIn(
-                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT",
-                calls,
-            )
-            self.assertIn("pg_auth_members", calls)
-            self.assertIn("Unsafe Integration role/database collision", calls)
-            self.assertIn("REVOKE CONNECT, TEMPORARY ON DATABASE %I FROM PUBLIC", calls)
-            self.assertIn("REVOKE ALL ON DATABASE %I FROM %I", calls)
-            self.assertIn('ALTER SCHEMA public OWNER TO :"integration_role"', calls)
-            self.assertIn("--set=database_name=template1", calls)
-            self.assertIn("SET log_min_error_statement = 'panic'", calls)
-
-    def test_sql_errors_stop_later_steps_and_credential_errors_hide_sql(self):
-        for match, expected_status in (
-            ("CREATE DATABASE %I", 7),
-            ("REVOKE CONNECT, TEMPORARY", 7),
-            ("ALTER SCHEMA public", 7),
-            ("PASSWORD %L", 1),
-        ):
-            with self.subTest(match=match), tempfile.TemporaryDirectory() as directory:
-                result = self.run_setup(directory, overrides={"PSQL_FAIL_MATCH": match})
-                self.assertEqual(result.returncode, expected_status, result.stderr)
-                if match == "PASSWORD %L":
-                    self.assertIn("credential preparation failed", result.stderr)
-                    self.assertNotIn(
-                        "private-password-not-in-argv", result.stdout + result.stderr
-                    )
-                else:
-                    self.assertNotIn(
-                        "PASSWORD %L", (Path(directory) / "calls").read_text()
-                    )

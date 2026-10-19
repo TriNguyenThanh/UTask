@@ -378,6 +378,9 @@ paths:
   /classes/{class_id}/adjust-member/:
     post:
       operationId: classes_adjust_member_create
+      description: Teacher đang phụ trách hoặc Admin phân/chuyển/loại sinh viên khỏi
+        nhóm; lớp mở, có lý do, giữ sĩ số và người kế nhiệm trưởng nhóm, kể cả sau
+        khi chốt nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -539,6 +542,9 @@ paths:
   /classes/{class_id}/enrollments/{enrollment_id}/exit/:
     post:
       operationId: classes_enrollments_exit_create
+      description: Sinh viên tự rời lớp theo điều kiện hiện tại; Teacher đang phụ
+        trách hoặc Admin được loại sinh viên. Trưởng nhóm phải có người kế nhiệm trước
+        khi kết thúc thành viên nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -786,6 +792,8 @@ paths:
   /classes/{class_id}/lock-grouping/:
     post:
       operationId: classes_lock_grouping_create
+      description: Teacher có global role TEACHER và phân công ACTIVE, hoặc Admin,
+        được chốt nhóm; PRIMARY và CO_TEACHER có quyền ngang nhau.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1328,6 +1336,7 @@ paths:
           description: ''
     post:
       operationId: courses_create
+      description: Giảng viên hoặc Quản trị viên hệ thống được tạo môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1402,6 +1411,8 @@ paths:
   /courses/{course_id}/:
     patch:
       operationId: courses_partial_update
+      description: Giảng viên được sửa môn học do mình tạo; Quản trị viên hệ thống
+        được sửa mọi môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1481,6 +1492,8 @@ paths:
   /courses/{course_id}/archive/:
     post:
       operationId: courses_archive_create
+      description: Giảng viên được ngừng dùng môn học do mình tạo; Quản trị viên hệ
+        thống được ngừng dùng mọi môn học.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1555,6 +1568,8 @@ paths:
   /groups/:
     get:
       operationId: groups_list
+      description: Sinh viên thấy nhóm trong lớp đang ghi danh; Teacher đang phụ trách
+        thấy nhóm trong lớp; Admin thấy mọi nhóm.
       parameters:
       - in: query
         name: cursor
@@ -1629,6 +1644,10 @@ paths:
           description: ''
     post:
       operationId: groups_create
+      description: Sinh viên đang ghi danh tự tạo nhóm. Teacher đang phụ trách hoặc
+        Admin tạo thay sinh viên bằng leader_id; người được chọn phải có tài khoản
+        STUDENT ACTIVE và ghi danh ACTIVE trong lớp. Mỗi sinh viên chỉ có một nhóm
+        hoạt động trong lớp; lớp phải mở và chưa chốt nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1703,6 +1722,8 @@ paths:
   /groups/{group_id}/:
     get:
       operationId: groups_retrieve
+      description: Thành viên đang hoạt động của đúng nhóm, Teacher đang phụ trách
+        hoặc Admin.
       parameters:
       - in: path
         name: group_id
@@ -1771,6 +1792,8 @@ paths:
           description: ''
     patch:
       operationId: groups_partial_update
+      description: Trưởng nhóm, Teacher đang phụ trách hoặc Admin; lớp mở, nhóm hoạt
+        động và đúng phiên bản.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2245,6 +2268,9 @@ paths:
   /groups/{group_id}/remove-member/:
     post:
       operationId: groups_remove_member_create
+      description: Trưởng nhóm, Teacher đang phụ trách hoặc Admin được loại thành
+        viên thường; lớp phải mở, kể cả sau khi chốt nhóm. Trưởng nhóm phải có người
+        kế nhiệm trước khi bị loại.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -3456,6 +3482,12 @@ components:
         name:
           type: string
           maxLength: 200
+        created_by_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
         archived_at:
           type:
           - string
@@ -3463,6 +3495,7 @@ components:
           format: date-time
       required:
       - code
+      - created_by_id
       - id
       - name
     CourseArchiveViewResponse:
@@ -3882,6 +3915,9 @@ components:
         name:
           type: string
           maxLength: 200
+        leader_id:
+          type: string
+          format: uuid
       required:
       - class_id
       - name

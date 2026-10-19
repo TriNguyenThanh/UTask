@@ -23,7 +23,10 @@ def class_detail(request, section):
 
 def class_teachers(request, section):
     require_read(request, section)
-    active_only = not (is_teacher(request.user, section) or "SYSTEM_ADMIN" in actor_roles(request))
+    active_only = not (
+        is_teacher(request.user, section, roles=actor_roles(request))
+        or "SYSTEM_ADMIN" in actor_roles(request)
+    )
     status = list_status(request.query_params, {"ACTIVE", "LEFT"})
     qs = section.teachers.all()
     if active_only:
