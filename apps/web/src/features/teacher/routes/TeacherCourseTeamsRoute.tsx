@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TeamAdjustDialog } from "@/features/teacher/components/TeamAdjustDialog";
 import {
+  NoData,
   PersonAvatar,
   ProgressMeter,
   StatCard,
@@ -260,17 +261,18 @@ function TeamsPanel({ courseId }: Readonly<{ courseId: string }>) {
 
 export function Component() {
   const course = useTeacherCourseContext();
-  const grouped = course.studentCount - course.studentsWithoutTeam;
+  const without = course.studentsWithoutTeam;
+  const grouped = without === null ? null : course.studentCount - without;
 
   return (
     <div className="space-y-6">
       <section aria-label="Chỉ số nhóm" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Tổng số sinh viên" value={course.studentCount} />
-        <StatCard label="Đã có nhóm" value={grouped} />
+        <StatCard label="Đã có nhóm" value={grouped ?? <NoData />} />
         <StatCard
           label="Chưa có nhóm"
-          value={course.studentsWithoutTeam}
-          tone={course.studentsWithoutTeam > 0 ? "attention" : "default"}
+          value={without ?? <NoData />}
+          tone={without ? "attention" : "default"}
         />
         <StatCard
           label="Quy định sĩ số"

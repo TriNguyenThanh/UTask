@@ -2,6 +2,7 @@ import type { ApiClient } from "@/lib/api/client";
 import type {
   AccessCodeDto,
   ClassDto,
+  ClassStatus,
   CourseDto,
   EnrollmentDto,
   EnrollmentStatus,
@@ -11,6 +12,7 @@ import type {
   MemberStatus,
   ProjectLinkDto,
   TeacherDto,
+  TeacherRole,
   TeacherStatus,
 } from "@/lib/api/classroom/dto";
 import { collectAllPages, MAX_PAGE_SIZE, type ListMeta } from "@/lib/api/pagination";
@@ -189,4 +191,138 @@ export function removeMember(
     { version: input.version, reason: input.reason, user_id: input.userId },
     input.idempotencyKey,
   );
+}
+
+/** Tổng số bản ghi qua `meta.pagination.total_count`, chỉ tải một phần tử. */
+async function countOf(client: ApiClient, path: string, status: string): Promise<number> {
+  const { meta } = await client.requestEnvelope<unknown[], ListMeta>(
+    `${ROOT}${path}?page_size=1&status=${status}`,
+  );
+  return meta?.pagination.total_count ?? 0;
+}
+
+/** Chỉ giảng viên của lớp hoặc admin đếm được ghi danh. */
+export function countActiveEnrollments(client: ApiClient, classId: string) {
+  return countOf(client, `/classes/${encodeURIComponent(classId)}/enrollments/`, "ACTIVE");
+}
+
+export function countActiveGroups(client: ApiClient, classId: string) {
+  return countOf(client, `/classes/${encodeURIComponent(classId)}/groups/`, "ACTIVE");
+}
+
+export async function createCourse(client: ApiClient, input: { code: string; name: string } & CommandOptions) {
+  const { data } = await client.requestEnvelope<CourseDto>(`${ROOT}/courses/`, {
+    method: "POST",
+    body: { code: input.code, name: input.name },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+export interface ClassFields {
+  name: string;
+  term: string;
+  startsOn: string;
+  endsOn: string;
+  groupMinSize: number;
+  groupMaxSize: number;
+}
+
+export async function createClass(
+  client: ApiClient,
+  input: ClassFields & { courseId: string; code: string } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<ClassDto>(`${ROOT}/classes/`, {
+    method: "POST",
+    body: {
+      course_id: input.courseId,
+      code: input.code,
+      name: input.name,
+      term: input.term,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      group_min_size: input.groupMinSize,
+      group_max_size: input.groupMaxSize,
+    },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+/** Sửa lớp: chỉ gửi các trường có mặt; `version` là `Class.version` đang hiển thị. */
+export async function patchClass(
+  client: ApiClient,
+  classId: string,
+  input: Partial<ClassFields> & { version: number } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<ClassDto>(`${ROOT}/classes/${encodeURIComponent(classId)}/`, {
+    method: "PATCH",
+    body: {
+      version: input.version,
+      name: input.name,
+      term: input.term,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      group_min_size: input.groupMinSize,
+      group_max_size: input.groupMaxSize,
+    },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+export async function setClassState(
+  client: ApiClient,
+  classId: string,
+  input: { version: number; status: ClassStatus } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<ClassDto>(`${ROOT}/classes/${encodeURIComponent(classId)}/state/`, {
+    method: "POST",
+    body: { version: input.version, status: input.status },
+    idempotencyKey: input.idempotencyKey,
+  });
+  return data;
+}
+
+/** Cấp mã mới (hạn mặc định 7 ngày) hoặc tắt mã. Mã thô chỉ có trong kết quả cấp. */
+export async function issueClassJoinCode(
+  client: ApiClient,
+  classId: string,
+  input: { version: number; enabled: boolean } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<AccessCodeDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/join-code/`,
+    {
+      method: "POST",
+      body: { version: input.version, enabled: input.enabled },
+      idempotencyKey: input.idempotencyKey,
+    },
+  );
+  return data;
+}
+
+/** Chốt giai đoạn lập nhóm; không có API mở lại. */
+export async function lockGrouping(client: ApiClient, classId: string, input: { version: number } & CommandOptions) {
+  const { data } = await client.requestEnvelope<ClassDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/lock-grouping/`,
+    { method: "POST", body: { version: input.version }, idempotencyKey: input.idempotencyKey },
+  );
+  return data;
+}
+
+/** Phân công hoặc cho nghỉ giảng viên (`status: "LEFT"`). Trả về lớp với `version` mới. */
+export async function assignTeacher(
+  client: ApiClient,
+  classId: string,
+  input: { version: number; userId: string; role: TeacherRole; status: TeacherStatus } & CommandOptions,
+) {
+  const { data } = await client.requestEnvelope<ClassDto>(
+    `${ROOT}/classes/${encodeURIComponent(classId)}/teachers/assign/`,
+    {
+      method: "POST",
+      body: { version: input.version, user_id: input.userId, role: input.role, status: input.status },
+      idempotencyKey: input.idempotencyKey,
+    },
+  );
+  return data;
 }

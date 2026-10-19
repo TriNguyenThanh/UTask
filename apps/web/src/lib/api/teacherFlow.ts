@@ -33,18 +33,38 @@ export interface TeacherCourseSummary {
   name: string;
   term: string;
   studentCount: number;
-  studentsWithoutTeam: number;
+  /** Null when the source cannot tell (real Classroom list: needs every group's members). */
+  studentsWithoutTeam: number | null;
   teamCount: number;
-  teamsWithoutProject: number;
-  /** Teams with at least one rule-based signal (see TeacherSignal). */
-  teamsWithSignals: number;
+  /** Null when no source knows (project data belongs to Work). */
+  teamsWithoutProject: number | null;
+  /** Teams with at least one rule-based signal (see TeacherSignal). Null when no source computes signals. */
+  teamsWithSignals: number | null;
   /** Summed over the class's teams; null when no issue in the class has a deadline. */
   overdue: (TeacherOverdue & { asOf: string }) | null;
   /** Null when no team has recorded activity. */
   lastActivity: TeacherActivity | null;
 }
 
+/**
+ * What only the real Classroom service has: the version every class command
+ * must echo, and the state those commands change. Absent in demo (MSW) data.
+ */
+export interface TeacherClassroomMeta {
+  version: number;
+  /** Class code (`Class.code`, unique per class). */
+  code: string;
+  status: "OPEN" | "CLOSED" | "ARCHIVED";
+  groupingPhase: "FORMING" | "LOCKED";
+  groupingLockedAt: string | null;
+  /** ISO 8601; the raw join code is never readable again, only when it expires. */
+  joinCodeExpiresAt: string | null;
+  startsOn: string;
+  endsOn: string;
+}
+
 export interface TeacherCourseDetail extends TeacherCourseSummary {
+  classroom?: TeacherClassroomMeta;
   instructors: { userId: string; name: string; isOwner: boolean }[];
   /** Null when the class has no join code. */
   joinCode: string | null;
@@ -87,6 +107,9 @@ export interface TeacherTeam {
   progress: TeacherTeamProgress | null;
   lastActivity: TeacherActivity | null;
 }
+
+/** A class from the real Classroom service: carries the version and state its commands need. */
+export type ClassroomCourseDetail = TeacherCourseDetail & { classroom: TeacherClassroomMeta };
 
 /**
  * A fact worth the teacher's attention, stated with its cause. Signals come

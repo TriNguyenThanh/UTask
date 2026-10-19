@@ -59,6 +59,20 @@ export function isCourseUnavailable(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 403 || error.status === 404);
 }
 
+/**
+ * Real Classroom mode: progress, signals, projects and activity come from Work,
+ * which this build does not read yet. Says so instead of showing empty data
+ * that would read as "no problems".
+ */
+export function WorkDataUnavailable({ title }: Readonly<{ title: string }>) {
+  return (
+    <EmptyState
+      title={`${title} chưa khả dụng`}
+      description="Mục này cần dữ liệu tiến độ và project từ Work Service, chưa được kết nối. Danh sách sinh viên và nhóm vẫn dùng dữ liệu thật từ Classroom."
+    />
+  );
+}
+
 export function CourseUnavailable() {
   return (
     <EmptyState
@@ -285,6 +299,9 @@ function CourseSignalSummary({ course }: Readonly<{ course: TeacherCourseSummary
   if (course.teamCount === 0) {
     return <p className="text-xs text-muted-foreground">Lớp chưa có nhóm nào để theo dõi.</p>;
   }
+  if (course.teamsWithSignals === null) {
+    return <p className="text-xs text-muted-foreground">Chưa có dữ liệu tín hiệu cho lớp này.</p>;
+  }
   if (course.teamsWithSignals > 0) {
     return (
       <Badge variant="outline" className="w-fit border-amber-300 bg-amber-50 text-amber-900">
@@ -333,7 +350,7 @@ export function CourseCard({ course }: Readonly<{ course: TeacherCourseSummary }
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Chưa có nhóm</dt>
-            <dd className="font-semibold">{course.studentsWithoutTeam}</dd>
+            <dd className="font-semibold">{course.studentsWithoutTeam ?? "—"}</dd>
           </div>
           <div>
             <dt className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -345,7 +362,7 @@ export function CourseCard({ course }: Readonly<{ course: TeacherCourseSummary }
             <dt className="flex items-center gap-1 text-xs text-muted-foreground">
               <FolderGit2 className="size-3.5" aria-hidden /> Nhóm chưa có project
             </dt>
-            <dd className="font-semibold">{course.teamsWithoutProject}</dd>
+            <dd className="font-semibold">{course.teamsWithoutProject ?? "—"}</dd>
           </div>
         </dl>
 
