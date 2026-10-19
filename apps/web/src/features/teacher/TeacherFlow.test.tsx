@@ -937,7 +937,7 @@ describe("Student Flow is unchanged for students", () => {
     setup("/my-work", studentTestSession);
     expect(await screen.findByText(/Team NEXUS · Leader/)).toBeInTheDocument();
     expect(screen.getByText(/Team DELI · Member/)).toBeInTheDocument();
-    expect(screen.getByText(/Yêu cầu tham gia Team PHOENIX/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Môn học" })).getByText("Chờ duyệt")).toBeInTheDocument();
   });
 
   it("shows the unteamed IT3090 formation view with the graph's classmates", async () => {
