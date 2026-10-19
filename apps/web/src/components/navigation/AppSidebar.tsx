@@ -4,6 +4,7 @@ import { NavLink, useParams } from "react-router-dom";
 import { SidebarNavItem } from "@/components/navigation/SidebarNavItem";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace } from "@/features/auth/utils";
+import { currentSemesterEnrollments } from "@/features/my-work/currentSemester";
 import { useMyWorkOverview } from "@/features/my-work/queries";
 import type { CourseEnrollment, TeamMembership } from "@/features/my-work/types";
 import { cn } from "@/lib/utils";
@@ -96,7 +97,7 @@ export function AppSidebar({
 }) {
   const { user } = useAuth();
   const { data: overview, isLoading } = useMyWorkOverview();
-  const enrollments = overview?.enrollments ?? [];
+  const enrollments = currentSemesterEnrollments(overview);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 short:gap-3 overflow-y-auto overflow-x-hidden px-3 py-3 short:py-2">
       <nav aria-label="Điều hướng chính" className="space-y-0.5">
