@@ -1,11 +1,17 @@
 import { CheckSquare2, LogOut, Menu } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  Outlet,
+  useLocation,
+  useMatches,
+  useNavigate,
+  type UIMatch,
+} from "react-router-dom";
 
 import { AppSidebar } from "@/components/navigation/AppSidebar";
 import { TeacherSidebar } from "@/components/navigation/TeacherSidebar";
-import { TeacherTopNavigation } from "@/components/navigation/TeacherTopNavigation";
-import { TopNavigation } from "@/components/navigation/TopNavigation";
+import { TopBar } from "@/components/navigation/TopBar";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -18,6 +24,15 @@ import {
 import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import { TeacherChromeContext } from "@/app/layouts/TeacherChromeContext";
+import { PageTitleContext } from "@/app/layouts/PageTitleContext";
+
+function titleFromMatches(matches: readonly UIMatch[]): string {
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const handle = matches[index].handle as { title?: string } | undefined;
+    if (handle?.title) return handle.title;
+  }
+  return "UTask";
+}
 
 function UserSummary({ onLogout }: Readonly<{ onLogout: () => void }>) {
   const { user } = useAuth();
@@ -83,6 +98,9 @@ export function AuthenticatedLayout() {
     (!isStudentAccount(auth.user) || instructorProjectView);
   const inTeacherSpace = (inTeacherArea && canUseTeacherSpace(auth.user)) || inInstructorProject;
   const sidebar = inTeacherSpace ? <TeacherSidebar /> : <AppSidebar />;
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  const matches = useMatches();
+  const title = pageTitle ?? titleFromMatches(matches);
 
   // Any navigation (including search-param deep links from task rows or
   // notifications) must close the mobile drawer so the page is visible.
@@ -118,21 +136,26 @@ export function AuthenticatedLayout() {
         </div>
       </aside>
 
-      <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
-        {inTeacherSpace ? (
-          <TeacherTopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
-        ) : (
-          <TopNavigation onOpenMobileNav={() => setMobileOpen(true)} />
-        )}
+      <div className="flex min-h-svh min-w-0 flex-col lg:min-h-0">
+        <TopBar
+          title={title}
+          inTeacherSpace={inTeacherSpace}
+          onOpenMobileNav={() => setMobileOpen(true)}
+        />
         <main
           ref={mainRef}
-          className="min-w-0 pb-16 short:pb-8 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+          className="min-w-0 flex-1 pb-8 short:pb-4 lg:min-h-0 lg:overflow-y-auto"
           id="main-content"
         >
           <TeacherChromeContext.Provider value={setInstructorProjectView}>
-            <Outlet />
+            <PageTitleContext.Provider value={setPageTitle}>
+              <Outlet />
+            </PageTitleContext.Provider>
           </TeacherChromeContext.Provider>
         </main>
+        <footer className="shrink-0 border-t bg-background px-4 py-2.5 text-center text-[11px] text-muted-foreground lg:px-8">
+          UTask Academic Portal • Quản lý đồ án &amp; Nghiên cứu khoa học sinh viên
+        </footer>
       </div>
 
       {/* Mobile drawer */}

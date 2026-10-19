@@ -9,6 +9,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -278,33 +279,14 @@ export default function ProjectsRoute() {
   return (
     <div className="page-container space-y-5 p-4 md:p-6">
       {/* Page title */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-          Dự án Đồ án Môn học
-        </h1>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground md:text-sm">
-          Không gian làm việc Jira Software của các đồ án môn học trong học kỳ.
-          Theo dõi tiến độ Sprint và tích hợp mã nguồn Git theo thời gian thực.
-        </p>
-      </div>
-
       {/* Current / archived tabs */}
-      <div
-        className="flex items-center gap-6 border-b"
-        role="tablist"
-        aria-label="Phạm vi thời gian"
-      >
+      <div className={segmentedTabsListClass} role="tablist" aria-label="Phạm vi thời gian">
         <button
           type="button"
           role="tab"
           aria-selected={tab === "current"}
           onClick={() => setTab("current")}
-          className={cn(
-            "flex items-center gap-2 border-b-2 pb-2.5 text-xs tracking-tight transition-colors",
-            tab === "current"
-              ? "border-primary font-bold text-primary"
-              : "border-transparent font-medium text-muted-foreground hover:text-foreground",
-          )}
+          className={segmentedTabClass(tab === "current")}
         >
           Kỳ hiện tại
           <Badge
@@ -320,12 +302,7 @@ export default function ProjectsRoute() {
           role="tab"
           aria-selected={tab === "archived"}
           onClick={() => setTab("archived")}
-          className={cn(
-            "flex items-center gap-2 border-b-2 pb-2.5 text-xs tracking-tight transition-colors",
-            tab === "archived"
-              ? "border-primary font-bold text-primary"
-              : "border-transparent font-medium text-muted-foreground hover:text-foreground",
-          )}
+          className={segmentedTabClass(tab === "archived")}
         >
           Đã lưu trữ
           <Badge

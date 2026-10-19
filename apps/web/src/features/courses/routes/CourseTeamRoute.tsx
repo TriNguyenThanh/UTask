@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  CheckCircle2,
   Clock,
   FileText,
   GitBranch,
@@ -977,10 +976,6 @@ export function Component() {
       ) : (
         <TeamHubView course={course} />
       )}
-      <footer className="flex items-center justify-center border-t pt-6 pb-6 text-xs text-muted-foreground">
-        <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden />
-        UTask Academic Portal • Quản lý đồ án &amp; Nghiên cứu khoa học sinh viên
-      </footer>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/feedback/ErrorState";
 import { ForbiddenPage } from "@/components/feedback/ForbiddenPage";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { useRequestTeacherChrome } from "@/app/layouts/TeacherChromeContext";
+import { usePageTitle } from "@/app/layouts/PageTitleContext";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -69,6 +70,7 @@ export default function ProjectWorkspaceLayout() {
   const workspaceQuery = useProjectWorkspace(projectId);
   const requestTeacherChrome = useRequestTeacherChrome();
   const instructorView = workspaceQuery.data?.viewer.kind === "course-instructor";
+  usePageTitle(projectModuleTitles[moduleFromPathname(pathname)]);
 
   useEffect(() => {
     if (!instructorView) return;
@@ -195,9 +197,7 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
       )}
       <div className="flex flex-wrap items-start justify-between gap-3 pt-2">
         <div>
-          <h1 className="text-lg font-bold tracking-tight">
-            {projectModuleTitles[activeModule]}
-          </h1>
+          <h1 className="sr-only">{projectModuleTitles[activeModule]}</h1>
           <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Môn: {workspace.courseCode}</span>
             <span aria-hidden>•</span>

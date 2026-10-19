@@ -4,6 +4,7 @@ import { NavLink, Outlet, useParams } from "react-router-dom";
 
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
+import { segmentedTabClass, segmentedTabsListClass } from "@/components/navigation/segmentedTabs";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { CopyJoinCodeButton } from "@/features/teacher/components/JoinCode";
@@ -97,20 +98,13 @@ export function Component() {
           ) : null}
         </div>
 
-        <nav aria-label="Các mục của lớp" className="mt-4 flex gap-6 overflow-x-auto">
+        <nav aria-label="Các mục của lớp" className={`${segmentedTabsListClass} mt-4 mb-3`}>
           {tabs.map((tab) => (
             <NavLink
               key={tab.label}
               to={tab.to}
               end={tab.end}
-              className={({ isActive }) =>
-                cn(
-                  "whitespace-nowrap border-b-2 pb-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:text-foreground",
-                  isActive
-                    ? "border-primary font-bold text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )
-              }
+              className={({ isActive }) => segmentedTabClass(isActive)}
             >
               {tab.label}
               {tab.count ? " " : null}

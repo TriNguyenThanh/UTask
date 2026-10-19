@@ -93,13 +93,6 @@ function PendingCard({
   );
 }
 
-function githubSyncMessageFor(isError: boolean, state: string | undefined): string {
-  if (isError) return "Không thể tải trạng thái đồng bộ GitHub";
-  if (state === "connected") return "Đồng bộ GitHub đang hoạt động";
-  if (state === "disconnected") return "Kết nối GitHub để đồng bộ hoạt động đồ án";
-  return "Đang tải trạng thái đồng bộ GitHub";
-}
-
 export function MyWorkPage() {
   const { user } = useAuth();
   const overviewQuery = useMyWorkOverview();
@@ -149,14 +142,13 @@ export function MyWorkPage() {
   );
 
   const firstName = user?.display_name.split(" ").at(-1) ?? "";
-  const githubSyncMessage = githubSyncMessageFor(githubQuery.isError, githubQuery.data?.sync.state);
 
   return (
     <div className="page-container space-y-8 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       <div className="space-y-4">
         <div className="flex flex-col justify-between gap-2 border-b pb-4 md:flex-row md:items-baseline">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Bàn làm việc của tôi</h1>
+            <h1 className="sr-only">Bàn làm việc của tôi</h1>
             <p className="mt-1 text-xs font-medium text-muted-foreground">
               {overview.semester} • Cập nhật lúc{" "}
               {new Date(overview.refreshedAt).toLocaleTimeString("vi-VN", {
@@ -204,12 +196,6 @@ export function MyWorkPage() {
         error={githubQuery.isError ? githubQuery.error : null}
         onRetry={() => void githubQuery.refetch()}
       />
-
-      <footer className="flex flex-col items-center justify-between gap-4 border-t pt-6 text-xs text-muted-foreground sm:flex-row">
-        <span>
-          {githubSyncMessage}
-        </span>
-      </footer>
     </div>
   );
 }
