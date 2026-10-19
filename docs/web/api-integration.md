@@ -42,7 +42,7 @@ VITE_API_BASE_URL=
 | 5 | Classroom phía sinh viên: danh sách lớp, chi tiết lớp/nhóm của tôi, tham gia lớp bằng mã | Một phần (xem giới hạn; chưa smoke trình duyệt) |
 | 6 | Classroom: sinh viên tạo nhóm, vào nhóm bằng mã, cấp/tắt mã mời, rời nhóm, chuyển Trưởng nhóm, loại thành viên | Đã triển khai ở mức form + request (chưa smoke trình duyệt) |
 | 7 | Classroom: giảng viên đọc lớp, tạo lớp, sửa lớp, trạng thái lớp, mã tham gia, chốt lập nhóm, thêm giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
-| 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Chưa triển khai |
+| 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Một phần (đã smoke API thật và trình duyệt; xem giới hạn) |
 | 9+ | Work, Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
@@ -209,8 +209,7 @@ Giao diện chỉ ẩn nút theo trạng thái; quyền do backend quyết đị
 Chưa làm trong Phase 7: sửa/lưu trữ môn học (`PATCH /courses/{id}/`,
 `POST /courses/{id}/archive/`) vì không có màn nào cần; cho giảng viên nghỉ lớp
 (`assign` với `status: LEFT`) và đổi giảng viên chính; chọn hạn của mã tham
-gia. Các màn Sinh viên và Nhóm còn nút thêm/nhập/điều chỉnh chỉ xem trước,
-làm ở Phase 8.
+gia. Các thao tác thêm/nhập/điều chỉnh sinh viên và nhóm làm ở Phase 8.
 
 Đã smoke: API thật trên staging (tạo môn, tạo lớp, sửa, xung đột phiên bản
 `VERSION_CONFLICT`, cấp mã, sinh viên vào lớp bằng mã, đếm `total_count`,
@@ -223,6 +222,46 @@ sát). Hai tài khoản giảng viên trên staging:
 (gán thêm role TEACHER ở Phase 7). Dữ liệu smoke là các lớp `SMK…`/`UI…` đã
 lưu trữ.
 
+## Giảng viên quản lý sinh viên, nhóm và lịch sử (Phase 8)
+
+Cũng chỉ có ở `VITE_REAL_SERVICES` chứa `classroom`; chế độ mock giữ nút xem
+trước bị vô hiệu như trước. Mỗi lệnh gửi `Idempotency-Key` sinh một lần cho mỗi
+ý định của người dùng, dùng lại khi thử lại cùng nội dung, không cập nhật lạc
+quan, và làm mới cache `classroom` + `teacher/<user>` khi thành công.
+
+| Thao tác | API | Ghi chú |
+|---|---|---|
+| Thêm một sinh viên | `POST /classes/{id}/students/ {students:[{row_number, email?, student_id?, first_name?, last_name?}]}` | Hộp "Thêm sinh viên" gửi một dòng; kết quả từng dòng hiện ngay trong hộp. Email chưa có tài khoản sẽ được tạo tài khoản chờ kích hoạt (email kích hoạt do Identity gửi, B3) |
+| Nhập danh sách | cùng API, mỗi lô tối đa 100 dòng | Chỉ gửi dòng không có lỗi định dạng; dòng trùng trong file vẫn gửi để backend đánh dấu `DUPLICATE_IN_LIST`. Các lô gửi tuần tự, mỗi lô một khóa idempotency tạo từ đầu lượt; lô lỗi dừng cả lượt, "Thử lại" chỉ gửi lại các lô chưa xong với đúng khóa cũ. Tóm tắt cộng gộp các lô, mỗi dòng có nhãn tiếng Việt theo `reason` |
+| Loại sinh viên khỏi lớp | `POST /classes/{id}/enrollments/{enrollmentId}/exit/ {reason}` | Hộp lý do 3–500 ký tự; cảnh báo nếu sinh viên đang là Leader (server từ chối nếu chưa chỉ định Leader mới, B11) |
+| Chuyển/xếp/bỏ khỏi nhóm | `POST /classes/{id}/adjust-member/ {user_id, target_group_id \| null, successor_user_id?, reason}` | Lý do bắt buộc. Leader rời nhóm phải chọn người kế nhiệm trong nhóm đó. `target_group_id: null` là bỏ khỏi nhóm |
+| Chỉ định Leader | `POST /groups/{id}/transfer-leader/ {version, user_id, reason}` | `version` = `Group.source_version` của nhóm; Leader cũ thành thành viên thường |
+| Tạo nhóm cho sinh viên | `POST /groups/ {class_id, name, leader_id}` | Giảng viên chọn một sinh viên chưa có nhóm làm Leader đầu tiên; không cần lý do |
+| Lịch sử lớp | `GET /classes/{id}/activities/?page_size=50` | Thẻ "Lịch sử lớp" ở Tổng quan. Chỉ giảng viên của lớp hoặc admin đọc được |
+| Lịch sử nhóm, chi tiết nhóm | `GET /groups/{id}/activities/`, dữ liệu nhóm đã tải | Trang nhóm hiện thành viên và lịch sử; project/tiến độ nói rõ là chưa có dữ liệu (cần Work) |
+
+Lịch sử hiện nhãn tiếng Việt cho các `verb` đã biết (`class.*`, `enrollment.*`,
+`group.*`, `group.member.*`); `verb` lạ hiện nguyên mã để không che sự kiện.
+Tên người làm tra bằng `POST /users/batch`; người không tra được hiện "Không rõ".
+
+Đã smoke API thật trên staging (lớp tạm đã lưu trữ): nhập 3 tài khoản có sẵn
+(`EXISTING`), email giảng viên (`FLAGGED_ROLE_CONFLICT`), dòng chỉ MSSV
+(`STUDENT_ID_NOT_FOUND`), dòng trùng (`DUPLICATE_IN_LIST`), nhập lại cùng người
+(`ALREADY_ENROLLED`), 101 dòng bị từ chối `VALIDATION_ERROR`, tạo nhóm với
+`leader_id`, xếp thành viên, chuyển Leader có người kế nhiệm, Leader duy nhất bị
+`LEADER_SUCCESSOR_REQUIRED` (B11), loại sinh viên, lịch sử mới nhất trước,
+`page_size=50` được tôn trọng, sinh viên đọc lịch sử lớp bị 403, người đã rời
+nhóm đọc lịch sử nhóm bị 404. Đã smoke trình duyệt Chromium (đăng nhập giảng
+viên, danh sách sinh viên, hộp loại Leader bị server từ chối, thêm một sinh
+viên đã bị loại, nhập file có 2 dòng với tóm tắt và nhãn lý do, hộp điều chỉnh
+nhóm, trang nhóm và thẻ lịch sử). **Chưa smoke trình duyệt** cho di chuyển thật
+một thành viên, chỉ định Leader, tạo nhóm và nhập quá 100 dòng (các luồng này có
+test giao diện với MSW và đã kiểm tra API thật ở trên).
+
+Chưa làm trong Phase 8: duyệt yêu cầu gia nhập chờ (B6), phân trang lịch sử
+quá 50 dòng, nút "Bỏ khỏi nhóm" riêng ngoài hộp điều chỉnh, ghi danh lại sinh
+viên đã bị loại (B12).
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -230,7 +269,7 @@ lưu trữ.
 | B1 | Chưa có tài khoản TEACHER sẵn trên staging; Phase 7 phải gán role qua API Admin cho hai tài khoản sinh viên. Cần tài khoản giảng viên cố định và quy trình cấp role |
 | B2 | Endpoint CSRF sạch và `CSRF_TRUSTED_ORIGINS`/`SECURE_PROXY_SSL_HEADER`; nếu không, refresh từ origin production có `Origin` sẽ bị 403 |
 | B3 | Xác nhận gửi email và định dạng link kích hoạt/đặt lại mật khẩu, `IDENTITY_FRONTEND_URL` |
-| B4 | Schema Classroom: khai báo enum trong OpenAPI; khóa của `profile` (`display_name, email, student_id, avatar_url`); khóa `students[]`/`results[]` khi import; cấu trúc `Activity.changes` |
+| B4 | Schema Classroom: khai báo enum trong OpenAPI; khóa của `profile` (`display_name, email, student_id, avatar_url`); cấu trúc `Activity.changes` (khóa `students[]`/`results[]` của import đã xác định từ mã nguồn và đã kiểm trên staging ở Phase 8, nhưng chưa có trong OpenAPI); khóa lạ trong một dòng import bị đánh dấu lỗi ở dòng đó (`VALIDATION_ERROR`) chứ không từ chối cả yêu cầu |
 | B5 | Thêm vào API: `Group.member_count`, `Group.leader_id`, `Class.enrolled_count`, `Class.grouped_count`, `Class.primary_teacher_id`, course `{id, code, name}` nhúng trong Class, và "nhóm của tôi" của lớp. Hiện sinh viên không biết số thành viên/trưởng nhóm của nhóm khác và phải dò từng nhóm; giảng viên phải tải thành viên của từng nhóm để biết sinh viên chưa có nhóm |
 | B6 | Tính năng UI chưa có API: đề tài, yêu cầu gia nhập chờ duyệt, hạn đăng ký nhóm, kỹ năng cần/trách nhiệm, giám sát của giảng viên (tín hiệu, quá hạn, hoạt động gần nhất, project của nhóm), tổng quan My Work, thông báo, GitHub |
 | B7 | Khoảng trống Work (xem kế hoạch Phase 9+ khi tới lượt) |
@@ -238,11 +277,14 @@ lưu trữ.
 | B9 | Tra cứu người dùng theo email (Phase 7 buộc phải nhập UUID để thêm giảng viên đồng phụ trách) |
 | Mới | Đăng nhập email chưa xác minh trả `VALIDATION_ERROR` "E-mail is not verified." thay vì `ACCOUNT_PENDING_ACTIVATION`; đăng ký mật khẩu nhận mọi tên miền trong khi OAuth sinh viên yêu cầu `.edu.vn` |
 | Mới | `PATCH /users/me` chỉ trả một phần hồ sơ; hành vi xoay/phát hiện tái dùng refresh token khi nhiều tab chưa xác minh |
+| B11 | Giảng viên không đưa được Trưởng nhóm duy nhất của một nhóm ra khỏi nhóm hoặc lớp: `adjust-member` và `enrollments/{id}/exit/` trả 409 `LEADER_SUCCESSOR_REQUIRED`, mà người kế nhiệm phải là thành viên cùng nhóm (nếu không có thì 404). Hiện phải xếp thêm một người vào nhóm trước. Cần cho phép giải thể/bỏ nhóm một người hoặc cho nhóm không có Leader khi nó chỉ còn một người |
+| B12 | Sinh viên đã rời hoặc bị loại khỏi lớp không ghi danh lại được bằng thêm/nhập danh sách (`ENROLLMENT_INACTIVE`); chưa có API khôi phục ghi danh. Giảng viên bấm "Loại khỏi lớp" nhầm thì không hoàn tác được trên giao diện |
+| B13 | Lịch sử lớp/nhóm chỉ lấy trang đầu (50 dòng mới nhất); chưa có cách lọc theo loại sự kiện hay người làm. `Activity.changes` (B4f) chưa có hợp đồng nên giao diện chỉ hiện việc gì, ai, lúc nào |
 
 ## Kiểm tra đã chạy
 
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
-sau Phase 7 (50 file / 731 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
-Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất, và ở Phase 7 cho
-luồng giảng viên (xem phần Phase 7). **Chưa smoke trên trình duyệt** cho Phase
+sau Phase 8 (52 file / 764 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
+Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất, và ở Phase 7–8 cho
+luồng giảng viên (xem hai phần đó). **Chưa smoke trên trình duyệt** cho Phase
 3–6 và cho refresh khi 401 hoặc hết hạn 15 phút.

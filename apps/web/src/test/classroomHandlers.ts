@@ -4,7 +4,15 @@
  */
 import { http, HttpResponse, type HttpHandler } from "msw";
 
-import type { ClassDto, CourseDto, EnrollmentDto, GroupDto, MemberDto, TeacherDto } from "@/lib/api/classroom/dto";
+import type {
+  ActivityDto,
+  ClassDto,
+  CourseDto,
+  EnrollmentDto,
+  GroupDto,
+  MemberDto,
+  TeacherDto,
+} from "@/lib/api/classroom/dto";
 import type { PublicUserDto } from "@/lib/api/identity/dto";
 
 export function buildClass(overrides: Partial<ClassDto> = {}): ClassDto {
@@ -89,6 +97,20 @@ export function buildTeacher(overrides: Partial<TeacherDto> = {}): TeacherDto {
   };
 }
 
+export function buildActivity(overrides: Partial<ActivityDto> = {}): ActivityDto {
+  return {
+    id: "act-1",
+    class_section_id: "class-1",
+    actor_user_id: "teacher-user-1",
+    verb: "class.created",
+    subject_type: "ClassSection",
+    subject_id: "class-1",
+    changes: {},
+    created_at: "2026-09-02T08:30:00Z",
+    ...overrides,
+  };
+}
+
 export interface ClassroomFixture {
   classes: ClassDto[];
   courses: CourseDto[];
@@ -98,6 +120,8 @@ export interface ClassroomFixture {
   /** Chỉ nhóm có trong bảng này trả được thành viên; nhóm khác trả 404 như thật. */
   members?: Record<string, MemberDto[]>;
   users?: PublicUserDto[];
+  /** Lịch sử theo mã lớp hoặc mã nhóm. */
+  activities?: Record<string, ActivityDto[]>;
 }
 
 export function envelope<T>(data: T, extra: { status?: number; hasNext?: boolean; nextCursor?: string | null } = {}) {
@@ -149,6 +173,10 @@ export function classroomHandlers(fixture: ClassroomFixture): HttpHandler[] {
       const members = fixture.members?.[String(params.groupId)];
       return members ? envelope(members) : envelopeError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy nhóm học tập.");
     }),
+    http.get("/api/classroom/classes/:classId/activities/", ({ params }) =>
+      envelope(fixture.activities?.[String(params.classId)] ?? [])),
+    http.get("/api/classroom/groups/:groupId/activities/", ({ params }) =>
+      envelope(fixture.activities?.[String(params.groupId)] ?? [])),
     http.post("/api/auth/users/batch", async ({ request }) => {
       const { user_ids: ids } = (await request.json()) as { user_ids: string[] };
       return envelope({ users: (fixture.users ?? []).filter((user) => ids.includes(user.id)) });

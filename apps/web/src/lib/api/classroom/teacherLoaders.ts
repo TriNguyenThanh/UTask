@@ -131,6 +131,7 @@ export function toTeacherStudents(roster: ClassRoster): TeacherStudent[] {
     team: teamOf.get(enrollment.user_id) ?? null,
     // Chưa có luồng xin gia nhập chờ duyệt trong API (B6).
     pendingTeam: null,
+    enrollmentId: enrollment.id,
   }));
 }
 
@@ -148,6 +149,7 @@ export function toTeacherTeams(roster: ClassRoster): TeacherTeam[] {
       leaders: members.filter((member) => member.role === "leader").map(({ userId, name }) => ({ userId, name })),
       members,
       memberCount: members.length,
+      version: group.source_version,
       maxMembers: roster.cls.group_max_size,
       // Project, tiến độ và hoạt động thuộc Work (B7).
       project: null,
