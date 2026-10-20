@@ -27,7 +27,7 @@ Hướng dẫn tích hợp chuẩn ở [docs/identity-service](../../identity-se
 - Code/test quyết định phần hiện hành; yêu cầu ngoài source phải ghi mục tiêu/chưa xác
   minh. Không dùng tham khảo dự án khác để thay implementation UTask.
 
-Mặc định có25 operations trên23 paths nghiệp vụ; OAuth/avatar thêm8 operations khi
+Mặc định có26 operations (gồm bootstrap CSRF); OAuth/avatar thêm8 operations khi
 flags bật. GET activate trả405, không thuộc contract. Health/OpenAPI/Swagger là routes
 hỗ trợ. Giữ mã UC-ID-01..27/SQ-ID-01..21 để link hiện hữu tiếp tục dùng; UC28/SQ22 là
 resend public, UC29/SQ23 là GitHub mapping nội bộ.
@@ -36,7 +36,7 @@ resend public, UC29/SQ23 là GitHub mapping nội bộ.
 
 | Nhóm | Use case | Sequence |
 | --- | --- | --- |
-| Register → activate → login | [UC01](usecase.md#uc-id-01), [UC12](usecase.md#uc-id-12), [UC02](usecase.md#uc-id-02) | [SQ01](sequence.md#sq-id-01), [SQ09](sequence.md#sq-id-09), [SQ02](sequence.md#sq-id-02) |
+| Register ACTIVE → login; import pending → activate | [UC01](usecase.md#uc-id-01), [UC12](usecase.md#uc-id-12), [UC02](usecase.md#uc-id-02) | [SQ01](sequence.md#sq-id-01), [SQ09](sequence.md#sq-id-09), [SQ02](sequence.md#sq-id-02) |
 | Refresh/logout/devices | [UC03](usecase.md#uc-id-03), [UC06](usecase.md#uc-id-06), [UC07](usecase.md#uc-id-07), [UC08](usecase.md#uc-id-08), [UC09](usecase.md#uc-id-09) | [SQ03](sequence.md#sq-id-03), [SQ05](sequence.md#sq-id-05), [SQ21](sequence.md#sq-id-21) |
 | Forgot/reset/change | [UC10](usecase.md#uc-id-10), [UC11](usecase.md#uc-id-11), [UC13](usecase.md#uc-id-13) | [SQ06](sequence.md#sq-id-06), [SQ07](sequence.md#sq-id-07), [SQ08](sequence.md#sq-id-08) |
 | JWKS/session-status | [UC04](usecase.md#uc-id-04), [UC05](usecase.md#uc-id-05) | [SQ20](sequence.md#sq-id-20), [SQ04](sequence.md#sq-id-04) |
@@ -48,11 +48,12 @@ resend public, UC29/SQ23 là GitHub mapping nội bộ.
 | GitHub mapping | [UC29](usecase.md#uc-id-29) | [SQ23](sequence.md#sq-id-23) |
 | Avatar | [UC19](usecase.md#uc-id-19) | [SQ16](sequence.md#sq-id-16) |
 | Classroom import — boundary mục tiêu | [UC22](usecase.md#uc-id-22) | [SQ10](sequence.md#sq-id-10) |
-| Outbox/handoff | Use cases ghi event | [SQ19](sequence.md#sq-id-19): chỉ ghi outbox đã có code |
+| Outbox/handoff | Use cases ghi event | [SQ19](sequence.md#sq-id-19): ghi outbox, publisher và Work consumer đã kiểm chứng local |
 
 ## Chính sách cần giữ khi tích hợp
 
-Register tạo pending; activate không cấp JWT, login riêng. Refresh là JWT SimpleJWT,
+Register tạo ACTIVE/email verified; import vẫn pending. Activate không cấp JWT,
+login riêng. Refresh là JWT SimpleJWT,
 cập nhật cùng session ID/family, hạn family7 ngày tuyệt đối. Replay còn hạn thu hồi
 family trước401. Password reset/change và mutation status/roles thu hồi credential liên
 quan; change password gồm cả thiết bị hiện tại. Consumer chỉ kiểm chữ ký không tự có
@@ -64,12 +65,14 @@ vẫn reserved. SYSTEM_ADMIN/Django metadata không là project/classroom permis
 
 Google account/link và token issuance có transaction riêng; unlink không có link vẫn
 200 và ghi audit/user.updated. JWKS một khóa không kid; chưa hỗ trợ overlap nhiều khóa.
-Publisher/ACK Kafka, mail delivery, consumer và Classroom enrollment cần triển khai/
-nghiệm thu riêng. Chỉ Integration gọi GitHub API; Identity không sở hữu repo/membership.
+Publisher/ACK Kafka và consumer hồ sơ Work đã có nghiệm thu local. Mail delivery,
+Google/GitHub và staging nằm ngoài kết quả này. Chỉ Integration gọi GitHub API;
+Identity không sở hữu repo/membership.
 
 ## Nguồn hình và tái sinh
 
-Source chuẩn là31 khối PlantUML trong Markdown:7 use-case maps,23 sequences,1 ERD.
+Source chuẩn là các khối PlantUML và Mermaid trong Markdown; SQ-ID-01/SQ-ID-19 dùng
+Mermaid để phản ánh luồng mới. Các sơ đồ khác giữ PlantUML và SVG tương ứng.
 SVG tại assets/ là output, không sửa riêng khỏi nguồn. Renderer PlantUML1.2025.10 với
 UTF-8; use case/ERD dùng Smetana để không cần Graphviz riêng.
 
