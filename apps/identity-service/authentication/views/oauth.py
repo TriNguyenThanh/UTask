@@ -25,7 +25,7 @@ class OAuthDisconnectView(SocialAccountDisconnectView):
             provider,
             lambda pk: super(OAuthDisconnectView, self).post(request, pk=pk),
         )
-        return Response({"detail": "Account unlinked."})
+        return Response({"detail": "Đã hủy liên kết tài khoản."})
 
 
 @extend_schema_view(
@@ -84,7 +84,9 @@ class OAuthStartView(APIView):
             else settings.IDENTITY_GITHUB_CALLBACK_URI
         )
         if set(request.data) != {"redirect_uri"} or request.data["redirect_uri"] != expected:
-            raise serializers.ValidationError({"redirect_uri": "Redirect URI is not allowed."})
+            raise serializers.ValidationError(
+                {"redirect_uri": "Địa chỉ quay lại sau đăng nhập không được chấp nhận."}
+            )
         url, cookie = OAuthAccountService.start_authorization(request, provider, expected)
         response = Response({"authorization_url": url, "expires_in": 600})
         response.set_cookie(
@@ -126,7 +128,9 @@ class GitHubLinkView(OAuthDisconnectView):
         if set(request.data) != {"code", "state", "redirect_uri"} or not isinstance(
             request.data["code"], str
         ):
-            raise serializers.ValidationError("Expected code, state and redirect_uri.")
+            raise serializers.ValidationError(
+                "Thiếu hoặc sai thông tin xác nhận đăng nhập. Vui lòng bắt đầu lại."
+            )
         proof = OAuthAccountService.link_github_account(request)
         return Response(
             {

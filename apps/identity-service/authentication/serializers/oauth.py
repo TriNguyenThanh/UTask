@@ -32,11 +32,13 @@ class GoogleLoginSerializer(StrictInputMixin, SocialLoginSerializer):
             result = super().validate(attrs)
         except (OAuth2Error, PermissionDenied) as exc:
             raise IdentityAPIError(
-                "OAUTH_AUTHENTICATION_FAILED", "Invalid provider identity."
+                "OAUTH_AUTHENTICATION_FAILED", "Không thể xác minh tài khoản đăng nhập bên ngoài."
             ) from exc
         except requests.RequestException as exc:
             raise IdentityAPIError(
-                "OAUTH_PROVIDER_UNAVAILABLE", "Provider unavailable.", status_code=503
+                "OAUTH_PROVIDER_UNAVAILABLE",
+                "Không thể kết nối để xác minh tài khoản đăng nhập bên ngoài.",
+                status_code=503,
             ) from exc
         OAuthAccountService.require_active_google_account(result["user"])
         # allauth uses a temporary Django login; REST credentials remain JWT only.

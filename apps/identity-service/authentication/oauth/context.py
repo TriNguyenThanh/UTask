@@ -38,7 +38,9 @@ def create_context(provider, redirect_uri, verifier, nonce, actor=None):
         client().set(context_key(state), json.dumps(record), ex=600, nx=True)
     except RedisError as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "OAuth context unavailable.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Không thể khởi tạo hoặc kiểm tra phiên đăng nhập bên ngoài.",
+            status_code=503,
         ) from exc
     return state, cookie
 
@@ -46,7 +48,10 @@ def create_context(provider, redirect_uri, verifier, nonce, actor=None):
 def consume_context(request, provider, *, actor=None):
     state = request.data.get("state")
     if not isinstance(state, str) or not state or len(state) > 128:
-        raise IdentityAPIError("OAUTH_STATE_INVALID", "Invalid OAuth context.")
+        raise IdentityAPIError(
+            "OAUTH_STATE_INVALID",
+            "Yêu cầu đăng nhập bên ngoài không hợp lệ hoặc đã hết hạn. Vui lòng bắt đầu lại.",
+        )
     key = context_key(state)
     try:
         with client().pipeline() as pipe:
@@ -61,14 +66,23 @@ def consume_context(request, provider, *, actor=None):
                 or record["actor"] != (str(actor) if actor else None)
                 or not secrets.compare_digest(record["cookie_hash"], cookie_hash)
             ):
-                raise IdentityAPIError("OAUTH_STATE_INVALID", "Invalid OAuth context.")
+                raise IdentityAPIError(
+                    "OAUTH_STATE_INVALID",
+                    "Yêu cầu đăng nhập bên ngoài không hợp lệ hoặc đã hết hạn. "
+                    "Vui lòng bắt đầu lại.",
+                )
             pipe.multi()
             pipe.delete(key)
             pipe.execute()
             return record
     except WatchError as exc:
-        raise IdentityAPIError("OAUTH_STATE_INVALID", "OAuth context already consumed.") from exc
+        raise IdentityAPIError(
+            "OAUTH_STATE_INVALID",
+            "Yêu cầu đăng nhập bên ngoài đã được sử dụng. Vui lòng bắt đầu lại.",
+        ) from exc
     except RedisError as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "OAuth context unavailable.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Không thể khởi tạo hoặc kiểm tra phiên đăng nhập bên ngoài.",
+            status_code=503,
         ) from exc
