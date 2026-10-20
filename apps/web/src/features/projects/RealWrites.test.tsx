@@ -194,6 +194,8 @@ describe("Issue panel edits", () => {
     setup("/projects/project-1/board?issue=NEXUS-1", { tasks: freshTasks() }, memberTestSession);
     await user.click(await screen.findByText("Chỉnh sửa issue", {}, { timeout: 5000 }));
     await screen.findByLabelText("Tiêu đề");
+    expect(screen.getByLabelText("Tiêu đề")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Tiêu chí nghiệm thu")).toHaveAttribute("readonly");
     expect(screen.queryByLabelText("Độ ưu tiên")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Epic")).not.toBeInTheDocument();
   });

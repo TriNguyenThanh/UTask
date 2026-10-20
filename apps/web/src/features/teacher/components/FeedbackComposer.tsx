@@ -10,7 +10,7 @@ import { draftKey, useDraft } from "@/features/teacher/lib/drafts";
 export const FEEDBACK_MAX_LENGTH = 2000;
 
 export const FEEDBACK_UNAVAILABLE =
-  "Gửi phản hồi chưa khả dụng: chưa có hợp đồng API bình luận/phản hồi. Nội dung bạn viết chỉ được giữ làm nháp trong tab này, chưa gửi cho ai và nhóm không nhận được thông báo.";
+  "Gửi phản hồi chưa khả dụng ở chế độ demo: chưa nối API bình luận của Work. Nội dung bạn viết chỉ được giữ làm nháp trong tab này, chưa gửi cho ai và nhóm không nhận được thông báo.";
 
 export function validateFeedback(text: string): string | null {
   const trimmed = text.trim();

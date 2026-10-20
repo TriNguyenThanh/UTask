@@ -93,6 +93,8 @@ export interface Issue {
   /** A flag on the card, not a column: a blocked card keeps its status. */
   blocked: boolean;
   blockedReason: string | null;
+  /** Nhãn của task (Work thật); demo không có nhãn nên để trống. */
+  labels?: { id: string; name: string; color: string }[];
 }
 
 export interface Sprint {
@@ -126,6 +128,8 @@ export interface ProjectWorkspace {
   issues: Issue[];
   /** Board columns in sequence order; built from WorkService states. */
   states: ProjectState[];
+  /** Một phần dữ liệu phụ (epic) không tải được; Board và Backlog vẫn dùng được. */
+  partial?: boolean;
 }
 
 export interface IssueComment {

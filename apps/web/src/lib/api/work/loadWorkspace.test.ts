@@ -1,3 +1,4 @@
+import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { createApiClient } from "@/lib/api/client";
@@ -38,6 +39,7 @@ describe("loadWorkspace", () => {
       }),
     );
     const workspace = await loadWorkspace(client, "me", shell);
+    expect(workspace.partial).toBeUndefined();
     expect(Object.fromEntries(workspace.issues.map((issue) => [issue.key, issue.sprintId]))).toEqual({
       "N-1": "s1",
       "N-2": "s2",
@@ -59,6 +61,17 @@ describe("loadWorkspace", () => {
     await loadWorkspace(client, "me", shell);
     expect(seen.some((url) => url.includes("sprint_id"))).toBe(false);
     server.events.removeAllListeners();
+  });
+
+  it("still loads the board when only the epic list fails", async () => {
+    server.use(
+      http.get("/api/work/projects/:projectId/epics/", () => HttpResponse.json({ error: { code: "INTERNAL_ERROR", message: "Lỗi" } }, { status: 500 })),
+      ...workHandlers({ projects: [], states: buildDefaultStates(), tasks: [buildTask({ id: "a", code: "N-1", epic_id: "e1" })] }),
+    );
+    const workspace = await loadWorkspace(client, "me", shell);
+    expect(workspace.issues.map((issue) => issue.key)).toEqual(["N-1"]);
+    expect(workspace.epics).toEqual([]);
+    expect(workspace.partial).toBe(true);
   });
 
   it("fails as a whole when a required list fails", async () => {

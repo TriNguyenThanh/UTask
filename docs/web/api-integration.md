@@ -302,8 +302,8 @@ smoke: 503 `CLASSROOM_UNAVAILABLE`, `partial`, dự án của lớp đã `ARCHIV
 nhiều dự án một nhóm, tạo dự án khi `CONCURRENT_MUTATION_IN_PROGRESS`.
 
 Chưa làm trong Phase 9: Board, Backlog, Sprint, Task, Comment, Dashboard,
-GitHub, AI (B14); sidebar và My Work vẫn chạy MSW (B20), nên ở chế độ thật
-`CourseEnrollment.projectId` không có người tiêu thụ; dự án smoke chỉ lưu trữ
+GitHub, AI (B14). Sidebar và My Work chạy thật từ Phase 15 (B20), nên
+`CourseEnrollment.projectId` giờ có người tiêu thụ; dự án smoke chỉ lưu trữ
 được vì Work không có API xóa (B18).
 
 ## Work Board và Backlog chỉ đọc (Phase 10)
@@ -337,7 +337,7 @@ Giới hạn đã biết:
 
 Trạng thái: **Một phần**. Mã: `lib/api/work/endpoints.tasks.ts` (`createTask`, `createSubtask`, `patchTask`, `transitionTask`, `blockTask`, `unblockTask`, `listTaskOrderInState`), hook `lib/query/workWriteHooks.ts`, `features/projects/lib/transitionNeighbours.ts`.
 
-- Quyền: Leader ghi mọi task; thành viên chỉ task được giao cho mình (và chỉ sửa title/mô tả/tiêu chí); giảng viên và dự án lưu trữ không có nút ghi.
+- Quyền: Leader ghi mọi task; thành viên chỉ task được giao cho mình và **chỉ sửa mô tả** (backend `require_member_fields(.., {"description_html"})`: gửi `title` hoặc `acceptance_criteria` bị 403 `LEADER_PERMISSION_REQUIRED`, nên hai ô đó chỉ đọc); giảng viên và dự án lưu trữ không có nút ghi. Backend chưa chặn thành viên thường tạo nhãn (`metadata.py`), UI chỉ cho Leader.
 - `Idempotency-Key` chỉ ở tạo issue và tạo nhiệm vụ con; PATCH, transition, block, unblock không gửi. Block/unblock là `PATCH`.
 - Đổi cột: server tính vị trí trên **cột đầy đủ** (gồm nhiệm vụ con và task ngoài sprint đang chạy), nên neighbor không lấy từ cột Board đang hiện. Client gọi `GET tasks?state_id=&fields=id,sort_order` rồi `planNeighbours` chọn hàng xóm liền kề; chuyển cột từ menu thì xếp cuối cột.
 - Cập nhật lạc quan, hoàn tác và tải lại khi lỗi. Thành công chỉ ghi `version` và `sort_order` thật, không tải lại workspace.
@@ -367,7 +367,8 @@ Giới hạn:
 
 - Không có giao diện đổi cha hoặc đổi `type` của task: backend không có URL cho `reparent_task` và `type` bất biến.
 - Danh sách "Đã lưu trữ/Đã xóa" là danh sách phẳng (mã, tiêu đề), không mở được panel.
-- Nhãn chưa hiện trên thẻ Board/Backlog và chưa lọc theo nhãn (workspace chưa chứa nhãn của từng task).
+- Nhãn hiện trên thẻ (tối đa 3, phần dư gộp "+n") lấy từ `expand=labels` của danh sách task; chưa lọc theo nhãn.
+- Epic lỗi không làm hỏng Board/Backlog: workspace đặt `partial` và hiện "Một phần dữ liệu chưa tải được (danh sách epic)."; states, tasks, sprints lỗi vẫn là lỗi cả trang.
 - Đích liên kết chỉ chọn trong issue đã tải ở Board/Backlog (không gồm nhiệm vụ con).
 - Kiểm tra: `tsc`, 74 file / 980 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật cho epic (cả lỗi ngày), nhãn, gán nhãn, liên kết, vòng chặn, trùng, lưu trữ/mở lại/xóa/khôi phục; giao diện Backlog tạo epic (lỗi ngày rồi thành công), xóa epic, mở hộp nhãn, tab "Đã lưu trữ". Chưa smoke giao diện: gán nhãn và liên kết trong panel, xóa/lưu trữ từ panel, khôi phục từ tab, thành viên không phải Leader.
 
@@ -378,7 +379,7 @@ Giới hạn:
 - Bắt đầu cần đủ hai ngày và chưa có sprint đang chạy (nút tắt kèm lý do nếu thiếu ngày). Kết thúc chọn sprint nháp đích hoặc trả issue chưa xong về Product Backlog.
 - Đổi sprint của issue dùng lại menu/kéo thả Backlog (`useIssueMover`). Backlog thật giờ ghi được. Đổi sprint là REMOVE rồi ADD, **không nguyên tử**; sprint đang chạy bắt buộc có lý do (`scope_change_reason`). Đổi sprint không đổi `version` của task.
 - Tiến độ và burndown (theo điểm ước lượng) lấy từ server cho sprint đang chạy; đường lý tưởng tự vẽ phía client. Tổng quan dự án ở trang Thông tin; `GET .../dashboard/` **không nhận query param** (có param → 400 trên staging).
-- Capacity sửa ngay trong bảng thành viên; chỉ Leader, dự án chưa lưu trữ.
+- Capacity sửa ngay trong bảng thành viên; chỉ Leader, dự án chưa lưu trữ. Bảng khối lượng có cột "Dùng capacity (ước lượng)" = điểm đã giao / capacity tuần, **tính phía client** (server không trả); "—" khi chưa đặt hoặc bằng 0. Đơn vị: capacity là giờ/tuần còn điểm là story point, nên chỉ để tham khảo.
 - Giới hạn: workspace bỏ sprint đã hoàn thành; Backlog không có issue thì ẩn cả sprint và thanh công cụ sprint; chưa có giao diện lưu trữ/xóa sprint; kiểm tra thành viên phải còn hoạt động mới gán capacity (422 `MEMBER_NOT_ACTIVE`).
 - Kiểm tra: `tsc`, 79 file / 1017 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật (tạo, bắt đầu thiếu ngày → 400 `INVALID_OPERATION`, thêm vào sprint đang chạy thiếu lý do → 422, có lý do → `is_scope_creep`, progress, burndown, dashboard, kết thúc có đích, capacity); giao diện tạo sprint và bắt đầu sprint (hiện tiến độ). Chưa smoke giao diện: menu đổi sprint, hộp kết thúc sprint, sửa capacity, thành viên không phải Leader (có test thành phần).
 

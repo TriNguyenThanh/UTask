@@ -291,6 +291,7 @@ function taskWriteHandlers(fixture: TaskFixture): HttpHandler[] {
   const notFound = () => envelopeError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy công việc.");
   const find = (id: unknown) => fixture.tasks?.find((task) => task.id === id);
   const stale = () => envelopeError(409, "VERSION_CONFLICT", "Dữ liệu đã được cập nhật bởi thao tác khác.");
+  const readOnly = () => envelopeError(400, "INVALID_OPERATION", "Tài nguyên đang ở chế độ chỉ đọc.");
   const nextCode = (tasks: TaskDto[]) => {
     const prefix = tasks[0]?.code.split("-")[0] ?? "NEXUS";
     const sequence = Math.max(0, ...tasks.map((task) => task.sequence_id)) + 1;
@@ -351,6 +352,7 @@ function taskWriteHandlers(fixture: TaskFixture): HttpHandler[] {
       if (fixture.writeError) return failure(fixture.writeError);
       const task = find(params.taskId);
       if (!task) return notFound();
+      if (task.archived_at !== null) return readOnly();
       const bad = unknownKeys(body, PATCHABLE_KEYS);
       if (bad.length > 0) return envelopeError(422, "VALIDATION_ERROR", `Trường không hợp lệ: ${bad.join(", ")}`);
       if (body.expected_version !== task.version) return stale();
@@ -364,6 +366,7 @@ function taskWriteHandlers(fixture: TaskFixture): HttpHandler[] {
       if (fixture.writeError) return failure(fixture.writeError);
       const task = find(params.taskId);
       if (!task) return notFound();
+      if (task.archived_at !== null) return readOnly();
       if (body.expected_version !== task.version) return stale();
       const target = fixture.states?.find((state) => state.id === body.target_state_id);
       if (!target) return envelopeError(422, "VALIDATION_ERROR", "Trạng thái đích không thuộc dự án hiện tại.");
@@ -386,6 +389,7 @@ function taskWriteHandlers(fixture: TaskFixture): HttpHandler[] {
       if (fixture.writeError) return failure(fixture.writeError);
       const task = find(params.taskId);
       if (!task) return notFound();
+      if (task.archived_at !== null) return readOnly();
       if (body.expected_version !== task.version) return stale();
       const group = fixture.states?.find((state) => state.id === task.state_id)?.group;
       if (group === "COMPLETED" || group === "CANCELLED") {
@@ -399,6 +403,7 @@ function taskWriteHandlers(fixture: TaskFixture): HttpHandler[] {
       if (fixture.writeError) return failure(fixture.writeError);
       const task = find(params.taskId);
       if (!task) return notFound();
+      if (task.archived_at !== null) return readOnly();
       if (body.expected_version !== task.version) return stale();
       Object.assign(task, { is_blocked: false, blocked_reason: null, version: task.version + 1 });
       return envelope(task);

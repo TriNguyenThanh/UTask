@@ -149,7 +149,7 @@ export async function loadWorkspace(
   const projectId = shell.project.id;
   const [states, epics, tasks, sprints] = await Promise.all([
     listStates(client, projectId),
-    listEpics(client, projectId),
+    listEpics(client, projectId).catch(() => null),
     listTasks(client, projectId),
     listSprints(client, projectId),
   ]);
@@ -164,5 +164,6 @@ export async function loadWorkspace(
     for (const taskId of taskIds) sprintByTask.set(taskId, sprintId);
   }
 
-  return buildWorkspace({ shell, userId, states, epics, tasks, sprints, sprintByTask });
+  const workspace = buildWorkspace({ shell, userId, states, epics: epics ?? [], tasks, sprints, sprintByTask });
+  return epics === null ? { ...workspace, partial: true } : workspace;
 }

@@ -91,6 +91,7 @@ export function toIssue(dto: TaskDto, context: IssueContext): Issue | null {
     version: dto.version,
     blocked: dto.is_blocked,
     blockedReason: dto.blocked_reason,
+    labels: (dto.labels ?? []).filter((label) => label.deleted_at === null).map(({ id, name, color }) => ({ id, name, color })),
   };
 }
 
