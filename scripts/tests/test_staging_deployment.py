@@ -355,7 +355,11 @@ class StagingDeploymentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
-            compose["services"].update(extra_runtime or {})
+            for name, overrides in (extra_runtime or {}).items():
+                compose["services"][name] = {
+                    **compose["services"].get(name, {}),
+                    **overrides,
+                }
             (root / "docker-compose.staging.yml").write_text(yaml.safe_dump(compose))
             (root / "apps").mkdir()
             for service in services:
@@ -495,7 +499,7 @@ class StagingDeploymentTests(unittest.TestCase):
         dispatcher = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
             "services"
         ]["ai-dispatcher"]
-        dispatcher.pop("healthcheck", None)
+        dispatcher["healthcheck"] = None
         with self.assertRaisesRegex(
             ValueError, "ai-dispatcher requires an enabled Compose healthcheck"
         ):
@@ -803,7 +807,10 @@ class StagingDeploymentTests(unittest.TestCase):
             self.validate(
                 ["identity-service"],
                 extra_runtime={
-                    "identity-service": {"healthcheck": {"test": ["CMD", "true"]}}
+                    "identity-service": {
+                        "healthcheck": {"test": ["CMD", "true"]},
+                        "x-deploy": {},
+                    }
                 },
             )
 

@@ -183,7 +183,7 @@ cùng giao dịch, nhưng riêng FK không buộc mọi user phải có profile.
 | user_global_roles | UUID id; FK user CASCADE, role RESTRICT, assigned_by_user nullable SET NULL; assigned_at. UNIQUE(user_id, role_id), index role_id. |
 | user_sessions | UUID id; FK user CASCADE; family UUID ổn định, refresh hash SHA-256 unique, refresh_jti nullable trỏ logic tới SimpleJWT. is_revoked/revoked_at/revoked_reason nhất quán; ip_address, user_agent, device_name, expires_at, created_at. UNIQUE family khi chưa revoked; expires_at > created_at; index user/is_revoked/expires_at và family. |
 | audit_logs | UUID id; actor_id/target_user_id nullable VARCHAR(100), action VARCHAR(60), ip_address, user_agent, details JSONB, created_at. Trigger cấm UPDATE/DELETE. Index thời gian, actor, target và action. |
-| outbox_events | UUID id/aggregate_id; event_type, event_version, data JSONB chứa event envelope, created_at, published_at, retry_count, last_error. Partial index created_at khi published_at NULL. Chỉ đánh dấu published sau Kafka ACK; publisher chưa nghiệm thu. |
+| outbox_events | UUID id/aggregate_id; event_type, event_version, data JSONB chứa event envelope, created_at, published_at, retry_count, last_error, next_attempt_at. Partial index created_at và đầu hàng (aggregate_id,created_at,id) khi published_at NULL theo migration0006. Chỉ đánh dấu published sau Kafka ACK; publisher đã chạy local với broker thật. |
 | idempotency_records | UUID id; actor user_id VARCHAR(100), endpoint_path, idempotency_key, payload_hash, response_status, response_body JSONB, created_at. UNIQUE(actor/path/key), index created_at; không lưu secret trong receipt. |
 
 MVP xóa mềm; email/username/MSSV vẫn được reserved. Admin restore không phục hồi phiên cũ.
@@ -224,6 +224,8 @@ xem xét trước vận hành.
 
 Reset dùng uid/token của generator, không token row/used_at; confirmation do allauth
 quản lý. User không có trạng thái LOCKED hoặc counter lockout tự viết. JWT một khóa
-RS256 không kid; chưa có key rotation overlap. Outbox chỉ được ghi, chưa có publisher/
-ACK/retention worker trong Identity. Provider/Kafka/email/consumer thật cần nghiệm thu
-riêng; quan hệ thư viện trong hình không chứng minh tích hợp E2E.
+RS256 không kid; chưa có key rotation overlap. Outbox có publisher command với ACK,
+retry và trường `next_attempt_at` theo migration0006; cleanup là lệnh thủ công.
+Publisher và Work consumer đã có kiểm chứng Kafka local, avatar đã chạy R2 thật.
+Google/GitHub, email và staging vẫn cần nghiệm thu riêng; quan hệ trong hình không
+chứng minh những phần đó đã hoạt động.

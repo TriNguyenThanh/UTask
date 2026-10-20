@@ -309,6 +309,7 @@ class OutboxEvent(models.Model):
     published_at = models.DateTimeField(null=True, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
     last_error = models.TextField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "outbox_events"
@@ -317,7 +318,12 @@ class OutboxEvent(models.Model):
                 fields=("created_at",),
                 condition=Q(published_at__isnull=True),
                 name="idx_identity_outbox_pending",
-            )
+            ),
+            models.Index(
+                fields=("aggregate_id", "created_at", "id"),
+                condition=Q(published_at__isnull=True),
+                name="idx_identity_outbox_heads",
+            ),
         ]
 
 

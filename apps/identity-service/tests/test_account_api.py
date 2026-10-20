@@ -13,6 +13,21 @@ from tests.helpers import create_user, login
 pytestmark = [pytest.mark.integration, pytest.mark.django_db, pytest.mark.postgres]
 
 
+@pytest.mark.parametrize("invalid_id", ["not-a-uuid", "", "00000000-0000-0000-0000-00000000000z"])
+def test_batch_invalid_uuid_has_vietnamese_issue_and_preserves_item_path(
+    authenticated_account, invalid_id
+):
+    user, client = authenticated_account()
+
+    response = client.post("/users/batch", {"user_ids": [str(user.pk), invalid_id]}, format="json")
+
+    assert response.status_code == 400
+    assert response.json()["error"] == {
+        "code": "VALIDATION_ERROR",
+        "details": [{"field": "user_ids.1", "issue": "Mã định danh không hợp lệ."}],
+    }
+
+
 def test_profile_update_trigger_event_and_noop(authenticated_account):
     user, client = authenticated_account()
     changes = {

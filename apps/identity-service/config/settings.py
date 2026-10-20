@@ -81,6 +81,7 @@ SOCIALACCOUNT_STORE_TOKENS = False
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
 
 MIDDLEWARE = [
+    "common.client_ip.TrustedProxyClientIPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -90,6 +91,12 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
+
+IDENTITY_TRUSTED_PROXY_CIDRS = tuple(
+    cidr.strip()
+    for cidr in os.environ.get("IDENTITY_TRUSTED_PROXY_CIDRS", "").split(",")
+    if cidr.strip()
+)
 
 ROOT_URLCONF = "config.urls"
 TEMPLATES: list[dict[str, object]] = [
@@ -123,7 +130,7 @@ DATABASES = {
     }
 }
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "vi"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
@@ -140,6 +147,7 @@ LOGGING = {
     },
     "loggers": {
         "identity.api": {"handlers": ["api_console"], "level": "WARNING", "propagate": False},
+        "identity.outbox": {"handlers": ["api_console"], "level": "INFO", "propagate": False},
     },
 }
 PASSWORD_HASHERS = [
@@ -159,7 +167,7 @@ IDENTITY_JWT_ISSUER = _first_environment_value(
 IDENTITY_JWT_AUDIENCE = _first_environment_value("IDENTITY_JWT_AUDIENCE", default="utask-platform")
 
 REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "config.schema.IdentityAutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "config.api_documentation.IdentityAutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "authentication.adapters.access_token_authentication.IdentityJWTAuthentication"
     ],
@@ -167,6 +175,8 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.exception_handler.identity_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["common.renderers.EnvelopeJSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    # Middleware resolves trusted proxy headers once; never trust a raw X-Forwarded-For.
+    "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_RATES": {
         "dj_rest_auth": "3000/min",
         "registration": "100/min",
@@ -235,8 +245,12 @@ if _signing_key:
     )
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        seconds=int(os.environ.get("IDENTITY_ACCESS_TOKEN_SECONDS", "9000"))
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        seconds=int(os.environ.get("IDENTITY_REFRESH_TOKEN_SECONDS", "604800"))
+    ),
     "ALGORITHM": "RS256",
     "SIGNING_KEY": _signing_key,
     "VERIFYING_KEY": _verifying_key,
@@ -262,6 +276,36 @@ IDENTITY_FRONTEND_URL = _first_environment_value(
 IDENTITY_MAIL_KEY = _first_environment_value("IDENTITY_MAIL_KEY")
 IDENTITY_MAIL_KEY_ID = _first_environment_value("IDENTITY_MAIL_KEY_ID")
 IDENTITY_REDIS_URL = _first_environment_value("IDENTITY_REDIS_URL", default="redis://redis:6379/0")
+CSRF_COOKIE_SECURE = True
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in _first_environment_value(
+        "IDENTITY_CSRF_TRUSTED_ORIGINS", default=IDENTITY_FRONTEND_URL
+    ).split(",")
+    if origin.strip()
+]
+
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+KAFKA_SECURITY_PROTOCOL = os.environ.get("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
+KAFKA_SASL_MECHANISM = os.environ.get("KAFKA_SASL_MECHANISM", "PLAIN")
+KAFKA_SASL_USERNAME = os.environ.get("KAFKA_SASL_USERNAME", "")
+KAFKA_SASL_PASSWORD = os.environ.get("KAFKA_SASL_PASSWORD", "")
+KAFKA_SSL_CA_LOCATION = os.environ.get("KAFKA_SSL_CA_LOCATION", "")
+IDENTITY_KAFKA_TOPIC = os.environ.get("IDENTITY_KAFKA_TOPIC", "utask.identity.events")
+IDENTITY_SESSION_RETENTION_DAYS = int(os.environ.get("IDENTITY_SESSION_RETENTION_DAYS", "30"))
+IDENTITY_RECEIPT_RETENTION_DAYS = int(os.environ.get("IDENTITY_RECEIPT_RETENTION_DAYS", "7"))
+IDENTITY_OUTBOX_RETENTION_DAYS = int(os.environ.get("IDENTITY_OUTBOX_RETENTION_DAYS", "7"))
+if (
+    min(
+        IDENTITY_SESSION_RETENTION_DAYS,
+        IDENTITY_RECEIPT_RETENTION_DAYS,
+        IDENTITY_OUTBOX_RETENTION_DAYS,
+    )
+    < 1
+):
+    raise ImproperlyConfigured(
+        "Identity retention must be at least one day; audit is never purged."
+    )
 if os.environ.get("IDENTITY_REDIS_URL"):
     CACHES = {
         "default": {
@@ -303,6 +347,7 @@ AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
 AXES_USERNAME_CALLABLE = "authentication.adapters.login_lockout.identity_axes_username"
 AXES_LOCKOUT_CALLABLE = "authentication.adapters.login_lockout.identity_axes_lockout_response"
 AXES_VERBOSE = False
+AXES_IPWARE_META_PRECEDENCE_ORDER = ("REMOTE_ADDR",)
 
 # Per-caller backend secrets, never client JWT roles or Django staff flags.
 IDENTITY_SERVICE_KEYS = json.loads(os.environ.get("IDENTITY_SERVICE_KEYS", "{}"))

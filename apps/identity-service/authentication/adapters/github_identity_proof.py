@@ -64,7 +64,7 @@ class GitHubIdentityProofClient:
         except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
             raise IdentityAPIError(
                 "OAUTH_PROVIDER_UNAVAILABLE",
-                "Integration proof unavailable or invalid.",
+                "Không thể xác minh tài khoản GitHub.",
                 status_code=503,
             ) from exc
         return proof

@@ -39,7 +39,9 @@ class PasswordService:
             # Revalidate under the user lock: two concurrent confirmations cannot both win.
             validate_reset()
             if not default_token_generator.check_token(current, token):
-                raise serializers.ValidationError({"token": "Invalid reset token."})
+                raise serializers.ValidationError(
+                    {"token": "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."}
+                )
             result = save_password(current)
             revoke_sessions(current, "PASSWORD_CHANGED")
             reset_axes(username=str(current.pk))
@@ -60,4 +62,6 @@ class PasswordService:
     @staticmethod
     def validate_reset_account(user):
         if not user.is_active:
-            raise serializers.ValidationError({"token": "Invalid reset token."})
+            raise serializers.ValidationError(
+                {"token": "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."}
+            )

@@ -6,7 +6,7 @@ from dj_rest_auth.views import (
 from django.conf import settings
 from django.urls import path
 
-from authentication.views.auth import LoginView, SessionRefreshView, healthz, jwks
+from authentication.views.auth import LoginView, SessionRefreshView, csrf, healthz, jwks
 from authentication.views.devices import (
     DeviceListView,
     DeviceRevokeView,
@@ -24,6 +24,7 @@ urlpatterns = [
     path("healthz", healthz, name="healthz"),
     path(".well-known/jwks.json", jwks, name="identity-jwks"),
     path("login", LoginView.as_view(), name="identity-login"),
+    path("csrf", csrf, name="identity-csrf"),
     path(
         "api/v1/internal/auth/session-status",
         SessionStatusView.as_view(),

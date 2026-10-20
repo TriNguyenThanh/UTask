@@ -51,3 +51,22 @@ class IdentityAutoSchema(AutoSchema):
                 },
             )
         return responses
+
+
+class RoleChangeAutoSchema(IdentityAutoSchema):
+    """Describe the existing DELETE role command body in Swagger/OpenAPI.
+
+    drf-spectacular intentionally infers bodies only for POST/PUT/PATCH.
+    Opt in for this endpoint rather than adding bodies to all DELETE routes.
+    """
+
+    def _get_request_body(self, direction="request"):
+        if self.method != "DELETE":
+            return super()._get_request_body(direction)
+        schema, required = self._get_request_for_media_type(
+            self.get_request_serializer(), direction
+        )
+        return {
+            "content": {"application/json": {"schema": schema}},
+            "required": required,
+        }

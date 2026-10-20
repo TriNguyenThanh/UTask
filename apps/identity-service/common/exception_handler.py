@@ -6,6 +6,7 @@ from typing import Any
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import Http404
+from django.utils.translation import gettext
 from rest_framework import status
 from rest_framework.exceptions import (
     AuthenticationFailed,
@@ -25,6 +26,36 @@ from common.responses import build_envelope
 
 logger = logging.getLogger("identity.api")
 
+AUTHENTICATION_MESSAGES = {
+    "INVALID_CREDENTIALS": "Email, tên đăng nhập hoặc mật khẩu không đúng.",
+    "TOKEN_EXPIRED": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "INVALID_TOKEN": "Thông tin đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+    "TOKEN_REVOKED": "Phiên đăng nhập đã bị thu hồi. Vui lòng đăng nhập lại.",
+}
+
+# Some library validation messages are absent from their Vietnamese catalogs.
+LIBRARY_VALIDATION_MESSAGES = {
+    "Must be a valid UUID.": "Mã định danh không hợp lệ.",
+    "User is already registered with this e-mail address.": (
+        "Email đã được sử dụng để đăng ký tài khoản."
+    ),
+    "A user is already registered with this e-mail address.": (
+        "Email đã được sử dụng để đăng ký tài khoản."
+    ),
+    "Invalid value": "Giá trị không hợp lệ.",
+    "Your old password was entered incorrectly. Please enter it again.": (
+        "Mật khẩu hiện tại không đúng. Vui lòng nhập lại."
+    ),
+    "E-mail is not verified.": "Email chưa được xác minh.",
+    "User account is disabled.": "Tài khoản không còn hoạt động.",
+    "Unable to log in with provided credentials.": "Thông tin đăng nhập không đúng.",
+    'Must include "email" and "password".': "Cần nhập email và mật khẩu.",
+    'Must include "username" and "password".': "Cần nhập tên đăng nhập và mật khẩu.",
+    'Must include either "username" or "email" and "password".': (
+        "Cần nhập email hoặc tên đăng nhập cùng mật khẩu."
+    ),
+}
+
 
 def _validation_details(value: Any, field: str = "") -> list[dict[str, str]]:
     if isinstance(value, Mapping):
@@ -36,12 +67,10 @@ def _validation_details(value: Any, field: str = "") -> list[dict[str, str]]:
     if isinstance(value, (list, tuple)):
         details = []
         for nested in value:
-            if isinstance(nested, (Mapping, list, tuple)):
-                details.extend(_validation_details(nested, field))
-            else:
-                details.append({"field": field, "issue": str(nested)})
+            details.extend(_validation_details(nested, field))
         return details
-    return [{"field": field, "issue": str(value)}]
+    issue = LIBRARY_VALIDATION_MESSAGES.get(str(value), str(value))
+    return [{"field": field, "issue": gettext(issue)}]
 
 
 def identity_exception_handler(exc: Exception, context: dict[str, Any]) -> Response:
@@ -54,7 +83,16 @@ def identity_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
         code = exc.public_code
         message = exc.public_message
         details = exc.public_details
-    elif isinstance(exc, (ValidationError, DjangoValidationError, ParseError)):
+    elif isinstance(exc, ParseError):
+        code = "VALIDATION_ERROR"
+        message = "Dữ liệu đầu vào không hợp lệ."
+        details = [
+            {
+                "field": "",
+                "issue": "Không thể đọc nội dung yêu cầu. Hãy kiểm tra định dạng dữ liệu.",
+            }
+        ]
+    elif isinstance(exc, (ValidationError, DjangoValidationError)):
         if isinstance(exc, DjangoValidationError) and response is None:
             status_code = status.HTTP_400_BAD_REQUEST
         code = "VALIDATION_ERROR"
@@ -68,11 +106,13 @@ def identity_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
             message_dict = getattr(exc, "message_dict", None)
             if message_dict:
                 details = _validation_details(message_dict)
+            elif isinstance(exc, DjangoValidationError):
+                details = _validation_details(exc.messages)
     elif isinstance(exc, InvalidToken):
         code = (
             "TOKEN_EXPIRED" if str(exc.detail.get("code")) == "TOKEN_EXPIRED" else "INVALID_TOKEN"
         )
-        message = "Token đã hết hạn." if code == "TOKEN_EXPIRED" else "Token không hợp lệ."
+        message = AUTHENTICATION_MESSAGES[code]
     elif isinstance(exc, (NotAuthenticated, AuthenticationFailed)):
         detail = getattr(exc, "detail", None)
         if isinstance(detail, Mapping) and str(detail.get("code", "")) in {
@@ -82,7 +122,7 @@ def identity_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
             "TOKEN_REVOKED",
         }:
             code = str(detail["code"])
-            message = str(detail.get("message", "Yêu cầu xác thực tài khoản."))
+            message = AUTHENTICATION_MESSAGES[code]
         else:
             library_code = str(detail.get("code", "")) if isinstance(detail, Mapping) else ""
             code = (

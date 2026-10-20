@@ -56,7 +56,7 @@ class OAuthAccountService:
                     ):
                         raise IdentityAPIError(
                             "OAUTH_ACCOUNT_ALREADY_LINKED",
-                            "Another Google account is linked.",
+                            "Bạn đã liên kết với một tài khoản Google khác.",
                             status_code=409,
                         )
                     login.user = current
@@ -68,16 +68,18 @@ class OAuthAccountService:
     @staticmethod
     def validate_google_identity(sociallogin):
         if sociallogin.account.provider != "google":
-            raise PermissionDenied("Provider not supported by Identity.")
+            raise PermissionDenied("Hình thức đăng nhập này chưa được hỗ trợ.")
         verified = [
             address.email.lower() for address in sociallogin.email_addresses if address.verified
         ]
         if not verified:
-            raise PermissionDenied("A verified provider email is required.")
+            raise PermissionDenied("Cần email đã được xác minh trên tài khoản đăng nhập bên ngoài.")
         if sociallogin.is_existing:
             OAuthAccountService.require_active_google_account(sociallogin.user)
         elif not any(email.rpartition("@")[2].endswith(".edu.vn") for email in verified):
-            raise PermissionDenied("Student registration requires an educational domain.")
+            raise PermissionDenied(
+                "Vui lòng dùng email do trường cấp để đăng ký tài khoản sinh viên."
+            )
 
     @staticmethod
     def register_google_student(request, sociallogin, save_social_account):
@@ -140,7 +142,7 @@ class OAuthAccountService:
                     if existing.uid != proof["github_user_id"]:
                         raise IdentityAPIError(
                             "OAUTH_ACCOUNT_ALREADY_LINKED",
-                            "Another GitHub account is linked.",
+                            "Bạn đã liên kết với một tài khoản GitHub khác.",
                             status_code=409,
                         )
                 else:
@@ -166,7 +168,7 @@ class OAuthAccountService:
         except IntegrityError as exc:
             raise IdentityAPIError(
                 "OAUTH_ACCOUNT_ALREADY_LINKED",
-                "GitHub account belongs to another user.",
+                "Tài khoản GitHub đã được liên kết với người dùng khác.",
                 status_code=409,
             ) from exc
         return {**proof, "linked_at": existing.date_joined.isoformat()}
@@ -178,7 +180,8 @@ class OAuthAccountService:
             require_current_session(user, request.auth)
             if provider == "google" and not user.has_usable_password():
                 raise IdentityAPIError(
-                    "CANNOT_UNLINK_ONLY_AUTH_METHOD", "Set a password before unlinking Google."
+                    "CANNOT_UNLINK_ONLY_AUTH_METHOD",
+                    "Vui lòng đặt mật khẩu trước khi hủy liên kết Google.",
                 )
             accounts = list(SocialAccount.objects.filter(user=user, provider=provider))
             for account in accounts:

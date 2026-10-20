@@ -17,7 +17,7 @@ class StudentRowSerializer(StrictInputMixin, serializers.Serializer):
         attrs["email"] = User.objects.normalize_email(attrs.get("email", ""))
         attrs["student_id"] = User.objects.normalize_student_id(attrs.get("student_id"))
         if not attrs["email"] and not attrs["student_id"]:
-            raise serializers.ValidationError("An email or student_id is required.")
+            raise serializers.ValidationError("Cần cung cấp email hoặc mã số sinh viên.")
         return attrs
 
 

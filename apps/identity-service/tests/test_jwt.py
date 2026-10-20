@@ -24,7 +24,8 @@ def test_standard_claims_are_supported_without_exact_set_restriction():
     token = AccessToken(signed_access(custom_optional="value"))
     assert token["token_type"] == "access"
     assert token["custom_optional"] == "value"
-    assert token["exp"] - token["iat"] == 900
+    expected_lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+    assert token["exp"] - token["iat"] == expected_lifetime
 
 
 @pytest.mark.parametrize(

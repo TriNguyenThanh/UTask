@@ -11,6 +11,26 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `classroom-service.env`: cấu hình riêng Classroom Service, gồm
   `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
+## Web gọi API và CORS
+
+Nginx chỉ cho origin Web staging `https://utask.u-code.dev` và các origin local
+đã ghi rõ trong map đọc response API. Nginx bật gửi cookie; không dùng `*` vì
+trình duyệt từ chối wildcard khi request cần credentials. API vẫn xác thực
+`Bearer` token ở backend; CORS không cấp quyền đăng nhập hay quyền dữ liệu.
+
+Origin được phép cho CSRF vẫn giới hạn theo frontend. `.env` dùng
+`http://localhost:5173` và `http://127.0.0.1:5173`; `.env.staging` dùng
+`https://utask.u-code.dev` cho `IDENTITY_FRONTEND_URL` và
+`IDENTITY_CSRF_TRUSTED_ORIGINS`. Origin gồm scheme, host và port; không thêm
+đường dẫn `/` ở cuối. CORS allowlist và `CSRF_TRUSTED_ORIGINS` là hai kiểm tra
+riêng.
+
+Web đọc `VITE_API_BASE_URL` lúc build; mặc định mã nguồn để trống và gọi đường
+dẫn cùng origin. Khi Web chạy trên Vercel cùng API ở host riêng, cấu hình biến
+build của Vercel thành `https://utask-api.u-code.dev`; `.env.staging` trên VPS
+không được Vercel đọc. Xem [Web API client](../../apps/web/src/lib/api/ApiClientProvider.tsx)
+và [Nginx gateway](../../infra/nginx/nginx.conf).
+
 ## Chọn Kafka Docker hoặc Kafka bên ngoài
 
 **Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập
@@ -220,6 +240,41 @@ runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/pr
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
+<a id="ip-client-qua-proxy"></a>
+
+### IP client qua proxy
+
+Luồng staging là client → Cloudflare → Nginx → Identity. Nginx chỉ tin
+`CF-Connecting-IP` nếu IP kết nối nằm trong CIDR Cloudflare chính thức; truy cập
+trực tiếp từ nguồn khác không được tự khai IP qua header này. Danh sách IPv4/IPv6
+nằm ngay trong `infra/nginx/nginx.conf`, đối chiếu ngày 2026-10-19 với
+[Cloudflare IPv4](https://www.cloudflare.com/ips-v4) và
+[Cloudflare IPv6](https://www.cloudflare.com/ips-v6). Cần cập nhật khi nhà cung cấp
+đổi dải IP. Nginx ghi đè `X-Real-IP` và `X-Forwarded-For` bằng IP đã xác nhận.
+
+**Dùng Compose hiện tại không cần khai báo biến IP trong `.env`, `.env.staging`
+hoặc `.env.example`.** Hạ tầng tự cấp cấu hình mạng Docker qua
+`infra/env/identity-service.env`; Nginx gửi IP người dùng đã xác nhận cho Identity.
+
+Trường hợp hạ tầng tùy chỉnh: mapping có thể ghi đè bằng biến môi trường nội bộ
+`IDENTITY_TRUSTED_PROXY_CIDRS`, là danh sách IP/CIDR proxy cách nhau bằng dấu phẩy.
+Mặc định `172.16.0.0/12` bao gồm mạng bridge Docker thông thường; nếu chuyển sang
+subnet ngoài dải này hoặc muốn giới hạn chặt hơn, quản trị hạ tầng cấu hình theo
+IP/subnet Nginx thực tế. Không dùng `0.0.0.0/0` hoặc `::/0` và không publish cổng
+HTTP của Identity ra ngoài. Chạy app ngoài Compose mặc định không tin header proxy.
+
+Middleware Identity chuẩn hóa `REMOTE_ADDR` trước session, audit, Axes và rate
+limit. DRF bỏ qua header XFF thô (`NUM_PROXIES=0`); Axes đọc `REMOTE_ADDR` đã chuẩn
+hóa. Header không hợp lệ hoặc nguồn không được tin cậy giữ IP kết nối ban đầu.
+Các service khác chưa được đổi cách lấy IP trong thay đổi này.
+
+Triển khai cần cả image Identity mới và cấu hình Nginx mới; chỉ reload Nginx hoặc
+restart image cũ chưa đủ. Sau deploy, đăng nhập mới qua domain Cloudflare rồi kiểm
+tra `user_sessions.ip_address` và audit của lần đó. Có thể đối chiếu IP proxy bằng
+`docker inspect utask-nginx-1 --format '{{json .NetworkSettings.Networks}}'`.
+Kiểm tra thêm request trực tiếp có header giả không được ghi nhận là IP giả.
+Session/audit cũ giữ nguyên IP lịch sử; kiểm thử local không thay cho xác minh VPS.
+
 Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
 publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
 `CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
@@ -247,6 +302,12 @@ Consumer Classroom của Work dùng cùng hàm cấu hình kết nối với pub
 consumer Identity và bên gửi thông điệp lỗi, gồm tài khoản, mật khẩu và CA
 khi dùng Kafka cloud. Quy tắc chỉ xác nhận offset sau xử lý hoặc DLQ thành công
 được giữ nguyên; kiểm thử cấu hình không thay cho nghiệm thu luồng sự kiện thật.
+
+Consumer hồ sơ Work dùng `WORK_IDENTITY_KAFKA_TOPIC`; khi để trống, mapping lấy
+`IDENTITY_KAFKA_TOPIC` (mặc định `utask.identity.events`) để khớp producer Identity.
+Không tạo broker Identity riêng. Đã có kiểm chứng local riêng tại
+[Work nhận sự kiện Identity](../project-service/identity-events.md); không coi đó là
+nghiệm thu staging hoặc consumer Notification.
 
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;

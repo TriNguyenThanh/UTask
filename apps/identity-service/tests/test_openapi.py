@@ -11,36 +11,15 @@ from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.test import APIClient
 
 from accounts.models import AccountStatus, OutboxEvent, UserSession
-from tests.helpers import NEW_PASSWORD, PASSWORD, create_user, login, mail_secret
-
-# Acceptance cases, compared with the generated URLconf: adding an API requires a case here.
-DEFAULT_OPERATIONS = [
-    ("/.well-known/jwks.json", "get", 200),
-    ("/register", "post", 201),
-    ("/activate", "post", 200),
-    ("/activation/resend", "post", 200),
-    ("/login", "post", 200),
-    ("/refresh", "post", 200),
-    ("/logout", "post", 200),
-    ("/logout-all", "post", 200),
-    ("/sessions", "get", 200),
-    ("/sessions/{session_id}", "delete", 200),
-    ("/password-reset/request", "post", 200),
-    ("/password-reset/confirm", "post", 200),
-    ("/password-change", "post", 200),
-    ("/users/me", "get", 200),
-    ("/users/me", "patch", 200),
-    ("/users/{user_id}", "get", 200),
-    ("/users/batch", "post", 200),
-    ("/admin/users", "get", 200),
-    ("/admin/users/{user_id}/status", "patch", 200),
-    ("/admin/users/{user_id}/roles", "post", 200),
-    ("/admin/users/{user_id}/roles", "delete", 200),
-    ("/api/v1/internal/users/provision-students", "post", 201),
-    ("/api/v1/internal/users/{user_id}/resend-activation", "post", 200),
-    ("/api/v1/internal/auth/session-status", "post", 200),
-    ("/api/v1/internal/users/{user_id}/oauth/GITHUB", "get", 200),
-]
+from tests.fixtures.api_operations import DEFAULT_OPERATIONS
+from tests.helpers import (
+    NEW_PASSWORD,
+    PASSWORD,
+    create_pending_user,
+    create_user,
+    login,
+    mail_secret,
+)
 
 
 @pytest.mark.parametrize(
@@ -91,6 +70,30 @@ def exported_schema(tmp_path):
     return json_schema(json.loads(output.read_text()))
 
 
+@pytest.mark.contract
+@pytest.mark.parametrize("method", ["post", "delete"])
+def test_role_commands_document_required_role_body_in_swagger(method):
+    response = APIClient().get("/openapi/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
+    assert response.status_code == 200
+    schema = json.loads(response.content)
+    body = schema["paths"]["/admin/users/{user_id}/roles"][method]["requestBody"]
+    assert body["required"] is True
+    request_schema = body["content"]["application/json"]["schema"]
+    validator = Draft202012Validator({**request_schema, "components": schema["components"]})
+    for code in ("STUDENT", "TEACHER", "SYSTEM_ADMIN"):
+        validator.validate({"role_code": code})
+    assert not validator.is_valid({})
+    assert not validator.is_valid({"role_code": "UNKNOWN_ROLE"})
+
+
+@pytest.mark.contract
+def test_device_delete_without_body_stays_bodyless_in_openapi():
+    response = APIClient().get("/openapi/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
+    assert response.status_code == 200
+    operation = json.loads(response.content)["paths"]["/sessions/{session_id}"]["delete"]
+    assert "requestBody" not in operation
+
+
 @pytest.fixture
 def contract_request(settings, signup_data):
     """Prepare each operation with real credentials; return its response for assertions."""
@@ -102,13 +105,18 @@ def contract_request(settings, signup_data):
 
     def execute(route, method):
         client = APIClient()
+        if route == "/csrf":
+            return client.get(route)
         if route.endswith("jwks.json"):
             return client.get(route)
         if route.endswith("/register"):
             return client.post(route, signup_data, format="json")
         if route.endswith("/activate"):
-            registered = client.post("/register", signup_data, format="json")
-            assert registered.status_code == 201
+            user = create_pending_user()
+            assert (
+                client.post("/activation/resend", {"email": user.email}, format="json").status_code
+                == 200
+            )
             event = OutboxEvent.objects.get(event_type="identity.activation.requested")
             return client.post(route, mail_secret(event), format="json")
 
@@ -204,7 +212,7 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
     assert "/login" in schema["paths"]
     assert "/api/v1/auth/login" not in schema["paths"]
     assert "/api/v1/users/me" not in schema["paths"]
-    assert sum(len(methods) for methods in schema["paths"].values()) == 25
+    assert sum(len(methods) for methods in schema["paths"].values()) == len(DEFAULT_OPERATIONS)
     assert {
         (route, method) for route, methods in schema["paths"].items() for method in methods
     } == {(route, method) for route, method, _ in DEFAULT_OPERATIONS}

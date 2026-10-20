@@ -45,14 +45,16 @@ def presign_avatar(request, data):
         receipt_client().setex(receipt_key(key), 300, json.dumps(record))
     except RedisError as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "Không thể lưu receipt tải ảnh.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Không thể tạo yêu cầu tải ảnh. Vui lòng thử lại.",
+            status_code=503,
         ) from exc
     return {"upload_url": url, "public_url": public_url(key), "file_key": key, "expires_in": 300}
 
 
 def confirm_avatar(request, key):
     if not re.fullmatch(rf"avatars/{request.user.pk}/[0-9]+_[0-9a-f]{{32}}\.(jpg|png|webp)", key):
-        raise IdentityAPIError("INVALID_UPLOAD_REFERENCE", "File key không hợp lệ.")
+        raise IdentityAPIError("INVALID_UPLOAD_REFERENCE", "Thông tin ảnh tải lên không hợp lệ.")
     url = public_url(key)
     with transaction.atomic():
         user = lock_accounts(request)[request.user.pk]
@@ -62,7 +64,9 @@ def confirm_avatar(request, key):
         raw = receipt_client().get(receipt_key(key))
     except RedisError as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "Không thể đọc receipt tải ảnh.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Không thể kiểm tra yêu cầu tải ảnh. Vui lòng thử lại.",
+            status_code=503,
         ) from exc
     record = json.loads(raw) if raw else None
     if (
@@ -71,13 +75,19 @@ def confirm_avatar(request, key):
         or record["session_id"] != request.auth["session_id"]
         or record["file_key"] != key
     ):
-        raise IdentityAPIError("INVALID_UPLOAD_REFERENCE", "Receipt không hợp lệ hoặc đã hết hạn.")
+        raise IdentityAPIError(
+            "INVALID_UPLOAD_REFERENCE",
+            "Yêu cầu tải ảnh không hợp lệ hoặc đã hết hạn. Vui lòng tải lại ảnh.",
+        )
     metadata = AvatarStorage.head(key)  # Real remote call, outside database transaction.
     if (
         metadata.get("ContentLength") != record["file_size"]
         or metadata.get("ContentType") != record["content_type"]
     ):
-        raise IdentityAPIError("UPLOAD_METADATA_MISMATCH", "Thông tin ảnh khác với receipt.")
+        raise IdentityAPIError(
+            "UPLOAD_METADATA_MISMATCH",
+            "Loại hoặc dung lượng ảnh đã tải lên không khớp với yêu cầu ban đầu.",
+        )
     with transaction.atomic():
         user = lock_accounts(request)[request.user.pk]
         if user.profile.avatar_url != url:

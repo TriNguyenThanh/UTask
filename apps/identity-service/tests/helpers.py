@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 from django.db import close_old_connections, connections
 
-from accounts.models import User
+from accounts.models import AccountStatus, User
 
 PASSWORD = "StrongPassword123!"
 NEW_PASSWORD = "NewStrongPassword456!"
@@ -23,6 +23,13 @@ def create_user(**kwargs):
         email=f"{unique}@example.edu.vn", username=unique, password=PASSWORD, **kwargs
     )
     EmailAddress.objects.create(user=user, email=user.email, primary=True, verified=True)
+    return user
+
+
+def create_pending_user(**kwargs):
+    """An imported account still needs verification; self-signup is already verified."""
+    user = create_user(account_status=AccountStatus.PENDING_ACTIVATION, **kwargs)
+    EmailAddress.objects.filter(user=user).update(verified=False)
     return user
 
 
