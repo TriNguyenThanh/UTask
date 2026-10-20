@@ -81,6 +81,7 @@ SOCIALACCOUNT_STORE_TOKENS = False
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
 
 MIDDLEWARE = [
+    "common.client_ip.TrustedProxyClientIPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -90,6 +91,12 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
+
+IDENTITY_TRUSTED_PROXY_CIDRS = tuple(
+    cidr.strip()
+    for cidr in os.environ.get("IDENTITY_TRUSTED_PROXY_CIDRS", "").split(",")
+    if cidr.strip()
+)
 
 ROOT_URLCONF = "config.urls"
 TEMPLATES: list[dict[str, object]] = [
@@ -168,6 +175,8 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.exception_handler.identity_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["common.renderers.EnvelopeJSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    # Middleware resolves trusted proxy headers once; never trust a raw X-Forwarded-For.
+    "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_RATES": {
         "dj_rest_auth": "3000/min",
         "registration": "100/min",
@@ -338,6 +347,7 @@ AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
 AXES_USERNAME_CALLABLE = "authentication.adapters.login_lockout.identity_axes_username"
 AXES_LOCKOUT_CALLABLE = "authentication.adapters.login_lockout.identity_axes_lockout_response"
 AXES_VERBOSE = False
+AXES_IPWARE_META_PRECEDENCE_ORDER = ("REMOTE_ADDR",)
 
 # Per-caller backend secrets, never client JWT roles or Django staff flags.
 IDENTITY_SERVICE_KEYS = json.loads(os.environ.get("IDENTITY_SERVICE_KEYS", "{}"))

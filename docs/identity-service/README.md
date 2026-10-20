@@ -24,6 +24,14 @@ cần; có thể dùng `django-allauth`, chưa khẳng định dependency đã �
 Mật khẩu dùng Django password hashing; login và endpoint nhạy cảm cần rate
 limit. API phải dùng HTTPS ngoài môi trường local phù hợp.
 
+Chạy bằng Docker Compose không cần thêm biến IP vào `.env`: Nginx lấy IP người
+dùng, Identity dùng IP đó cho session, audit, Axes và rate limit. Hạ tầng cấp sẵn
+cấu hình để chỉ nhận header IP từ mạng proxy nội bộ; header giả từ nguồn khác
+bị bỏ qua. Chạy app ngoài Compose mặc định dùng IP kết nối trực tiếp.
+Chi tiết tại
+[cấu hình proxy và IP client](../infrastructure/environment.md#ip-client-qua-proxy).
+Các bản ghi lịch sử không tự đổi IP sau khi deploy bản sửa.
+
 Các service xác thực token nhưng không truy cập Identity DB. Phân quyền kết
 hợp global RBAC (Admin, Teacher, User) với quyền trên tài nguyên/project
 (Leader/Owner, Member). Identity cấp danh tính và vai trò toàn hệ thống;
