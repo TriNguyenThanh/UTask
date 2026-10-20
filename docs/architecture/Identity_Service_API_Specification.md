@@ -1096,6 +1096,12 @@ Envelope theo4.1: event_id/type/aggregate_type/aggregate_id/occurred_at/event_ve
 
 Mail secret null **chỉ khi expires_at hết hạn** theo1.6; consumer skip trước decrypt. user.created không có mail secret, kể cả import. Non-mail snapshot không phone/bio/preferences/password/IP/audit reason. Unsupported version/malformed không cập nhật projection; retry/DLQ có audit, không skip như success.
 
+Cột Consumer nêu nơi cần sử dụng dữ liệu theo nghiệp vụ, không xác nhận mọi đầu nhận
+đã triển khai. Consumer hồ sơ Work hiện chỉ cập nhật display_name/avatar từ
+`identity.user.created/updated`; các loại Identity đã chốt còn lại được kiểm envelope
+rồi bỏ qua, không tạo profile hoặc giải mã mail. JSON/envelope hỏng, loại lạ và version
+sai vẫn vào DLQ và chờ ACK trước commit offset; xem hướng dẫn consumer Work.
+
 ## 5. Cấu trúc Mã nguồn Mẫu & Middleware Thực thi (Framework Implementation)
 
 ### 5.1. Bộ Xử lý Ngoại lệ Hợp nhất (`unified_exception_handler`)

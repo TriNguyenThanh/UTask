@@ -18,6 +18,7 @@ def emit(user, event_type, data):
         "occurred_at": timezone.now().isoformat(),
         "producer": "identity-service",
         "aggregate_id": str(user.pk),
+        "aggregate_type": "user",
         "trace_id": str(uuid4()),
         "data": data,
     }
@@ -27,6 +28,16 @@ def emit(user, event_type, data):
 
 
 def emit_user(user, event_type="identity.user.created"):
+    if event_type == "identity.user.activated":
+        return emit(
+            user,
+            event_type,
+            {
+                "user_id": str(user.pk),
+                "account_status": user.account_status,
+                "is_email_verified": user.is_email_verified,
+            },
+        )
     if event_type == "identity.user.updated":
         return emit(
             user,
@@ -66,6 +77,8 @@ def emit_mail(user, event_type, secret, lifetime):
         "expires_at": expires,
         "secret": encrypted_secret,
     }
+    if event_type == "identity.student.imported":
+        data["student_id"] = user.student_id
     envelope = {
         "event_id": str(event_id),
         "event_type": event_type,
@@ -73,6 +86,7 @@ def emit_mail(user, event_type, secret, lifetime):
         "occurred_at": timezone.now().isoformat(),
         "producer": "identity-service",
         "aggregate_id": str(user.pk),
+        "aggregate_type": "user",
         "trace_id": str(uuid4()),
         "data": data,
     }

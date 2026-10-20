@@ -86,6 +86,7 @@ def change_role(request, target_id, code, *, assign):
                 {
                     "user_id": str(user.pk),
                     "role_code": code,
+                    "actor_id": str(request.user.pk),
                     "roles": sorted(
                         user.global_role_assignments.values_list("role__code", flat=True)
                     ),

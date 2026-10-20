@@ -193,14 +193,16 @@ Nghiệp vụ ở `event.data`; consumer xử lý lặp bằng `event_id`.
 
 | Sự kiện                                                                                           | Mục đích                                            |
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `identity.user.created`, `identity.user.updated`                                                  | Cập nhật bản sao thông tin user                     |
+| `identity.user.created`, `identity.user.updated`, `identity.user.activated`                         | Cập nhật thông tin user và báo kích hoạt            |
 | `identity.user.role_assigned`, `identity.user.role_revoked`                                       | Thông báo đổi global role                           |
 | `identity.activation.requested`, `identity.student.imported`, `identity.password_reset.requested` | Notification gửi hướng dẫn; mail secret được mã hóa |
 | `identity.oauth.github_linked`, `identity.oauth.github_unlinked`                                  | Thông báo liên kết GitHub cho Integration           |
 
 Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tương ứng.
-Outbox có code ghi dữ liệu; publisher/ACK Kafka, gửi mail và consumer liên service cần
-triển khai/nghiệm thu riêng. Chi tiết event ở mục4 của đặc tả API.
+`identity.student.imported` có thêm `student_id` nullable theo hợp đồng. Work cập nhật
+projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
+kiểm envelope rồi bỏ qua tại consumer hồ sơ, không đưa nhầm vào DLQ. Xem
+[quy tắc phía Work](../project-service/identity-events.md).
 
 Google dùng allauth xác minh danh tính đăng nhập. GitHub dùng để liên kết tài khoản:
 Identity quản lý OAuth context/link, chỉ Integration đổi code và gọi GitHub API qua

@@ -120,7 +120,7 @@ class RegistrationService:
             user.save(update_fields=("account_status", "updated_at"))
             EmailConfirmation.objects.filter(email_address=email_address).delete()
             audit(user, "ACCOUNT_ACTIVATED", request)
-            emit_user(user, "identity.user.updated")
+            emit_user(user, "identity.user.activated")
             return True
 
     @staticmethod
