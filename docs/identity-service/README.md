@@ -97,6 +97,11 @@ Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `
 | GitHub mapping | GET `/api/v1/internal/users/{user_id}/oauth/GITHUB`                                                   | Integration key; mapping có thể là null                                  |
 | Khóa công khai | GET `/.well-known/jwks.json`                                                                          | Anonymous; `keys` ở root                                                 |
 
+Gán và thu hồi role đều nhận JSON body `{"role_code":"TEACHER"}` tại
+`POST`/`DELETE /admin/users/{user_id}/roles`. Swagger hiển thị request body bắt buộc
+cho cả hai phương thức. POST thêm role, không ghi đè các role khác; DELETE chỉ gỡ
+role được chỉ định. Gọi qua gateway thì thêm tiền tố `/api/auth`.
+
 Tra cứu public/batch chỉ trả dữ liệu cho phép, không password/token/preferences của
 user khác. Provisioning nhận tối đa100 JSON rows và trả kết quả từng row. Cùng actor,
 path, key và body trả lại receipt; body khác với cùng key trả422. Classroom giữ payload

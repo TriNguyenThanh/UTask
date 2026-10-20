@@ -159,7 +159,7 @@ IDENTITY_JWT_ISSUER = _first_environment_value(
 IDENTITY_JWT_AUDIENCE = _first_environment_value("IDENTITY_JWT_AUDIENCE", default="utask-platform")
 
 REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "config.schema.IdentityAutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "config.api_documentation.IdentityAutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "authentication.adapters.access_token_authentication.IdentityJWTAuthentication"
     ],

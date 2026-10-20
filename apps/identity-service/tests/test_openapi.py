@@ -70,6 +70,30 @@ def exported_schema(tmp_path):
     return json_schema(json.loads(output.read_text()))
 
 
+@pytest.mark.contract
+@pytest.mark.parametrize("method", ["post", "delete"])
+def test_role_commands_document_required_role_body_in_swagger(method):
+    response = APIClient().get("/openapi/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
+    assert response.status_code == 200
+    schema = json.loads(response.content)
+    body = schema["paths"]["/admin/users/{user_id}/roles"][method]["requestBody"]
+    assert body["required"] is True
+    request_schema = body["content"]["application/json"]["schema"]
+    validator = Draft202012Validator({**request_schema, "components": schema["components"]})
+    for code in ("STUDENT", "TEACHER", "SYSTEM_ADMIN"):
+        validator.validate({"role_code": code})
+    assert not validator.is_valid({})
+    assert not validator.is_valid({"role_code": "UNKNOWN_ROLE"})
+
+
+@pytest.mark.contract
+def test_device_delete_without_body_stays_bodyless_in_openapi():
+    response = APIClient().get("/openapi/", HTTP_ACCEPT="application/vnd.oai.openapi+json")
+    assert response.status_code == 200
+    operation = json.loads(response.content)["paths"]["/sessions/{session_id}"]["delete"]
+    assert "requestBody" not in operation
+
+
 @pytest.fixture
 def contract_request(settings, signup_data):
     """Prepare each operation with real credentials; return its response for assertions."""
