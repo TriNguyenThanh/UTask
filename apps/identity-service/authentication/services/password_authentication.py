@@ -10,8 +10,12 @@ class PasswordAuthenticationService:
     @staticmethod
     def validate_login_account(user):
         if user.account_status == AccountStatus.SUSPENDED:
-            raise IdentityAPIError("ACCOUNT_SUSPENDED", "Account suspended.", status_code=403)
+            raise IdentityAPIError(
+                "ACCOUNT_SUSPENDED",
+                "Tài khoản đã bị đình chỉ. Vui lòng liên hệ người quản trị.",
+                status_code=403,
+            )
         if not user.is_active:
             raise IdentityAPIError(
-                "ACCOUNT_PENDING_ACTIVATION", "Account unavailable.", status_code=403
+                "ACCOUNT_PENDING_ACTIVATION", "Tài khoản chưa được kích hoạt.", status_code=403
             )

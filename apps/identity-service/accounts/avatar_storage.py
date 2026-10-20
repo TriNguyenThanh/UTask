@@ -54,9 +54,9 @@ class AvatarStorage:
                     "UPLOAD_NOT_FOUND", "Chưa tìm thấy ảnh tải lên.", status_code=404
                 ) from exc
             raise IdentityAPIError(
-                "STORAGE_UNAVAILABLE", "Không thể kiểm tra ảnh trên R2.", status_code=503
+                "STORAGE_UNAVAILABLE", "Không thể kiểm tra ảnh đã tải lên.", status_code=503
             ) from exc
         except BotoCoreError as exc:
             raise IdentityAPIError(
-                "STORAGE_UNAVAILABLE", "Không thể kiểm tra ảnh trên R2.", status_code=503
+                "STORAGE_UNAVAILABLE", "Không thể kiểm tra ảnh đã tải lên.", status_code=503
             ) from exc

@@ -15,6 +15,7 @@ from accounts.serializers.profiles import AdminUserSerializer
 from accounts.services.administration import change_role, change_status
 from accounts.services.profiles import public_users
 from common.pagination import IdentityPagePagination
+from config.api_documentation import RoleChangeAutoSchema
 
 
 @extend_schema_view(get=extend_schema(parameters=[AdminQuerySerializer]))
@@ -69,13 +70,14 @@ class AdminStatusView(GenericAPIView):
 
 @extend_schema_view(
     post=extend_schema(
+        request=RoleChangeSerializer,
         responses=inline_serializer(
             "AssignedRoles",
             fields={
                 "user_id": serializers.UUIDField(),
                 "roles": serializers.ListField(child=serializers.CharField()),
             },
-        )
+        ),
     ),
     delete=extend_schema(
         request=RoleChangeSerializer,
@@ -91,6 +93,7 @@ class AdminStatusView(GenericAPIView):
     ),
 )
 class AdminRoleView(GenericAPIView):
+    schema = RoleChangeAutoSchema()
     serializer_class = RoleChangeSerializer
     permission_classes = [IsAuthenticated, SystemAdminPermission]
     success_messages = {

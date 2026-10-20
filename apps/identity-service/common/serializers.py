@@ -26,5 +26,7 @@ class StrictInputMixin:
             return super().to_internal_value(data)
         unknown = set(data) - set(self.fields)
         if unknown:
-            raise serializers.ValidationError({name: "Unknown field." for name in sorted(unknown)})
+            raise serializers.ValidationError(
+                {name: "Trường này không được phép gửi." for name in sorted(unknown)}
+            )
         return super().to_internal_value(data)

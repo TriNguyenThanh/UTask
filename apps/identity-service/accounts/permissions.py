@@ -38,6 +38,6 @@ class ServiceKeyPermission(BasePermission):
                 accepted |= secrets.compare_digest(supplied, expected.encode())
         if not accepted:
             raise IdentityAPIError(
-                "SERVICE_ACCESS_DENIED", "Service caller không hợp lệ.", status_code=403
+                "SERVICE_ACCESS_DENIED", "Yêu cầu truy cập không được chấp nhận.", status_code=403
             )
         return True

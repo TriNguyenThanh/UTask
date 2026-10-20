@@ -59,7 +59,7 @@ def test_validation_error_is_flattened_to_a_details_array():
     assert response.status_code == 400
     assert response.data["error"] == {
         "code": "VALIDATION_ERROR",
-        "details": [{"field": "email", "issue": "This field is required."}],
+        "details": [{"field": "email", "issue": "Trường này là bắt buộc."}],
     }
 
 
@@ -77,7 +77,7 @@ def test_django_validation_error_uses_bad_request_status_and_public_envelope():
         "meta": None,
         "error": {
             "code": "VALIDATION_ERROR",
-            "details": [{"field": "email", "issue": "Enter a valid email address."}],
+            "details": [{"field": "email", "issue": "Nhập một địa chỉ email hợp lệ."}],
         },
     }
 
@@ -126,7 +126,12 @@ def test_exception_handler_preserves_authentication_token_codes(code):
     )
     assert response.status_code == 401
     assert response.data["error"]["code"] == code
-    assert response.data["message"] == f"{code} message."
+    expected = {
+        "TOKEN_EXPIRED": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+        "INVALID_TOKEN": "Thông tin đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+        "TOKEN_REVOKED": "Phiên đăng nhập đã bị thu hồi. Vui lòng đăng nhập lại.",
+    }
+    assert response.data["message"] == expected[code]
     assert response.data["error"]["details"] == []
 
 

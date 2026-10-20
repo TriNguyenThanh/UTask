@@ -28,13 +28,13 @@ from messaging.mail_crypto import mail_key
     )
 )
 class StudentRegisterView(RegisterView):
+    success_message = "Đăng ký tài khoản thành công."
     throttle_scope = "registration"
 
     def create(self, request, *args, **kwargs):
-        mail_key()
         if request.headers.get("Idempotency-Key"):
             raise serializers.ValidationError(
-                "Registration idempotency is not supported in this version."
+                "Đăng ký tài khoản chưa hỗ trợ mã yêu cầu chống xử lý lặp."
             )
         with RegistrationService.signup_transaction():
             return super().create(request, *args, **kwargs)
@@ -66,7 +66,7 @@ class ActivationView(VerifyEmailView):
     def post(self, request, *args, **kwargs):
         allowed = {"key", "new_password1", "new_password2"}
         if set(request.data) - allowed:
-            raise serializers.ValidationError("Unknown activation fields.")
+            raise serializers.ValidationError("Yêu cầu kích hoạt chứa trường không được phép.")
         key_serializer = self.get_serializer(data=request.data)
         key_serializer.is_valid(raise_exception=True)
         return RegistrationService.activate_account(
@@ -86,4 +86,6 @@ class ActivationResendView(ResendEmailVerificationView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"].strip().lower()
         RegistrationService.resend_activation(email, request._request)
-        return Response({"detail": "If eligible, verification instructions have been queued."})
+        return Response(
+            {"detail": "Nếu tài khoản đủ điều kiện, hướng dẫn kích hoạt đã được đưa vào hàng đợi."}
+        )
