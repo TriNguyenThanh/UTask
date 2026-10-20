@@ -1,7 +1,8 @@
 # API Integration Service
 
-**Trạng thái: Một phần.** Các route dưới đây có trong source; GitHub thật và
-runtime production chưa xác minh. Contract máy đọc được ở
+**Trạng thái: Đã triển khai trong source.** Các ca GitHub dev theo kế hoạch
+đã nghiệm thu local; bằng chứng tại [checkpoint 20/10/2026](checkpoint-2026-10-20.md).
+Runtime production chưa xác minh. Contract máy đọc được ở
 [OpenAPI 1.3.0](../../contracts/api/integration-service-v1.yaml). Path tính từ root server,
 chưa gồm prefix gateway. Response thành công dùng `{success:true,data:...}`.
 

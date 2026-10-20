@@ -1,12 +1,12 @@
 # Integration: hiện trạng và cách kiểm tra
 
 **Trạng thái: Một phần.** Đã đối chiếu source và cấu hình M4 trong worktree
-ngày 19/10/2026. Bộ kiểm thử và smoke Docker local đã chạy; GitHub thật và
-deploy thực tế **Chưa xác minh**.
+ngày 19/10/2026. Bộ kiểm thử và smoke Docker local đã chạy; ngày 20/10/2026
+đã nghiệm thu các ca GitHub dev theo kế hoạch. Staging/production **Chưa xác minh**.
 
 Cập nhật cấu hình và chẩn đoán Docker local ngày 20/10/2026 tại
-[checkpoint mới](checkpoint-2026-10-20.md); luồng installation GitHub thật
-vẫn chưa được nghiệm thu đầy đủ.
+[checkpoint mới](checkpoint-2026-10-20.md), gồm bằng chứng consent, đọc repo,
+refresh thật, vòng đời quyền và trạng thái kết nối lại cuối phiên.
 
 ## Bằng chứng source
 
@@ -20,8 +20,8 @@ vẫn chưa được nghiệm thu đầy đủ.
 | Installation/repository | Đã triển khai trong source | start/complete, actor/Bearer/nonce/state binding, live provider checks, pagination |
 | Webhook | Đã triển khai trong source | raw-body HMAC-SHA256, giới hạn 25 MiB, delivery ID/fingerprint durable; authorization revoke thu hồi local credential đồng bộ |
 | Jobs | Đã triển khai trong source | PostgreSQL `GitHubJob`, claim/lease/version, Celery task payload chỉ ID; retry hữu hạn; replay command |
-| Runtime/deployment | Một phần | Compose API, migration gate, worker, Beat và Redis broker có; chưa xác minh deploy |
-| GitHub/Identity thật | Chưa xác minh | Tests mock không chứng minh upstream/provider thật |
+| Runtime/deployment | Một phần | API/worker/Beat local healthy; webhook/job đã xử lý sự kiện GitHub thật; staging/production chưa xác minh |
+| GitHub/Identity thật trong phạm vi dev | Đã triển khai, đã nghiệm thu local | Actor qua Identity/gateway, smoke có Bearer và các ca live có bằng chứng riêng trong checkpoint 20/10; không suy ra từ test mock |
 
 ## Hành vi và cấu hình
 
@@ -117,18 +117,13 @@ domain sync trong M4. Work authorization/mutation và AI context vẫn
 
 ## Smoke GitHub thật (chạy riêng)
 
-Hoàn tất consent/cài App bằng tài khoản test trước, rồi đặt
-`INTEGRATION_SMOKE_URL` (root Integration hoặc gateway `/api/integrations`),
-`INTEGRATION_SMOKE_BEARER` và tùy chọn `INTEGRATION_SMOKE_INSTALLATION_ID`.
-Từ root repo chạy:
-
-```bash
-uv run --project apps/integration-service python scripts/smoke_integration_github.py
-```
-
-Script chỉ GET account/installation/repository, không theo redirect và không
-in Bearer hoặc response cá nhân. Chưa chạy script với GitHub thật trong M4;
-OAuth/refresh/revoke và callback thật vẫn cần nghiệm thu riêng.
+[Runbook nghiệm thu](live-acceptance.md) là nguồn chuẩn cho Reqable, biến môi
+trường/cách chạy smoke, kiểm repo kỳ vọng qua phân trang, refresh có kiểm
+soát và các ca uninstall/revoke/phục hồi. Script chỉ GET, không theo redirect
+mang Bearer và không ép refresh/revoke/uninstall; GET có thể refresh tự nhiên
+theo backend. Kết quả GitHub dev ngày 20/10/2026 nằm tại
+[checkpoint](checkpoint-2026-10-20.md); không suy ra từ test mock hoặc smoke
+Docker local ở trên, không khẳng định staging/production đã đạt.
 
 
 ## Phân tích ảnh hưởng cuối thay đổi

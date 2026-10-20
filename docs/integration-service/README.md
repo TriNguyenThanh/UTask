@@ -2,8 +2,9 @@
 
 **Trạng thái: Một phần.** API account, consent GitHub App, credential mã hóa,
 refresh có fencing, GitHub App installation, webhook bền vững và worker có
-trong source. Cấu hình M4 mặc định tắt; GitHub thật và triển khai chưa được
-xác minh. Chi tiết tại [foundation](foundation.md), [API](api.md) và
+trong source. Các ca GitHub dev trong kế hoạch nghiệm thu đã đạt ngày
+20/10/2026; staging/production chưa xác minh. Cấu hình M4 mặc định tắt.
+Chi tiết tại [foundation](foundation.md), [API](api.md) và
 [checkpoint 20/10/2026](checkpoint-2026-10-20.md).
 
 ## Nguồn chuẩn
@@ -14,6 +15,8 @@ xác minh. Chi tiết tại [foundation](foundation.md), [API](api.md) và
   quyền, cài App, đọc repository live, chọn repo chính cho Project và liên kết
   hoạt động GitHub vào Task.
 - [Foundation](foundation.md): bằng chứng source, cấu hình và kiểm thử.
+- [Nghiệm thu GitHub thật](live-acceptance.md): checklist Reqable, smoke,
+  refresh có kiểm soát và vòng đời quyền; kết quả từng phiên ở checkpoint.
 - [Sơ đồ](diagram/README.md): mô hình khái niệm và luồng mục tiêu.
 
 ## Ranh giới service
@@ -32,12 +35,13 @@ hay GitHub App private key trong M4.
 
 | Hạng mục | Trạng thái | Bằng chứng |
 | --- | --- | --- |
-| Account và xác thực Identity | Đã triển khai trong source | API account, Identity Bearer adapter và kiểm thử; tích hợp runtime chưa xác minh |
+| Account và xác thực Identity | Đã triển khai | API account, Identity Bearer adapter, kiểm thử và actor thật qua gateway ở local |
 | Consent GitHub App và credential | Đã triển khai trong source | OAuth authorization hiện có đổi sang user token có hạn, mã hóa riêng; kiểm thử mock |
 | Refresh fencing và revoke | Đã triển khai trong source | version/generation/claim, job thu hồi token và management command |
 | Installation và repository live list | Đã triển khai trong source | setup start/complete, kiểm tra quyền live và phân trang |
 | Webhook, job durable và worker/Beat | Đã triển khai trong source | HMAC, inbox PostgreSQL, Celery/Redis, migration gate trong Compose |
-| GitHub thật/production | Chưa xác minh | Cần cấu hình và xác minh môi trường thật |
+| GitHub dev theo kế hoạch nghiệm thu | Đã triển khai, đã nghiệm thu local | Consent, đọc repo, refresh thật, đổi quyền repo, uninstall/reinstall, revoke, DELETE và reconnect; xem checkpoint |
+| Staging/production | Chưa xác minh | Không deploy trong phiên nghiệm thu local |
 | Project/Task mutation, AI context, Kafka | Chưa triển khai | Ngoài phạm vi M4; Work vẫn sở hữu quyền nghiệp vụ |
 
 ## Mốc triển khai
@@ -45,10 +49,11 @@ hay GitHub App private key trong M4.
 - M0–M2: ownership và xác minh actor qua Identity API.
 - M3: OAuth consent PKCE và mapping account, trước đây không lưu token.
 - M4: chuyển consent sang GitHub App user authorization, lưu credential mã
-  hóa có hạn, installation, webhook và jobs. Mốc triển khai thực tế chưa xác
-  minh; xem [checkpoint](checkpoint-2026-10-20.md).
+  hóa có hạn, installation, webhook và jobs. GitHub dev đã nghiệm thu local;
+  staging/production chưa xác minh. Xem [checkpoint](checkpoint-2026-10-20.md).
 
 Các kế hoạch trong `plans/` là snapshot, không phải hợp đồng hiện hành.
 
-Phiên tiếp theo theo [kế hoạch nghiệm thu GitHub thật](plans/2026-10-20-github-live-acceptance.md):
-hoàn tất installation/repository, kiểm tra refresh, uninstall/revoke và kết nối lại.
+Thực hiện [runbook nghiệm thu GitHub thật](live-acceptance.md) để hoàn tất
+installation/repository, refresh, uninstall/revoke và kết nối lại. Kết quả
+thực tế được ghi tại checkpoint của phiên, không suy ra từ checklist.
