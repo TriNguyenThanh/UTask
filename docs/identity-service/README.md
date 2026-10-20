@@ -203,6 +203,16 @@ Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tư�
 projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
 kiểm envelope rồi bỏ qua tại consumer hồ sơ, không đưa nhầm vào DLQ. Xem
 [quy tắc phía Work](../project-service/identity-events.md).
+Publisher dùng row lock/skip-locked, chỉ gửi đầu hàng pending của mỗi user,
+ghi `published_at` sau callback ACK. Lỗi lưu loại exception (không message chứa secret),
+retry backoff tối đa300 giây; không cho event sau vượt event lỗi cùng user. Crash sau
+ACK có thể gửi lại cùng event ID, consumer phải chống lặp. Event mail hết hạn được
+đặt `secret=null`, giữ user/email/expiry trước publish. Kiểm tra backlog/retry qua `published_at`, `retry_count`, `last_error`, `next_attempt_at`;
+event lỗi giữ trong DB để điều tra, không bị bỏ qua hay tự đánh dấu thành công.
+Xem log bằng `docker compose logs -f identity-publisher`. Logger `identity.outbox`
+ghi `publish_succeeded` ở mức INFO sau Kafka ACK và DB commit, gồm `event_id`,
+`event_type`, `topic`; lỗi gửi ghi `publish_failed` ở mức WARNING. Không ghi nội dung
+event, email, mã kích hoạt hay token. Khi không có sự kiện chờ, publisher không in log.
 
 Google dùng allauth xác minh danh tính đăng nhập. GitHub dùng để liên kết tài khoản:
 Identity quản lý OAuth context/link, chỉ Integration đổi code và gọi GitHub API qua

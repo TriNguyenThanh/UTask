@@ -193,7 +193,7 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 4. OAuth bước start phía server theo3.3.0; context Redis10 phút, atomic one-use, gắn provider/URI/browser và user_id khi link. Chỉ server giữ nonce/PKCE verifier. Client phải giữ cookie context; Redis outage503 IDENTITY_UNAVAILABLE, không bỏ qua context.
 5. Avatar receipt Redis300 giây owner/key/type/size; confirm kiểm receipt, HEAD R2 thật ngoài TX-I. Key đã là avatar chính user trả200 no-op; confirm khác không receipt trả400. Public URL derive server. Orphan dùng lifecycle R2, không DELETE dữ liệu tài khoản.
 6. Admin/internal delegated mutation kiểm role hiện tại trong DB sau khóa actor/target, không chỉ JWT roles. Role no-op không phát event/revoke mới; role đổi thật revoke mọi family target. Không project bypass cho Admin.
-7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Một Celery poller active không overlap, lease Redis owner/TTL được giữ khi publish. Read oldest (created_at,id); event lỗi cùng user không bị vượt. ACK rồi crash trước mark gây duplicate. Nhiều poller cần fencing/claim riêng trước triển khai, không hứa “thứ tự tuyệt đối” từ partition key.
+7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Publisher lấy bản ghi chờ cũ nhất của mỗi user theo (created_at,id), dùng PostgreSQL row lock và skip-locked để tránh hai process đồng thời gửi cùng đầu hàng. Event lỗi cùng user không bị vượt. Chỉ ghi published_at sau Kafka ACK; ACK rồi crash trước mark có thể gây duplicate, consumer phải chống lặp theo event_id.
 8. GitHub reconcile theo3.7.1 trước update projection/replay/backfill; outage phải retry, không verified từ event cũ. Public/batch giữ policy Bearer toàn hệ thống hiện tại; không tự thêm quyền cùng lớp nếu sản phẩm chưa đổi contract.
 
 ### 1.11. Trạng thái API và thư viện ở phiên bản1.7
@@ -1024,7 +1024,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 * **Topic:** `utask.identity.events`
 * **Partition Key:** `user_id` (thứ tự broker nhận trong partition, không phải exactly-once/thứ tự nghiệp vụ giữa nhiều producer).
 
-**Chuẩn v1 đã chọn cho thiết kế:** trường nghiệp vụ là `data`, không chấp nhận đồng thời hoặc thay thế bằng `payload`. Cột JSONB của outbox Identity cũng tên `data`, giữ kiểu JSONB; không đổi `payload_hash` của receipt/request. event_id/time/trace không đổi khi retry. Chưa có migration/producer triển khai trong checkout; đây không phải ALTER TABLE đã thực thi. Nếu phát hiện môi trường khác đang dùng tên cũ, lập migration/consumer compatibility trước rollout, không tự xóa dữ liệu.
+**Chuẩn v1 đã triển khai:** trường nghiệp vụ là `data`, không chấp nhận đồng thời hoặc thay thế bằng `payload`. Cột JSONB của outbox Identity cũng tên `data`; `payload_hash` của receipt/request giữ nguyên. Producer gửi envelope đã lưu; event_id/time/trace không đổi khi retry. Migration0006 bổ sung lịch thử lại và index hàng chờ, không đổi tên cột JSONB. Không suy ra migration trên staging từ kết quả database kiểm thử local.
 
 ### 4.1. Sự kiện `identity.user.created`
 Được phát khi có tài khoản mới được tạo (qua Đăng ký, Google OAuth, hoặc Import sinh viên).

@@ -140,6 +140,7 @@ LOGGING = {
     },
     "loggers": {
         "identity.api": {"handlers": ["api_console"], "level": "WARNING", "propagate": False},
+        "identity.outbox": {"handlers": ["api_console"], "level": "INFO", "propagate": False},
     },
 }
 PASSWORD_HASHERS = [
