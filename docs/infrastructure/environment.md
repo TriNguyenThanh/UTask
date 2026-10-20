@@ -240,6 +240,12 @@ consumer Identity và bên gửi thông điệp lỗi, gồm tài khoản, mật
 khi dùng Kafka cloud. Quy tắc chỉ xác nhận offset sau xử lý hoặc DLQ thành công
 được giữ nguyên; kiểm thử cấu hình không thay cho nghiệm thu luồng sự kiện thật.
 
+Consumer hồ sơ Work dùng `WORK_IDENTITY_KAFKA_TOPIC`; khi để trống, mapping lấy
+`IDENTITY_KAFKA_TOPIC` (mặc định `utask.identity.events`) để khớp producer Identity.
+Không tạo broker Identity riêng. Đã có kiểm chứng local riêng tại
+[Work nhận sự kiện Identity](../project-service/identity-events.md); không coi đó là
+nghiệm thu staging hoặc consumer Notification.
+
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
 deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và

@@ -21,6 +21,31 @@ x-work-runtime: &work_runtime
     redis:
       condition: service_healthy
 
+x-identity-publisher: &identity_publisher
+  profiles: [identity-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/identity-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  restart: unless-stopped
+  x-deploy:
+    role: worker
+    application: identity-service
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/identity-service.env
+  volumes:
+    - type: bind
+      source: ${IDENTITY_JWT_PRIVATE_KEY_HOST_PATH:?Set the RSA private key path on the staging server}
+      target: /run/identity-secrets/jwt-private.pem
+      read_only: true
+      bind:
+        create_host_path: false
+    - ./infra/env:/run/kafka-certificates:ro
+  depends_on:
+    identity-service:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
 services:
 
   postgres:
@@ -105,6 +130,10 @@ services:
       timeout: 5s
       retries: 6
       start_period: 15s
+
+  identity-publisher:
+    <<: *identity_publisher
+    command: ["/app/.venv/bin/python", "manage.py", "publish_identity_outbox", "--watch"]
 
   work-service:
     <<: *work_runtime

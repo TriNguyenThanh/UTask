@@ -18,6 +18,26 @@ x-ai: &ai
   extra_hosts:
     - host.docker.internal:host-gateway
 
+x-identity-publisher: &identity_publisher
+  profiles: [identity-service]
+  image: ${UTASK_IMAGE_PREFIX:-utask}/identity-service:${UTASK_IMAGE_TAG:-local}
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/identity-service.env
+  volumes:
+    - type: bind
+      source: ${IDENTITY_JWT_PRIVATE_KEY_HOST_PATH:-./.local-secrets/identity-jwt-private.pem}
+      target: /run/identity-secrets/jwt-private.pem
+      read_only: true
+    - ./infra/env:/run/kafka-certificates:ro
+  depends_on:
+    identity-service:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
 services:
 
   postgres:
@@ -95,6 +115,10 @@ services:
       timeout: 5s
       retries: 6
       start_period: 15s
+
+  identity-publisher:
+    <<: *identity_publisher
+    command: ["/app/.venv/bin/python", "manage.py", "publish_identity_outbox", "--watch"]
 
   work-service:
     image: ${UTASK_IMAGE_PREFIX:-utask}/work-service:${UTASK_IMAGE_TAG:-local}

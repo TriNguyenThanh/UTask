@@ -35,6 +35,8 @@ của lớp persistence đã chọn khi được triển khai.
 
 Giai đoạn đầu dùng outbox + Celery publisher; Debezium CDC là lựa chọn mở
 rộng khi có nhu cầu, không phải dependency bắt buộc của MVP.
+Riêng Identity dùng command `publish_identity_outbox --watch`, không có Celery/Beat
+ở bước chuyển sự kiện này theo quyết định đơn giản hóa hiện tại. Broker vẫn dùng chung.
 
 Với AI, event kết quả chỉ được phát khi đã có contract: application lưu kết
 quả và outbox trong cùng transaction, publisher gửi Kafka sau commit. API
@@ -72,6 +74,7 @@ hình dùng client giả, không thay cho nghiệm thu broker thật.
 | Luồng | Topic mặc định | Partition key | Consumer / DLQ |
 | --- | --- | --- | --- |
 | Work tạo dự án | `utask.work.events` | Project UUID | Classroom `consume_work` / `utask.classroom.work.dlq` |
+| Hồ sơ Identity | `utask.identity.events` | User UUID | Work `consume_identity` / `utask.work.profile.dlq`; các loại đã chốt ngoài hồ sơ được kiểm envelope rồi bỏ qua |
 | Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Chưa có `consume_classroom` trong source Work của checkout này |
 
 Publisher chỉ ghi `published_at` sau delivery callback thành công, lỗi thử
