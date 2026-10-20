@@ -1,5 +1,13 @@
 # Classroom Service
 
+Đối chiếu riêng ngày20/10/2026 cho đường Classroom→Identity: HTTP thật đã kiểm
+JWKS/session-status, tạo lớp và phân công giáo viên, provisioning JSON từng dòng,
+idempotency, enrich hồ sơ batch, quyền lớp, thu hồi phiên và dependency lỗi/khôi phục.
+Kết quả local tại `artifacts/identity/classroom-integration/runtime.json`; bộ mặc định
+Classroom308 ca đạt,17 E2E/external được loại theo cấu hình pytest. Không đồng nghĩa
+đã nghiệm thu gateway/staging hoặc chạy lại toàn pipeline Classroom–Work.
+Classroom chưa có endpoint resend public riêng; hợp đồng resend nội bộ hiện ở Identity.
+
 **Trạng thái: Đã triển khai backend P0/P1 trong mã nguồn. Các số nghiệm thu local là snapshot từng lần chạy, xem
 kết quả kiểm thử (bản local `backend-validation.md`).** Không gồm giao
 diện, bước 8 của kế hoạch hoặc học vụ P2; không suy trạng thái staging từ local.
