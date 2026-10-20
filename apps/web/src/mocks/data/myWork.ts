@@ -255,9 +255,9 @@ export function buildMixedOverview(now = new Date(ANCHOR_DATE)): MyWorkOverview 
 
   const open = tasks.filter((task) => task.status !== "done");
   const dueToday = open.filter(
-    (task) => new Date(task.dueAt).toDateString() === now.toDateString(),
+    (task) => task.dueAt !== null && new Date(task.dueAt).toDateString() === now.toDateString(),
   );
-  const overdue = open.filter((task) => new Date(task.dueAt) < now);
+  const overdue = open.filter((task) => task.dueAt !== null && new Date(task.dueAt) < now);
 
   return {
     semester: "HK1 2026–2027",
@@ -434,9 +434,9 @@ export function buildOverviewForUser(
 
   const open = tasks.filter((task) => task.status !== "done");
   const dueToday = open.filter(
-    (task) => new Date(task.dueAt).toDateString() === now.toDateString(),
+    (task) => task.dueAt !== null && new Date(task.dueAt).toDateString() === now.toDateString(),
   );
-  const overdue = open.filter((task) => new Date(task.dueAt) < now);
+  const overdue = open.filter((task) => task.dueAt !== null && new Date(task.dueAt) < now);
   const sprintProgressPercent =
     sprints.length > 0
       ? Math.round(

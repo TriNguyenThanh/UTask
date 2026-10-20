@@ -1,6 +1,6 @@
 import type { MyTask } from "@/features/my-work/types";
 
-export type TaskBucketId = "today" | "week" | "overdue";
+export type TaskBucketId = "today" | "week" | "overdue" | "undated";
 
 /**
  * Done tasks are closed work: they never reappear in "today", "week" or
@@ -11,15 +11,15 @@ function isOpen(task: MyTask): boolean {
 }
 
 export function isDueToday(task: MyTask, now: Date): boolean {
-  return isOpen(task) && new Date(task.dueAt).toDateString() === now.toDateString();
+  return isOpen(task) && task.dueAt !== null && new Date(task.dueAt).toDateString() === now.toDateString();
 }
 
 export function isOverdue(task: MyTask, now: Date): boolean {
-  return isOpen(task) && new Date(task.dueAt) < now;
+  return isOpen(task) && task.dueAt !== null && new Date(task.dueAt) < now;
 }
 
 export function isDueWithinDays(task: MyTask, now: Date, days: number): boolean {
-  if (!isOpen(task)) return false;
+  if (!isOpen(task) || task.dueAt === null) return false;
   const due = new Date(task.dueAt);
   const endOfWeek = new Date(now);
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + days);
@@ -34,5 +34,7 @@ export function tasksForBucket(tasks: MyTask[], bucket: TaskBucketId, now: Date)
       return tasks.filter((task) => isDueWithinDays(task, now, 7));
     case "overdue":
       return tasks.filter((task) => isOverdue(task, now));
+    case "undated":
+      return tasks.filter((task) => isOpen(task) && task.dueAt === null);
   }
 }

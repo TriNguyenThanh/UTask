@@ -54,7 +54,10 @@ VITE_API_BASE_URL=
 | 11 | Work: ghi task cốt lõi (tạo issue, kéo thả/menu đổi cột, chặn/bỏ chặn, sửa trong panel, tạo và tick nhiệm vụ con) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
 | 12 | Work: epic (tạo/sửa/xóa), nhãn (quản lý + gán), liên kết task, lưu trữ/xóa/khôi phục task | Một phần (đã smoke API thật và giao diện Backlog trên staging; xem giới hạn) |
 | 13 | Work: sprint (tạo/sửa/bắt đầu/kết thúc), thêm/bớt issue khỏi sprint (menu và kéo thả Backlog), tiến độ + burndown, tổng quan dự án, sửa capacity | Một phần (đã smoke API thật và giao diện tạo/bắt đầu sprint trên staging; xem giới hạn) |
-| 14+ | Work (comment, activity, đính kèm, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
+| 14 | Work: bình luận, lịch sử hoạt động, tệp đính kèm, phản hồi của giảng viên cho dự án | Một phần (đã smoke API thật trên staging; giao diện chỉ có test thành phần; upload từ trình duyệt có thể bị CORS của R2 chặn, B30) |
+| 14 (GitHub) | Work: repository, liên kết GitHub, username GitHub, tab Code thật | Chưa triển khai (hoãn theo yêu cầu, vẫn dùng dữ liệu mock) |
+| 15 | Work: Trang chủ (My Work) và Sidebar dựng từ dự án thật, tiến độ dự án cho giảng viên | Một phần (đã kiểm API đọc trên staging; chưa smoke giao diện; xem giới hạn) |
+| 16+ | Admin; AI làm cuối trong plan riêng | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -379,6 +382,26 @@ Giới hạn:
 - Giới hạn: workspace bỏ sprint đã hoàn thành; Backlog không có issue thì ẩn cả sprint và thanh công cụ sprint; chưa có giao diện lưu trữ/xóa sprint; kiểm tra thành viên phải còn hoạt động mới gán capacity (422 `MEMBER_NOT_ACTIVE`).
 - Kiểm tra: `tsc`, 79 file / 1017 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật (tạo, bắt đầu thiếu ngày → 400 `INVALID_OPERATION`, thêm vào sprint đang chạy thiếu lý do → 422, có lý do → `is_scope_creep`, progress, burndown, dashboard, kết thúc có đích, capacity); giao diện tạo sprint và bắt đầu sprint (hiện tiến độ). Chưa smoke giao diện: menu đổi sprint, hộp kết thúc sprint, sửa capacity, thành viên không phải Leader (có test thành phần).
 
+## Work cộng tác: bình luận, lịch sử, đính kèm (Phase 14)
+
+- Phạm vi: **không gồm GitHub** (repository, liên kết, username, tab Code) — hoãn theo yêu cầu, giữ dữ liệu mock.
+- Bình luận (panel issue, chế độ thật): gửi **text thuần** làm `content_html` (repo chưa có thư viện sanitize); không bao giờ gửi `is_teacher_feedback` (server tự gắn huy hiệu). Không dùng `Idempotency-Key`. Người nhắc (@) chọn từ thành viên, mention ngoài dự án → 422 và giữ nguyên nội dung. Chỉ tác giả sửa; tác giả hoặc Leader xóa. Dự án lưu trữ ẩn ô soạn.
+- Lịch sử: `GET tasks/{id}/activities/`; giá trị cũ/mới là chuỗi thô, `parseActivityValue` thử JSON rồi trả nguyên văn. Chưa có lịch sử cấp dự án.
+- Đính kèm: presign → `PUT` thẳng lên R2 bằng `fetch` (không gửi token) → confirm có `Idempotency-Key`. Client kiểm loại tệp (7 loại) và cỡ ≤ 25 MB trước. Link tải lấy mới ngay trước khi mở, không cache. 503 → "Kho lưu trữ chưa sẵn sàng", không tự thử lại; R2 từ chối → thông báo chọn lại tệp.
+- Giảng viên: ô "Phản hồi cho nhóm" ở trang nhóm (Work thật) là bình luận cấp dự án (`POST /comments/` với `project_id`). Nhánh demo vẫn là bản nháp cục bộ.
+- Kiểm tra: `tsc`, test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging API thật: tạo/sửa/xóa bình luận, mention ngoài dự án → 422, activities, presign, `PUT` từ Node, confirm, link tải, xóa tệp. **Chưa smoke giao diện trình duyệt**; huy hiệu giảng viên và mention hợp lệ chưa thử trên staging (dự án smoke chỉ có 1 thành viên).
+
+## Work Trang chủ, Sidebar, giảng viên (Phase 15)
+
+- Điều kiện: chỉ khi **cả Work và Classroom** là thật (`VITE_REAL_SERVICES` có `work` và `classroom`); thiếu một trong hai vẫn dùng MSW.
+- Tổng quan (`useMyWorkOverview`, dùng cho Trang chủ và Sidebar) dựng phía client: môn học lấy từ Classroom, việc của tôi lấy bằng fan-out `GET projects/{id}/tasks/?assignee_id=<tôi>` cho từng dự án chưa lưu trữ mà tôi là thành viên (đợt 5 song song), tiến độ sprint đang chạy lấy từ `sprints/{id}/progress/`. Một dự án lỗi bị bỏ qua và trang hiện "Một phần dữ liệu chưa tải được."; lỗi tiến độ sprint chỉ làm mất thẻ sprint đó.
+- Sidebar: môn học có dự án chưa lưu trữ thì mở thẳng dự án (gắn theo `class_id`).
+- Task chưa có hạn không thuộc bộ lọc Hôm nay/Tuần này/Quá hạn nên thêm tab "Chưa đặt hạn"; `MyTask.dueAt` có thể `null`. Hạn `due_date` chỉ có ngày, coi là hết ngày đó.
+- Thẻ sprint: điểm lấy từ server; "sức khỏe" (đúng tiến độ/rủi ro/trễ) là **ước lượng phía client** (quá hạn chưa xong → trễ; chậm hơn thời gian trôi trên 20 điểm % → rủi ro). Không có tên giảng viên (Work không cấp) nên ẩn dòng GVHD.
+- Giảng viên: trang nhóm có thẻ "Tiến độ dự án" (số task, % hoàn thành, quá hạn, đang bị chặn từ `dashboard`) và "Phản hồi cho nhóm" (bình luận cấp dự án). Các màn Board/Backlog đã chỉ đọc cho giảng viên từ Phase 10–13.
+- Không có ở chế độ thật: khối GitHub của Trang chủ, số PR (`openPullRequests` luôn 0, UI không hiện), tab Code và Settings (`WorkModuleNotIntegrated`, chờ GitHub và plan AI).
+- Kiểm tra: `tsc`, test cả khi có và không có `.env.local`, build; ESLint không chạy được. Staging chỉ có dự án smoke đã lưu trữ nên fan-out Trang chủ chưa chạy với dữ liệu sống; đã kiểm `tasks?assignee_id`, `dashboard` và `comments` đọc được bằng cả hai tài khoản. Chưa smoke giao diện.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -403,8 +426,9 @@ Giới hạn:
 | B17 | `tech_stack` là object tự do, chưa có cấu trúc hay tài liệu; frontend luôn gửi `{}` |
 | B18 | Một nhóm có nhiều dự án nhưng không có khái niệm "dự án chính"; `identifier` duy nhất toàn hệ thống dễ trùng giữa các lớp; chưa có API xóa dự án |
 | B19 | Liên kết Classroom↔Work (`GET /api/classroom/groups/{id}/projects/`) cập nhật bất đồng bộ qua Kafka; cần xác nhận consumer chạy trên staging và độ trễ tối đa. Phase 9 hỏi thẳng Work |
-| B20 | Sidebar và My Work vẫn chạy MSW (`/api/work/api/v1/my-work/overview`); Work chưa có API tổng quan công việc của tôi |
+| B20 | Work chưa có API "việc của tôi" xuyên dự án; Trang chủ và Sidebar gom bằng N+1 lời gọi (Phase 15), chậm khi sinh viên có nhiều dự án. Cần endpoint tổng hợp nếu số dự án lớn |
 | B21 | `GET /projects/{id}/members/` chậm (~5 giây trên staging); `ProjectMember.display_name` có thể rỗng khi `UserProjection` chưa đồng bộ, frontend tra lại qua `users/batch` |
+| B30 | Preflight `OPTIONS` từ origin web tới URL presign R2 trả 403, không có header `access-control-*`; `PUT` từ Node thì qua. Nếu bucket chưa cho origin của web (method `PUT`, header `Content-Type`) thì upload từ trình duyệt sẽ bị chặn. Cần backend/ops cấu hình CORS bucket và xác nhận trên trình duyệt; nếu không, ẩn khối đính kèm |
 
 ## Kiểm tra đã chạy
 

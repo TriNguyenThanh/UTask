@@ -219,6 +219,8 @@ export function taskHandlers(fixture: TaskFixture): HttpHandler[] {
       });
       const stateFilter = url.searchParams.get("state_id");
       if (stateFilter) rows = rows.filter((task) => task.state_id === stateFilter);
+      const assigneeFilter = url.searchParams.get("assignee_id");
+      if (assigneeFilter) rows = rows.filter((task) => task.assignee_ids.includes(assigneeFilter));
       const sprintId = url.searchParams.get("sprint_id");
       if (sprintId === "none") {
         const inSprint = new Set(Object.values(fixture.sprintTasks ?? {}).flat());

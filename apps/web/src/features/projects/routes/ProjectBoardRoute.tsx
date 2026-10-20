@@ -21,6 +21,8 @@ import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { CreateIssueDialog } from "@/features/projects/components/CreateIssueDialog";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
 import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/components/RealIssueSlots";
+import { collabSlots } from "@/features/projects/components/RealCollab";
+import { useAuth } from "@/features/auth/AuthProvider";
 import type { IssueWrites } from "@/features/projects/lib/issueWrites";
 import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
 import { useRealIssueWrites, useToggleSubtask } from "@/lib/query/workWriteHooks";
@@ -267,6 +269,17 @@ function BoardView({
   const canEditRealIssue =
     real && !archived && !readOnly && detail.data !== undefined && (mover.role === "leader" || detail.data.issue.isMine);
 
+  // Work thật: bình luận/lịch sử/tệp lấy từ server. Giảng viên (readOnly) vẫn bình luận được, dự án lưu trữ thì không.
+  const { user } = useAuth();
+  const collab =
+    real && detail.data && user
+      ? collabSlots(
+          detail.data.issue.id,
+          { userId: user.id, isLeader: mover.role === "leader", canComment: !archived, canUpload: !archived && !readOnly },
+          assignees,
+        )
+      : undefined;
+
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
   const visibleIssues = useMemo(
@@ -398,6 +411,7 @@ function BoardView({
           subtaskCreateSlot={
             real && canEditRealIssue && detail.data ? <SubtaskCreateForm parentId={detail.data.issue.id} /> : undefined
           }
+          {...collab}
           onToggleSubtaskRemote={real ? realTools?.toggleSubtask : undefined}
           onChangeStatus={
             detail.data && mover.enabled && canUpdateTask(permissionCtx, detail.data.issue.isMine)

@@ -29,6 +29,8 @@ export function listLabels(client: ApiClient, projectId: string) {
 export interface ListTasksOptions {
   /** UUID của chu kỳ, hoặc `none` cho backlog. Task không có `sprint_id` nên phải hỏi theo chu kỳ (D4). */
   sprintId?: string;
+  /** Chỉ task giao cho người này. */
+  assigneeId?: string;
 }
 
 /** Danh sách task kèm state/epic/labels/assignees. Gồm cả SUBTASK; adapter lọc bỏ. */
@@ -36,7 +38,7 @@ export function listTasks(client: ApiClient, projectId: string, options: ListTas
   return collectAllPages((cursor) =>
     fetchPage<TaskDto>(client, `${project(projectId)}/tasks/`, {
       cursor,
-      params: { expand: "state,epic,labels,assignees", sprint_id: options.sprintId },
+      params: { expand: "state,epic,labels,assignees", sprint_id: options.sprintId, assignee_id: options.assigneeId },
     }));
 }
 
