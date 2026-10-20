@@ -297,9 +297,12 @@ Smoke trình duyệt thật (Chrome qua relay, staging, `VITE_REAL_SERVICES=auth
   (trả thông báo trung tính).
 - Phase 5–6: vào lớp bằng mã sai (404) và đúng (201), tạo nhóm, bật mã mời,
   chuyển Trưởng nhóm, rời nhóm.
-- Phase 7–8: giảng viên đọc bàn làm việc và danh sách sinh viên của lớp thật.
-  Hộp "Thêm sinh viên" chưa smoke giao diện (Chrome ngắt debugger khi tiện ích
-  trình quản lý mật khẩu chèn khung vào ô email).
+- Phase 7–8: giảng viên đọc bàn làm việc và danh sách sinh viên của lớp thật;
+  nhập CSV (3 dòng: 1 dòng sai email bị chặn ở giao diện, 1 thêm vào lớp, 1 đã
+  thuộc lớp); tạo lớp từ môn có sẵn; sửa tên lớp; tạo mã tham gia.
+  Chưa smoke giao diện: hộp "Thêm sinh viên" từng người (Chrome ngắt debugger
+  khi mở hộp thoại), chốt lập nhóm, đóng/lưu trữ lớp, thêm giảng viên, chỉnh
+  nhóm, lịch sử, `VERSION_CONFLICT`, nhập trên 100 dòng.
 
 Hiệu năng danh sách lớp của sinh viên: API không có "nhóm của tôi" (B5) nên
 `loadCourseEnrollments` dò `groups/` rồi `members/` của từng lớp. Mỗi request
