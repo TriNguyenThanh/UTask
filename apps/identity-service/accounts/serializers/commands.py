@@ -30,14 +30,16 @@ class ProfilePatchSerializer(StrictInputMixin, serializers.ModelSerializer):
 
     def validate_preferences(self, value):
         if not isinstance(value, dict):
-            raise serializers.ValidationError("Expected a JSON object.")
+            raise serializers.ValidationError(
+                "Cần gửi thông tin tùy chọn dưới dạng một đối tượng JSON."
+            )
         return value
 
     def validate_timezone(self, value):
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError) as exc:
-            raise serializers.ValidationError("Unknown timezone.") from exc
+            raise serializers.ValidationError("Múi giờ không hợp lệ.") from exc
         return value
 
 
@@ -56,7 +58,9 @@ class StatusChangeSerializer(StrictInputMixin, serializers.Serializer):
         if ("status" in attrs) == ("restore_deleted" in attrs) or attrs.get(
             "restore_deleted"
         ) is False:
-            raise serializers.ValidationError("Provide status or restore_deleted=true exclusively.")
+            raise serializers.ValidationError(
+                "Chỉ chọn đổi trạng thái hoặc khôi phục tài khoản đã xóa."
+            )
         return attrs
 
 
