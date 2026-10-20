@@ -14,15 +14,18 @@ import {
   blockTask,
   createSubtask,
   createTask,
+  getSprint,
   getTask,
   listTaskOrderInState,
   patchTask,
+  setSprintScope,
   transitionTask,
   unblockTask,
   type CreateTaskInput,
   type PatchTaskInput,
   type TaskFieldsInput,
 } from "@/lib/api/work/endpoints";
+import { newIdempotencyKey } from "@/lib/api/idempotency";
 import { workKeys } from "@/lib/query/workHooks";
 
 function useUserId(): string {
@@ -55,6 +58,34 @@ function currentIssue(queryClient: QueryClient, key: readonly unknown[], issueId
 }
 
 /**
+ * Đổi sprint của một task: bớt khỏi sprint cũ rồi thêm vào sprint mới (backend không có lệnh "chuyển").
+ * `issue.sprintId` là sprint gốc trong lệnh; cache đã bị sửa lạc quan nên không đọc từ đó. Mỗi bước đọc lại
+ * `version` của sprint. Hai bước không nguyên tử: nếu bước thêm lỗi, task đã ra khỏi sprint cũ, và
+ * `onError` tải lại dữ liệu để phản ánh đúng.
+ */
+async function moveToSprint(
+  client: ReturnType<typeof useApiClient>,
+  taskId: string,
+  fromSprintId: string | null,
+  toSprintId: string | null,
+  reason: string | undefined,
+) {
+  const steps: { sprintId: string; action: "ADD" | "REMOVE" }[] = [];
+  if (fromSprintId !== null) steps.push({ sprintId: fromSprintId, action: "REMOVE" });
+  if (toSprintId !== null) steps.push({ sprintId: toSprintId, action: "ADD" });
+  for (const step of steps) {
+    const sprint = await getSprint(client, step.sprintId);
+    await setSprintScope(client, step.sprintId, {
+      expectedVersion: sprint.version,
+      action: step.action,
+      taskIds: [taskId],
+      ...(reason ? { scopeChangeReason: reason } : {}),
+      idempotencyKey: newIdempotencyKey(),
+    });
+  }
+}
+
+/**
  * Ghi Board/Backlog thật cho `useIssueMover`. Các lệnh xếp hàng theo dự án nên hai lần kéo liền nhau
  * tới server đúng thứ tự, và `version` được đọc từ cache lúc gửi (sau khi lệnh trước đã tăng nó).
  * Lạc quan: sửa cache trước, hoàn tác khi lỗi. Thành công thì ghi `version` và `sort_order` thật của
@@ -74,8 +105,13 @@ export function useRealIssueWrites(projectId: string): IssueWrites {
 
   const move = useMutation({
     scope: { id: `work-issue-write:${projectId}` },
-    mutationFn: async ({ issue, intent }: MoveCommand) => {
+    mutationFn: async ({ issue, intent, reason }: MoveCommand) => {
       const current = currentIssue(queryClient, workspaceKey, issue.id, issue);
+      if (intent.sprintId !== undefined) {
+        await moveToSprint(client, issue.id, issue.sprintId, intent.sprintId, reason);
+      }
+      // Chỉ đổi sprint thì không có gì để chuyển state/vị trí (thêm/bớt sprint không tăng version của task).
+      if (intent.statusId === undefined && intent.rank === undefined) return null;
       const targetStateId = intent.statusId ?? current.statusId;
       const column = (await listTaskOrderInState(client, projectId, targetStateId)).filter((id) => id !== issue.id);
       const siblings = (queryClient.getQueryData<ProjectWorkspace>(workspaceKey)?.issues ?? [])
@@ -92,16 +128,21 @@ export function useRealIssueWrites(projectId: string): IssueWrites {
           ? { statusId: target.id, stateGroup: target.group, status: statusForGroup(target.group) }
           : {}),
         ...(intent.rank !== undefined ? { rank: intent.rank } : {}),
+        ...(intent.sprintId !== undefined ? { sprintId: intent.sprintId } : {}),
       };
       return applyOptimistic(queryClient, workspaceKey, issue.key, patch);
     },
-    onSuccess: (task, { issue }) => {
-      queryClient.setQueryData<ProjectWorkspace>(workspaceKey, (current) =>
-        current
-          ? applyServerVersion(applyIssuePatch(current, issue.key, { rank: task.sort_order }), issue.key, task.version)
-          : current,
-      );
-      void queryClient.invalidateQueries({ queryKey: workKeys.task(userId, issue.id), exact: true });
+    onSuccess: (task, { issue, intent }) => {
+      if (task) {
+        queryClient.setQueryData<ProjectWorkspace>(workspaceKey, (current) =>
+          current
+            ? applyServerVersion(applyIssuePatch(current, issue.key, { rank: task.sort_order }), issue.key, task.version)
+            : current,
+        );
+      }
+      // Tổng điểm của sprint, tiến độ và burndown đều đổi khi phạm vi đổi.
+      if (intent.sprintId !== undefined) void queryClient.invalidateQueries({ queryKey: workKeys.all });
+      else void queryClient.invalidateQueries({ queryKey: workKeys.task(userId, issue.id), exact: true });
     },
     onError: (error, _command, snapshot) => onError(error, snapshot),
   });

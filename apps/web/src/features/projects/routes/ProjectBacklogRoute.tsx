@@ -31,6 +31,9 @@ import {
   TaskScopeTabs,
 } from "@/features/projects/components/RealBacklogTools";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
+import { CreateSprintButton, SprintHeaderActions, SprintInsights } from "@/features/projects/components/RealSprintTools";
+import type { IssueWrites } from "@/features/projects/lib/issueWrites";
+import { useRealIssueWrites } from "@/lib/query/workWriteHooks";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
 import { PressableText } from "@/features/projects/components/PressableText";
@@ -90,6 +93,7 @@ const priorityConfig: Record<Issue["priority"], { label: string; badge: string }
 };
 
 function sprintDateRange(sprint: Sprint): string {
+  if (!sprint.startDate || !sprint.endDate) return "Chưa đặt ngày";
   const start = new Date(sprint.startDate).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -271,6 +275,8 @@ function SprintSection({
   onOpenIssue,
   canComplete,
   mover,
+  actions,
+  insights,
 }: {
   projectId: string;
   sprint: Sprint;
@@ -278,6 +284,9 @@ function SprintSection({
   onOpenIssue: (projectId: string, issueKey: string) => void;
   canComplete: boolean;
   mover: ReturnType<typeof useIssueMover>;
+  /** Chế độ Work thật: thay nút "Hoàn thành Sprint" chưa có API bằng bộ nút thật. */
+  actions?: ReactNode;
+  insights?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -340,7 +349,9 @@ function SprintSection({
           <span className="text-[11px] font-bold text-muted-foreground">
             {sprint.completedPoints}/{sprint.totalPoints} SP
           </span>
-          {canComplete && isActive ? (
+          {actions !== undefined ? (
+            actions
+          ) : canComplete && isActive ? (
             <Button
               variant="outline"
               size="xs"
@@ -369,6 +380,7 @@ function SprintSection({
               {percent}%
             </span>
           </div>
+          {insights}
 
           {issues.length === 0 ? (
             <p className="px-3 py-3 text-xs text-muted-foreground">
@@ -440,8 +452,8 @@ function BacklogSkeleton() {
   );
 }
 
-/** `real`: dữ liệu Work thật, chỉ đọc ở Phase 10; AI chưa tích hợp nên ẩn thanh AI. */
-function BacklogView({ real }: Readonly<{ real: boolean }>) {
+/** `real`: dữ liệu Work thật; `writes` là cách ghi thật cho menu/kéo-thả. AI chưa tích hợp nên ẩn thanh AI. */
+function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueWrites }>) {
   const navigate = useNavigate();
   const { projectId, workspace: data, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
   const { user } = useAuth();
@@ -482,7 +494,8 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
     projectId,
     workspace,
     role: viewerRole(viewer),
-    canWrite: real ? false : undefined,
+    canWrite: real ? realCanWrite : undefined,
+    writes,
   });
   const backlogSectionRef = useRef<HTMLElement | null>(null);
   const backlogOver = useSectionDropTarget(
@@ -546,6 +559,23 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
       </Button>
     );
   };
+
+  /** Chế độ thật: nút của Leader trên đầu sprint, và tiến độ/burndown cho sprint đang chạy. */
+  const sprintExtras = (sprint: Sprint) =>
+    real
+      ? {
+          actions:
+            realCanWrite && isLeader ? (
+              <SprintHeaderActions
+                projectId={projectId}
+                sprint={sprint}
+                sprints={workspace.sprints}
+                issues={workspace.issues.filter((issue) => issue.sprintId === sprint.id)}
+              />
+            ) : null,
+          insights: sprint.state === "active" ? <SprintInsights sprintId={sprint.id} /> : null,
+        }
+      : {};
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -663,6 +693,11 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
           </div>
 
           {real ? <TaskScopeTabs scope={scope} onChange={setScope} /> : null}
+          {real && realCanWrite && isLeader ? (
+            <div className="mb-3">
+              <CreateSprintButton projectId={projectId} />
+            </div>
+          ) : null}
 
           {/* Leader-only toolbar */}
           {isLeader && !real ? (
@@ -705,6 +740,7 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
                   mover={mover}
+                  {...sprintExtras(sprint)}
                 />
               ))}
               {upcomingSprints.map((sprint) => (
@@ -718,6 +754,7 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
                   mover={mover}
+                  {...sprintExtras(sprint)}
                 />
               ))}
 
@@ -777,9 +814,15 @@ export default function ProjectBacklogRoute() {
 function RealBacklog() {
   return (
     <RealWorkspaceBoundary>
-      <BacklogView real />
+      <RealBacklogContent />
     </RealWorkspaceBoundary>
   );
+}
+
+function RealBacklogContent() {
+  const { projectId } = useProjectWorkspaceContext();
+  const writes = useRealIssueWrites(projectId);
+  return <BacklogView real writes={writes} />;
 }
 
 export function Component() {

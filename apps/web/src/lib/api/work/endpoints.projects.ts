@@ -1,6 +1,7 @@
 import type { ApiClient, ApiEnvelopeResult } from "@/lib/api/client";
 import { collectAllPages, DEFAULT_MAX_PAGES } from "@/lib/api/pagination";
 import type {
+  DashboardDto,
   ProjectDto,
   ProjectMemberDto,
   ProjectMemberStatus,
@@ -123,6 +124,28 @@ export async function setProjectArchived(
   const { data } = await client.requestEnvelope<ProjectDto>(
     `${ROOT}/projects/${encodeURIComponent(projectId)}/${action}/`,
     { method: "POST", body: { expected_version: input.expectedVersion } },
+  );
+  return data;
+}
+
+/** Backend trả 422 nếu có bất kỳ query param nào, nên không bao giờ thêm tham số vào URL này. */
+export async function getProjectDashboard(client: ApiClient, projectId: string) {
+  const { data } = await client.requestEnvelope<DashboardDto>(
+    `${ROOT}/projects/${encodeURIComponent(projectId)}/dashboard/`,
+  );
+  return data;
+}
+
+/** Chỉ Leader; thành viên đã rời trả 422 `MEMBER_NOT_ACTIVE`. Không có `version`, không gửi `Idempotency-Key`. */
+export async function patchMemberCapacity(
+  client: ApiClient,
+  projectId: string,
+  userId: string,
+  weeklyCapacity: number,
+) {
+  const { data } = await client.requestEnvelope<ProjectMemberDto>(
+    `${ROOT}/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}/capacity/`,
+    { method: "PATCH", body: { weekly_capacity: weeklyCapacity } },
   );
   return data;
 }

@@ -4,7 +4,7 @@ import type { Issue } from "@/features/projects/types";
 export interface MoveCommand {
   issue: Issue;
   intent: MoveIntent;
-  /** Lý do đổi phạm vi Sprint; chỉ chế độ demo dùng. */
+  /** Lý do đổi phạm vi Sprint (demo gửi kèm lệnh; Work thật gửi làm `scope_change_reason`). */
   reason?: string;
 }
 

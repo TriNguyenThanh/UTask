@@ -121,6 +121,87 @@ export interface SprintDto {
   archived_at: string | null;
 }
 
+export interface ScopeTotalsDto {
+  task_count: number;
+  work_item_count: number;
+  completed_task_count: number;
+  completed_work_item_count: number;
+  cancelled_task_count: number;
+  cancelled_work_item_count: number;
+  blocked_task_count: number;
+  overdue_task_count: number;
+  estimated_count: number;
+  unestimated_count: number;
+  known_estimate_points: number;
+  completed_estimate_points: number;
+  cancelled_estimate_points: number;
+  /** `null` khi chưa có công việc để chia. */
+  completion_percent: number | null;
+}
+
+export interface SprintProgressDto {
+  sprint_id: string;
+  formula_version: string;
+  captured_at: string;
+  snapshot_version: number | null;
+  totals: ScopeTotalsDto;
+}
+
+export interface BurndownDayDto {
+  date: string;
+  observed_at: string;
+  scope_work_item_count: number;
+  remaining_work_item_count: number;
+  remaining_estimate_points: number;
+  unestimated_remaining_count: number;
+}
+
+export interface SprintBurndownDto {
+  sprint_id: string;
+  formula_version: string;
+  captured_at: string;
+  snapshot_version: number | null;
+  days: BurndownDayDto[];
+  window_truncated: boolean;
+}
+
+export interface SprintScopeResultDto {
+  sprint_id: string;
+  modified_task_ids: string[];
+  is_scope_creep: boolean;
+  version: number;
+}
+
+export interface SprintCloseResultDto {
+  sprint_id: string;
+  status: string;
+  closed_at: string;
+  snapshot_version: number;
+  target_sprint_id: string | null;
+  summary: Record<string, number>;
+}
+
+export interface DashboardDto {
+  project_id: string;
+  formula_version: string;
+  scope: "ACTIVE_TASKS";
+  computed_at: string;
+  business_date: string;
+  source_event_sequence: number;
+  board_revision: number;
+  totals: ScopeTotalsDto & { dependency_blocked_task_count: number };
+  state_distribution: { group: StateGroupDto; task_count: number; work_item_count: number }[];
+  assignee_distribution: {
+    user_id: string;
+    status: string | null;
+    weekly_capacity: number | null;
+    assigned_work_item_count: number;
+    unestimated_work_item_count: number;
+    allocated_estimate_points: number;
+  }[];
+  unassigned_estimate_points: number;
+}
+
 export interface TaskAssigneeDto {
   user_id: string;
   /** Có thể rỗng khi `UserProjection` chưa đồng bộ. */

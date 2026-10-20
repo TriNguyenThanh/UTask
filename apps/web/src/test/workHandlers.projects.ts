@@ -165,5 +165,15 @@ export function projectHandlers(fixture: ProjectFixture): HttpHandler[] {
       );
       return listResponse(members, url, fixture, false);
     }),
+    http.patch("/api/work/projects/:projectId/members/:userId/capacity/", async ({ request, params }) => {
+      const body = await record(request, fixture, `/projects/${String(params.projectId)}/members/${String(params.userId)}/capacity/`);
+      if (!find(params.projectId)) return notFound();
+      const member = fixture.members?.[String(params.projectId)]?.find((row) => row.user_id === params.userId);
+      if (!member || member.status !== "ACTIVE") {
+        return envelopeError(422, "MEMBER_NOT_ACTIVE", "Thành viên không còn hoạt động.");
+      }
+      member.weekly_capacity = body.weekly_capacity as number;
+      return envelope(member);
+    }),
   ];
 }
