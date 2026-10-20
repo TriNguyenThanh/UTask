@@ -301,6 +301,11 @@ Smoke trình duyệt thật (Chrome qua relay, staging, `VITE_REAL_SERVICES=auth
   Hộp "Thêm sinh viên" chưa smoke giao diện (Chrome ngắt debugger khi tiện ích
   trình quản lý mật khẩu chèn khung vào ô email).
 
-Đã biết, chưa xử lý: sau thao tác ghi, danh sách lớp/nhóm của sinh viên cập nhật
-chậm vài giây vì tải lại theo từng lớp rồi từng nhóm. Chưa smoke trình duyệt
-cho refresh khi 401 hoặc hết hạn 15 phút.
+Hiệu năng danh sách lớp của sinh viên: API không có "nhóm của tôi" (B5) nên
+`loadCourseEnrollments` dò `groups/` rồi `members/` của từng lớp. Mỗi request
+trên staging mất khoảng 330 ms. Các lớp được dò song song tối đa
+`CLASS_CONCURRENCY` (3) lớp; trang `/courses` với 4 lớp tải xong sau khoảng
+4,5 giây thay vì 6,8 giây (đo trên Chrome qua relay, gồm cả `refresh` và
+`users/me`). Phần còn lại là chuỗi request nối tiếp; chỉ hết hẳn khi backend
+thêm `my_group` hoặc `member_count` (B5). Chưa smoke trình duyệt cho refresh
+khi 401 hoặc hết hạn 15 phút.
