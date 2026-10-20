@@ -118,6 +118,28 @@ locale `vi`; thông báo nghiệp vụ được viết tại nơi phát sinh, th
 dj-rest-auth được chuẩn hóa trong `common`. HTTP status, mã lỗi và đường dẫn trường
 giữ nguyên; lỗi đọc dữ liệu không trả nội dung thô của bộ phân tích JSON.
 
+### Avatar R2
+
+Đặt `IDENTITY_AVATAR_ENABLED=true` trong `.env` của môi trường đã có đủ
+`IDENTITY_R2_ENDPOINT`, `IDENTITY_R2_BUCKET`, `IDENTITY_R2_ACCESS_KEY`,
+`IDENTITY_R2_SECRET_KEY`, `IDENTITY_R2_PUBLIC_URL`. Các giá trị đi qua mapping hiện có;
+tạo lại container sau khi thay đổi môi trường. PostgreSQL/Redis vẫn dùng hạ tầng chung.
+
+Luồng client: gọi `POST /users/me/avatar/presigned-url` với tên, loại và dung lượng
+ảnh; PUT byte ảnh vào `upload_url` với đúng `Content-Type`; sau đó gọi
+`POST /users/me/avatar/confirm` với `file_key`. Backend kiểm HEAD trên R2 rồi cập nhật
+hồ sơ và outbox. Ảnh chưa tồn tại hoặc metadata không khớp không được ghi vào hồ sơ.
+Chỉ hỗ trợ JPEG/PNG/WebP, tối đa5 MB; URL tải lên có hạn300 giây.
+
+Đã chạy luồng này với R2 thật, gồm GET ảnh public và confirm lặp không phát thêm
+event; bằng chứng ở `artifacts/identity/localization-r2/runtime.json`. CORS preflight
+cho `https://utask.u-code.dev` đạt204. `http://localhost:8080` hiện bị bucket từ chối403;
+muốn upload từ origin local này cần bổ sung vào CORS của bucket, giữ các origin đang có.
+Policy cần cho phép `PUT` và header `Content-Type`; `GET`/`HEAD` dùng cho đọc/kiểm tra
+ảnh. Xem [hướng dẫn CORS của Cloudflare](https://developers.cloudflare.com/r2/buckets/cors/).
+Credential R2 hiện có không cho đọc cấu hình CORS (`AccessDenied`); lượt kiểm chứng
+không ghi đè policy của bucket hoặc thay cấu hình Cloudflare.
+
 <a id="xac-thuc-va-quyen"></a>
 
 ## Xác thực và quyền ở service gọi
