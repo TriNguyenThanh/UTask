@@ -336,9 +336,9 @@ end note
 
 **API / actor:** `POST /register`. Guest; username, email, password1, password2, first_name, last_name.
 
-**Luồng:** Kiểm mail key, từ chối Idempotency-Key, validate bằng RegisterSerializer. Một transaction tạo PENDING_ACTIVATION, profile, STUDENT, audit REGISTER, user.created và activation.requested mã hóa. Trả201 data.user/account_status; chưa cấp JWT. Kích hoạt rồi login riêng.
+**Luồng:** Từ chối Idempotency-Key, validate bằng RegisterSerializer. Một transaction tạo ACTIVE, profile, STUDENT, audit REGISTER và user.created; allauth lưu email đã xác minh. Trả201 data.user/account_status, không cấp JWT và không gửi yêu cầu mail kích hoạt. Đăng nhập riêng sau đăng ký. Tài khoản import vẫn cần kích hoạt.
 
-**Lỗi và giới hạn:** 400 VALIDATION_ERROR cho duplicate/unknown field/password/key header;429 throttle; thiếu mail key503. Không nhận role/MSSV và không sinh username thay input đăng ký.
+**Lỗi và giới hạn:** 400 VALIDATION_ERROR cho duplicate/unknown field/password/key header;429 throttle. Tự đăng ký không phụ thuộc mail key. Không nhận role/MSSV và không sinh username thay input đăng ký.
 
 Nguồn: [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py);
 kiểm thử: [test_registration.py](../../../apps/identity-service/tests/test_registration.py);

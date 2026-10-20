@@ -54,8 +54,9 @@ Lockout không phải một trạng thái vòng đời của user.
 
 ## Cách hoạt động
 
-1. **Đăng ký:** tạo user pending, profile và role STUDENT; tạo yêu cầu kích hoạt.
-   Xác minh key hợp lệ chuyển user thành ACTIVE; đăng nhập riêng để nhận JWT.
+1. **Đăng ký:** tạo user ACTIVE, profile và role STUDENT; email được đánh dấu đã xác
+   minh ngay, không chờ email kích hoạt trong giai đoạn chưa có Resend.
+   Đăng nhập riêng để nhận JWT. Tài khoản import vẫn dùng luồng kích hoạt hiện có.
 2. **Đăng nhập:** dj-rest-auth/Django Auth/allauth kiểm email hoặc username/password;
    Identity kiểm trạng thái tài khoản rồi tạo phiên thiết bị và token SimpleJWT.
 3. **Refresh:** SimpleJWT đổi refresh token và blacklist token trước; Identity giữ

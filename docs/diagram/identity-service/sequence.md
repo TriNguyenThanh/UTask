@@ -28,7 +28,7 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 
 | Sequence | Nội dung | Source thực thi |
 | --- | --- | --- |
-| [SQ-ID-01](#sq-id-01) | Đăng ký Student pending | [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py) |
+| [SQ-ID-01](#sq-id-01) | Đăng ký Student ACTIVE/email verified | [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py) |
 | [SQ-ID-02](#sq-id-02) | Login bằng Django Auth và Axes | [authentication/serializers/auth.py](../../../apps/identity-service/authentication/serializers/auth.py) |
 | [SQ-ID-03](#sq-id-03) | Refresh JWT trên session ổn định | [authentication/services/session_service.py](../../../apps/identity-service/authentication/services/session_service.py) |
 | [SQ-ID-04](#sq-id-04) | Kiểm tra phiên và boundary quyền tài nguyên | [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py) |
@@ -54,50 +54,31 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 
 <a id="sq-id-01"></a>
 
-## SQ-ID-01 — Đăng ký Student pending
+## SQ-ID-01 — Đăng ký Student ACTIVE/email verified
 
-Đăng ký Student pending
+Nguồn: [registration serializer](../../../apps/identity-service/authentication/serializers/registration.py),
+[registration service](../../../apps/identity-service/accounts/services/registration.py);
+kiểm thử HTTP: [test_flows.py](../../../apps/identity-service/tests/test_flows.py).
 
-Nguồn: [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py);
-kiểm thử: [test_registration.py](../../../apps/identity-service/tests/test_registration.py).
-
-<details>
-<summary>Nguồn PlantUML</summary>
-
-```plantuml
-@startuml SQ-ID-01
-skinparam defaultFontName Arial
-skinparam shadowing false
-skinparam sequenceMessageAlign left
-skinparam responseMessageBelowArrow true
-skinparam maxMessageSize 300
-hide footbox
-autonumber
-title SQ-ID-01 — Đăng ký Student pending
-actor "Guest" as U
-participant "StudentRegisterView / RegisterSerializer" as V
-participant "allauth / IdentityAccountAdapter" as A
-database "identity_db" as D
-U -> V : POST /auth/register\nusername,email,password1,password2,tên
-V -> V : mail_key(); reject Idempotency-Key
-alt Thiếu mail key hoặc input/key header sai
- V --> U : 503 IDENTITY_UNAVAILABLE /400 VALIDATION_ERROR
-else Input được chấp nhận
- group TX-I: signup_transaction
-  V -> A : Validate password bằng Django; save_user
-  A -> D : INSERT user PENDING_ACTIVATION
-  V -> D : Profile + STUDENT + audit REGISTER\noutbox identity.user.created
-  V -> A : Mandatory email verification
-  A -> D : EmailAddress + EmailConfirmation\noutbox activation.requested (secret AES-GCM)
-  A -> D : Lưu hash confirmation key; COMMIT
- end
- V --> U : 201 data.user/account_status\nkhông access/refresh
-end
-note over U,D : Mail key/DB lỗi rollback signup; không anonymous receipt.\nKích hoạt theo SQ09, sau đó login SQ02; username là input bắt buộc.
-@enduml
+```mermaid
+sequenceDiagram
+    actor U as Người đăng ký
+    participant V as RegisterView/RegisterSerializer
+    participant A as allauth
+    participant D as Identity DB
+    U->>V: POST /register
+    V->>V: Kiểm tra input và mật khẩu
+    V->>D: Bắt đầu transaction
+    V->>A: Tạo user bằng hook thư viện
+    V->>D: Đặt ACTIVE, tạo profile/STUDENT/audit/user.created
+    V->>A: Đánh dấu email đã xác minh
+    A->>D: Lưu EmailAddress verified
+    V->>D: Commit
+    V-->>U: 201 user/account_status ACTIVE; không JWT
 ```
 
-</details>
+Đăng ký mới không chờ mail, không yêu cầu mail key. Không thay tài khoản import pending;
+kích hoạt của chúng theo SQ-ID-09. Người dùng đăng nhập riêng theo SQ-ID-02.
 
 <a id="sq-id-02"></a>
 

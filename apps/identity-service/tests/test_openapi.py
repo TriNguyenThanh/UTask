@@ -12,7 +12,14 @@ from rest_framework.test import APIClient
 
 from accounts.models import AccountStatus, OutboxEvent, UserSession
 from tests.fixtures.api_operations import DEFAULT_OPERATIONS
-from tests.helpers import NEW_PASSWORD, PASSWORD, create_user, login, mail_secret
+from tests.helpers import (
+    NEW_PASSWORD,
+    PASSWORD,
+    create_pending_user,
+    create_user,
+    login,
+    mail_secret,
+)
 
 
 @pytest.mark.parametrize(
@@ -79,8 +86,11 @@ def contract_request(settings, signup_data):
         if route.endswith("/register"):
             return client.post(route, signup_data, format="json")
         if route.endswith("/activate"):
-            registered = client.post("/register", signup_data, format="json")
-            assert registered.status_code == 201
+            user = create_pending_user()
+            assert (
+                client.post("/activation/resend", {"email": user.email}, format="json").status_code
+                == 200
+            )
             event = OutboxEvent.objects.get(event_type="identity.activation.requested")
             return client.post(route, mail_secret(event), format="json")
 

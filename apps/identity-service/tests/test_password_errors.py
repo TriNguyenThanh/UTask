@@ -9,8 +9,15 @@ from allauth.account.utils import user_pk_to_url_str
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import AuditLog, OutboxEvent, User, UserSession
-from tests.helpers import NEW_PASSWORD, PASSWORD, create_user, login, mail_secret
+from accounts.models import AuditLog, OutboxEvent, UserSession
+from tests.helpers import (
+    NEW_PASSWORD,
+    PASSWORD,
+    create_pending_user,
+    create_user,
+    login,
+    mail_secret,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db, pytest.mark.postgres]
 
@@ -76,10 +83,12 @@ def test_reset_confirm_rejects_invalid_input_without_password_or_session_change(
 
 
 @pytest.mark.parametrize("fault", ["unknown-key", "expired", "suspended", "deleted"])
-def test_activation_rejects_ineligible_account_or_key(signup_data, fault):
+def test_activation_rejects_ineligible_account_or_key(fault):
     client = APIClient()
-    assert client.post("/register", signup_data, format="json").status_code == 201
-    user = User.objects.get(email=signup_data["email"])
+    user = create_pending_user()
+    assert (
+        client.post("/activation/resend", {"email": user.email}, format="json").status_code == 200
+    )
     key = mail_secret(OutboxEvent.objects.get(event_type="identity.activation.requested"))["key"]
     status, code = 404, "RESOURCE_NOT_FOUND"
     if fault == "unknown-key":

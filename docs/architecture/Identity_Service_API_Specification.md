@@ -313,7 +313,9 @@ POST `/register`, Anonymous, dj-rest-auth RegisterView/RegisterSerializer.
 Request: `email, username, password1, password2, first_name, last_name`.
 Không nhận role/MSSV/extra field. Password qua validators Django (min 8, không common/numeric,
 độ tương tự user và chữ hoa/chữ thường/số/ký tự đặc biệt).
-201: `data={"user":{...},"account_status":"PENDING_ACTIVATION"}`, không cấp JWT.
+201: `data={"user":{...},"account_status":"ACTIVE"}`, email được allauth đánh dấu
+đã xác minh ngay; không gửi yêu cầu mail kích hoạt và không cấp JWT. Đây là chính sách
+đăng ký hiện tại khi chưa có Resend; tài khoản import vẫn giữ luồng kích hoạt riêng.
 User/profile/STUDENT/audit/outbox cùng transaction. Idempotency-Key chưa hỗ trợ, gửi key
 trả 400 thay vì giả receipt. Email/username trùng trả 400 VALIDATION_ERROR, giữ unique DB.
 

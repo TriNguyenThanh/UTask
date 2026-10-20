@@ -18,7 +18,9 @@ def mail_key():
         return key
     except (ValueError, TypeError) as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "Mail encryption is not configured.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Chưa thể tạo hướng dẫn xác thực cho tài khoản. Vui lòng liên hệ người quản trị.",
+            status_code=503,
         ) from exc
 
 
