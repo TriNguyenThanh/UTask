@@ -10,6 +10,9 @@ xác minh. Chi tiết tại [foundation](foundation.md), [API](api.md) và
 
 - [Phạm vi và quyền](scope-access.md): ownership và ranh giới Identity/Work.
 - [API](api.md): route, request, response và trạng thái.
+- [Cách liên kết repository GitHub](github-repository-linking.md): luồng cấp
+  quyền, cài App, đọc repository live, chọn repo chính cho Project và liên kết
+  hoạt động GitHub vào Task.
 - [Foundation](foundation.md): bằng chứng source, cấu hình và kiểm thử.
 - [Sơ đồ](diagram/README.md): mô hình khái niệm và luồng mục tiêu.
 
