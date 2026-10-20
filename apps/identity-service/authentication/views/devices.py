@@ -40,7 +40,9 @@ class SessionLogoutView(LogoutView):
         cookie = request.COOKIES.get("refresh_token")
         body = request.data.get("refresh")
         if cookie and body and cookie != body:
-            raise serializers.ValidationError({"refresh": "Cookie and body differ."})
+            raise serializers.ValidationError(
+                {"refresh": "Thông tin phiên đăng nhập gửi kèm không khớp."}
+            )
         if cookie:
             JWTCookieAuthentication().enforce_csrf(request)
 
@@ -71,6 +73,7 @@ class SessionLogoutView(LogoutView):
     )
 )
 class LogoutAllView(LogoutView):
+    success_message = "Đã đăng xuất khỏi tất cả thiết bị."
     permission_classes = (IsAuthenticated,)
     http_method_names = ["post", "options"]
 
@@ -90,7 +93,7 @@ class DeviceRevokeView(LogoutView):
 
     def delete(self, request, session_id):
         is_current = SessionService.revoke_device(request, session_id)
-        response = Response({"detail": "Device revoked."})
+        response = Response({"detail": "Đã đăng xuất thiết bị."})
         if is_current:
             unset_jwt_cookies(response)
         return response

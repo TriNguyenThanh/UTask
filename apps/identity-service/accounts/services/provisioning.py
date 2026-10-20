@@ -91,11 +91,13 @@ def provision_row(request, data, locked_ids):
 
 def provision_students(request, rows, key):
     if not key:
-        raise IdentityAPIError("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key là bắt buộc.")
+        raise IdentityAPIError("IDEMPOTENCY_KEY_REQUIRED", "Thiếu mã chống xử lý lặp cho yêu cầu.")
     try:
         key = str(UUID(key))
     except ValueError as exc:
-        raise IdentityAPIError("VALIDATION_ERROR", "Idempotency-Key phải là UUID.") from exc
+        raise IdentityAPIError(
+            "VALIDATION_ERROR", "Mã chống xử lý lặp không đúng định dạng."
+        ) from exc
     rows = canonical_students(rows)
     payload = json.dumps(
         {"students": rows}, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -122,7 +124,8 @@ def provision_students(request, rows, key):
                     if receipt.payload_hash != digest:
                         raise IdentityAPIError(
                             "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD",
-                            "Idempotency-Key đã dùng với nội dung khác.",
+                            "Mã chống xử lý lặp đã được dùng cho nội dung khác. "
+                            "Vui lòng tạo yêu cầu mới.",
                             status_code=422,
                         )
                     return receipt.response_status, receipt.response_body
@@ -179,7 +182,9 @@ def provision_students(request, rows, key):
         except RetryAccountLocks:
             continue
     raise IdentityAPIError(
-        "IDENTITY_UNAVAILABLE", "Không thể khóa danh tính an toàn; hãy retry.", status_code=503
+        "IDENTITY_UNAVAILABLE",
+        "Không thể hoàn tất việc cấp tài khoản. Vui lòng thử lại.",
+        status_code=503,
     )
 
 

@@ -13,7 +13,7 @@ class HealthEndpointTests(SimpleTestCase):
             response.json(),
             {
                 "success": True,
-                "message": "OK",
+                "message": "Dịch vụ đang hoạt động.",
                 "data": {"status": "ok"},
                 "meta": None,
                 "error": None,

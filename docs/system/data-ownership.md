@@ -10,7 +10,7 @@ Xem [baseline](../architecture/README.md).
 | `identity_db`     | Identity       | User, profile, global role, phiên/token metadata                                                    |
 | `work_db`         | Work           | Project/ProjectMember, backlog, Sprint, Task, Comment, Workflow, Activity và tiến độ                |
 | `classroom_db`    | Classroom      | Môn học, lớp, Group/GroupMember, điểm danh/điểm số và liên kết nhóm–project                         |
-| `integration_db`  | Integration    | GitHub App, repository, webhook và dữ liệu GitHub đã chuẩn hóa                                      |
+| `integration_db`  | Integration    | GitHub user/link/consent/credential, GitHub App, repository, webhook và dữ liệu GitHub đã chuẩn hóa |
 | `notification_db` | Notification   | Notification, người nhận, trạng thái gửi, template/tùy chọn khi được chọn                           |
 | `ai_context_db`   | AI             | Tên thiết kế riêng của AI cho yêu cầu/kết quả và context khi cần; baseline chưa đặt tên database AI |
 
@@ -19,6 +19,19 @@ Tên database không chứng minh database hoặc migration đã tồn tại.
 khai theo baseline mới. Không tạo database Progress riêng cho tiến độ Work.
 
 ## ID tham chiếu và dữ liệu đọc
+
+Theo [ADR-004](../adr/004-integration-github-account-ownership.md), Integration
+sở hữu mapping tài khoản GitHub của user; Identity chỉ xác thực tài khoản
+UTask/phiên qua API hiện có. `GitHubAccount.user_id` là UUID logic, không FK tới
+Identity, không lấy mapping GitHub legacy/Profile làm nguồn đúng và không tự
+chuyển dữ liệu cũ. Model/migration và API đọc/thu hồi mapping đã có trong
+Integration. M3 có OAuth App identity-only, pending consent và provider `/user`
+trong source; không lưu GitHub token. State/nonce lưu dạng hash, verifier tạm
+mã hóa Fernet bằng khóa riêng Integration; consent gắn actor và chính access
+Bearer đã được Identity xác minh (không có session ID từ `/users/me`).
+Generation của actor chặn callback đến sau DELETE kể cả chưa có mapping.
+OAuth thực tế chưa xác minh; xem [API Integration](../integration-service/api.md). Source Identity
+legacy giữ nguyên, không làm dependency cho luồng Integration mới.
 
 Các ID xuyên service như `user_id`, `group_id`, `project_id` chỉ là tham
 chiếu logic, không phải foreign key. Khi cần xác minh đồng bộ, dùng API của
@@ -45,8 +58,16 @@ phục hồi worker và dead-letter cần thiết kế trước migration.
 
 ## Hiện trạng hạ tầng
 
-**Một phần:** script PostgreSQL hiện tạo năm database nghiệp vụ theo Compose;
-chưa tạo database AI hoặc credential/role riêng. Local/staging đang dùng
-chung tài khoản PostgreSQL. Đây là khoảng trống so với baseline, xem
-[biến môi trường](../infrastructure/environment.md). Không sửa dữ liệu hoặc
-migration trong lần cập nhật tài liệu này.
+**Một phần:** script PostgreSQL chuẩn bị năm database nghiệp vụ theo Compose.
+Integration M1 đã có role/login riêng qua `INTEGRATION_DB_USER` và
+`INTEGRATION_DB_PASSWORD`, không nhận tài khoản quản trị trong container app.
+Role không có quyền superuser/tạo database/tạo role/replication/bypass RLS,
+chỉ sở hữu database và schema Integration. Script hạn chế PUBLIC CONNECT/TEMP
+trên các database được quản lý, `postgres` và `template1`, giữ quyền tài khoản
+chung đang phục vụ service khác. Custom role/DB ngoài repo cần ACL rõ ràng;
+không suy việc tách Integration là đã tách toàn cluster.
+
+Identity/Work/Classroom vẫn dùng credential chung, còn thiếu so với baseline.
+AI dùng PostgreSQL riêng theo [cấu hình AI](../ai-service/README.md).
+Kiểm tra bootstrap M1 ở [Integration foundation](../integration-service/foundation.md);
+chưa xác minh database/role staging thực tế. Xem [biến môi trường](../infrastructure/environment.md).

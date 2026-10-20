@@ -3,9 +3,12 @@
 import base64
 import json
 import secrets
+from copy import deepcopy
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from common.errors import IdentityAPIError
 
@@ -18,7 +21,9 @@ def mail_key():
         return key
     except (ValueError, TypeError) as exc:
         raise IdentityAPIError(
-            "IDENTITY_UNAVAILABLE", "Mail encryption is not configured.", status_code=503
+            "IDENTITY_UNAVAILABLE",
+            "Chưa thể tạo hướng dẫn xác thực cho tài khoản. Vui lòng liên hệ người quản trị.",
+            status_code=503,
         ) from exc
 
 
@@ -34,3 +39,19 @@ def encrypt_mail_payload(key, event_id, event_type, user_id, expires, secret):
         "nonce": base64.b64encode(nonce).decode(),
         "ciphertext": base64.b64encode(encrypted).decode(),
     }
+
+
+def redact_expired_mail_secret(envelope, now):
+    data = envelope.get("data", {}) if isinstance(envelope, dict) else {}
+    secret = data.get("secret") if isinstance(data, dict) else None
+    if not isinstance(secret, dict):
+        return envelope, False
+    try:
+        expiration = parse_datetime(secret.get("expires_at", ""))
+    except (TypeError, ValueError):
+        return envelope, False
+    if expiration is None or timezone.is_naive(expiration) or expiration > now:
+        return envelope, False
+    result = deepcopy(envelope)
+    result["data"]["secret"] = None
+    return result, True

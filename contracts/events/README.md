@@ -5,6 +5,16 @@ sự kiện đã được chốt. Danh mục mục tiêu nằm trong
 [docs/system/kafka-events.md](../../docs/system/kafka-events.md). Không lặp
 schema trong tài liệu service và không tạo hợp đồng giả.
 
+## Hợp đồng Integration đã chốt
+
+- [`integration.project.connection.changed.v1.json`](integration.project.connection.changed.v1.json):
+  **Đã triển khai phía producer outbox/publisher, flag mặc định tắt**;
+  consumer Work thật chưa nghiệm thu. Topic `utask.integration.events`, key Project ID; Work là consumer
+  đầu tiên. Event không cấp quyền hoặc tự xác nhận Task link. Quy tắc outbox,
+  chống lặp, version và ACL tại [ADR-003](../../docs/adr/003-integration-auth-and-contracts.md);
+  ranh giới Work/AI và thứ tự rollout tại
+  [ADR-005](../../docs/adr/005-integration-work-ai-contracts.md).
+
 ## Hợp đồng thiết kế trước baseline mới
 
 - [`ai-context-v1.yaml`](ai-context-v1.yaml): event context mà AI Service

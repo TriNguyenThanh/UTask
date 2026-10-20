@@ -7,6 +7,20 @@ from common.serializers import ResponseEnvelopeSerializer
 
 ENVELOPE_FIELDS = frozenset(ResponseEnvelopeSerializer().fields)
 
+LIBRARY_RESPONSE_MESSAGES = {
+    "Password reset e-mail has been sent.": (
+        "Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu đã được đưa vào hàng đợi."
+    ),
+    "Password has been reset with the new password.": "Đặt lại mật khẩu thành công.",
+    "New password has been saved.": "Đổi mật khẩu thành công. Vui lòng đăng nhập lại.",
+    "Successfully logged out.": "Đăng xuất thành công.",
+    "Verification e-mail sent.": "Hướng dẫn xác minh email đã được đưa vào hàng đợi.",
+    "ok": "Thao tác thành công.",
+    "An error has occurred.": "Không thể hoàn tất yêu cầu.",
+    "Refresh token was not included in cookie data.": "Thiếu thông tin phiên đăng nhập.",
+    "Refresh token was not included in request data.": "Thiếu thông tin phiên đăng nhập.",
+}
+
 
 class EnvelopeJSONRenderer(JSONRenderer):
     """One envelope for every DRF endpoint; exception headers remain on Response."""
@@ -29,11 +43,7 @@ class EnvelopeJSONRenderer(JSONRenderer):
                 else "Thao tác thành công."
             )
             payload = None if isinstance(data, Mapping) and set(data) == {"detail"} else data
-            if message == "Password reset e-mail has been sent.":
-                message = (
-                    "Nếu tài khoản đủ điều kiện, hướng dẫn đặt lại mật khẩu "
-                    "đã được đưa vào hàng đợi."
-                )
+            message = LIBRARY_RESPONSE_MESSAGES.get(message, message)
             view = context.get("view")
             if ok and view is not None:
                 messages = getattr(view, "success_messages", {})

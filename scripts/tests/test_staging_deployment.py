@@ -355,7 +355,11 @@ class StagingDeploymentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
-            compose["services"].update(extra_runtime or {})
+            for name, overrides in (extra_runtime or {}).items():
+                compose["services"][name] = {
+                    **compose["services"].get(name, {}),
+                    **overrides,
+                }
             (root / "docker-compose.staging.yml").write_text(yaml.safe_dump(compose))
             (root / "apps").mkdir()
             for service in services:
@@ -495,7 +499,7 @@ class StagingDeploymentTests(unittest.TestCase):
         dispatcher = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
             "services"
         ]["ai-dispatcher"]
-        dispatcher.pop("healthcheck", None)
+        dispatcher["healthcheck"] = None
         with self.assertRaisesRegex(
             ValueError, "ai-dispatcher requires an enabled Compose healthcheck"
         ):
@@ -550,44 +554,60 @@ class StagingDeploymentTests(unittest.TestCase):
             if not key.startswith("AI_")
             and key not in {"MOCK_TEST", "COMPOSE_PROFILES"}
         }
-        env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="sha-test")
-        for maps in ({}, {"work": "https://example.invalid/context"}):
-            with self.subTest(maps=maps):
-                if maps:
-                    env.update(
-                        AI_CONTEXT_URLS=json.dumps(maps),
-                        AI_AUTHORIZATION_URLS=json.dumps(maps),
+        # Ignore the local development/mock values in .env.example when
+        # validating staging's fallback values; do not read a developer's .env.
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="sha-test",
+            AI_ENVIRONMENT="",
+            MOCK_TEST="",
+        )
+        for environment in ("", "production"):
+            for maps in ({}, {"work": "https://example.invalid/context"}):
+                env.update(AI_ENVIRONMENT=environment)
+                with self.subTest(maps=maps, environment=environment):
+                    if maps:
+                        env.update(
+                            AI_CONTEXT_URLS=json.dumps(maps),
+                            AI_AUTHORIZATION_URLS=json.dumps(maps),
+                        )
+                    else:
+                        env.pop("AI_CONTEXT_URLS", None)
+                        env.pop("AI_AUTHORIZATION_URLS", None)
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            "docker-compose.staging.yml",
+                            "--profile",
+                            "ai-service",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=True,
                     )
-                result = subprocess.run(
-                    [
-                        "docker",
-                        "compose",
-                        "--env-file",
-                        ".env.example",
-                        "-f",
-                        "docker-compose.staging.yml",
-                        "--profile",
-                        "ai-service",
-                        "config",
-                        "--format",
-                        "json",
-                    ],
-                    cwd=ROOT,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                compose = json.loads(result.stdout)
-                for name in ("ai-service", "ai-worker", "ai-dispatcher"):
-                    runtime = compose["services"][name]["environment"]
-                    self.assertEqual(json.loads(runtime["AI_CONTEXT_URLS"]), maps)
-                    self.assertEqual(json.loads(runtime["AI_AUTHORIZATION_URLS"]), maps)
-                    self.assertEqual(runtime["AI_ENVIRONMENT"], "staging")
-                    self.assertEqual(runtime["MOCK_TEST"], "false")
-                self.assertIn(
-                    "--concurrency=2", compose["services"]["ai-worker"]["command"]
-                )
+                    compose = json.loads(result.stdout)
+                    for name in ("ai-service", "ai-worker", "ai-dispatcher"):
+                        runtime = compose["services"][name]["environment"]
+                        self.assertEqual(json.loads(runtime["AI_CONTEXT_URLS"]), maps)
+                        self.assertEqual(
+                            json.loads(runtime["AI_AUTHORIZATION_URLS"]), maps
+                        )
+                        self.assertEqual(
+                            runtime["AI_ENVIRONMENT"], environment or "staging"
+                        )
+                        self.assertEqual(runtime["MOCK_TEST"], "false")
+                    self.assertIn(
+                        "--concurrency=2", compose["services"]["ai-worker"]["command"]
+                    )
 
     def test_isolated_ci_database_creation_success_skip_failure_and_invalid_name(self):
         workflow = yaml.safe_load(
@@ -787,7 +807,10 @@ class StagingDeploymentTests(unittest.TestCase):
             self.validate(
                 ["identity-service"],
                 extra_runtime={
-                    "identity-service": {"healthcheck": {"test": ["CMD", "true"]}}
+                    "identity-service": {
+                        "healthcheck": {"test": ["CMD", "true"]},
+                        "x-deploy": {},
+                    }
                 },
             )
 

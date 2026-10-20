@@ -162,6 +162,69 @@ SSE/WebSocket cho frontend. POST vẫn chờ persistence tối đa 10 giây và 
 vẫn đọc bản ghi cuối theo ownership. Không thay đổi schema/URL public v1.
 Xem [ERD](erd.md) và [code map](code-map.md).
 
+### Giới hạn tối thiểu chống spam
+
+**Đã triển khai trong source:** tiếp nhận tối đa 5 request mới/user trong
+cửa sổ trượt 60 giây và tối đa 2 request `queued`/`running`/user, chỉnh bằng
+config. PostgreSQL khóa transaction theo user; replay/conflict được xử lý
+trước giới hạn và request/delivery chỉ được tạo khi còn chỗ. Nhiều API process
+dùng chung giới hạn, không có bộ đếm riêng trong memory. Vượt giới hạn trả
+`429` và `Retry-After`; xem [API](api.md#giới-hạn-chống-spam).
+
+Budget model/tool/token và timeout mỗi lần chạy, reauthorization tại worker,
+domain tools cố định và proposal không tự ghi nghiệp vụ tiếp tục áp dụng.
+Không thêm quota theo ngày, framework bảo mật hoặc service mới.
+
+**Thiết kế mục tiêu, chưa triển khai:** khi có chatbot, dùng lại giới hạn
+tiếp nhận/budget/quyền; chatbot ban đầu đọc context và trả lời/đề xuất. Khi
+triển khai lịch kiểm tra tiến độ, chạy 06:00 và 22:00 theo `Asia/Ho_Chi_Minh`,
+mỗi project một job mỗi khung giờ. Lưu khóa occurrence để retry không tạo job
+mới, không chạy chồng cùng project hoặc chạy bù hàng loạt sau restart. Job
+chỉ phân tích/báo cáo, không tự sửa task. Thông báo cùng cảnh báo cần chống
+gửi lặp tại Notification khi có contract và luồng gửi thực tế. Chưa tạo
+scheduler, conversation hoặc notification runtime trong thay đổi này.
+
+### Bàn giao kết quả worker cho API
+
+**Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
+Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
+và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
+[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+terminal result ở mục 3 của quyết định ban đầu.
+
+- Worker gọi `stage_completion`: khóa request, kiểm tra execution token,
+  lưu kết quả đã validate vào inbox (bảng chờ tiếp nhận) `ai_completion`, xóa
+  credential không còn cần và gọi `pg_notify` trong cùng transaction. Payload
+  notification chỉ có request UUID, không có kết quả/context/credential.
+- Mỗi process API có listener riêng, đăng ký `LISTEN utask_ai_completed`
+  trước khi đọc inbox. Khi nhận tín hiệu, listener gọi application để đọc
+  và tiếp nhận completion; không chạy workflow/LLM trong API.
+- API khóa request bằng `FOR UPDATE SKIP LOCKED`, kiểm tra execution token và
+  schema/intent/version/result. Ghi trạng thái cuối, kết quả hoặc lỗi/dead-letter
+  và xóa inbox cùng transaction. Nhiều API process hoặc thông báo trùng không
+  ghi đè kết quả hay tạo dead-letter trùng. Completion sai schema thành failed;
+  completion có token cũ bị bỏ qua và xóa, không sửa request.
+- `NOTIFY` chỉ đánh thức listener, không bảo đảm lưu thông báo khi API mất
+  kết nối. `ai_completion` là nguồn phục hồi bền vững. Listener đọc inbox sau
+  mỗi lần kết nối, khi có tín hiệu và định kỳ mỗi 5 giây theo
+  `AI_COMPLETION_RECONCILE_SECONDS`; lỗi kết nối/tiếp nhận được thử lại, không
+  chạy lại LLM. Worker chết trước khi commit bàn giao vẫn bị timeout như cũ.
+- Khi API tạm dừng, completion đã commit được giữ lại; request vẫn `running`
+  đến khi API tiếp nhận. Kết quả bàn giao đúng hạn không bị dispatcher đổi
+  thành timeout chỉ vì API xử lý muộn. Bearer đã xóa từ lúc bàn giao.
+
+Listener dùng một connection PostgreSQL riêng, autocommit và đóng khi API
+shutdown; cần kết nối trực tiếp hoặc session pooling, không dùng transaction
+pooling cho `LISTEN`. Các query/transaction tiếp nhận dùng connection pool
+hiện có. Chạy Alembic tới migration `0002` trước khi khởi động phiên bản mới;
+phối hợp cập nhật API và worker, không trộn worker cũ ghi terminal trực tiếp
+với luồng bàn giao mới.
+
+Đây là thông báo nội bộ cùng AI Service, không phải Kafka domain event hoặc
+SSE/WebSocket cho frontend. POST vẫn chờ persistence tối đa 10 giây và GET
+vẫn đọc bản ghi cuối theo ownership. Không thay đổi schema/URL public v1.
+Xem [ERD](erd.md) và [code map](code-map.md).
+
 ### Thiết kế mục tiêu
 
 Đường chạy trên triển khai pipeline ADR-002. Phần **Chưa xác minh** là token

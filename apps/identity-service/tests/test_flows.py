@@ -4,6 +4,7 @@ import json
 import pytest
 import requests
 from allauth.account.models import EmailAddress, EmailConfirmation
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import UntypedToken
@@ -44,38 +45,29 @@ def http_login(client, base_url, user, password=PASSWORD, *, field="email"):
 
 @pytest.mark.http
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.case_id(
-    "TC_REG_001", "TC_PWD_010", "TC_AUTH_001", "TC_AUTH_009", "TC_AUTH_012", "TC_PROF_001"
-)
-def test_register_verify_login_me_refresh_logout(http_client, live_server, signup_data):
+@pytest.mark.case_id("TC_REG_001", "TC_AUTH_001", "TC_AUTH_009", "TC_AUTH_012", "TC_PROF_001")
+def test_register_active_login_me_refresh_logout(http_client, live_server, signup_data):
     client, base = http_client, live_server.url
     response = client.post(f"{base}/register", json=signup_data, timeout=10)
     assert response.status_code == 201, response.json()
     assert response.json()["data"]["user"]["roles"] == ["STUDENT"]
     assert response.json()["data"]["user"]["student_id"] is None
     user = User.objects.get(pk=response.json()["data"]["user"]["id"])
-    assert user.account_status == AccountStatus.PENDING_ACTIVATION
+    assert user.account_status == AccountStatus.ACTIVE
+    assert user.is_email_verified
     assert OutboxEvent.objects.filter(
         aggregate_id=user.pk, event_type="identity.user.created"
     ).exists()
-    event = OutboxEvent.objects.get(
+    assert not OutboxEvent.objects.filter(
         aggregate_id=user.pk, event_type="identity.activation.requested"
-    )
-    key = mail_secret(event)["key"]
-    assert key not in json.dumps(event.data)
-    assert (
-        EmailConfirmation.objects.get(email_address__user=user).key
-        == hashlib.sha256(key.encode()).hexdigest()
-    )
-    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 200
-    assert client.post(f"{base}/activate", json={"key": key}, timeout=10).status_code == 404
-    user.refresh_from_db()
-    assert user.is_active and user.is_email_verified
+    ).exists()
+    assert not EmailConfirmation.objects.filter(email_address__user=user).exists()
 
     response = http_login(client, base, user)
     access = UntypedToken(response.json()["data"]["access"])
     assert access["sub"] == str(user.pk)
-    assert access["exp"] - access["iat"] <= 900
+    expected_lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+    assert 0 < access["exp"] - access["iat"] <= expected_lifetime
     session = UserSession.objects.get(user=user)
     cookie = next(cookie for cookie in response.cookies if cookie.name == "refresh_token")
     assert cookie.secure and cookie.has_nonstandard_attr("HttpOnly")
@@ -255,12 +247,16 @@ def test_resend_invalidates_old_activation_and_imported_user_sets_password():
     login(client, user)
 
 
-def test_missing_mail_key_rolls_back_signup_equally_for_recovery(settings, signup_data):
+def test_signup_without_mail_key_succeeds_but_recovery_is_unavailable(settings, signup_data):
     settings.IDENTITY_MAIL_KEY = None
     client = APIClient()
     response = client.post("/register", signup_data, format="json")
-    assert response.status_code == 503
-    assert not User.objects.filter(email=signup_data["email"]).exists()
+    assert response.status_code == 201
+    user = User.objects.get(email=signup_data["email"])
+    assert user.account_status == AccountStatus.ACTIVE and user.is_email_verified
+    assert not OutboxEvent.objects.filter(
+        aggregate_id=user.pk, event_type="identity.activation.requested"
+    ).exists()
     assert (
         client.post(
             "/password-reset/request",

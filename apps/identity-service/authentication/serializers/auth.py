@@ -24,13 +24,16 @@ class LoginRequestSerializer(StrictInputMixin, RestAuthLoginSerializer):
         user = authenticate(self.context["request"]._request, **kwargs)
         if user is None:
             raise AuthenticationFailed(
-                {"code": "INVALID_CREDENTIALS", "message": "Invalid credentials."}
+                {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "Email, tên đăng nhập hoặc mật khẩu không đúng.",
+                }
             )
         return user
 
     def validate(self, attrs):
         if bool(attrs.get("email")) == bool(attrs.get("username")):
-            raise serializers.ValidationError("Provide exactly one of email or username.")
+            raise serializers.ValidationError("Chỉ nhập email hoặc tên đăng nhập cùng mật khẩu.")
         for key in ("email", "username"):
             if attrs.get(key):
                 attrs[key] = attrs[key].strip().lower()
@@ -62,7 +65,9 @@ class SessionRefreshSerializer(CookieTokenRefreshSerializer):
         cookie = request.COOKIES.get("refresh_token")
         body = request.data.get("refresh")
         if cookie and body and cookie != body:
-            raise serializers.ValidationError({"refresh": "Cookie and body differ."})
+            raise serializers.ValidationError(
+                {"refresh": "Thông tin phiên đăng nhập gửi kèm không khớp."}
+            )
         if cookie:
             JWTCookieAuthentication().enforce_csrf(request)
         return super().extract_refresh_token()

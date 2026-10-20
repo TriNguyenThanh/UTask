@@ -136,7 +136,8 @@ latency. JWT local đã được refresh; token owner/outsider giữ tại `.env
 Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY` nằm trong
 `.env` root. Chỉ `AI_CREDENTIAL_KEY` là khóa Fernet bí mật; public key là
 credential xác minh JWT, lưu cùng bộ credential để không commit key local.
-Điền model/base URL vào `infra/env/ai-service.env` và API key vào `.env` root.
+Điền model/base URL và API key vào `.env` root; `infra/env/ai-service.env` chỉ
+ánh xạ các biến đó vào container.
 Sinh Fernet key rồi điền vào `.env` root:
 
 ```sh
@@ -174,8 +175,8 @@ trường AI độc lập, có network/volume và cổng host riêng; không dù
 
 ## Chạy bằng Compose riêng của AI
 
-Chạy từ `apps/ai-service/`, sau khi điền `.env` root và chọn chế độ trong
-`infra/env/ai-service.env`. Dùng cùng Compose cho cả mock và dữ liệu thật:
+Chạy từ `apps/ai-service/`, sau khi điền `.env` root. Dùng cùng Compose cho cả
+mock và dữ liệu thật:
 
 ```sh
 docker compose --project-name ai-mock --env-file ../../.env \
@@ -194,7 +195,7 @@ DB/broker không mở cổng ra host.
 đặt URL DB/broker theo tên container. Worker local dùng concurrency 2, có thể
 điều chỉnh theo tài nguyên; đây không phải quyết định topology production.
 
-`AI_HTTP_PORT` đổi cổng API; các cờ và giới hạn nằm trong `ai-service.env`.
+`AI_HTTP_PORT` đổi cổng API; các cờ và giới hạn nằm trong `.env` root.
 `MOCK_TEST` chỉ hợp lệ với development/test; staging/production bật mock sẽ
 lỗi startup. API/worker dùng cùng factory: mock đọc fixture tại adapter;
 tắt mock gọi REST của Work/Integration. JWT và LLM vẫn thật. Đổi cờ/key rồi

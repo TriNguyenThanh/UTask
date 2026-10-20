@@ -26,7 +26,7 @@ class RegistrationService:
             with transaction.atomic():
                 yield
         except IntegrityError as exc:
-            raise serializers.ValidationError("Email or username already registered.") from exc
+            raise serializers.ValidationError("Email hoặc tên đăng nhập đã được sử dụng.") from exc
 
     @staticmethod
     def create_student_profile(request, user, data):
@@ -56,18 +56,20 @@ class RegistrationService:
     def get_activation_confirmation(key):
         confirmation = EmailConfirmation.from_key(hashlib.sha256(key.encode()).hexdigest())
         if confirmation is None:
-            raise NotFound("Invalid or expired activation key.")
+            raise NotFound("Mã kích hoạt không hợp lệ hoặc đã hết hạn.")
         return confirmation
 
     @staticmethod
     def activate_account(key, password_data, verify_email):
         confirmation = EmailConfirmation.from_key(hashlib.sha256(key.encode()).hexdigest())
         if confirmation is None:
-            raise NotFound("Invalid or expired activation key.")
+            raise NotFound("Mã kích hoạt không hợp lệ hoặc đã hết hạn.")
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=confirmation.email_address.user_id)
             if user.deleted_at or user.account_status != AccountStatus.PENDING_ACTIVATION:
-                raise IdentityAPIError("INVALID_ACTIVATION_TOKEN", "Account cannot be activated.")
+                raise IdentityAPIError(
+                    "INVALID_ACTIVATION_TOKEN", "Tài khoản không đủ điều kiện kích hoạt."
+                )
             if not user.has_usable_password():
                 form = SetPasswordForm(user, password_data)
                 if not form.is_valid():
@@ -109,14 +111,16 @@ class RegistrationService:
                 or user.account_status != AccountStatus.PENDING_ACTIVATION
                 or not user.has_usable_password()
             ):
-                raise IdentityAPIError("INVALID_ACTIVATION_TOKEN", "Account cannot be activated.")
+                raise IdentityAPIError(
+                    "INVALID_ACTIVATION_TOKEN", "Tài khoản không đủ điều kiện kích hoạt."
+                )
             if not confirm_email():
                 return False
             user.account_status = AccountStatus.ACTIVE
             user.save(update_fields=("account_status", "updated_at"))
             EmailConfirmation.objects.filter(email_address=email_address).delete()
             audit(user, "ACCOUNT_ACTIVATED", request)
-            emit_user(user, "identity.user.updated")
+            emit_user(user, "identity.user.activated")
             return True
 
     @staticmethod
@@ -124,7 +128,9 @@ class RegistrationService:
         user = context.get("user")
         if user is None:
             raise IdentityAPIError(
-                "IDENTITY_UNAVAILABLE", "Unsupported account mail.", status_code=503
+                "IDENTITY_UNAVAILABLE",
+                "Không thể tạo hướng dẫn cho tài khoản này. Vui lòng liên hệ người quản trị.",
+                status_code=503,
             )
         if template_prefix == "account/email/password_reset_key":
             emit_mail(
@@ -142,5 +148,7 @@ class RegistrationService:
             )
         else:
             raise IdentityAPIError(
-                "IDENTITY_UNAVAILABLE", "Unsupported account mail.", status_code=503
+                "IDENTITY_UNAVAILABLE",
+                "Không thể tạo hướng dẫn cho tài khoản này. Vui lòng liên hệ người quản trị.",
+                status_code=503,
             )

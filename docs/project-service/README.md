@@ -1,5 +1,9 @@
 # Work Service
 
+Phần tích hợp hồ sơ Identity đã có source và nghiệm thu local riêng; xem
+[Work nhận sự kiện Identity](identity-events.md). Trạng thái dưới đây mô tả tài liệu
+kiến trúc tổng quan, không phủ nhận phần tích hợp đã kiểm chứng này.
+
 **Trạng thái: Thiết kế mục tiêu; hiện trạng mã nguồn nghiệp vụ chưa xác minh.**
 Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
 mục 4.2, Work là core service, dùng Python + Django + DRF và sở hữu `work_db`.

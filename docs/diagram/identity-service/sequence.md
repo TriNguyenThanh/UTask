@@ -28,7 +28,7 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 
 | Sequence | Nội dung | Source thực thi |
 | --- | --- | --- |
-| [SQ-ID-01](#sq-id-01) | Đăng ký Student pending | [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py) |
+| [SQ-ID-01](#sq-id-01) | Đăng ký Student ACTIVE/email verified | [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py) |
 | [SQ-ID-02](#sq-id-02) | Login bằng Django Auth và Axes | [authentication/serializers/auth.py](../../../apps/identity-service/authentication/serializers/auth.py) |
 | [SQ-ID-03](#sq-id-03) | Refresh JWT trên session ổn định | [authentication/services/session_service.py](../../../apps/identity-service/authentication/services/session_service.py) |
 | [SQ-ID-04](#sq-id-04) | Kiểm tra phiên và boundary quyền tài nguyên | [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py) |
@@ -46,7 +46,7 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 | [SQ-ID-16](#sq-id-16) | Avatar receipt bound user và session | [accounts/services/avatars.py](../../../apps/identity-service/accounts/services/avatars.py) |
 | [SQ-ID-17](#sq-id-17) | Admin status/restore: mọi mutation thu hồi phiên | [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py) |
 | [SQ-ID-18](#sq-id-18) | Admin role và revoke credential | [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py) |
-| [SQ-ID-19](#sq-id-19) | Ghi outbox hiện hành và handoff mục tiêu | [messaging/outbox.py](../../../apps/identity-service/messaging/outbox.py) |
+| [SQ-ID-19](#sq-id-19) | Outbox, publisher và consumer hồ sơ | [messaging/outbox.py](../../../apps/identity-service/messaging/outbox.py) |
 | [SQ-ID-20](#sq-id-20) | JWKS một khóa RS256 hiện hành | [authentication/adapters/session_tokens.py](../../../apps/identity-service/authentication/adapters/session_tokens.py) |
 | [SQ-ID-21](#sq-id-21) | Đọc hồ sơ, batch, sessions và admin list | [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py) |
 | [SQ-ID-22](#sq-id-22) | Resend activation public | [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py) |
@@ -54,50 +54,31 @@ provider/consumer/runtime liên service cần nghiệm thu riêng.
 
 <a id="sq-id-01"></a>
 
-## SQ-ID-01 — Đăng ký Student pending
+## SQ-ID-01 — Đăng ký Student ACTIVE/email verified
 
-Đăng ký Student pending
+Nguồn: [registration serializer](../../../apps/identity-service/authentication/serializers/registration.py),
+[registration service](../../../apps/identity-service/accounts/services/registration.py);
+kiểm thử HTTP: [test_flows.py](../../../apps/identity-service/tests/test_flows.py).
 
-Nguồn: [authentication/views/registration.py](../../../apps/identity-service/authentication/views/registration.py);
-kiểm thử: [test_registration.py](../../../apps/identity-service/tests/test_registration.py).
-
-<details>
-<summary>Nguồn PlantUML</summary>
-
-```plantuml
-@startuml SQ-ID-01
-skinparam defaultFontName Arial
-skinparam shadowing false
-skinparam sequenceMessageAlign left
-skinparam responseMessageBelowArrow true
-skinparam maxMessageSize 300
-hide footbox
-autonumber
-title SQ-ID-01 — Đăng ký Student pending
-actor "Guest" as U
-participant "StudentRegisterView / RegisterSerializer" as V
-participant "allauth / IdentityAccountAdapter" as A
-database "identity_db" as D
-U -> V : POST /auth/register\nusername,email,password1,password2,tên
-V -> V : mail_key(); reject Idempotency-Key
-alt Thiếu mail key hoặc input/key header sai
- V --> U : 503 IDENTITY_UNAVAILABLE /400 VALIDATION_ERROR
-else Input được chấp nhận
- group TX-I: signup_transaction
-  V -> A : Validate password bằng Django; save_user
-  A -> D : INSERT user PENDING_ACTIVATION
-  V -> D : Profile + STUDENT + audit REGISTER\noutbox identity.user.created
-  V -> A : Mandatory email verification
-  A -> D : EmailAddress + EmailConfirmation\noutbox activation.requested (secret AES-GCM)
-  A -> D : Lưu hash confirmation key; COMMIT
- end
- V --> U : 201 data.user/account_status\nkhông access/refresh
-end
-note over U,D : Mail key/DB lỗi rollback signup; không anonymous receipt.\nKích hoạt theo SQ09, sau đó login SQ02; username là input bắt buộc.
-@enduml
+```mermaid
+sequenceDiagram
+    actor U as Người đăng ký
+    participant V as RegisterView/RegisterSerializer
+    participant A as allauth
+    participant D as Identity DB
+    U->>V: POST /register
+    V->>V: Kiểm tra input và mật khẩu
+    V->>D: Bắt đầu transaction
+    V->>A: Tạo user bằng hook thư viện
+    V->>D: Đặt ACTIVE, tạo profile/STUDENT/audit/user.created
+    V->>A: Đánh dấu email đã xác minh
+    A->>D: Lưu EmailAddress verified
+    V->>D: Commit
+    V-->>U: 201 user/account_status ACTIVE; không JWT
 ```
 
-</details>
+Đăng ký mới không chờ mail, không yêu cầu mail key. Không thay tài khoản import pending;
+kích hoạt của chúng theo SQ-ID-09. Người dùng đăng nhập riêng theo SQ-ID-02.
 
 <a id="sq-id-02"></a>
 
@@ -224,7 +205,7 @@ note over U,D : session_id và token_family ổn định; family_exp không vư�
 Kiểm tra phiên và boundary quyền tài nguyên
 
 Nguồn: [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -808,7 +789,7 @@ note over I,N : Chỉ Integration gọi GitHub API; Identity không gọi provid
 PATCH hồ sơ: chỉ mutation thật mới phát event
 
 Nguồn: [accounts/services/profiles.py](../../../apps/identity-service/accounts/services/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -915,7 +896,7 @@ note over I,D : Session ID ổn định qua refresh; receipt vẫn bound cùng t
 Admin status/restore: mọi mutation thu hồi phiên
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -966,7 +947,7 @@ note over U,D : Restore không tự ACTIVE hay revive phiên.\nKhông DELETE use
 Admin role và revoke credential
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -1010,49 +991,50 @@ note over I,D : Actor=target đổi role khác có thể revoke chính credentia
 
 <a id="sq-id-19"></a>
 
-## SQ-ID-19 — Ghi outbox hiện hành và handoff mục tiêu
+## SQ-ID-19 — Outbox, publisher và consumer hồ sơ
 
-Ghi outbox hiện hành và handoff mục tiêu
+Nguồn: [outbox](../../../apps/identity-service/messaging/outbox.py),
+[publisher](../../../apps/identity-service/messaging/publisher.py),
+[Work consumer](../../../apps/work-service/apps/messaging/consumer.py).
 
-Nguồn: [messaging/outbox.py](../../../apps/identity-service/messaging/outbox.py);
-kiểm thử: [test_audit.py](../../../apps/identity-service/tests/test_audit.py).
-
-<details>
-<summary>Nguồn PlantUML</summary>
-
-```plantuml
-@startuml SQ-ID-19
-skinparam defaultFontName Arial
-skinparam shadowing false
-skinparam sequenceMessageAlign left
-skinparam responseMessageBelowArrow true
-skinparam maxMessageSize 300
-hide footbox
-autonumber
-title SQ-ID-19 — Ghi outbox hiện hành và handoff mục tiêu
-participant "Service mutation / allauth hook" as S
-participant "messaging.outbox emit / emit_mail" as M
-database "identity_db" as D
-queue "Kafka\nTHIẾT KẾ MỤC TIÊU" as K
-participant "Consumer / Notification\nCHƯA XÁC MINH" as N
-group Transaction nghiệp vụ tại caller
- S -> D : Ghi user/profile/role hoặc audit
- S -> M : emit hoặc emit_mail
- M -> M : Build event_id/type/version/occurred_at\nproducer/aggregate_id/trace_id/data
- opt Mail activation/reset/import
-  M -> M : AES-GCM secret bằng key/key_id và AAD
- end
- M -> D : INSERT OutboxEvent.data = toàn envelope\npublished_at=NULL
- S -> D : COMMIT mutation + outbox
-end
-note over S,D : Code hiện chỉ build/lưu event; không có Celery/Kafka publisher ở Identity.\nKhông có ACK, lease, retry worker hay secret cleanup đã được triển khai để nhận vơ.
-D --> K : Mục tiêu: publisher giao event sau commit; key=user_id
-K --> N : Mục tiêu: consumer dedup event_id\nmail decrypt/expiry/delivery hoặc projection
-note over K,N : Handoff là thiết kế mục tiêu, không chứng minh Kafka/email/consumer đã chạy.\nAt-least-once/dedup/ACK/retention cần implementation + nghiệm thu riêng.\nHTTP queued không đồng nghĩa mail delivered.
-@enduml
+```mermaid
+sequenceDiagram
+    participant S as Nghiệp vụ Identity
+    participant D as Identity DB
+    participant P as Publisher command
+    participant K as Kafka dùng chung
+    participant W as Work consumer
+    participant WD as Work DB
+    S->>D: Transaction: thay đổi nghiệp vụ + audit + outbox
+    D-->>S: Commit
+    P->>D: Khóa đầu hàng pending theo user
+    P->>K: Gửi envelope đã lưu; key=user_id
+    alt Kafka ACK
+        K-->>P: Xác nhận
+        P->>D: Lưu published_at và commit
+        P->>P: Ghi publish_succeeded
+    else Lỗi kết nối/gửi
+        P->>D: Giữ pending; tăng retry, lưu next_attempt_at
+    end
+    K->>W: Event Identity
+    alt created/updated hợp lệ
+        W->>WD: Transaction: receipt chống trùng + projection
+        WD-->>W: Commit
+        W->>K: Commit offset
+    else Loại đã chốt ngoài projection
+        W->>W: Kiểm envelope; không đọc/giải mã mail
+        W->>K: Commit offset
+    else Dữ liệu hỏng/phiên bản không hỗ trợ
+        W->>K: Gửi DLQ và chờ ACK
+        K-->>W: ACK
+        W->>K: Commit offset
+    end
 ```
 
-</details>
+At-least-once: crash sau Kafka ACK nhưng trước DB commit có thể phát lại cùng event ID;
+consumer phải chống lặp. Không cho event sau vượt đầu hàng lỗi cùng user. HTTP queued
+không đồng nghĩa mail delivered. Mail còn do Notification xử lý và chưa có Resend;
+không mô tả nhánh đó như đã chạy từ kiểm chứng Work projection.
 
 <a id="sq-id-20"></a>
 
@@ -1097,7 +1079,7 @@ note over C,S : SimpleJWT header alg/typ; không kid. Private key không chia s�
 Đọc hồ sơ, batch, sessions và admin list
 
 Nguồn: [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -1189,7 +1171,7 @@ note over U,D : Key lỗi503 cho known/unknown; email sai400; throttle429.\nKhô
 GitHub mapping nội bộ cho reconciliation
 
 Nguồn: [accounts/views/internal.py](../../../apps/identity-service/accounts/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -1235,8 +1217,8 @@ OAuth/R2 cần test với provider thật và cấu hình flags/credential phù 
 Google không có outer transaction chung account/link và token issuance. Unlink không có
 link vẫn200 và ghi audit/user.updated. GitHub proof được kiểm trước user transaction,
 không có recheck expiry dưới lock. Đây là mô tả code hiện hành, không cam kết mạnh hơn.
-Không có nhiều JWKS keys/kid/rotation overlap; không có publisher hoặc retention worker
-trong source Identity hiện tại. Giữ các giới hạn này khi xây consumer hoặc lập test E2E.
+Không có nhiều JWKS keys/kid/rotation overlap. Identity có publisher command chạy liên tục;
+cleanup là lệnh thủ công, không có worker tự xóa dữ liệu. Xem hướng dẫn Identity hiện hành.
 
 Sơ đồ và SVG mô tả cùng nguồn PlantUML. Render thành công chỉ xác minh tài liệu,
 không thay kết quả regression PostgreSQL/provider/Kafka/consumer.

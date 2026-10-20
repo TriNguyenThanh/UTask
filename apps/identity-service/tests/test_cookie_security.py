@@ -1,8 +1,6 @@
 """Browser refresh/logout exercise Django CSRF, Origin and cookie policy end to end."""
 
 import pytest
-from django.middleware.csrf import get_token
-from django.test import RequestFactory
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import UntypedToken
@@ -20,9 +18,37 @@ def browser_session(settings):
     user = create_user()
     client = APIClient(enforce_csrf_checks=True)
     response = login(client, user)
-    token = get_token(RequestFactory().get("/"))
-    client.cookies[settings.CSRF_COOKIE_NAME] = token
+    token = response.cookies[settings.CSRF_COOKIE_NAME].value
     return user, client, token, response.cookies["refresh_token"].value
+
+
+def test_csrf_bootstrap_is_anonymous_uncached_and_sets_cookie(settings):
+    client = APIClient(enforce_csrf_checks=True)
+    response = client.get("/csrf", secure=True)
+    assert response.status_code == 200
+    assert response["Cache-Control"] == "no-store"
+    assert response.cookies[settings.CSRF_COOKIE_NAME].value
+    assert response.json()["data"]["csrf_token"]
+    assert "refresh_token" not in response.cookies
+
+
+def test_login_rotates_bootstrap_csrf_and_refresh_uses_issued_cookie(settings):
+    client = APIClient(enforce_csrf_checks=True)
+    client.get("/csrf", secure=True)
+    old = client.cookies[settings.CSRF_COOKIE_NAME].value
+    user = create_user()
+    response = login(client, user)
+    csrf = response.cookies[settings.CSRF_COOKIE_NAME].value
+    assert csrf != old
+    response = client.post(
+        "/refresh",
+        {},
+        format="json",
+        secure=True,
+        HTTP_X_CSRFTOKEN=csrf,
+        HTTP_ORIGIN="https://testserver",
+    )
+    assert response.status_code == 200
 
 
 @pytest.mark.parametrize("endpoint", ENDPOINTS)

@@ -59,7 +59,7 @@ class InternalActivationResendView(APIView):
     )
     def post(self, request, user_id):
         if request.data:
-            raise serializers.ValidationError("Expected an empty body.")
+            raise serializers.ValidationError("Yêu cầu này không nhận nội dung gửi kèm.")
         resend_import_activation(request, user_id)
         return Response(None)
 

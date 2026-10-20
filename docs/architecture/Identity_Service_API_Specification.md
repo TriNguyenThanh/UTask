@@ -2,14 +2,14 @@
 ## Đặc tả Giao diện Lập trình Ứng dụng (Enterprise API Specification) cho Dịch vụ Xác thực & Định danh Toàn cục
 
 **Phiên bản:** 1.8 (trạng thái email và lockout thuộc thư viện; flags cho OAuth/R2)<br>
-**Trạng thái: Một phần.** Cập nhật03/10/2026; API local có source/tests; provider/R2 và liên dịch vụ chưa nghiệm thu. Xem [phạm vi và cách tích hợp](../identity-service/README.md).<br>
+**Trạng thái: Một phần.** Cập nhật20/10/2026; API local có source và 383 test đạt; avatar R2, Kafka và Identity–Classroom đã có kiểm chứng local. Gửi mail, OAuth thật, gateway/staging chưa nghiệm thu. Xem [phạm vi và cách tích hợp](../identity-service/README.md).<br>
 **Dịch vụ sở hữu:** `apps/identity-service`<br>
 **Cơ sở dữ liệu:** `identity_db` (PostgreSQL 16)<br>
 **Cổng lắng nghe cục bộ (Local Port):** `8001`<br>
 **Đường dẫn trong service:** `/login`, `/users`, `/admin/users`; gateway công khai dưới `/api/auth`. Đường nội bộ provisioning không công khai qua gateway.<br>
 **Tài liệu tham chiếu:**
 - [Kiến trúc hiện hành](../system/architecture.md), [ownership](../system/data-ownership.md), [Kafka](../system/kafka-events.md) (nguồn chuẩn sau pull)
-- [UTask - Phân tích thiết kế yêu cầu.md](UTask%20-%20Phân%20tích%20thiết%20kế%20yêu%20cầu.md) (Epic 1: US-1.1 đến US-1.4, Quyền Giảng viên/Sinh viên/Admin)
+- tài liệu yêu cầu gốc (không có trong checkout này; không dùng làm bằng chứng triển khai) (Epic 1: US-1.1 đến US-1.4, Quyền Giảng viên/Sinh viên/Admin)
 - [erd.md](../diagram/identity-service/erd.md) (Sơ đồ CSDL và Từ điển dữ liệu `identity_db`)
 - [Work_Service_API_Specification.md](Work_Service_API_Specification.md) (Quy chuẩn Single Unified Envelope và UserProjection contract)
 
@@ -17,7 +17,7 @@
 
 ## 1. Nguyên tắc Thiết kế & Chuẩn mực Kiến trúc Bắt buộc
 
-**Quyết định ngày 2026-10-01:** Classroom nhận CSV/Excel và ghi danh; Identity tạo hoặc tìm tài khoản qua API nội bộ. Access token chỉ dùng RS256, issuer `https://identity.utask.internal`, audience `utask-platform`, TTL 15 phút. Refresh được xử lý trong ứng dụng, có khóa và giao dịch PostgreSQL. ERD và test specification dùng cùng tên trường và API bên dưới.
+**Quyết định ngày 2026-10-01:** Classroom nhận CSV/Excel và ghi danh; Identity tạo hoặc tìm tài khoản qua API nội bộ. Access token chỉ dùng RS256, issuer `https://identity.utask.internal`, audience `utask-platform`, TTL mặc định 9.000 giây (2 giờ 30 phút). Refresh được xử lý trong ứng dụng, có khóa và giao dịch PostgreSQL. ERD và test specification dùng cùng tên trường và API bên dưới.
 
 Use case và sequence bàn giao tại [usecase.md](../diagram/identity-service/usecase.md), [sequence.md](../diagram/identity-service/sequence.md) và [chỉ mục](../diagram/identity-service/README.md). Chi tiết kỹ thuật bổ sung được chốt ở mục 1.10. Các ví dụ mã là hướng dẫn triển khai, không phải mã đã chạy trong repo; kết quả kiểm thử nằm riêng trong báo cáo thực thi.
 
@@ -27,7 +27,7 @@ Mọi phản hồi nghiệp vụ từ `identity-service` (thành công hoặc th
 ```json
 {
   "success": true,
-  "message": "Đăng nhập hệ thống thành công.",
+  "message": "Đăng nhập thành công.",
   "data": {},
   "meta": {
     "page": 1,
@@ -42,12 +42,15 @@ Mọi phản hồi nghiệp vụ từ `identity-service` (thành công hoặc th
 ```
 
 `data={}` ở ví dụ khung chỉ minh họa vị trí payload; dữ liệu thực tế theo từng endpoint.
+`message` và `error.details[].issue` dùng tiếng Việt, gồm lỗi validation của thư viện.
+Giữ nguyên HTTP status, `error.code`, tên trường và đường dẫn trường; không trả nguyên
+thông báo nội bộ, lỗi phân tích JSON hoặc lỗi nhà cung cấp cho client.
 
 Khi phát sinh lỗi (HTTP 4xx / 5xx), trường `data` và `meta` mang giá trị `null`, trường `error` cung cấp chi tiết lỗi có cấu trúc:
 ```json
 {
   "success": false,
-  "message": "Thông tin đăng nhập không chính xác hoặc tài khoản đang bị khóa.",
+  "message": "Email, tên đăng nhập hoặc mật khẩu không đúng.",
   "data": null,
   "meta": null,
   "error": {
@@ -61,7 +64,7 @@ Khi phát sinh lỗi (HTTP 4xx / 5xx), trường `data` và `meta` mang giá tr�
 
 ### 1.2. JWT và phiên theo SimpleJWT (contract 1.7)
 
-Access và refresh đều là JWT RS256 do SimpleJWT tạo/xác minh; access tối đa 15 phút,
+Access và refresh đều là JWT RS256 do SimpleJWT tạo/xác minh; access mặc định 9.000 giây (2 giờ 30 phút),
 refresh family tối đa 7 ngày từ login. Claims chuẩn gồm `token_type`, `jti`,
 `iat`, `exp`, `sub`, `iss`, `aud`; `hash_password` do
 `CHECK_REVOKE_TOKEN` quản lý. Adapter chỉ thêm `session_id`,
@@ -84,6 +87,10 @@ Không có route cấp raw refresh riêng cho mobile trong phiên bản này.
 JWKS trả `keys` ở root, một khóa RSA công khai. SimpleJWT dùng header chuẩn không `kid`;
 consumer chọn khóa duy nhất, không dùng parser/signature engine viết tay. Chưa hỗ trợ
 overlap nhiều signing key; phải có kế hoạch chuyển khóa/consumer trước rollout.
+
+`GET /csrf` Anonymous cấp CSRF cookie và trả `data={"csrf_token":"<masked-token>"}`,
+`Cache-Control: no-store`. Login cũng cấp/đổi CSRF cookie. Browser gửi token mới trong
+`X-CSRFToken` cùng cookie khi refresh/logout; không cần mở Swagger để khởi tạo CSRF.
 
 ### 1.3. Không dò tài khoản và vòng đời
 
@@ -119,7 +126,7 @@ Xung đột uniqueness khiến migration rollback; không tự lấy email của
 Mọi thay đổi dữ liệu người dùng (`CREATE`, `UPDATE`, `ROLE_ASSIGNED`, `STATUS_CHANGED`) đều được ghi đồng thời vào bảng `outbox_events` trong cùng Database Transaction.
 - **Kafka Topic:** `utask.identity.events`
 - **Partition Key:** `user_id` (Kafka giữ thứ tự broker nhận trong partition; producer/replay phải giữ thứ tự theo mục 1.10).
-- **Celery Poller:** Chạy nền mỗi 1 giây quét các bản ghi `published_at IS NULL` và đẩy vào broker.
+- **Outbox publisher:** Command `publish_identity_outbox --watch` quét mỗi 1 giây và gửi Kafka; không cần Celery/Beat hay hàng đợi Redis trong Identity.
 
 ---
 
@@ -156,7 +163,7 @@ API `/api/v1/internal/users/provision-students` và resend nội bộ chỉ đư
 
 ### 1.8. Kiểm tra JWT và trạng thái phiên liên dịch vụ
 
-JWT dùng RS256, `iss=https://identity.utask.internal`, `aud=utask-platform`, TTL 15 phút; có sub/iat/exp/jti/session_id/token_family. Service vệ tinh xác minh chữ ký rồi gọi `POST /api/v1/internal/auth/session-status` của Identity. Giai đoạn đầu không cache kết quả cho phép; chấp nhận thêm một HTTP call để tránh dùng phiên đã bị thu hồi. Identity lỗi/timeout: 503 IDENTITY_UNAVAILABLE, không cấp quyền. Service vệ tinh không đọc DB Identity.
+JWT dùng RS256, `iss=https://identity.utask.internal`, `aud=utask-platform`, TTL mặc định 9.000 giây (2 giờ 30 phút); có sub/iat/exp/jti/session_id/token_family. Service vệ tinh xác minh chữ ký rồi gọi `POST /api/v1/internal/auth/session-status` của Identity. Giai đoạn đầu không cache kết quả cho phép; chấp nhận thêm một HTTP call để tránh dùng phiên đã bị thu hồi. Identity lỗi/timeout: 503 IDENTITY_UNAVAILABLE, không cấp quyền. Service vệ tinh không đọc DB Identity.
 
 Endpoint nội bộ nhận Bearer access token cần kiểm tra và X-Service-Key riêng của caller Work/Classroom/AI; Identity kiểm JWT/key cục bộ, không gọi ngược chính endpoint này. Gateway chặn /internal/. Response 200 envelope với `data={"active":true}` hoặc `data={"active":false}`.
 
@@ -180,13 +187,13 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 
 ### 1.10. Chi tiết kỹ thuật được chốt để bàn giao (2026-10-02)
 
-1. Refresh family7 ngày tuyệt đối; login/kích hoạt tạo family mới. Access15 phút. Cookie/body refresh khác nhau trả400; cookie mutation kiểm CSRF/Origin. Web dùng cookie không nhận raw refresh trong body; ví dụ token body dành cho API client.
+1. Refresh family7 ngày tuyệt đối; login/kích hoạt tạo family mới. Access mặc định9.000 giây, cấu hình qua IDENTITY_ACCESS_TOKEN_SECONDS và không vượt hạn family. Cookie/body refresh khác nhau trả400; cookie mutation kiểm CSRF/Origin. Web dùng cookie không nhận raw refresh trong body; ví dụ token body dành cho API client.
 2. Login sai được Axes signals/middleware lưu; không tự cập nhật counter users. Password đúng mới báo trạng thái. AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT=false. Writer khóa user trước token; actor/target/batch theo UUID tăng dần. Phát sinh khóa ngoài thứ tự: rollback/retry toàn TX-I tối đa3 lần, hết mức lỗi hạ tầng chung, không success giả.
 3. Receipt provisioning scope (actor_user_id,endpoint_path,key); Registration hiện từ chối Idempotency-Key400; không có receipt đăng ký. DB unique + transaction-level tuple lock claim trước nghiệp vụ; cùng canonical-body hash replay status/body, khác hash422. Canonical JSON sắp khóa cố định, normalize email/MSSV, giữ nguyên thứ tự students; password chỉ tham gia hash, không lưu raw request. Registration receipt không token. Không key: unique indexes chống account trùng, không hứa replay response. Giữ receipt ít nhất24 giờ; client chỉ retry trong24 giờ, sau đó key mới và resolve account hiện có. Classroom retry JSON đã cố định, không parse lại thành payload khác.
 4. OAuth bước start phía server theo3.3.0; context Redis10 phút, atomic one-use, gắn provider/URI/browser và user_id khi link. Chỉ server giữ nonce/PKCE verifier. Client phải giữ cookie context; Redis outage503 IDENTITY_UNAVAILABLE, không bỏ qua context.
 5. Avatar receipt Redis300 giây owner/key/type/size; confirm kiểm receipt, HEAD R2 thật ngoài TX-I. Key đã là avatar chính user trả200 no-op; confirm khác không receipt trả400. Public URL derive server. Orphan dùng lifecycle R2, không DELETE dữ liệu tài khoản.
 6. Admin/internal delegated mutation kiểm role hiện tại trong DB sau khóa actor/target, không chỉ JWT roles. Role no-op không phát event/revoke mới; role đổi thật revoke mọi family target. Không project bypass cho Admin.
-7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Một Celery poller active không overlap, lease Redis owner/TTL được giữ khi publish. Read oldest (created_at,id); event lỗi cùng user không bị vượt. ACK rồi crash trước mark gây duplicate. Nhiều poller cần fencing/claim riêng trước triển khai, không hứa “thứ tự tuyệt đối” từ partition key.
+7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Publisher lấy bản ghi chờ cũ nhất của mỗi user theo (created_at,id), dùng PostgreSQL row lock và skip-locked để tránh hai process đồng thời gửi cùng đầu hàng. Event lỗi cùng user không bị vượt. Chỉ ghi published_at sau Kafka ACK; ACK rồi crash trước mark có thể gây duplicate, consumer phải chống lặp theo event_id.
 8. GitHub reconcile theo3.7.1 trước update projection/replay/backfill; outage phải retry, không verified từ event cũ. Public/batch giữ policy Bearer toàn hệ thống hiện tại; không tự thêm quyền cùng lớp nếu sản phẩm chưa đổi contract.
 
 ### 1.11. Trạng thái API và thư viện ở phiên bản1.7
@@ -282,8 +289,8 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 #### 3.1.1. Lấy Khóa Công khai Xác thực Token (JWKS - JSON Web Key Set)
 * **Phương thức:** `GET`
 * **Đường dẫn:** `/.well-known/jwks.json`
-* **Xác thực:** Công khai (Anonymous). Cache TTL: 24 giờ.
-* **Ngoại lệ envelope:** JWKS trả đối tượng `{"keys": [...]}` trực tiếp theo chuẩn JWKS, không bọc envelope năm trường. JWT header bắt buộc có `alg=RS256` và `kid`; bên nhận chọn khóa theo `kid`, làm mới JWKS khi gặp kid chưa biết, chỉ chấp nhận kid có trong bộ khóa. Giữ khóa cũ ít nhất 15 phút sau lần cuối phát token bằng khóa đó.
+* **Xác thực:** Công khai (Anonymous). Cache TTL: 300 giây.
+* **Ngoại lệ envelope:** JWKS trả đối tượng `{"keys": [...]}` trực tiếp theo chuẩn JWKS, không bọc envelope năm trường. Hiện có một khóa RSA và JWT do SimpleJWT phát không có `kid`; bên nhận kiểm RS256/iss/aud/exp bằng khóa công khai này. Nhiều khóa và xoay khóa có thời gian chồng lấp là thiết kế mở rộng, chưa triển khai.
 * **Mô tả:** Cung cấp bộ khóa công khai (RSA Public Keys) theo chuẩn RFC 7517 để API Gateway và các satellite microservices (`work-service`, `classroom-service`, `ai-service`) tự xác thực chữ ký Access Token mà không cần gọi vào `identity_db`.
 
 * **Phản hồi Thành công (HTTP 200 OK):**
@@ -294,7 +301,6 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
       "kty": "RSA",
       "use": "sig",
       "alg": "RS256",
-      "kid": "utask-identity-key-2026",
       "n": "u1g...public_modulus...",
       "e": "AQAB"
     }
@@ -310,7 +316,9 @@ POST `/register`, Anonymous, dj-rest-auth RegisterView/RegisterSerializer.
 Request: `email, username, password1, password2, first_name, last_name`.
 Không nhận role/MSSV/extra field. Password qua validators Django (min 8, không common/numeric,
 độ tương tự user và chữ hoa/chữ thường/số/ký tự đặc biệt).
-201: `data={"user":{...},"account_status":"PENDING_ACTIVATION"}`, không cấp JWT.
+201: `data={"user":{...},"account_status":"ACTIVE"}`, email được allauth đánh dấu
+đã xác minh ngay; không gửi yêu cầu mail kích hoạt và không cấp JWT. Đây là chính sách
+đăng ký hiện tại khi chưa có Resend; tài khoản import vẫn giữ luồng kích hoạt riêng.
 User/profile/STUDENT/audit/outbox cùng transaction. Idempotency-Key chưa hỗ trợ, gửi key
 trả 400 thay vì giả receipt. Email/username trùng trả 400 VALIDATION_ERROR, giữ unique DB.
 
@@ -1015,7 +1023,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 * **Topic:** `utask.identity.events`
 * **Partition Key:** `user_id` (thứ tự broker nhận trong partition, không phải exactly-once/thứ tự nghiệp vụ giữa nhiều producer).
 
-**Chuẩn v1 đã chọn cho thiết kế:** trường nghiệp vụ là `data`, không chấp nhận đồng thời hoặc thay thế bằng `payload`. Cột JSONB của outbox Identity cũng tên `data`, giữ kiểu JSONB; không đổi `payload_hash` của receipt/request. event_id/time/trace không đổi khi retry. Chưa có migration/producer triển khai trong checkout; đây không phải ALTER TABLE đã thực thi. Nếu phát hiện môi trường khác đang dùng tên cũ, lập migration/consumer compatibility trước rollout, không tự xóa dữ liệu.
+**Chuẩn v1 đã triển khai:** trường nghiệp vụ là `data`, không chấp nhận đồng thời hoặc thay thế bằng `payload`. Cột JSONB của outbox Identity cũng tên `data`; `payload_hash` của receipt/request giữ nguyên. Producer gửi envelope đã lưu; event_id/time/trace không đổi khi retry. Migration0006 bổ sung lịch thử lại và index hàng chờ, không đổi tên cột JSONB. Không suy ra migration trên staging từ kết quả database kiểm thử local.
 
 ### 4.1. Sự kiện `identity.user.created`
 Được phát khi có tài khoản mới được tạo (qua Đăng ký, Google OAuth, hoặc Import sinh viên).
@@ -1086,6 +1094,12 @@ Envelope theo4.1: event_id/type/aggregate_type/aggregate_id/occurred_at/event_ve
 | identity.oauth.github_unlinked | Unlink; user_id,github_user_id(captured trước delete) | Integration → github.account.unverified |
 
 Mail secret null **chỉ khi expires_at hết hạn** theo1.6; consumer skip trước decrypt. user.created không có mail secret, kể cả import. Non-mail snapshot không phone/bio/preferences/password/IP/audit reason. Unsupported version/malformed không cập nhật projection; retry/DLQ có audit, không skip như success.
+
+Cột Consumer nêu nơi cần sử dụng dữ liệu theo nghiệp vụ, không xác nhận mọi đầu nhận
+đã triển khai. Consumer hồ sơ Work hiện chỉ cập nhật display_name/avatar từ
+`identity.user.created/updated`; các loại Identity đã chốt còn lại được kiểm envelope
+rồi bỏ qua, không tạo profile hoặc giải mã mail. JSON/envelope hỏng, loại lạ và version
+sai vẫn vào DLQ và chờ ACK trước commit offset; xem hướng dẫn consumer Work.
 
 ## 5. Cấu trúc Mã nguồn Mẫu & Middleware Thực thi (Framework Implementation)
 

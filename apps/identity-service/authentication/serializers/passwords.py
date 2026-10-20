@@ -65,7 +65,9 @@ class IdentityPasswordResetConfirmSerializer(StrictInputMixin, PasswordResetConf
 class IdentityPasswordChangeSerializer(StrictInputMixin, PasswordChangeSerializer):
     def custom_validation(self, attrs):
         if self.user.check_password(attrs["new_password1"]):
-            raise serializers.ValidationError({"new_password1": "New password must differ."})
+            raise serializers.ValidationError(
+                {"new_password1": "Mật khẩu mới phải khác mật khẩu hiện tại."}
+            )
 
     def save(self):
         def save_password(current):

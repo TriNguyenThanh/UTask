@@ -66,7 +66,8 @@ def change_role(request, target_id, code, *, assign):
             )
         if not assign and code == "SYSTEM_ADMIN" and target_id == request.user.pk:
             raise IdentityAPIError(
-                "CANNOT_REVOKE_OWN_ADMIN_ROLE", "Không thể tự thu hồi quyền admin."
+                "CANNOT_REVOKE_OWN_ADMIN_ROLE",
+                "Bạn không thể tự thu hồi quyền quản trị hệ thống của mình.",
             )
         role = GlobalRole.objects.get(code=code)
         if assign:
@@ -85,6 +86,7 @@ def change_role(request, target_id, code, *, assign):
                 {
                     "user_id": str(user.pk),
                     "role_code": code,
+                    "actor_id": str(request.user.pk),
                     "roles": sorted(
                         user.global_role_assignments.values_list("role__code", flat=True)
                     ),

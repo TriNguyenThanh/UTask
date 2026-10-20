@@ -1,0 +1,1595 @@
+openapi: 3.1.0
+info:
+  title: UTask Integration API
+  version: 1.4.0
+  description: Integration sở hữu mapping và credential GitHub App mã hóa, consent PKCE,
+    installation/repository discovery, kết nối repository của Project, context GitHub đã lọc
+    và webhook bền vững. Provider public và internal đã triển khai trong source và kiểm thử;
+    flags connection/Kafka/AI mặc định tắt. Work/AI thật chưa nghiệm thu tích hợp runtime;
+    mỗi caller dùng key riêng và internal path luôn bị chặn tại gateway.
+servers:
+- url: /api/integrations
+  description: Qua gateway; internal path bị chặn.
+- url: http://integration-service:8000
+  description: Root server trong mạng backend.
+x-utask-ownership: integration-service
+security: []
+paths:
+  /healthz:
+    get:
+      operationId: integrationHealth
+      summary: Kiểm tra DB Integration bằng SELECT 1
+      x-utask-status: implemented
+      responses:
+        '200':
+          description: DB sẵn sàng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Healthy'
+              example:
+                status: ok
+        '503':
+          description: DB không khả dụng, không trả chi tiết lỗi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unavailable'
+              example:
+                status: unavailable
+    head:
+      operationId: integrationHealthHead
+      summary: Kiểm tra DB, không trả body
+      x-utask-status: implemented
+      responses:
+        '200':
+          description: DB sẵn sàng.
+        '503':
+          description: DB không khả dụng.
+  /api/v1/github/account:
+    get:
+      operationId: getOwnGitHubAccount
+      summary: Đọc mapping GitHub của actor hiện tại
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      description: Không nhận query hoặc body. Actor lấy từ Identity GET /users/me bằng Bearer hiện tại;
+        không nhận user_id hoặc key service thay user. Chưa liên kết trả UNLINKED/version 0. Metadata
+        GitHub bị ẩn khi REVOKED. Response Cache-Control private, no-store; không cache quyền cho phép.
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: revokeOwnGitHubAccount
+      summary: Thu hồi mapping GitHub của actor hiện tại
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      description: Thu hồi mapping, credential và pending flow của actor trong một transaction; account
+        version idempotent. Lưu job revoke token cụ thể ở GitHub, không xóa installation hoặc grant của
+        consent mới. Không tạo mapping khi chưa liên kết.
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    head:
+      operationId: headOwnGitHubAccount
+      summary: Kiểm tra cùng quyền/nguồn với GET, không trả body
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      responses:
+        '200':
+          description: Actor được xác thực và dữ liệu truy cập được.
+        '400':
+          description: Endpoint không nhận query/body.
+        '401':
+          description: Bearer/phiên không hợp lệ.
+        '503':
+          description: Identity hoặc DB không khả dụng.
+  /api/v1/github/authorizations/start:
+    post:
+      operationId: startOwnGitHubConsent
+      summary: Bắt đầu consent GitHub App cá nhân
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      description: Không nhận body/query. State một lần TTL600, PKCE S256 và redirect cố định. Cookie
+        utask_github_consent HttpOnly/SameSite=Lax/Secure mặc định; binding đúng Bearer đã được Identity
+        xác minh. Consent mới vô hiệu consent trước; không nhận project_id. Feature hoặc cấu hình thiếu
+        trả503.
+      responses:
+        '200':
+          description: URL GitHub authorize đã ràng buộc state, không token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentStartResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/github/authorizations/complete:
+    post:
+      operationId: completeOwnGitHubConsent
+      summary: Xác minh danh tính GitHub và lưu mapping ở Integration
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      description: Nhận code/state, kiểm actor/Bearer/nonce/generation/TTL; consume trước exchange. GitHub
+        /user xác minh ID/login; lưu mapping cùng credential mã hóa trong một transaction. Yêu cầu token
+        có hạn và refresh token. Giữ quy tắc unlink trước khi đổi GitHub ID. DELETE/webhook revoke chặn
+        callback cũ. Không trả token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentCompleteRequest'
+            example:
+              code: example-authorization-code
+              state: example-unguessable-state
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: Danh tính đang được liên kết hoặc cần unlink/consent mới.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '403':
+          description: Không có quyền GitHub.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không có installation truy cập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: GitHub rate limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Số giây trước khi thử lại.
+  /api/v1/github/installations/start:
+    post:
+      operationId: startOwnGitHubInstallation
+      summary: Bắt đầu cài GitHub App
+      description: Không body/query; credential hoạt động. State600giây và cookie utask_github_installation
+        ràng buộc actor/Bearer/browser; chỉ consent installation mới nhất còn hiệu lực.
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      responses:
+        '200':
+          description: Thành công; Cache-Control private, no-store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallationStartResponse'
+        '400':
+          description: Dữ liệu không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Bearer UTask không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Không có quyền GitHub.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không có installation truy cập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cần consent mới, refresh đang chạy hoặc generation đã đổi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: GitHub rate limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Số giây trước khi thử lại.
+        '503':
+          description: Provider, storage hoặc cấu hình không khả dụng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/github/installations/complete:
+    post:
+      operationId: completeOwnGitHubInstallation
+      summary: Xác minh installation callback
+      description: State một lần; install/update phải được GitHub user token xác nhận live, App ID đúng
+        và không suspended. request chỉ trả PENDING_APPROVAL, không cấp quyền. Không tạo ProjectConnection.
+        Membership scan tối đa1000 installations, quá giới hạn trả503.
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      responses:
+        '200':
+          description: Thành công; Cache-Control private, no-store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallationCompleteResponse'
+        '400':
+          description: Dữ liệu không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Bearer UTask không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Không có quyền GitHub.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không có installation truy cập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cần consent mới, refresh đang chạy hoặc generation đã đổi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: GitHub rate limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Số giây trước khi thử lại.
+        '503':
+          description: Provider, storage hoặc cấu hình không khả dụng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallationCompleteRequest'
+  /api/v1/github/installations:
+    get:
+      operationId: listOwnGitHubInstallations
+      summary: Liệt kê installation actor truy cập được
+      description: Dùng GitHub user token hiện hành; lọc App ID và suspended; không cache quyền cho phép.
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      responses:
+        '200':
+          description: Thành công; Cache-Control private, no-store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallationsResponse'
+        '400':
+          description: Dữ liệu không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Bearer UTask không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Không có quyền GitHub.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không có installation truy cập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cần consent mới, refresh đang chạy hoặc generation đã đổi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: GitHub rate limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Số giây trước khi thử lại.
+        '503':
+          description: Provider, storage hoặc cấu hình không khả dụng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - &id001
+        name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          default: 1
+      - &id002
+        name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+  /api/v1/github/installations/{installation_id}/repositories:
+    get:
+      operationId: listOwnGitHubRepositories
+      summary: Liệt kê repository trong giao quyền user và App
+      description: Xác minh installation live, đọc /user/installations/{id}/repositories. Không nhận actor/project
+        ID, không dùng installation token. Kiểm lại credential/generation trước trả kết quả.
+      x-utask-status: implemented
+      security:
+      - ActorBearer: []
+      responses:
+        '200':
+          description: Thành công; Cache-Control private, no-store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepositoriesResponse'
+        '400':
+          description: Dữ liệu không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Bearer UTask không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Không có quyền GitHub.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Không có installation truy cập được.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cần consent mới, refresh đang chạy hoặc generation đã đổi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: GitHub rate limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Số giây trước khi thử lại.
+        '503':
+          description: Provider, storage hoặc cấu hình không khả dụng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: installation_id
+        in: path
+        required: true
+        schema: &id003
+          type: string
+          pattern: ^[1-9][0-9]{0,99}$
+      - *id001
+      - *id002
+  /api/v1/internal/projects/{project_id}/github/connection/prepare:
+    post:
+      operationId: prepareProjectGitHubConnection
+      summary: Chuẩn bị kết nối hoặc ngắt repository của Project
+      description: Work đã kiểm quyền Leader trước khi gọi và forward Bearer actor. Integration
+        xác minh actor qua Identity, kiểm quyền repository live, idempotency và CAS nhưng chỉ tạo
+        operation PREPARED/PENDING. Work phải lưu projection cùng confirm/abort intent bền vững.
+      x-utask-status: implemented
+      x-utask-callers: [work]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionPrepareRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/ConnectionFact'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/confirm:
+    post:
+      operationId: confirmProjectGitHubConnection
+      summary: Xác nhận operation mà Work đã áp dụng
+      description: Work dispatcher gọi idempotent. Integration đọc receipt qua internal Work API
+        bằng service key chiều Integration sang Work, rồi chỉ finalize khi project, operation,
+        generation, repository và trạng thái khớp. Không cần tái sử dụng Bearer actor cũ.
+      x-utask-status: implemented
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionOperationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/ConnectionFact'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/abort:
+    post:
+      operationId: abortProjectGitHubConnection
+      summary: Hủy operation mà Work không áp dụng
+      description: Chỉ hủy operation PREPARED có cùng project, operation và generation. Abort
+        muộn không được thay đổi connection hoặc generation mới hơn. Retry cùng payload thành công.
+      x-utask-status: implemented
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionOperationRequest'
+      responses:
+        '200':
+          description: Operation đã ABORTED; retry trả cùng snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionOperationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/operations/{operation_id}:
+    get:
+      operationId: getProjectGitHubConnectionOperation
+      summary: Đọc trạng thái operation để phục hồi retry
+      description: Work phải đọc endpoint này sau timeout hoặc mất response trước khi quyết định
+        retry prepare/confirm/abort. Endpoint không tự xác nhận operation.
+      x-utask-status: implemented
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/OperationId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      responses:
+        '200':
+          description: Snapshot operation hiện hành hoặc tombstone còn retention.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionOperationResponse'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/references/verify:
+    post:
+      operationId: verifyProjectGitHubReference
+      summary: Xác minh branch, commit hoặc Pull Request thuộc connection hiện hành
+      description: Work kiểm quyền thành viên trước khi gọi. Integration chỉ trả metadata GitHub
+        đã allowlist sau khi kiểm connection CONNECTED, repository/generation khớp và quyền provider
+        còn hiệu lực. Không tạo TaskGitHubLink.
+      x-utask-status: implemented
+      x-utask-callers: [work]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceVerifyRequest'
+      responses:
+        '200':
+          description: ReferenceFact đã xác minh, không credential/raw provider response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceFactResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/context:
+    get:
+      operationId: getProjectGitHubContext
+      summary: Đọc GitHub activity context đã lọc cho AI
+      description: Chỉ AI gọi với service key riêng và Bearer actor. Integration fail closed khi
+        Work không xác nhận action github.read. Kết quả là ContextDocument tương thích AI, tối đa
+        20 item mỗi loại; không trả token, raw payload, Kafka metadata hoặc quyền hạ tầng.
+      x-utask-status: implemented
+      x-utask-callers: [ai]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      responses:
+        '200':
+          description: Context available hoặc partial; stale/missing/unavailable dùng cùng schema để caller quyết định.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubContextDocument'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/github/webhooks:
+    post:
+      operationId: receiveGitHubWebhook
+      summary: Lưu webhook có chữ ký trước khi ACK
+      description: HMAC-SHA256 raw JSON, tối đa25MiB. Dedupe deliveryID+event/payload hash. Sự kiện authorization
+        revoked vô hiệu credential/generation ngay trong transaction nhận. Các event installation xử lý
+        qua worker; event ngoài phạm vi ghi IGNORED.
+      x-utask-status: implemented
+      security: []
+      parameters:
+      - name: X-Hub-Signature-256
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256=[a-f0-9]{64}$
+      - name: X-GitHub-Delivery
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,100}$
+      - name: X-GitHub-Event
+        in: header
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z_]{1,80}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payload GitHub theo event. Chữ ký tính trên raw bytes trước parse.
+      responses:
+        '202':
+          description: Delivery đã lưu; duplicate cùng payload cũng thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookReceipt'
+        '400':
+          description: JSON/header sai.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Chữ ký/App không hợp lệ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cùng delivery ID khác payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Body vượt25MiB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Storage/config không khả dụng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    ActorBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ServiceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Key riêng theo caller; không gửi xuống browser hoặc ghi log.
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OperationId:
+      name: operation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+        pattern: ^[A-Za-z0-9._:-]+$
+        not:
+          enum: ['.', '..']
+    ServiceKeyHeader:
+      name: X-Service-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 32
+        maxLength: 512
+      description: Credential backend riêng cho Work hoặc AI; không phải identity của actor.
+  schemas:
+    Healthy:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      properties:
+        status:
+          const: ok
+    Unavailable:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      properties:
+        status:
+          const: unavailable
+    AccountSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+      - user_id
+      - status
+      - github_user_id
+      - github_username
+      - verified_at
+      - linked_at
+      - revoked_at
+      - source_version
+      - authorization_status
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        status:
+          enum:
+          - UNLINKED
+          - LINKED
+          - REVOKED
+        github_user_id:
+          type:
+          - string
+          - 'null'
+          pattern: ^[1-9][0-9]{0,99}$
+        github_username:
+          type:
+          - string
+          - 'null'
+          maxLength: 39
+          pattern: ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        linked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        source_version:
+          type: integer
+          minimum: 0
+        authorization_status:
+          enum:
+          - NOT_AUTHORIZED
+          - ACTIVE
+          - REAUTH_REQUIRED
+          - REVOKED
+      allOf:
+      - if:
+          properties:
+            status:
+              const: LINKED
+        then:
+          properties:
+            github_user_id:
+              type: string
+            github_username:
+              type: string
+            verified_at:
+              type: string
+            linked_at:
+              type: string
+            revoked_at:
+              type: 'null'
+            source_version:
+              minimum: 1
+        else:
+          properties:
+            github_user_id:
+              type: 'null'
+            github_username:
+              type: 'null'
+            verified_at:
+              type: 'null'
+            linked_at:
+              type: 'null'
+      - if:
+          properties:
+            status:
+              const: UNLINKED
+        then:
+          properties:
+            revoked_at:
+              type: 'null'
+            source_version:
+              const: 0
+      - if:
+          properties:
+            status:
+              const: REVOKED
+        then:
+          properties:
+            revoked_at:
+              type: string
+            source_version:
+              minimum: 1
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/AccountSnapshot'
+    ConsentStartResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - authorization_url
+          - expires_at
+          properties:
+            authorization_url:
+              type: string
+              format: uri
+              pattern: ^https://github\.com/login/oauth/authorize\?
+            expires_at:
+              type: string
+              format: date-time
+    ConsentCompleteRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - state
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          writeOnly: true
+        state:
+          type: string
+          minLength: 20
+          maxLength: 256
+          writeOnly: true
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - error
+      properties:
+        success:
+          const: false
+        error:
+          type: object
+          additionalProperties: false
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              minLength: 1
+            message:
+              type: string
+              minLength: 1
+    Installation:
+      type: object
+      additionalProperties: false
+      required:
+      - installation_id
+      - app_id
+      - account
+      - repository_selection
+      - suspended_at
+      properties:
+        installation_id: *id003
+        app_id: *id003
+        account: &id004
+          type: object
+          additionalProperties: false
+          required:
+          - id
+          - login
+          - type
+          properties:
+            id: *id003
+            login:
+              type: string
+              maxLength: 100
+            type:
+              enum:
+              - User
+              - Organization
+        repository_selection: &id005
+          enum:
+          - all
+          - selected
+        suspended_at: &id006
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Repository:
+      type: object
+      additionalProperties: false
+      required:
+      - repository_id
+      - name
+      - full_name
+      - private
+      properties:
+        repository_id: *id003
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 201
+        private:
+          type: boolean
+    InstallationsResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - items
+          - next_page
+          properties:
+            items:
+              type: array
+              maxItems: 100
+              items:
+                $ref: '#/components/schemas/Installation'
+            next_page:
+              type:
+              - integer
+              - 'null'
+              minimum: 1
+    RepositoriesResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - items
+          - next_page
+          properties:
+            items:
+              type: array
+              maxItems: 100
+              items:
+                $ref: '#/components/schemas/Repository'
+            next_page:
+              type:
+              - integer
+              - 'null'
+              minimum: 1
+    InstallationStartResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - installation_url
+          - expires_at
+          properties:
+            installation_url:
+              type: string
+              format: uri
+              pattern: ^https://github\.com/apps/[A-Za-z0-9-]+/installations/new\?
+            expires_at:
+              type: string
+              format: date-time
+    InstallationCompleteRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - state
+      - installation_id
+      - setup_action
+      properties:
+        state:
+          type: string
+          minLength: 20
+          maxLength: 256
+          writeOnly: true
+        installation_id: *id003
+        setup_action:
+          enum:
+          - install
+          - update
+          - request
+    InstallationCompleteResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          oneOf:
+          - type: object
+            additionalProperties: false
+            required:
+            - status
+            - installation_id
+            - app_id
+            - account
+            - repository_selection
+            - suspended_at
+            properties:
+              status:
+                const: ACTIVE
+              installation_id: *id003
+              app_id: *id003
+              account: *id004
+              repository_selection: *id005
+              suspended_at: *id006
+          - type: object
+            additionalProperties: false
+            required:
+            - status
+            - installation_id
+            properties:
+              status:
+                const: PENDING_APPROVAL
+              installation_id: *id003
+    ConnectionPrepareRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, action, expected_generation, github_repo_id]
+      properties:
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9._:-]+$
+          not:
+            enum: ['.', '..']
+        action:
+          enum: [CONNECT, DISCONNECT]
+        expected_generation:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775806
+        github_repo_id:
+          type: [string, 'null']
+          pattern: ^[1-9][0-9]{0,99}$
+      allOf:
+      - if:
+          properties:
+            action:
+              const: CONNECT
+        then:
+          properties:
+            github_repo_id:
+              type: string
+        else:
+          properties:
+            github_repo_id:
+              type: 'null'
+    ConnectionOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, generation]
+      properties:
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9._:-]+$
+          not:
+            enum: ['.', '..']
+        generation:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854775806
+    ConnectionFact:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - operation_id
+      - generation
+      - source_version
+      - status
+      - repo_id
+      - repo_owner
+      - repo_name
+      - default_branch
+      - synced_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        generation:
+          type: integer
+          minimum: 1
+        source_version:
+          type: integer
+          minimum: 1
+        status:
+          enum: [PENDING, CONNECTED, DISCONNECTED]
+        repo_id:
+          type: [string, 'null']
+          pattern: ^[1-9][0-9]{0,99}$
+        repo_owner:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        repo_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 255
+        default_branch:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        synced_at:
+          type: string
+          format: date-time
+      allOf:
+      - if:
+          properties:
+            status:
+              const: CONNECTED
+        then:
+          properties:
+            repo_id: {type: string}
+            repo_owner: {type: string}
+            repo_name: {type: string}
+            default_branch: {type: string}
+      - if:
+          properties:
+            status:
+              const: DISCONNECTED
+        then:
+          properties:
+            repo_id: {type: 'null'}
+            repo_owner: {type: 'null'}
+            repo_name: {type: 'null'}
+            default_branch: {type: 'null'}
+    ConnectionFactResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ConnectionFact'
+    ConnectionOperation:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - operation_id
+      - action
+      - state
+      - generation
+      - expires_at
+      - result
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        action:
+          enum: [CONNECT, DISCONNECT]
+        state:
+          enum: [PREPARED, CONFIRMED, ABORTED, EXPIRED]
+        generation:
+          type: integer
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+        result:
+          oneOf:
+          - $ref: '#/components/schemas/ConnectionFact'
+          - type: 'null'
+    ConnectionOperationResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ConnectionOperation'
+    ReferenceVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [repo_id, generation, link_type, ref_id]
+      properties:
+        repo_id:
+          type: string
+          pattern: ^[1-9][0-9]{0,99}$
+        generation:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854775806
+        link_type:
+          enum: [BRANCH, COMMIT, PULL_REQUEST]
+        ref_id:
+          type: string
+          minLength: 1
+          maxLength: 300
+    ReferenceFact:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - repo_id
+      - generation
+      - source_version
+      - link_type
+      - ref_id
+      - title
+      - status
+      - url
+      - is_verified
+      - synced_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        repo_id:
+          type: string
+          pattern: ^[1-9][0-9]{0,99}$
+        generation:
+          type: integer
+          minimum: 1
+        source_version:
+          type: integer
+          minimum: 1
+        link_type:
+          enum: [BRANCH, COMMIT, PULL_REQUEST]
+        ref_id:
+          type: string
+          minLength: 1
+          maxLength: 300
+        title:
+          type: [string, 'null']
+          maxLength: 300
+        status:
+          type: [string, 'null']
+          enum: [OPEN, MERGED, CLOSED, null]
+        url:
+          type: [string, 'null']
+          format: uri
+          pattern: '^https://github\.com/[^?#\s\\]+$'
+          maxLength: 1000
+        is_verified:
+          const: true
+        synced_at:
+          type: string
+          format: date-time
+    ReferenceFactResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ReferenceFact'
+    GitHubActivityItem:
+      type: object
+      additionalProperties: false
+      required: [id, title, status, url, occurred_at]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 300
+        title:
+          type: [string, 'null']
+          maxLength: 300
+        status:
+          type: [string, 'null']
+          maxLength: 40
+        url:
+          type: string
+          format: uri
+          pattern: '^https://github\.com/[^?#\s\\]+$'
+          maxLength: 1000
+        occurred_at:
+          type: string
+          format: date-time
+    GitHubContextDocument:
+      type: object
+      additionalProperties: false
+      required: [domain, as_of, status, source_version, data, warning]
+      properties:
+        domain:
+          const: github_activity
+        as_of:
+          type: string
+          format: date-time
+        status:
+          enum: [available, partial, missing, stale, unavailable]
+        source_version:
+          type: [string, 'null']
+          maxLength: 100
+        data:
+          type: object
+          additionalProperties: false
+          required: [commits, pull_requests, issues, mapping_status]
+          properties:
+            commits:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            pull_requests:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            issues:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            mapping_status:
+              enum: [CONNECTED, DISCONNECTED, REAUTH_REQUIRED]
+        warning:
+          type: [string, 'null']
+          maxLength: 500
+    WebhookReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - success
+      - data
+      properties:
+        success:
+          const: true
+        data:
+          type: object
+          additionalProperties: false
+          required:
+          - delivery_id
+          properties:
+            delivery_id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,100}$
+  responses:
+    ConnectionFact:
+      description: ConnectionFact idempotent để Work lưu projection; prepare trả PENDING, confirm trả trạng thái cuối.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConnectionFactResponse'
+    ServiceDenied:
+      description: Thiếu/sai X-Service-Key hoặc caller không nằm trong allowlist của endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Project operation, connection, repository hoặc reference không tồn tại trong scope hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Payload idempotency khác, generation cũ, trạng thái race hoặc quyền provider đã đổi.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Expired:
+      description: Operation đã hết TTL và chỉ còn tombstone; không được thực thi như operation mới.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: GitHub rate limit; caller chỉ retry sau thời gian được chỉ định.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Account:
+      description: Snapshot của actor, không credential và không dữ liệu user khác.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AccountResponse'
+          example:
+            success: true
+            data:
+              user_id: 11111111-1111-4111-8111-111111111111
+              status: LINKED
+              github_user_id: '12345'
+              github_username: My-Login
+              verified_at: '2026-10-18T03:00:00Z'
+              linked_at: '2026-10-18T03:00:00Z'
+              revoked_at: null
+              source_version: 1
+              authorization_status: ACTIVE
+    InvalidRequest:
+      description: Body/query/actor tự khai báo không được chấp nhận.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: Thiếu/sai Bearer hoặc Identity xác nhận phiên bị thu hồi.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: Identity, GitHub, cấu hình consent hoặc DB lỗi; không trả chi tiết upstream.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
