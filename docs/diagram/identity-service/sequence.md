@@ -224,7 +224,7 @@ note over U,D : session_id và token_family ổn định; family_exp không vư�
 Kiểm tra phiên và boundary quyền tài nguyên
 
 Nguồn: [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -808,7 +808,7 @@ note over I,N : Chỉ Integration gọi GitHub API; Identity không gọi provid
 PATCH hồ sơ: chỉ mutation thật mới phát event
 
 Nguồn: [accounts/services/profiles.py](../../../apps/identity-service/accounts/services/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -915,7 +915,7 @@ note over I,D : Session ID ổn định qua refresh; receipt vẫn bound cùng t
 Admin status/restore: mọi mutation thu hồi phiên
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -966,7 +966,7 @@ note over U,D : Restore không tự ACTIVE hay revive phiên.\nKhông DELETE use
 Admin role và revoke credential
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -1097,7 +1097,7 @@ note over C,S : SimpleJWT header alg/typ; không kid. Private key không chia s�
 Đọc hồ sơ, batch, sessions và admin list
 
 Nguồn: [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>
@@ -1189,7 +1189,7 @@ note over U,D : Key lỗi503 cho known/unknown; email sai400; throttle429.\nKhô
 GitHub mapping nội bộ cho reconciliation
 
 Nguồn: [accounts/views/internal.py](../../../apps/identity-service/accounts/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py).
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py).
 
 <details>
 <summary>Nguồn PlantUML</summary>

@@ -401,7 +401,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** Key sai/không có403 SERVICE_ACCESS_DENIED. Lỗi DB/hạ tầng không biến thành false/success giả. Consumer phải xử lý active=false và outage, rồi kiểm quyền tài nguyên riêng; consumer E2E chưa xác minh.
 
 Nguồn: [authentication/views/internal.py](../../../apps/identity-service/authentication/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-04](sequence.md#sq-id-04). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -596,7 +596,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** MSSV403 STUDENT_ID_IMMUTABLE; email/roles/avatar_url/unknown field400 VALIDATION_ERROR. Project projection sau outbox là tích hợp chưa xác minh.
 
 Nguồn: [accounts/services/profiles.py](../../../apps/identity-service/accounts/services/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-15](sequence.md#sq-id-15). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -626,7 +626,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** 404 RESOURCE_NOT_FOUND cho không có/deleted; UUID path sai404. Auth401. Mọi thay đổi policy riêng tư cần đổi API/test, không tự thêm qua sơ đồ.
 
 Nguồn: [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-21](sequence.md#sq-id-21). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -641,7 +641,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** 400 VALIDATION_ERROR cho kiểu/UUID/quá100; auth401. Không mutate và không suy ra resource permission.
 
 Nguồn: [accounts/views/profiles.py](../../../apps/identity-service/accounts/views/profiles.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-21](sequence.md#sq-id-21). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -701,7 +701,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** 403 FORBIDDEN_ADMIN_ONLY; query400 VALIDATION_ERROR; auth401. Không include_deleted query tự đặt hay bypass quyền project.
 
 Nguồn: [accounts/views/administration.py](../../../apps/identity-service/accounts/views/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-21](sequence.md#sq-id-21). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -716,7 +716,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** 403 admin; command400; missing404. Restore không tự activate hay revive phiên. Không có DELETE user API.
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-17](sequence.md#sq-id-17). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -731,7 +731,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** 400 CANNOT_REVOKE_OWN_ADMIN_ROLE; admin403; target missing/deleted404. Không MEMBER/LEADER, staff/superuser bypass hoặc project membership.
 
 Nguồn: [accounts/services/administration.py](../../../apps/identity-service/accounts/services/administration.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-18](sequence.md#sq-id-18). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 
@@ -761,7 +761,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 **Lỗi và giới hạn:** Key sai/không có403 SERVICE_ACCESS_DENIED. Không email/provider token. Integration dedup/reconcile/Project projection thuộc boundary bên ngoài và chưa xác minh.
 
 Nguồn: [accounts/views/internal.py](../../../apps/identity-service/accounts/views/internal.py);
-kiểm thử: [test_api_completion.py](../../../apps/identity-service/tests/test_api_completion.py);
+kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
 [SQ-ID-23](sequence.md#sq-id-23). Các file test là bằng chứng thiết kế kiểm thử,
 không phải kết quả chạy provider thật trong lần cập nhật tài liệu này.
 

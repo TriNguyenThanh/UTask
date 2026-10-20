@@ -11,36 +11,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.test import APIClient
 
 from accounts.models import AccountStatus, OutboxEvent, UserSession
+from tests.fixtures.api_operations import DEFAULT_OPERATIONS
 from tests.helpers import NEW_PASSWORD, PASSWORD, create_user, login, mail_secret
-
-# Acceptance cases, compared with the generated URLconf: adding an API requires a case here.
-DEFAULT_OPERATIONS = [
-    ("/.well-known/jwks.json", "get", 200),
-    ("/register", "post", 201),
-    ("/activate", "post", 200),
-    ("/activation/resend", "post", 200),
-    ("/login", "post", 200),
-    ("/refresh", "post", 200),
-    ("/logout", "post", 200),
-    ("/logout-all", "post", 200),
-    ("/sessions", "get", 200),
-    ("/sessions/{session_id}", "delete", 200),
-    ("/password-reset/request", "post", 200),
-    ("/password-reset/confirm", "post", 200),
-    ("/password-change", "post", 200),
-    ("/users/me", "get", 200),
-    ("/users/me", "patch", 200),
-    ("/users/{user_id}", "get", 200),
-    ("/users/batch", "post", 200),
-    ("/admin/users", "get", 200),
-    ("/admin/users/{user_id}/status", "patch", 200),
-    ("/admin/users/{user_id}/roles", "post", 200),
-    ("/admin/users/{user_id}/roles", "delete", 200),
-    ("/api/v1/internal/users/provision-students", "post", 201),
-    ("/api/v1/internal/users/{user_id}/resend-activation", "post", 200),
-    ("/api/v1/internal/auth/session-status", "post", 200),
-    ("/api/v1/internal/users/{user_id}/oauth/GITHUB", "get", 200),
-]
 
 
 @pytest.mark.parametrize(
@@ -204,7 +176,7 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
     assert "/login" in schema["paths"]
     assert "/api/v1/auth/login" not in schema["paths"]
     assert "/api/v1/users/me" not in schema["paths"]
-    assert sum(len(methods) for methods in schema["paths"].values()) == 25
+    assert sum(len(methods) for methods in schema["paths"].values()) == len(DEFAULT_OPERATIONS)
     assert {
         (route, method) for route, methods in schema["paths"].items() for method in methods
     } == {(route, method) for route, method, _ in DEFAULT_OPERATIONS}

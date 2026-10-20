@@ -1,0 +1,30 @@
+"""Acceptance operations shared by schema tests; not a runtime contract registry."""
+
+# Acceptance cases, compared with the generated URLconf: adding an API requires a case here.
+DEFAULT_OPERATIONS = [
+    ("/.well-known/jwks.json", "get", 200),
+    ("/register", "post", 201),
+    ("/activate", "post", 200),
+    ("/activation/resend", "post", 200),
+    ("/login", "post", 200),
+    ("/refresh", "post", 200),
+    ("/logout", "post", 200),
+    ("/logout-all", "post", 200),
+    ("/sessions", "get", 200),
+    ("/sessions/{session_id}", "delete", 200),
+    ("/password-reset/request", "post", 200),
+    ("/password-reset/confirm", "post", 200),
+    ("/password-change", "post", 200),
+    ("/users/me", "get", 200),
+    ("/users/me", "patch", 200),
+    ("/users/{user_id}", "get", 200),
+    ("/users/batch", "post", 200),
+    ("/admin/users", "get", 200),
+    ("/admin/users/{user_id}/status", "patch", 200),
+    ("/admin/users/{user_id}/roles", "post", 200),
+    ("/admin/users/{user_id}/roles", "delete", 200),
+    ("/api/v1/internal/users/provision-students", "post", 201),
+    ("/api/v1/internal/users/{user_id}/resend-activation", "post", 200),
+    ("/api/v1/internal/auth/session-status", "post", 200),
+    ("/api/v1/internal/users/{user_id}/oauth/GITHUB", "get", 200),
+]
