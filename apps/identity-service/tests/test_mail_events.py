@@ -1,11 +1,12 @@
 """Mail event envelopes, secret expiry and Kafka delivery acknowledgement."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest
 
+from messaging.kafka import KafkaPublisher
 from messaging.outbox import emit, emit_mail
 
 
@@ -19,7 +20,6 @@ def test_imported_student_mail_includes_nullable_student_id(student_id):
     assert data["student_id"] == student_id
     assert data["email"] == user.email
     assert "test-activation-key" not in str(data)
-
 
 
 @pytest.mark.unit
@@ -38,7 +38,6 @@ def test_other_mail_events_keep_their_existing_data_allowlist(event_type):
     }
 
 
-
 @pytest.mark.unit
 def test_event_envelope_has_user_aggregate_type():
     user = SimpleNamespace(pk=uuid4())
@@ -48,7 +47,6 @@ def test_event_envelope_has_user_aggregate_type():
     assert envelope["aggregate_type"] == "user"
     assert envelope["aggregate_id"] == envelope["data"]["user_id"]
     assert envelope["event_id"] == str(create.call_args.kwargs["id"])
-
 
 
 @pytest.mark.unit
@@ -79,3 +77,28 @@ def test_mail_redaction_only_changes_expired_secret(expires):
     assert result["data"]["email"] == original["data"]["email"]
     assert original["data"]["secret"] is not None
     assert (result["data"]["secret"] is None) is changed
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "outcome", ["ack", "error", "timeout", "missing-callback", "enqueue-error"]
+)
+def test_kafka_publish_requires_delivery_callback_ack(outcome):
+    producer = Mock()
+
+    def produce(*args, **kwargs):
+        if outcome == "enqueue-error":
+            raise BufferError("test queue full")
+        if outcome in {"ack", "error"}:
+            kwargs["on_delivery"](None if outcome == "ack" else RuntimeError(), None)
+
+    producer.produce.side_effect = produce
+    producer.flush.return_value = 1 if outcome == "timeout" else 0
+    event = SimpleNamespace(aggregate_id=uuid4(), data={"event_id": str(uuid4())})
+    publisher = KafkaPublisher(producer=producer)
+    if outcome == "ack":
+        publisher.publish(event)
+        assert producer.produce.call_args.kwargs["key"] == str(event.aggregate_id)
+    else:
+        with pytest.raises((RuntimeError, BufferError)):
+            publisher.publish(event)
