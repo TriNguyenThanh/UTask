@@ -1,31 +1,71 @@
 # Integration Service
 
-**Trạng thái tài liệu: Thiết kế mục tiêu; hiện trạng triển khai chưa xác minh.**
+**Trạng thái: Một phần.** API account, consent GitHub App, credential mã hóa,
+refresh có fencing, GitHub App installation, webhook bền vững và worker có
+trong source. Các ca GitHub dev trong kế hoạch nghiệm thu đã đạt ngày
+20/10/2026; staging/production chưa xác minh. Cấu hình M4 mặc định tắt.
+Chi tiết tại [foundation](foundation.md), [API](api.md) và
+[checkpoint 20/10/2026](checkpoint-2026-10-20.md).
 
-[Baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
-mục 4.4 chọn Python + Django + DRF và **GitHub App + Webhooks** làm kiến trúc
-chính; Personal Access Token không phải phương án chính. OAuth đăng nhập
-thuộc Identity, không thay thế quyền cài GitHub App cho repository.
+## Nguồn chuẩn
 
-Integration Service là service duy nhất được gọi trực tiếp GitHub API. Phạm vi
-mục tiêu gồm GitHub App/OAuth theo quyết định sản phẩm, kết nối repository,
-webhook, xác minh chữ ký, chống xử lý lặp, đồng bộ repository/commit/branch/
-issue/pull request, liên kết tới Project/Task, chuẩn hóa dữ liệu và phát sự kiện
-Kafka.
+- [Checkpoint mới nhất](checkpoint-2026-10-20.md): trạng thái bàn giao, bản sửa
+  timeout publisher và bước tiếp tục; [review provider](review-2026-10-20.md).
+- [Phạm vi và quyền](scope-access.md): ownership và ranh giới Identity/Work.
+- [API](api.md): route, request, response và trạng thái.
+- [Cách liên kết repository GitHub](github-repository-linking.md): luồng cấp
+  quyền, cài App, đọc repository live, chọn repo chính cho Project và liên kết
+  hoạt động GitHub vào Task.
+- [Hướng dẫn tích hợp Work](work-service-integration-guide.md): adapter REST,
+  prepare/confirm/abort, Kafka consumer và rollout phía Work (**Thiết kế mục tiêu**).
+- [Hướng dẫn tích hợp AI](ai-service-integration-guide.md): REST context
+  `github_activity`, service key và mapping lỗi phía AI (**Thiết kế mục tiêu**).
+- [Foundation](foundation.md): bằng chứng source, cấu hình và kiểm thử.
+- [Nghiệm thu GitHub thật](live-acceptance.md): checklist Reqable, smoke,
+  refresh có kiểm soát và vòng đời quyền; kết quả từng phiên ở checkpoint.
+- [Sơ đồ](diagram/README.md): mô hình khái niệm và luồng mục tiêu.
 
-```text
-GitHub → webhook → Integration Service → Integration DB → Kafka: github.*
-```
+## Ranh giới service
 
-Các service khác nhận dữ liệu GitHub đã chuẩn hóa qua sự kiện hoặc API được
-Integration Service công bố; không gọi GitHub trực tiếp. `project_id` và
-`task_id` là tham chiếu logic, không phải khóa ngoại xuyên database.
+Integration là service duy nhất gọi trực tiếp GitHub API. Service sở hữu
+mapping UTask–GitHub, consent, credential và metadata installation. `user_id`
+là UUID tham chiếu logic Identity, không có khóa ngoại hoặc truy cập database
+Identity. Identity xác thực Bearer qua `GET /users/me`.
 
-Đồng bộ theo lịch, retry và xử lý nặng dùng worker Celery thuộc Integration
-Service; Redis chuyển job nội bộ. Lưu thay đổi và outbox cùng transaction,
-publisher gửi event Kafka sau commit; xem [Kafka/outbox](../infrastructure/kafka.md).
+Work sở hữu Project, Task, ProjectMember và quyền nghiệp vụ; Integration không
+đọc database Work. Liên kết account/installation không cấp quyền Project hay
+repository cho Work hoặc AI. Không có thay đổi Work Identity, AI, UI, Kafka,
+hay GitHub App private key trong M4.
 
-**Cần quyết định hoặc xác minh trước khi xem là hợp đồng:** quy trình cài GitHub App;
-quy tắc map repository/project/task; endpoint webhook; cơ chế xác minh
-chữ ký và chống lặp; tập dữ liệu lưu; tên/schema sự kiện và service nhận sự kiện. Không endpoint
-nào được xác nhận là đang chạy trong tài liệu này.
+## Hiện trạng đã đối chiếu
+
+| Hạng mục | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| Account và xác thực Identity | Đã triển khai | API account, Identity Bearer adapter, kiểm thử và actor thật qua gateway ở local |
+| Consent GitHub App và credential | Đã triển khai trong source | OAuth authorization hiện có đổi sang user token có hạn, mã hóa riêng; kiểm thử mock |
+| Refresh fencing và revoke | Đã triển khai trong source | version/generation/claim, job thu hồi token và management command |
+| Installation và repository live list | Đã triển khai trong source | setup start/complete, kiểm tra quyền live và phân trang |
+| Webhook, job durable và worker/Beat | Đã triển khai trong source | HMAC, inbox PostgreSQL, Celery/Redis, migration gate trong Compose |
+| GitHub dev theo kế hoạch nghiệm thu | Đã triển khai, đã nghiệm thu local | Consent, đọc repo, refresh thật, đổi quyền repo, uninstall/reinstall, revoke, DELETE và reconnect; xem checkpoint |
+| Staging/production | Chưa xác minh | Không deploy trong phiên nghiệm thu local |
+| Provider connection/reference/context/outbox | Đã triển khai trong source | Kiểm thử PostgreSQL và HTTP stub; flags mặc định tắt |
+| Project/Task mutation và tích hợp Work/AI thật | Chưa xác minh | Không sửa source Work/AI trong thay đổi provider |
+
+Provider M5/M6 hiện có connection theo Project, prepare/confirm/abort/status,
+reference, REST context và Kafka outbox. Xem
+[vận hành provider Work/AI](runtime-connections.md). Work dispatcher/consumer
+và adapter AI thật vẫn cần triển khai theo guide và nghiệm thu tích hợp.
+
+## Mốc triển khai
+
+- M0–M2: ownership và xác minh actor qua Identity API.
+- M3: OAuth consent PKCE và mapping account, trước đây không lưu token.
+- M4: chuyển consent sang GitHub App user authorization, lưu credential mã
+  hóa có hạn, installation, webhook và jobs. GitHub dev đã nghiệm thu local;
+  staging/production chưa xác minh. Xem [checkpoint](checkpoint-2026-10-20.md).
+
+Các kế hoạch trong `plans/` là snapshot, không phải hợp đồng hiện hành.
+
+Thực hiện [runbook nghiệm thu GitHub thật](live-acceptance.md) để hoàn tất
+installation/repository, refresh, uninstall/revoke và kết nối lại. Kết quả
+thực tế được ghi tại checkpoint của phiên, không suy ra từ checklist.

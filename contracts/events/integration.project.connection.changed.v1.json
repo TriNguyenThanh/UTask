@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utask:integration:project-connection-changed:v1",
+  "title": "Integration project connection changed v1",
+  "description": "Provider outbox/publisher đã triển khai, feature flag mặc định tắt. Consumer Work thật chưa nghiệm thu. Không cấp quyền hoặc tự xác nhận Task link.",
+  "x-utask-status": "implemented",
+  "x-kafka-topic": "utask.integration.events",
+  "x-kafka-key": "payload.project_id",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "event_version", "aggregate_id", "occurred_at", "trace_id", "producer", "payload"],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"const": "integration.project.connection.changed"},
+    "event_version": {"const": 1},
+    "aggregate_id": {"type": "string", "format": "uuid"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "trace_id": {"type": "string", "format": "uuid"},
+    "producer": {"const": "integration-service"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "operation_id", "generation", "source_version", "status", "repo_id", "repo_owner", "repo_name", "default_branch", "synced_at"],
+      "properties": {
+        "project_id": {"type": "string", "format": "uuid"},
+        "operation_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "generation": {"type": "integer", "minimum": 1},
+        "source_version": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["CONNECTED", "DISCONNECTED"]},
+        "repo_id": {"type": ["string", "null"], "pattern": "^[0-9]{1,100}$"},
+        "repo_owner": {"type": ["string", "null"], "minLength": 1, "maxLength": 100},
+        "repo_name": {"type": ["string", "null"], "minLength": 1, "maxLength": 255},
+        "default_branch": {"type": ["string", "null"], "minLength": 1, "maxLength": 100},
+        "synced_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "CONNECTED"}}},
+          "then": {"properties": {"repo_id": {"type": "string"}, "repo_owner": {"type": "string"}, "repo_name": {"type": "string"}, "default_branch": {"type": "string"}}},
+          "else": {"properties": {"repo_id": {"type": "null"}, "repo_owner": {"type": "null"}, "repo_name": {"type": "null"}, "default_branch": {"type": "null"}}}
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "event_id": "33333333-3333-4333-8333-333333333333",
+      "event_type": "integration.project.connection.changed",
+      "event_version": 1,
+      "aggregate_id": "11111111-1111-4111-8111-111111111111",
+      "occurred_at": "2026-10-18T03:00:00Z",
+      "trace_id": "44444444-4444-4444-8444-444444444444",
+      "producer": "integration-service",
+      "payload": {
+        "project_id": "11111111-1111-4111-8111-111111111111",
+        "operation_id": "22222222-2222-4222-8222-222222222222",
+        "generation": 1,
+        "source_version": 2,
+        "status": "CONNECTED",
+        "repo_id": "12345",
+        "repo_owner": "student-dev",
+        "repo_name": "utask-demo",
+        "default_branch": "main",
+        "synced_at": "2026-10-18T03:00:00Z"
+      }
+    }
+  ]
+}

@@ -185,7 +185,14 @@ class AIComposeTests(unittest.TestCase):
             for key, value in os.environ.items()
             if not key.startswith(("AI_", "UTASK_", "COMPOSE_")) and key != "MOCK_TEST"
         }
-        env.update(UTASK_IMAGE_PREFIX="utask", UTASK_IMAGE_TAG="sha-compose-test")
+        # .env.example explicitly selects development/mock for local use. Empty
+        # optional overrides exercise each Compose file's own defaults instead.
+        env.update(
+            UTASK_IMAGE_PREFIX="utask",
+            UTASK_IMAGE_TAG="sha-compose-test",
+            AI_ENVIRONMENT="",
+            MOCK_TEST="",
+        )
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=filename):
                 command = [
@@ -218,11 +225,13 @@ class AIComposeTests(unittest.TestCase):
                     self.assertEqual(
                         services[name]["image"], "utask/ai-service:sha-compose-test"
                     )
-                if "staging" in filename:
+                for name in AI_PROCESSES:
+                    settings = services[name]["environment"]
                     self.assertEqual(
-                        services["ai-service"]["environment"]["MOCK_TEST"], "false"
+                        settings["MOCK_TEST"],
+                        "false" if "staging" in filename else "true",
                     )
                     self.assertEqual(
-                        services["ai-service"]["environment"]["AI_ENVIRONMENT"],
-                        "staging",
+                        settings["AI_ENVIRONMENT"],
+                        "staging" if "staging" in filename else "development",
                     )

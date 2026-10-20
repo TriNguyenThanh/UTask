@@ -252,7 +252,12 @@ cũ hơn7 ngày và token/session/email-confirmation kỹ thuật đã quá hạ
 event chưa publish. Audit được giữ nguyên đến khi có chính sách được phê duyệt.
 Expired mail secret được redaction dù event còn pending; TTL Redis do Redis quản lý.
 
-Google dùng allauth xác minh danh tính đăng nhập. GitHub dùng để liên kết tài khoản:
+Theo [ADR-004](../adr/004-integration-github-account-ownership.md), luồng GitHub
+mới thuộc Integration và dùng `GET /users/me` của Identity để xác thực actor.
+Không cần sửa code/allowlist Identity. Nội dung GitHub sau đây mô tả **source
+legacy còn giữ nguyên**, không phải dependency hoặc ownership của luồng mới.
+
+Google dùng allauth xác minh danh tính đăng nhập. Source GitHub legacy dùng để liên kết tài khoản:
 Identity quản lý OAuth context/link, chỉ Integration đổi code và gọi GitHub API qua
 `POST /api/v1/internal/oauth/github/exchange`. Identity kiểm binding của proof trước khi
 ghi link. Avatar dùng presign/upload/confirm với R2. Các luồng này phụ thuộc feature flags

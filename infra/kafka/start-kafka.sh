@@ -38,7 +38,7 @@ until timeout 5 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092
   sleep 1
 done
 
-for topic in "$WORK_KAFKA_TOPIC" "$CLASSROOM_KAFKA_TOPIC" "$CLASSROOM_WORK_KAFKA_DLQ_TOPIC" "$WORK_CLASSROOM_KAFKA_DLQ_TOPIC"; do
+for topic in "$WORK_KAFKA_TOPIC" "$CLASSROOM_KAFKA_TOPIC" "$CLASSROOM_WORK_KAFKA_DLQ_TOPIC" "$WORK_CLASSROOM_KAFKA_DLQ_TOPIC" utask.integration.events; do
   timeout 15 /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$KAFKA_BOOTSTRAP_SERVERS" --create --if-not-exists --partitions 1 --replication-factor 1 --topic "$topic" &
   preparation_pid=$!
   wait "$preparation_pid"

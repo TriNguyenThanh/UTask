@@ -220,16 +220,24 @@ class InfrastructureStartupTests(unittest.TestCase):
                 ):
                     (self.path / name).unlink(missing_ok=True)
 
-    def test_kafka_creates_four_topics_on_configured_broker_after_local_readiness(self):
+    def test_kafka_creates_service_topics_on_configured_broker_after_local_readiness(
+        self,
+    ):
         process, marker = self.start("kafka")
         self.wait_ready(process, marker)
         calls = (self.path / "topic_calls").read_text().splitlines()
         self.assertIn("--bootstrap-server localhost:9092 --list", calls[0])
         creates = [call for call in calls if "--create" in call]
-        self.assertEqual(len(creates), 4)
+        self.assertEqual(len(creates), 5)
         for call, topic in zip(
             creates,
-            ("work.custom", "classroom.custom", "classroom.dlq", "work.dlq"),
+            (
+                "work.custom",
+                "classroom.custom",
+                "classroom.dlq",
+                "work.dlq",
+                "utask.integration.events",
+            ),
             strict=True,
         ):
             self.assertIn("--bootstrap-server configured-broker:19092", call)

@@ -329,16 +329,108 @@ services:
 
   integration-service:
     profiles: [integration-service]
+    init: true
+    x-deploy:
+      gateway_health_path: /api/integrations/healthz
+    x-ci:
+      test_env:
+        INTEGRATION_TEST_DB_USER: utask_ci
+        INTEGRATION_TEST_DB_PASSWORD: ci-only-postgres-password
+        INTEGRATION_TEST_DB_NAME: integration_test
+        TEST_DATABASE_NAME: integration_test
+        INTEGRATION_TEST_DB_HOST: 127.0.0.1
+        INTEGRATION_TEST_DB_PORT: "5432"
+        INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
     image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
     restart: unless-stopped
     env_file:
-      - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
+    environment:
+      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
+    depends_on:
+      integration-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+
+  integration-migrate:
+    profiles: [integration-service]
+    x-deploy:
+      role: migration
+      application: integration-service
+    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    init: true
+    restart: "no"
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    env_file:
+      - ./infra/env/django.env
+      - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck: *django_healthcheck
+
+  integration-worker:
+    profiles: [integration-service]
+    x-deploy: &integration_worker
+      role: worker
+      application: integration-service
+    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    init: true
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "worker", "-Q", "integration", "--concurrency=1"]
+    env_file:
+      - ./infra/env/django.env
+      - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
+    environment:
+      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
+    depends_on:
+      integration-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  integration-beat:
+    profiles: [integration-service]
+    x-deploy: *integration_worker
+    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    init: true
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat", "--pidfile=/tmp/integration-beat.pid", "--schedule=/tmp/integration-celerybeat"]
+    env_file:
+      - ./infra/env/django.env
+      - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
+    environment:
+      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
+    depends_on:
+      integration-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/integration-beat.pid').read_text()), 0); Path('/tmp').is_dir()"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
 
   notification-service:
     profiles: [notification-service]

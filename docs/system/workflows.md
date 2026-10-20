@@ -35,8 +35,15 @@ baseline ban đầu. Dashboard không cần AI để tính và hiển thị ch�
 
 ## GitHub
 
+Theo [ADR-004](../adr/004-integration-github-account-ownership.md), user liên
+kết GitHub cá nhân trực tiếp qua Integration; mapping và credential thuộc
+Integration. Identity chỉ xác thực Bearer qua `GET /users/me` hiện có. Luồng
+OAuth/GitHub App bên dưới vẫn là thiết kế mục tiêu; hiện đã có lưu trữ mapping
+và API đọc/thu hồi, chưa có OAuth/provider adapter.
+
 ```text
-User → Integration → GitHub App installation / repository connection
+User → Integration → GitHub user consent / account mapping
+User → Work → Integration → GitHub App installation / repository connection
 GitHub webhook → Integration: verify signature + chống lặp + chuẩn hóa
                → Integration DB + outbox → publisher → Kafka
 Đồng bộ theo lịch / retry → Redis → Celery worker của Integration → GitHub

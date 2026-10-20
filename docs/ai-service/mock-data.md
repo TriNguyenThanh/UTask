@@ -8,7 +8,8 @@ Compose override cho mock.
 
 ## Cấu hình
 
-[`infra/env/ai-service.env`](../../infra/env/ai-service.env) giữ biến thường:
+`.env` ở repository root giữ cấu hình AI; [`infra/env/ai-service.env`](../../infra/env/ai-service.env)
+chỉ ánh xạ các biến đó vào container:
 
 ```dotenv
 AI_ENVIRONMENT=development
@@ -18,7 +19,7 @@ AI_MODEL=gemini-3.8-flash-high
 AI_LLM_API_BASE=http://host.docker.internal:8317/v1
 ```
 
-Secret và credential xác minh JWT giữ trong `.env` root theo
+Secret và credential xác minh JWT cũng giữ trong `.env` root theo
 [mẫu root](../../.env.example): AI_LLM_API_KEY, AI_CREDENTIAL_KEY,
 AI_JWT_PUBLIC_KEY. Compose root dùng `POSTGRES_USER`/`POSTGRES_PASSWORD`
 chung với Django và database AI riêng theo `AI_DB_NAME` (mặc định `ai_context_db`);

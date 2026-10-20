@@ -25,7 +25,10 @@ riêng; số worker không được ấn định là singleton.
 - Work quản lý Project/Task/Sprint và tính tiến độ bằng quy tắc; có thể gọi
   Classroom đồng bộ để xác minh nhóm/lớp.
 - Integration là service duy nhất gọi trực tiếp GitHub; service khác dùng
-  internal API hoặc event GitHub đã chuẩn hóa.
+  internal API hoặc event GitHub đã chuẩn hóa. Hợp đồng REST nội bộ Work/AI
+  hiện **đã triển khai phía provider**, flags mặc định tắt và Work/AI thật
+  chưa nghiệm thu tích hợp; xem
+  [ADR-005](../adr/005-integration-work-ai-contracts.md).
 - AI nhận ý định, lấy context qua domain tool/Context Layer có adapter internal
   REST API. Kiểm tra quyền trên target cũng gọi service sở hữu qua REST; không
   dùng Kafka hỏi–đáp cho permission/context. Nếu chưa xác minh được quyền thì

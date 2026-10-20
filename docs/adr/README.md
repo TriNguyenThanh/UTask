@@ -9,3 +9,6 @@ tài liệu vận hành hoặc danh mục API/sự kiện.
 
 - [ADR-001 — Đồng bộ tài liệu với architecture baseline](001-adopt-architecture-baseline.md).
 - [ADR-002 — Pipeline request và job nền của AI Service](002-ai-request-pipeline.md).
+- [ADR-003 — Quyền và hợp đồng nền của Integration](003-integration-auth-and-contracts.md).
+- [ADR-004 — Integration sở hữu tài khoản GitHub đã liên kết](004-integration-github-account-ownership.md).
+- [ADR-005 — Hợp đồng Integration với Work và AI](005-integration-work-ai-contracts.md).

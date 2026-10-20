@@ -32,6 +32,27 @@ Ví dụ: Integration xử lý đồng bộ GitHub, Notification gửi email, se
 nghiệp vụ chạy deadline scan hoặc dọn dữ liệu. Không tạo service worker dùng
 chung để truy cập database của tất cả service.
 
+### Integration GitHub jobs
+
+**Đã triển khai trong source; smoke Docker local đạt, staging chưa xác minh.** Integration lưu webhook
+inbox và ý định revoke token trong bảng `GitHubJob` của chính service. Beat
+dispatch hàng đợi mỗi 5 giây qua Redis; Celery worker xử lý queue
+`integration`. Broker message chỉ mang row ID, không mang raw webhook hoặc
+credential. Job dùng claim/version/lease 60 giây, retry tối đa 5 lần; delivery
+đã hoàn tất/ignored được dọn payload sau 30 ngày, còn fingerprint để dedupe.
+Token revoke đã hết hạn cũng được dọn payload. Source tại
+[`github_jobs`](../../apps/integration-service/apps/github_jobs/), cấu hình
+Celery tại [`base.py`](../../apps/integration-service/config/settings/base.py)
+và service topology trong [Compose](../../docker-compose.yml).
+
+Compose root và staging khai báo `integration-migrate`; API, worker và Beat
+chờ migration thành công, PostgreSQL và Redis khỏe trước start. Đây là
+**Đã triển khai trong cấu hình**, chưa chứng minh staging/production đã chạy.
+Lệnh `python manage.py replay_github_job <id>` replay một job thất bại còn
+payload; credential không được truyền qua CLI. Webhook authorization revoke
+thu hồi credential local đồng bộ ngay khi delivery durable được ghi; các
+provider revoke khác chạy job nền.
+
 ```text
 API / scheduler / consumer của service
     → Redis broker → Celery worker của cùng service
@@ -132,3 +153,8 @@ với ID dự án, đọc ảnh chụp bằng credential dịch vụ; không lư
 giao task sau commit bị lỗi hoặc process chết. Không thêm bảng job/dispatcher
 cho đường phục hồi này. Xem [mã task](../../apps/work-service/apps/projects/tasks.py),
 [cấu hình Work](../../apps/work-service/config/settings/base.py).
+
+Job thu hồi token của Integration tiếp tục chạy khi tắt feature GitHub App;
+giữ client secret và key ring cho tới khi xử lý xong. Smoke Docker local đã
+xác minh luồng inbox → Beat → Redis → worker; GitHub thật và staging chưa
+xác minh, xem [foundation Integration](../integration-service/foundation.md).
