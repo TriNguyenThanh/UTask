@@ -14,6 +14,10 @@ Chi tiết tại [foundation](foundation.md), [API](api.md) và
 - [Cách liên kết repository GitHub](github-repository-linking.md): luồng cấp
   quyền, cài App, đọc repository live, chọn repo chính cho Project và liên kết
   hoạt động GitHub vào Task.
+- [Hướng dẫn tích hợp Work](work-service-integration-guide.md): adapter REST,
+  prepare/confirm/abort, Kafka consumer và rollout phía Work (**Thiết kế mục tiêu**).
+- [Hướng dẫn tích hợp AI](ai-service-integration-guide.md): REST context
+  `github_activity`, service key và mapping lỗi phía AI (**Thiết kế mục tiêu**).
 - [Foundation](foundation.md): bằng chứng source, cấu hình và kiểm thử.
 - [Nghiệm thu GitHub thật](live-acceptance.md): checklist Reqable, smoke,
   refresh có kiểm soát và vòng đời quyền; kết quả từng phiên ở checkpoint.
@@ -43,6 +47,9 @@ hay GitHub App private key trong M4.
 | GitHub dev theo kế hoạch nghiệm thu | Đã triển khai, đã nghiệm thu local | Consent, đọc repo, refresh thật, đổi quyền repo, uninstall/reinstall, revoke, DELETE và reconnect; xem checkpoint |
 | Staging/production | Chưa xác minh | Không deploy trong phiên nghiệm thu local |
 | Project/Task mutation, AI context, Kafka | Chưa triển khai | Ngoài phạm vi M4; Work vẫn sở hữu quyền nghiệp vụ |
+
+Contract v1.4.0 đã chốt thiết kế internal API Work/AI và giữ event connection
+v1 cho M5/M6. Sự hiện diện của contract và guide chưa chứng minh runtime đã nối.
 
 ## Mốc triển khai
 

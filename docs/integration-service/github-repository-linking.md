@@ -239,7 +239,9 @@ nằm trong [Work API](../../contracts/api/work-service.yaml), còn logic hiện
 tại ở [repository service](../../apps/work-service/apps/integrations/services/repositories.py)
 và [adapter contract](../../apps/work-service/infrastructure/integration.py).
 
-> **Giới hạn hiện trạng:** Work mặc định dùng `UnavailableIntegration`. Các
+> **Giới hạn hiện trạng:** Work mặc định dùng `UnavailableIntegration`. OpenAPI
+> v1.4.0 và [guide Work](work-service-integration-guide.md) đã chốt interface
+> mục tiêu, nhưng chưa có runtime adapter/dispatcher/consumer. Các
 > test hiện có thay adapter bằng gateway giả để kiểm tra guard, idempotency,
 > generation và race; điều đó chưa chứng minh Work gọi được Integration/GitHub
 > thật.
@@ -358,10 +360,10 @@ flow mới và không mặc định tái sử dụng installation ID cũ.
 | Đồng bộ commit/branch/PR tự động | Chưa triển khai trong Integration | Cần producer/consumer, event contract, retry và reconcile |
 | AI context từ repository | Chưa triển khai | AI chỉ nhận context qua contract của service sở hữu |
 
-Các kế hoạch mục tiêu có thể bổ sung prepare/confirm/abort giữa Work và
-Integration, event `integration.project.connection.changed` và consumer hoạt
-động GitHub. Không mô tả các phần đó như đã chạy nếu chưa có adapter, worker,
-contract test và runtime evidence tương ứng.
+Thiết kế prepare/confirm/abort/status, event
+`integration.project.connection.changed` và AI context đã được chốt tại
+[ADR-005](../adr/005-integration-work-ai-contracts.md). Không mô tả các phần đó
+như đã chạy nếu chưa có adapter, worker, contract test và runtime evidence.
 
 Xem thêm [API Integration](api.md), [phạm vi và quyền](scope-access.md) và
 [contract OpenAPI](../../contracts/api/integration-service-v1.yaml).

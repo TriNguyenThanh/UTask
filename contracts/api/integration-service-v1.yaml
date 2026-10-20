@@ -1,10 +1,12 @@
 openapi: 3.1.0
 info:
   title: UTask Integration API
-  version: 1.3.0
-  description: Integration sở hữu mapping và credential GitHub App mã hóa, consent PKCE, installation/repository
-    discovery và webhook bền vững. Xác thực actor qua Identity GET /users/me. M4 mặc định tắt; chưa xác
-    minh GitHub thật hoặc deployment. Không mở luồng Work/Project.
+  version: 1.4.0
+  description: Integration sở hữu mapping và credential GitHub App mã hóa, consent PKCE,
+    installation/repository discovery, kết nối repository của Project, context GitHub đã lọc
+    và webhook bền vững. API public M4 đã triển khai. Các API internal M5/M6 trong phiên bản
+    này là hợp đồng mục tiêu, chưa phải bằng chứng runtime; Work và AI phải dùng key riêng và
+    internal path luôn bị chặn tại gateway.
 servers:
 - url: /api/integrations
   description: Qua gateway; internal path bị chặn.
@@ -467,6 +469,220 @@ paths:
           pattern: ^[1-9][0-9]{0,99}$
       - *id001
       - *id002
+  /api/v1/internal/projects/{project_id}/github/connection/prepare:
+    post:
+      operationId: prepareProjectGitHubConnection
+      summary: Chuẩn bị kết nối hoặc ngắt repository của Project
+      description: Work đã kiểm quyền Leader trước khi gọi và forward Bearer actor. Integration
+        xác minh actor qua Identity, kiểm quyền repository live, idempotency và CAS nhưng chỉ tạo
+        operation PREPARED/PENDING. Work phải lưu projection cùng confirm/abort intent bền vững.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [work]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionPrepareRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/ConnectionFact'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/confirm:
+    post:
+      operationId: confirmProjectGitHubConnection
+      summary: Xác nhận operation mà Work đã áp dụng
+      description: Work dispatcher gọi idempotent. Integration đọc receipt qua internal Work API
+        bằng service key chiều Integration sang Work, rồi chỉ finalize khi project, operation,
+        generation, repository và trạng thái khớp. Không cần tái sử dụng Bearer actor cũ.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionOperationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/ConnectionFact'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/abort:
+    post:
+      operationId: abortProjectGitHubConnection
+      summary: Hủy operation mà Work không áp dụng
+      description: Chỉ hủy operation PREPARED có cùng project, operation và generation. Abort
+        muộn không được thay đổi connection hoặc generation mới hơn. Retry cùng payload thành công.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionOperationRequest'
+      responses:
+        '200':
+          description: Operation đã ABORTED; retry trả cùng snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionOperationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Expired'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/connection/operations/{operation_id}:
+    get:
+      operationId: getProjectGitHubConnectionOperation
+      summary: Đọc trạng thái operation để phục hồi retry
+      description: Work phải đọc endpoint này sau timeout hoặc mất response trước khi quyết định
+        retry prepare/confirm/abort. Endpoint không tự xác nhận operation.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [work]
+      security:
+      - ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/OperationId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      responses:
+        '200':
+          description: Snapshot operation hiện hành hoặc tombstone còn retention.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionOperationResponse'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/references/verify:
+    post:
+      operationId: verifyProjectGitHubReference
+      summary: Xác minh branch, commit hoặc Pull Request thuộc connection hiện hành
+      description: Work kiểm quyền thành viên trước khi gọi. Integration chỉ trả metadata GitHub
+        đã allowlist sau khi kiểm connection CONNECTED, repository/generation khớp và quyền provider
+        còn hiệu lực. Không tạo TaskGitHubLink.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [work]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceVerifyRequest'
+      responses:
+        '200':
+          description: ReferenceFact đã xác minh, không credential/raw provider response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceFactResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/v1/internal/projects/{project_id}/github/context:
+    get:
+      operationId: getProjectGitHubContext
+      summary: Đọc GitHub activity context đã lọc cho AI
+      description: Chỉ AI gọi với service key riêng và Bearer actor. Integration fail closed khi
+        Work không xác nhận action github.read. Kết quả là ContextDocument tương thích AI, tối đa
+        20 item mỗi loại; không trả token, raw payload, Kafka metadata hoặc quyền hạ tầng.
+      x-utask-status: design-approved-m5
+      x-utask-callers: [ai]
+      security:
+      - ActorBearer: []
+        ServiceKey: []
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ServiceKeyHeader'
+      responses:
+        '200':
+          description: Context available hoặc partial; stale/missing/unavailable dùng cùng schema để caller quyết định.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubContextDocument'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/github/webhooks:
     post:
       operationId: receiveGitHubWebhook
@@ -545,6 +761,37 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ServiceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Key riêng theo caller; không gửi xuống browser hoặc ghi log.
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OperationId:
+      name: operation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+        pattern: ^[A-Za-z0-9._:-]+$
+    ServiceKeyHeader:
+      name: X-Service-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 32
+        maxLength: 512
+      description: Credential backend riêng cho Work hoặc AI; không phải identity của actor.
   schemas:
     Healthy:
       type: object
@@ -929,6 +1176,309 @@ components:
               status:
                 const: PENDING_APPROVAL
               installation_id: *id003
+    ConnectionPrepareRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, action, expected_generation, github_repo_id]
+      properties:
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9._:-]+$
+        action:
+          enum: [CONNECT, DISCONNECT]
+        expected_generation:
+          type: integer
+          minimum: 0
+        github_repo_id:
+          type: [string, 'null']
+          pattern: ^[1-9][0-9]{0,99}$
+      allOf:
+      - if:
+          properties:
+            action:
+              const: CONNECT
+        then:
+          properties:
+            github_repo_id:
+              type: string
+        else:
+          properties:
+            github_repo_id:
+              type: 'null'
+    ConnectionOperationRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, generation]
+      properties:
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9._:-]+$
+        generation:
+          type: integer
+          minimum: 1
+    ConnectionFact:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - operation_id
+      - generation
+      - source_version
+      - status
+      - repo_id
+      - repo_owner
+      - repo_name
+      - default_branch
+      - synced_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        generation:
+          type: integer
+          minimum: 1
+        source_version:
+          type: integer
+          minimum: 1
+        status:
+          enum: [PENDING, CONNECTED, DISCONNECTED]
+        repo_id:
+          type: [string, 'null']
+          pattern: ^[1-9][0-9]{0,99}$
+        repo_owner:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        repo_name:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 255
+        default_branch:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+        synced_at:
+          type: string
+          format: date-time
+      allOf:
+      - if:
+          properties:
+            status:
+              const: CONNECTED
+        then:
+          properties:
+            repo_id: {type: string}
+            repo_owner: {type: string}
+            repo_name: {type: string}
+            default_branch: {type: string}
+      - if:
+          properties:
+            status:
+              const: DISCONNECTED
+        then:
+          properties:
+            repo_id: {type: 'null'}
+            repo_owner: {type: 'null'}
+            repo_name: {type: 'null'}
+            default_branch: {type: 'null'}
+    ConnectionFactResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ConnectionFact'
+    ConnectionOperation:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - operation_id
+      - action
+      - state
+      - generation
+      - expires_at
+      - result
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        action:
+          enum: [CONNECT, DISCONNECT]
+        state:
+          enum: [PREPARED, CONFIRMED, ABORTED, EXPIRED]
+        generation:
+          type: integer
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+        result:
+          oneOf:
+          - $ref: '#/components/schemas/ConnectionFact'
+          - type: 'null'
+    ConnectionOperationResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ConnectionOperation'
+    ReferenceVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [repo_id, generation, link_type, ref_id]
+      properties:
+        repo_id:
+          type: string
+          pattern: ^[1-9][0-9]{0,99}$
+        generation:
+          type: integer
+          minimum: 1
+        link_type:
+          enum: [BRANCH, COMMIT, PULL_REQUEST]
+        ref_id:
+          type: string
+          minLength: 1
+          maxLength: 300
+    ReferenceFact:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - repo_id
+      - generation
+      - source_version
+      - link_type
+      - ref_id
+      - title
+      - status
+      - url
+      - is_verified
+      - synced_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        repo_id:
+          type: string
+          pattern: ^[1-9][0-9]{0,99}$
+        generation:
+          type: integer
+          minimum: 1
+        source_version:
+          type: integer
+          minimum: 1
+        link_type:
+          enum: [BRANCH, COMMIT, PULL_REQUEST]
+        ref_id:
+          type: string
+          minLength: 1
+          maxLength: 300
+        title:
+          type: [string, 'null']
+          maxLength: 300
+        status:
+          type: [string, 'null']
+          enum: [OPEN, MERGED, CLOSED, null]
+        url:
+          type: [string, 'null']
+          format: uri
+          pattern: ^https://github\.com/
+          maxLength: 1000
+        is_verified:
+          const: true
+        synced_at:
+          type: string
+          format: date-time
+    ReferenceFactResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: '#/components/schemas/ReferenceFact'
+    GitHubActivityItem:
+      type: object
+      additionalProperties: false
+      required: [id, title, status, url, occurred_at]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 300
+        title:
+          type: [string, 'null']
+          maxLength: 300
+        status:
+          type: [string, 'null']
+          maxLength: 40
+        url:
+          type: string
+          format: uri
+          pattern: ^https://github\.com/
+          maxLength: 1000
+        occurred_at:
+          type: string
+          format: date-time
+    GitHubContextDocument:
+      type: object
+      additionalProperties: false
+      required: [domain, as_of, status, source_version, data, warning]
+      properties:
+        domain:
+          const: github_activity
+        as_of:
+          type: string
+          format: date-time
+        status:
+          enum: [available, partial, missing, stale, unavailable]
+        source_version:
+          type: [string, 'null']
+          maxLength: 100
+        data:
+          type: object
+          additionalProperties: false
+          required: [commits, pull_requests, issues, mapping_status]
+          properties:
+            commits:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            pull_requests:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            issues:
+              type: array
+              maxItems: 20
+              items:
+                $ref: '#/components/schemas/GitHubActivityItem'
+            mapping_status:
+              enum: [CONNECTED, DISCONNECTED, REAUTH_REQUIRED]
+        warning:
+          type: [string, 'null']
+          maxLength: 500
     WebhookReceipt:
       type: object
       additionalProperties: false
@@ -948,6 +1498,47 @@ components:
               type: string
               pattern: ^[A-Za-z0-9_-]{1,100}$
   responses:
+    ConnectionFact:
+      description: ConnectionFact idempotent để Work lưu projection; prepare trả PENDING, confirm trả trạng thái cuối.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConnectionFactResponse'
+    ServiceDenied:
+      description: Thiếu/sai X-Service-Key hoặc caller không nằm trong allowlist của endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Project operation, connection, repository hoặc reference không tồn tại trong scope hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Payload idempotency khác, generation cũ, trạng thái race hoặc quyền provider đã đổi.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Expired:
+      description: Operation đã hết TTL và chỉ còn tombstone; không được thực thi như operation mới.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: GitHub rate limit; caller chỉ retry sau thời gian được chỉ định.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     Account:
       description: Snapshot của actor, không credential và không dữ liệu user khác.
       content:

@@ -3,7 +3,7 @@
 **Trạng thái: Đã triển khai trong source.** Các ca GitHub dev theo kế hoạch
 đã nghiệm thu local; bằng chứng tại [checkpoint 20/10/2026](checkpoint-2026-10-20.md).
 Runtime production chưa xác minh. Contract máy đọc được ở
-[OpenAPI 1.3.0](../../contracts/api/integration-service-v1.yaml). Path tính từ root server,
+[OpenAPI 1.4.0](../../contracts/api/integration-service-v1.yaml). Path tính từ root server,
 chưa gồm prefix gateway. Response thành công dùng `{success:true,data:...}`.
 
 ## Account và consent
@@ -70,3 +70,23 @@ GitHub App mặc định tắt; khi tắt hoặc thiếu cấu hình, provider r
 Project/Task mutation, Work authorization/CAS, AI context, Kafka và đồng bộ
 GitHub không được cung cấp bởi các route này. Chúng là **Chưa triển khai**;
 không suy ra từ metadata account hoặc installation.
+
+## Internal API M5/M6
+
+**Trạng thái: Thiết kế mục tiêu; chưa triển khai runtime.** OpenAPI 1.4.0 đã
+chốt sáu capability nội bộ, tất cả dùng `X-Service-Key` theo caller và bị chặn
+tại gateway:
+
+| Method và path | Caller | Mục đích |
+| --- | --- | --- |
+| POST `/api/v1/internal/projects/{project_id}/github/connection/prepare` | Work + Bearer | Chuẩn bị connect/disconnect theo idempotency và generation |
+| POST `.../connection/confirm` | Work | Xác minh receipt Work rồi finalize connection |
+| POST `.../connection/abort` | Work | Hủy operation chưa được Work áp dụng |
+| GET `.../connection/operations/{operation_id}` | Work | Phục hồi sau timeout/mất response |
+| POST `.../github/references/verify` | Work + Bearer | Xác minh branch/commit/Pull Request |
+| GET `.../github/context` | AI + Bearer | Trả `ContextDocument` GitHub đã lọc sau Work authorize |
+
+Schema request/response và error là nguồn chuẩn trong OpenAPI. Quy trình phía
+caller xem [guide Work](work-service-integration-guide.md) và
+[guide AI](ai-service-integration-guide.md); quyết định kiến trúc ở
+[ADR-005](../adr/005-integration-work-ai-contracts.md).

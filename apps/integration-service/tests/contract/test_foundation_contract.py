@@ -35,18 +35,91 @@ def schema_validator(contract, name):
     )
 
 
-def test_openapi_is_valid_and_contains_no_identity_or_new_work_dependency(contract):
+def test_openapi_separates_implemented_public_and_target_internal_security(contract):
     validate(contract)
-    assert set(contract["components"]["securitySchemes"]) == {"ActorBearer"}
+    assert set(contract["components"]["securitySchemes"]) == {"ActorBearer", "ServiceKey"}
     assert "/api/v1/internal/oauth/github/exchange" not in contract["paths"]
     assert not (ROOT / "contracts/api/work-integration-access-v1.yaml").exists()
     for method in ["get", "delete", "head"]:
         operation = contract["paths"]["/api/v1/github/account"][method]
         assert operation["security"] == [{"ActorBearer": []}]
         assert operation["x-utask-status"] == "implemented"
+    prepare = contract["paths"]["/api/v1/internal/projects/{project_id}/github/connection/prepare"][
+        "post"
+    ]
+    assert prepare["security"] == [{"ActorBearer": [], "ServiceKey": []}]
+    assert prepare["x-utask-callers"] == ["work"]
+    assert prepare["x-utask-status"] == "design-approved-m5"
+    context = contract["paths"]["/api/v1/internal/projects/{project_id}/github/context"]["get"]
+    assert context["security"] == [{"ActorBearer": [], "ServiceKey": []}]
+    assert context["x-utask-callers"] == ["ai"]
+    assert context["x-utask-status"] == "design-approved-m5"
     field = GitHubAccount._meta.get_field("user_id")
     assert field.get_internal_type() == "UUIDField"
     assert field.remote_field is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {
+            "operation_id": "connect:project:1",
+            "action": "CONNECT",
+            "expected_generation": 0,
+            "github_repo_id": "12345",
+        },
+        {
+            "operation_id": "disconnect:project:2",
+            "action": "DISCONNECT",
+            "expected_generation": 2,
+            "github_repo_id": None,
+        },
+    ],
+)
+def test_connection_prepare_contract_accepts_connect_and_disconnect(contract, body):
+    schema_validator(contract, "ConnectionPrepareRequest").validate(body)
+
+
+@pytest.mark.parametrize("action,repo_id", [("CONNECT", None), ("DISCONNECT", "12345")])
+def test_connection_prepare_contract_rejects_action_repository_mismatch(contract, action, repo_id):
+    body = {
+        "operation_id": "operation:invalid",
+        "action": action,
+        "expected_generation": 0,
+        "github_repo_id": repo_id,
+    }
+    with pytest.raises(ValidationError):
+        schema_validator(contract, "ConnectionPrepareRequest").validate(body)
+
+
+def test_github_context_contract_rejects_secrets_and_unbounded_activity(contract):
+    body = {
+        "domain": "github_activity",
+        "as_of": "2026-10-20T03:00:00Z",
+        "status": "available",
+        "source_version": "7",
+        "data": {
+            "commits": [],
+            "pull_requests": [],
+            "issues": [],
+            "mapping_status": "CONNECTED",
+        },
+        "warning": None,
+    }
+    validator = schema_validator(contract, "GitHubContextDocument")
+    validator.validate(body)
+    body["access_token"] = "must-not-leak"
+    assert not validator.is_valid(body)
+    body.pop("access_token")
+    item = {
+        "id": "commit-1",
+        "title": "Change",
+        "status": None,
+        "url": "https://github.com/acme/repo/commit/1",
+        "occurred_at": "2026-10-20T02:00:00Z",
+    }
+    body["data"]["commits"] = [item] * 21
+    assert not validator.is_valid(body)
 
 
 def test_linked_account_example_is_valid(contract):

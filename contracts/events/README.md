@@ -11,7 +11,9 @@ schema trong tài liệu service và không tạo hợp đồng giả.
   schema M0, **Thiết kế mục tiêu — producer/consumer chưa triển khai**, chỉ
   bật từ M6. Topic `utask.integration.events`, key Project ID; Work là consumer
   đầu tiên. Event không cấp quyền hoặc tự xác nhận Task link. Quy tắc outbox,
-  chống lặp, version và ACL tại [ADR-003](../../docs/adr/003-integration-auth-and-contracts.md).
+  chống lặp, version và ACL tại [ADR-003](../../docs/adr/003-integration-auth-and-contracts.md);
+  ranh giới Work/AI và thứ tự rollout tại
+  [ADR-005](../../docs/adr/005-integration-work-ai-contracts.md).
 
 ## Hợp đồng thiết kế trước baseline mới
 

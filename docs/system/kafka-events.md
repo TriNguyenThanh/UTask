@@ -33,6 +33,12 @@ Publish qua transactional outbox; consumer chống lặp theo `event_id`.
 Truyền trace ID để liên kết API, job và event. Xem
 [Kafka/outbox](../infrastructure/kafka.md).
 
+Kết nối repository của Project dùng contract
+[`integration.project.connection.changed.v1`](../../contracts/events/integration.project.connection.changed.v1.json).
+Contract này đang ở trạng thái **Thiết kế mục tiêu**: Integration chưa phát và
+Work chưa consume trong runtime. Thứ tự triển khai, receipt và ranh giới với
+REST được chốt tại [ADR-005](../adr/005-integration-work-ai-contracts.md).
+
 ## Hợp đồng cũ cần đối chiếu
 
 [`ai-context-v1.yaml`](../../contracts/events/ai-context-v1.yaml) đã mô tả
