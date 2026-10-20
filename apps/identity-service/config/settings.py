@@ -235,8 +235,12 @@ if _signing_key:
     )
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        seconds=int(os.environ.get("IDENTITY_ACCESS_TOKEN_SECONDS", "9000"))
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        seconds=int(os.environ.get("IDENTITY_REFRESH_TOKEN_SECONDS", "604800"))
+    ),
     "ALGORITHM": "RS256",
     "SIGNING_KEY": _signing_key,
     "VERIFYING_KEY": _verifying_key,

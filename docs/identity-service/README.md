@@ -148,7 +148,8 @@ không ghi đè policy của bucket hoặc thay cấu hình Cloudflare.
 1. Nhận `Authorization: Bearer <access>`; dùng thư viện JWT kiểm RS256 bằng JWKS,
    `iss=https://identity.utask.internal`, `aud=utask-platform`, hạn token và `token_type=access`.
    `sub` là user_id; `session_id` và `token_family` định danh phiên cần kiểm tra.
-   Access tối đa15 phút; refresh family tối đa7 ngày từ login, không gia hạn khi rotate.
+   Access mặc định9.000 giây (2 giờ30 phút); refresh family tối đa7 ngày từ login,
+   không gia hạn khi rotate. Access vẫn bị giới hạn bởi hạn tuyệt đối của family.
    JWKS hiện có một khóa RSA; token SimpleJWT không có `kid`.
 2. Work/Project, Classroom và AI chuyển access tới `session-status`, kèm key backend
    riêng trong header `X-Service-Key`. Map key theo caller `work`, `classroom`, `ai`
@@ -165,6 +166,10 @@ Private signing key chỉ ở Identity; service khác dùng public JWKS và call
 Web nhận refresh qua cookie HttpOnly/Secure/SameSite=Lax, path `/api/auth`.
 Mutation dùng cookie phải qua CSRF/Origin của Django; cookie và body khác nhau trả400.
 Backend service không giữ refresh token thay người dùng.
+
+TTL cấu hình qua `IDENTITY_ACCESS_TOKEN_SECONDS` (mặc định9.000) và
+`IDENTITY_REFRESH_TOKEN_SECONDS` (604800). Đổi setting cần phát hành/restart service;
+token đã cấp không tự kéo dài và access mới vẫn bị chặn ở hạn family tuyệt đối.
 
 <a id="su-kien-va-dong-bo"></a>
 

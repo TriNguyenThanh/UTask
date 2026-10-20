@@ -4,6 +4,7 @@ import json
 import pytest
 import requests
 from allauth.account.models import EmailAddress, EmailConfirmation
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import UntypedToken
@@ -65,7 +66,8 @@ def test_register_active_login_me_refresh_logout(http_client, live_server, signu
     response = http_login(client, base, user)
     access = UntypedToken(response.json()["data"]["access"])
     assert access["sub"] == str(user.pk)
-    assert access["exp"] - access["iat"] <= 900
+    expected_lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+    assert 0 < access["exp"] - access["iat"] <= expected_lifetime
     session = UserSession.objects.get(user=user)
     cookie = next(cookie for cookie in response.cookies if cookie.name == "refresh_token")
     assert cookie.secure and cookie.has_nonstandard_attr("HttpOnly")

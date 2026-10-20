@@ -17,7 +17,7 @@
 
 ## 1. Nguyên tắc Thiết kế & Chuẩn mực Kiến trúc Bắt buộc
 
-**Quyết định ngày 2026-10-01:** Classroom nhận CSV/Excel và ghi danh; Identity tạo hoặc tìm tài khoản qua API nội bộ. Access token chỉ dùng RS256, issuer `https://identity.utask.internal`, audience `utask-platform`, TTL 15 phút. Refresh được xử lý trong ứng dụng, có khóa và giao dịch PostgreSQL. ERD và test specification dùng cùng tên trường và API bên dưới.
+**Quyết định ngày 2026-10-01:** Classroom nhận CSV/Excel và ghi danh; Identity tạo hoặc tìm tài khoản qua API nội bộ. Access token chỉ dùng RS256, issuer `https://identity.utask.internal`, audience `utask-platform`, TTL mặc định 9.000 giây (2 giờ 30 phút). Refresh được xử lý trong ứng dụng, có khóa và giao dịch PostgreSQL. ERD và test specification dùng cùng tên trường và API bên dưới.
 
 Use case và sequence bàn giao tại [usecase.md](../diagram/identity-service/usecase.md), [sequence.md](../diagram/identity-service/sequence.md) và [chỉ mục](../diagram/identity-service/README.md). Chi tiết kỹ thuật bổ sung được chốt ở mục 1.10. Các ví dụ mã là hướng dẫn triển khai, không phải mã đã chạy trong repo; kết quả kiểm thử nằm riêng trong báo cáo thực thi.
 
@@ -64,7 +64,7 @@ Khi phát sinh lỗi (HTTP 4xx / 5xx), trường `data` và `meta` mang giá tr�
 
 ### 1.2. JWT và phiên theo SimpleJWT (contract 1.7)
 
-Access và refresh đều là JWT RS256 do SimpleJWT tạo/xác minh; access tối đa 15 phút,
+Access và refresh đều là JWT RS256 do SimpleJWT tạo/xác minh; access mặc định 9.000 giây (2 giờ 30 phút),
 refresh family tối đa 7 ngày từ login. Claims chuẩn gồm `token_type`, `jti`,
 `iat`, `exp`, `sub`, `iss`, `aud`; `hash_password` do
 `CHECK_REVOKE_TOKEN` quản lý. Adapter chỉ thêm `session_id`,
@@ -159,7 +159,7 @@ API `/api/v1/internal/users/provision-students` và resend nội bộ chỉ đư
 
 ### 1.8. Kiểm tra JWT và trạng thái phiên liên dịch vụ
 
-JWT dùng RS256, `iss=https://identity.utask.internal`, `aud=utask-platform`, TTL 15 phút; có sub/iat/exp/jti/session_id/token_family. Service vệ tinh xác minh chữ ký rồi gọi `POST /api/v1/internal/auth/session-status` của Identity. Giai đoạn đầu không cache kết quả cho phép; chấp nhận thêm một HTTP call để tránh dùng phiên đã bị thu hồi. Identity lỗi/timeout: 503 IDENTITY_UNAVAILABLE, không cấp quyền. Service vệ tinh không đọc DB Identity.
+JWT dùng RS256, `iss=https://identity.utask.internal`, `aud=utask-platform`, TTL mặc định 9.000 giây (2 giờ 30 phút); có sub/iat/exp/jti/session_id/token_family. Service vệ tinh xác minh chữ ký rồi gọi `POST /api/v1/internal/auth/session-status` của Identity. Giai đoạn đầu không cache kết quả cho phép; chấp nhận thêm một HTTP call để tránh dùng phiên đã bị thu hồi. Identity lỗi/timeout: 503 IDENTITY_UNAVAILABLE, không cấp quyền. Service vệ tinh không đọc DB Identity.
 
 Endpoint nội bộ nhận Bearer access token cần kiểm tra và X-Service-Key riêng của caller Work/Classroom/AI; Identity kiểm JWT/key cục bộ, không gọi ngược chính endpoint này. Gateway chặn /internal/. Response 200 envelope với `data={"active":true}` hoặc `data={"active":false}`.
 
@@ -183,7 +183,7 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 
 ### 1.10. Chi tiết kỹ thuật được chốt để bàn giao (2026-10-02)
 
-1. Refresh family7 ngày tuyệt đối; login/kích hoạt tạo family mới. Access15 phút. Cookie/body refresh khác nhau trả400; cookie mutation kiểm CSRF/Origin. Web dùng cookie không nhận raw refresh trong body; ví dụ token body dành cho API client.
+1. Refresh family7 ngày tuyệt đối; login/kích hoạt tạo family mới. Access mặc định9.000 giây, cấu hình qua IDENTITY_ACCESS_TOKEN_SECONDS và không vượt hạn family. Cookie/body refresh khác nhau trả400; cookie mutation kiểm CSRF/Origin. Web dùng cookie không nhận raw refresh trong body; ví dụ token body dành cho API client.
 2. Login sai được Axes signals/middleware lưu; không tự cập nhật counter users. Password đúng mới báo trạng thái. AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT=false. Writer khóa user trước token; actor/target/batch theo UUID tăng dần. Phát sinh khóa ngoài thứ tự: rollback/retry toàn TX-I tối đa3 lần, hết mức lỗi hạ tầng chung, không success giả.
 3. Receipt provisioning scope (actor_user_id,endpoint_path,key); Registration hiện từ chối Idempotency-Key400; không có receipt đăng ký. DB unique + transaction-level tuple lock claim trước nghiệp vụ; cùng canonical-body hash replay status/body, khác hash422. Canonical JSON sắp khóa cố định, normalize email/MSSV, giữ nguyên thứ tự students; password chỉ tham gia hash, không lưu raw request. Registration receipt không token. Không key: unique indexes chống account trùng, không hứa replay response. Giữ receipt ít nhất24 giờ; client chỉ retry trong24 giờ, sau đó key mới và resolve account hiện có. Classroom retry JSON đã cố định, không parse lại thành payload khác.
 4. OAuth bước start phía server theo3.3.0; context Redis10 phút, atomic one-use, gắn provider/URI/browser và user_id khi link. Chỉ server giữ nonce/PKCE verifier. Client phải giữ cookie context; Redis outage503 IDENTITY_UNAVAILABLE, không bỏ qua context.
