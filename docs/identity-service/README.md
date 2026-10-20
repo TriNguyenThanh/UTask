@@ -207,7 +207,13 @@ Publisher dùng row lock/skip-locked, chỉ gửi đầu hàng pending của m�
 ghi `published_at` sau callback ACK. Lỗi lưu loại exception (không message chứa secret),
 retry backoff tối đa300 giây; không cho event sau vượt event lỗi cùng user. Crash sau
 ACK có thể gửi lại cùng event ID, consumer phải chống lặp. Event mail hết hạn được
-đặt `secret=null`, giữ user/email/expiry trước publish. Kiểm tra backlog/retry qua `published_at`, `retry_count`, `last_error`, `next_attempt_at`;
+đặt `secret=null`, giữ user/email/expiry trước publish. Chạy một batch thủ công trong môi trường đã cấu hình:
+`python manage.py publish_identity_outbox --batch-size 100`.
+Chạy liên tục: `python manage.py publish_identity_outbox --watch`; dừng bằng Ctrl+C
+hoặc dừng container. Lỗi tiến trình làm command thoát để Docker khởi động lại;
+event chưa được Kafka xác nhận vẫn nằm trong outbox. Redis hiện có vẫn phục vụ
+cache/giới hạn lượt gọi và OAuth, không phục vụ hàng đợi publisher.
+Kiểm tra backlog/retry qua `published_at`, `retry_count`, `last_error`, `next_attempt_at`;
 event lỗi giữ trong DB để điều tra, không bị bỏ qua hay tự đánh dấu thành công.
 Xem log bằng `docker compose logs -f identity-publisher`. Logger `identity.outbox`
 ghi `publish_succeeded` ở mức INFO sau Kafka ACK và DB commit, gồm `event_id`,

@@ -126,7 +126,7 @@ Xung đột uniqueness khiến migration rollback; không tự lấy email của
 Mọi thay đổi dữ liệu người dùng (`CREATE`, `UPDATE`, `ROLE_ASSIGNED`, `STATUS_CHANGED`) đều được ghi đồng thời vào bảng `outbox_events` trong cùng Database Transaction.
 - **Kafka Topic:** `utask.identity.events`
 - **Partition Key:** `user_id` (Kafka giữ thứ tự broker nhận trong partition; producer/replay phải giữ thứ tự theo mục 1.10).
-- **Celery Poller:** Chạy nền mỗi 1 giây quét các bản ghi `published_at IS NULL` và đẩy vào broker.
+- **Outbox publisher:** Command `publish_identity_outbox --watch` quét mỗi 1 giây và gửi Kafka; không cần Celery/Beat hay hàng đợi Redis trong Identity.
 
 ---
 
