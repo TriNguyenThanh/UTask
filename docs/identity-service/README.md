@@ -84,7 +84,7 @@ Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `
 | -------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Đăng ký        | POST `/register`                                                                                      | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key             |
 | Kích hoạt      | POST `/activate`, `/activation/resend`                                                                | Anonymous; key dùng một lần, resend vô hiệu key cũ                       |
-| Login/refresh  | POST `/login`, `/refresh`                                                                             | Login email/username; refresh bằng body JWT hoặc cookie                  |
+| Login/refresh  | POST `/login`, `/refresh`; GET `/csrf`                                                                | Login cấp CSRF cookie; refresh bằng body JWT hoặc cookie                  |
 | Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`                         | Request/confirm anonymous; change cần Bearer và password cũ              |
 | Logout         | POST `/logout`, `/logout-all`                                                                         | Bearer                                                                   |
 | Thiết bị       | GET `/sessions`; DELETE `/sessions/{session_id}`                                                      | Bearer; phiên thuộc user hiện tại                                        |
@@ -166,6 +166,13 @@ Private signing key chỉ ở Identity; service khác dùng public JWKS và call
 Web nhận refresh qua cookie HttpOnly/Secure/SameSite=Lax, path `/api/auth`.
 Mutation dùng cookie phải qua CSRF/Origin của Django; cookie và body khác nhau trả400.
 Backend service không giữ refresh token thay người dùng.
+
+Login cấp và đổi CSRF cookie bằng Django; client không cần mở Swagger trước.
+Client mới có thể gọi `GET /api/auth/csrf` với credentials để lấy `data.csrf_token`
+và cookie. Sau login đọc lại `csrftoken` vì secret đã được đổi; gửi `X-CSRFToken`
+cùng cookie khi refresh/logout/logout-all. Các response cấp token/CSRF không được cache.
+`IDENTITY_CSRF_TRUSTED_ORIGINS` nhận các origin có scheme, cách nhau dấu phẩy; nếu để
+trống dùng `IDENTITY_FRONTEND_URL`. Production cần cấu hình đúng origin HTTPS thực tế.
 
 TTL cấu hình qua `IDENTITY_ACCESS_TOKEN_SECONDS` (mặc định9.000) và
 `IDENTITY_REFRESH_TOKEN_SECONDS` (604800). Đổi setting cần phát hành/restart service;

@@ -266,6 +266,16 @@ IDENTITY_FRONTEND_URL = _first_environment_value(
 IDENTITY_MAIL_KEY = _first_environment_value("IDENTITY_MAIL_KEY")
 IDENTITY_MAIL_KEY_ID = _first_environment_value("IDENTITY_MAIL_KEY_ID")
 IDENTITY_REDIS_URL = _first_environment_value("IDENTITY_REDIS_URL", default="redis://redis:6379/0")
+CSRF_COOKIE_SECURE = True
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in _first_environment_value(
+        "IDENTITY_CSRF_TRUSTED_ORIGINS", default=IDENTITY_FRONTEND_URL
+    ).split(",")
+    if origin.strip()
+]
+
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 if os.environ.get("IDENTITY_REDIS_URL"):
     CACHES = {
         "default": {

@@ -6,11 +6,15 @@ from dj_rest_auth.jwt_auth import (
 )
 from dj_rest_auth.views import LoginView as RestAuthLoginView
 from django.http import JsonResponse
+from django.middleware.csrf import get_token, rotate_token
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import UntypedToken
 
 from authentication.adapters.access_token_authentication import IdentityJWTAuthentication
@@ -36,7 +40,22 @@ def jwks(_request):
     return response
 
 
+@extend_schema(
+    responses=inline_serializer("CSRFData", fields={"csrf_token": serializers.CharField()})
+)
+@ensure_csrf_cookie
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def csrf(request):
+    """Bootstrap Django CSRF for browser clients without visiting Swagger."""
+    response = Response({"csrf_token": get_token(request)})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @extend_schema_view(post=extend_schema(responses=api_settings.JWT_SERIALIZER))
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class LoginView(RestAuthLoginView):
     """Anonymous login must work even when the client still carries a revoked Bearer."""
 
@@ -46,6 +65,12 @@ class LoginView(RestAuthLoginView):
 
     def get_authenticate_header(self, request):
         return IdentityJWTAuthentication().authenticate_header(request)
+
+    def get_response(self):
+        response = super().get_response()
+        rotate_token(self.request)
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 @extend_schema_view(

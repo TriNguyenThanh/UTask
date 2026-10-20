@@ -29,6 +29,7 @@ def test_openapi_with_enabled_flags_reads_real_urlconf(settings, tmp_path):
         assert (
             sum(len(methods) for methods in schema["paths"].values()) == len(DEFAULT_OPERATIONS) + 8
         )
+        assert "get" in schema["paths"]["/csrf"]
         assert schema["paths"]["/oauth/google"].keys() == {"post", "delete"}
         assert schema["paths"]["/oauth/github"].keys() == {"post", "delete"}
         assert schema["paths"]["/users/me/avatar/confirm"].keys() == {"post"}

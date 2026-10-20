@@ -81,6 +81,8 @@ def contract_request(settings, signup_data):
 
     def execute(route, method):
         client = APIClient()
+        if route == "/csrf":
+            return client.get(route)
         if route.endswith("jwks.json"):
             return client.get(route)
         if route.endswith("/register"):

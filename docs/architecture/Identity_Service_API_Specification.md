@@ -88,6 +88,10 @@ JWKS trả `keys` ở root, một khóa RSA công khai. SimpleJWT dùng header c
 consumer chọn khóa duy nhất, không dùng parser/signature engine viết tay. Chưa hỗ trợ
 overlap nhiều signing key; phải có kế hoạch chuyển khóa/consumer trước rollout.
 
+`GET /csrf` Anonymous cấp CSRF cookie và trả `data={"csrf_token":"<masked-token>"}`,
+`Cache-Control: no-store`. Login cũng cấp/đổi CSRF cookie. Browser gửi token mới trong
+`X-CSRFToken` cùng cookie khi refresh/logout; không cần mở Swagger để khởi tạo CSRF.
+
 ### 1.3. Không dò tài khoản và vòng đời
 
 Password login sai/không tồn tại/đã xóa/unusable trả 401 INVALID_CREDENTIALS.

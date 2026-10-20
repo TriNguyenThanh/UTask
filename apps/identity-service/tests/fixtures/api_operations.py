@@ -2,6 +2,7 @@
 
 # Acceptance cases, compared with the generated URLconf: adding an API requires a case here.
 DEFAULT_OPERATIONS = [
+    ("/csrf", "get", 200),
     ("/.well-known/jwks.json", "get", 200),
     ("/register", "post", 201),
     ("/activate", "post", 200),
