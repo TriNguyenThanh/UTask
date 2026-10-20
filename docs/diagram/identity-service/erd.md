@@ -224,6 +224,8 @@ xem xét trước vận hành.
 
 Reset dùng uid/token của generator, không token row/used_at; confirmation do allauth
 quản lý. User không có trạng thái LOCKED hoặc counter lockout tự viết. JWT một khóa
-RS256 không kid; chưa có key rotation overlap. Outbox chỉ được ghi, chưa có publisher/
-ACK/retention worker trong Identity. Provider/Kafka/email/consumer thật cần nghiệm thu
-riêng; quan hệ thư viện trong hình không chứng minh tích hợp E2E.
+RS256 không kid; chưa có key rotation overlap. Outbox có publisher command với ACK,
+retry và trường `next_attempt_at` theo migration0006; cleanup là lệnh thủ công.
+Publisher và Work consumer đã có kiểm chứng Kafka local, avatar đã chạy R2 thật.
+Google/GitHub, email và staging vẫn cần nghiệm thu riêng; quan hệ trong hình không
+chứng minh những phần đó đã hoạt động.

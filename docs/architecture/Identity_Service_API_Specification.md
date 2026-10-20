@@ -2,14 +2,14 @@
 ## Đặc tả Giao diện Lập trình Ứng dụng (Enterprise API Specification) cho Dịch vụ Xác thực & Định danh Toàn cục
 
 **Phiên bản:** 1.8 (trạng thái email và lockout thuộc thư viện; flags cho OAuth/R2)<br>
-**Trạng thái: Một phần.** Cập nhật03/10/2026; API local có source/tests; provider/R2 và liên dịch vụ chưa nghiệm thu. Xem [phạm vi và cách tích hợp](../identity-service/README.md).<br>
+**Trạng thái: Một phần.** Cập nhật20/10/2026; API local có source và 383 test đạt; avatar R2, Kafka và Identity–Classroom đã có kiểm chứng local. Gửi mail, OAuth thật, gateway/staging chưa nghiệm thu. Xem [phạm vi và cách tích hợp](../identity-service/README.md).<br>
 **Dịch vụ sở hữu:** `apps/identity-service`<br>
 **Cơ sở dữ liệu:** `identity_db` (PostgreSQL 16)<br>
 **Cổng lắng nghe cục bộ (Local Port):** `8001`<br>
 **Đường dẫn trong service:** `/login`, `/users`, `/admin/users`; gateway công khai dưới `/api/auth`. Đường nội bộ provisioning không công khai qua gateway.<br>
 **Tài liệu tham chiếu:**
 - [Kiến trúc hiện hành](../system/architecture.md), [ownership](../system/data-ownership.md), [Kafka](../system/kafka-events.md) (nguồn chuẩn sau pull)
-- [UTask - Phân tích thiết kế yêu cầu.md](UTask%20-%20Phân%20tích%20thiết%20kế%20yêu%20cầu.md) (Epic 1: US-1.1 đến US-1.4, Quyền Giảng viên/Sinh viên/Admin)
+- tài liệu yêu cầu gốc (không có trong checkout này; không dùng làm bằng chứng triển khai) (Epic 1: US-1.1 đến US-1.4, Quyền Giảng viên/Sinh viên/Admin)
 - [erd.md](../diagram/identity-service/erd.md) (Sơ đồ CSDL và Từ điển dữ liệu `identity_db`)
 - [Work_Service_API_Specification.md](Work_Service_API_Specification.md) (Quy chuẩn Single Unified Envelope và UserProjection contract)
 
@@ -289,8 +289,8 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 #### 3.1.1. Lấy Khóa Công khai Xác thực Token (JWKS - JSON Web Key Set)
 * **Phương thức:** `GET`
 * **Đường dẫn:** `/.well-known/jwks.json`
-* **Xác thực:** Công khai (Anonymous). Cache TTL: 24 giờ.
-* **Ngoại lệ envelope:** JWKS trả đối tượng `{"keys": [...]}` trực tiếp theo chuẩn JWKS, không bọc envelope năm trường. JWT header bắt buộc có `alg=RS256` và `kid`; bên nhận chọn khóa theo `kid`, làm mới JWKS khi gặp kid chưa biết, chỉ chấp nhận kid có trong bộ khóa. Giữ khóa cũ ít nhất 15 phút sau lần cuối phát token bằng khóa đó.
+* **Xác thực:** Công khai (Anonymous). Cache TTL: 300 giây.
+* **Ngoại lệ envelope:** JWKS trả đối tượng `{"keys": [...]}` trực tiếp theo chuẩn JWKS, không bọc envelope năm trường. Hiện có một khóa RSA và JWT do SimpleJWT phát không có `kid`; bên nhận kiểm RS256/iss/aud/exp bằng khóa công khai này. Nhiều khóa và xoay khóa có thời gian chồng lấp là thiết kế mở rộng, chưa triển khai.
 * **Mô tả:** Cung cấp bộ khóa công khai (RSA Public Keys) theo chuẩn RFC 7517 để API Gateway và các satellite microservices (`work-service`, `classroom-service`, `ai-service`) tự xác thực chữ ký Access Token mà không cần gọi vào `identity_db`.
 
 * **Phản hồi Thành công (HTTP 200 OK):**
@@ -301,7 +301,6 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
       "kty": "RSA",
       "use": "sig",
       "alg": "RS256",
-      "kid": "utask-identity-key-2026",
       "n": "u1g...public_modulus...",
       "e": "AQAB"
     }

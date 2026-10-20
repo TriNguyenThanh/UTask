@@ -14,13 +14,13 @@ Identity Service sở hữu tài khoản, hồ sơ, vai trò toàn hệ thống,
 token và phiên/refresh token. Các service khác dùng `user_id` làm ID tham chiếu;
 chúng không đọc Identity DB.
 **Phạm vi:** API lõi có source và kiểm thử local. Google/GitHub OAuth và avatar R2 được
-mở bằng feature flags khi đủ cấu hình. Provider thật, gửi email, publisher Kafka và
-luồng tích hợp giữa các service chưa được nghiệm thu đầy đủ.
+mở bằng feature flags khi đủ cấu hình. Publisher Kafka và avatar R2 đã có kiểm chứng
+runtime local. Google/GitHub thật, gửi email và gateway/staging chưa được nghiệm thu.
 
 <a id="trach-nhiem-va-du-lieu"></a>
 
 Phạm vi bao gồm password reset và OAuth mở rộng Google/GitHub nếu sản phẩm
-cần; có thể dùng `django-allauth`, chưa khẳng định dependency đã được cài.
+cần; `django-allauth` đã có trong manifest và được dùng qua các hook của Identity.
 Mật khẩu dùng Django password hashing; login và endpoint nhạy cảm cần rate
 limit. API phải dùng HTTPS ngoài môi trường local phù hợp.
 
@@ -211,11 +211,20 @@ Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tư�
 projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
 kiểm envelope rồi bỏ qua tại consumer hồ sơ, không đưa nhầm vào DLQ. Xem
 [quy tắc phía Work](../project-service/identity-events.md).
+`identity-publisher` dùng cùng image Identity và PostgreSQL chung; bật bằng Compose
+profile `identity-service`. Command `publish_identity_outbox --watch` đọc outbox mỗi
+giây rồi gửi thẳng Kafka dùng chung, không qua Celery/Beat hay hàng đợi Redis.
 Publisher dùng row lock/skip-locked, chỉ gửi đầu hàng pending của mỗi user,
 ghi `published_at` sau callback ACK. Lỗi lưu loại exception (không message chứa secret),
 retry backoff tối đa300 giây; không cho event sau vượt event lỗi cùng user. Crash sau
 ACK có thể gửi lại cùng event ID, consumer phải chống lặp. Event mail hết hạn được
-đặt `secret=null`, giữ user/email/expiry trước publish. Chạy một batch thủ công trong môi trường đã cấu hình:
+đặt `secret=null`, giữ user/email/expiry trước publish. Đã chạy thử local với image
+Identity, PostgreSQL dùng chung và Kafka Docker thật: đăng ký qua HTTP tạo outbox,
+publisher gửi đúng envelope/ID và phục hồi sau lỗi kết nối. Bài thử dùng database/topic
+riêng; kết quả tại `artifacts/identity/publisher-runtime/result.json`. Chưa nghiệm thu
+Notification, mail provider hay staging; ACK Kafka không đồng nghĩa đã gửi mail.
+
+Chạy một batch thủ công trong môi trường đã cấu hình:
 `python manage.py publish_identity_outbox --batch-size 100`.
 Chạy liên tục: `python manage.py publish_identity_outbox --watch`; dừng bằng Ctrl+C
 hoặc dừng container. Lỗi tiến trình làm command thoát để Docker khởi động lại;
@@ -227,6 +236,9 @@ Xem log bằng `docker compose logs -f identity-publisher`. Logger `identity.out
 ghi `publish_succeeded` ở mức INFO sau Kafka ACK và DB commit, gồm `event_id`,
 `event_type`, `topic`; lỗi gửi ghi `publish_failed` ở mức WARNING. Không ghi nội dung
 event, email, mã kích hoạt hay token. Khi không có sự kiện chờ, publisher không in log.
+Chi tiết event ở mục4 của đặc tả API. Consumer của từng service phải đăng ký đúng
+event types trước rollout; chỉ có producer/test mock không chứng minh consumer đã áp dụng.
+
 ### Dọn dữ liệu kỹ thuật
 
 Không có job dọn dữ liệu tự động. Lệnh thủ công xử lý tối đa500 bản ghi mỗi bảng;
