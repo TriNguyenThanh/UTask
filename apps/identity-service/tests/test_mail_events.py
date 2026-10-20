@@ -48,3 +48,34 @@ def test_event_envelope_has_user_aggregate_type():
     assert envelope["aggregate_type"] == "user"
     assert envelope["aggregate_id"] == envelope["data"]["user_id"]
     assert envelope["event_id"] == str(create.call_args.kwargs["id"])
+
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("expires", ["expired", "future", "malformed", "missing", "naive"])
+def test_mail_redaction_only_changes_expired_secret(expires):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from messaging.mail_crypto import redact_expired_mail_secret
+
+    now = timezone.now()
+    values = {
+        "expired": (now - timedelta(seconds=1)).isoformat(),
+        "future": (now + timedelta(seconds=1)).isoformat(),
+        "malformed": "not a date",
+        "missing": "",
+        "naive": "2020-01-01T00:00:00",
+    }
+    original = {
+        "data": {
+            "email": "mail@example.invalid",
+            "secret": {"expires_at": values[expires], "ciphertext": "encrypted"},
+        }
+    }
+    result, changed = redact_expired_mail_secret(original, now)
+    assert changed is (expires == "expired")
+    assert result["data"]["email"] == original["data"]["email"]
+    assert original["data"]["secret"] is not None
+    assert (result["data"]["secret"] is None) is changed
