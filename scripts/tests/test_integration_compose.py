@@ -17,6 +17,93 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class IntegrationComposeTests(unittest.TestCase):
+    def test_kafka_is_optional_and_certificates_are_read_only(self):
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            with self.subTest(filename=filename):
+                services = yaml.safe_load((ROOT / filename).read_text())["services"]
+                dependency = services["integration-worker"]["depends_on"]["kafka"]
+                self.assertEqual(dependency["condition"], "service_healthy")
+                self.assertIs(dependency["required"], False)
+                for name in (
+                    "integration-service",
+                    "integration-migrate",
+                    "integration-worker",
+                    "integration-beat",
+                ):
+                    mounts = services[name]["volumes"]
+                    self.assertIn(
+                        {
+                            "type": "bind",
+                            "source": "./infra/env",
+                            "target": "/run/kafka-certificates",
+                            "read_only": True,
+                        },
+                        mounts,
+                    )
+                    self.assertNotIn(
+                        "kafka", str(services[name].get("healthcheck", {})).lower()
+                    )
+
+    def test_local_topic_preparation_includes_fixed_integration_topic(self):
+        script = (ROOT / "infra/kafka/start-kafka.sh").read_text()
+        self.assertIn("utask.integration.events", script)
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_kafka_configuration_reaches_all_processes_with_optional_broker(self):
+        configuration = {
+            "INTEGRATION_CONNECTIONS_ENABLED": "false",
+            "INTEGRATION_AI_CONTEXT_ENABLED": "false",
+            "INTEGRATION_KAFKA_ENABLED": "true",
+            "INTEGRATION_KAFKA_BOOTSTRAP_SERVERS": "fixture.example:9093",
+            "INTEGRATION_KAFKA_SECURITY_PROTOCOL": "SASL_SSL",
+            "INTEGRATION_KAFKA_SASL_MECHANISM": "SCRAM-SHA-512",
+            "INTEGRATION_KAFKA_SASL_USERNAME": "fixture-user",
+            "INTEGRATION_KAFKA_SASL_PASSWORD": "fixture-password",
+            "INTEGRATION_KAFKA_SSL_CA_LOCATION": "/run/kafka-certificates/ca.pem",
+        }
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for local_broker in (False, True):
+                with self.subTest(filename=filename, local_broker=local_broker):
+                    command = [
+                        "docker",
+                        "compose",
+                        "--env-file",
+                        ".env.example",
+                        "-f",
+                        filename,
+                        "--profile",
+                        "integration-service",
+                    ]
+                    if local_broker:
+                        command.extend(["--profile", "kafka"])
+                    result = subprocess.run(
+                        [*command, "config", "--format", "json"],
+                        cwd=ROOT,
+                        env={
+                            **os.environ,
+                            **configuration,
+                            "COMPOSE_PROFILES": "",
+                            "UTASK_IMAGE_PREFIX": "test/utask",
+                            "UTASK_IMAGE_TAG": "test",
+                        },
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, "Compose rendering failed")
+                    services = json.loads(result.stdout)["services"]
+                    self.assertEqual("kafka" in services, local_broker)
+                    for name in (
+                        "integration-service",
+                        "integration-migrate",
+                        "integration-worker",
+                        "integration-beat",
+                    ):
+                        for key, expected in configuration.items():
+                            self.assertEqual(
+                                services[name]["environment"][key], expected
+                            )
+
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
     def test_github_app_configuration_reaches_every_integration_process(self):
         configured = {

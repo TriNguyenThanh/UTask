@@ -102,6 +102,10 @@ class KafkaProfileDeploymentTests(unittest.TestCase):
 class NativeKafkaComposeTests(unittest.TestCase):
     def test_staging_certificate_directory_is_read_only_and_ca_file_optional(self):
         recipients = {
+            "integration-service",
+            "integration-migrate",
+            "integration-worker",
+            "integration-beat",
             "work-service",
             "work-publisher",
             "work-beat",
@@ -167,10 +171,12 @@ class NativeKafkaComposeTests(unittest.TestCase):
                             self.assertEqual(
                                 Path(mounts[0]["source"]).resolve(), mappings.resolve()
                             )
-                            self.assertEqual(
-                                runtime["environment"]["KAFKA_SSL_CA_LOCATION"],
-                                ca_location,
+                            key = (
+                                "INTEGRATION_KAFKA_SSL_CA_LOCATION"
+                                if name.startswith("integration-")
+                                else "KAFKA_SSL_CA_LOCATION"
                             )
+                            self.assertEqual(runtime["environment"][key], ca_location)
 
     def test_native_profiles_and_external_auth_without_local_cluster_id(self):
         env = {

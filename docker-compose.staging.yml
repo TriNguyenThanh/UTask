@@ -310,6 +310,7 @@ services:
     env_file:
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
     environment:
       INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
@@ -333,6 +334,7 @@ services:
     env_file:
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
@@ -349,6 +351,7 @@ services:
     env_file:
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
     environment:
       INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
@@ -358,6 +361,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
       interval: 15s
@@ -374,6 +380,7 @@ services:
     env_file:
       - ./infra/env/django.env
       - ./infra/env/integration-service.env
+    volumes: *kafka_certificates
     environment:
       INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
