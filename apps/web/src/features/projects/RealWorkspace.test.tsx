@@ -69,7 +69,7 @@ const WORKSPACE: Partial<WorkFixture> = {
 describe("Real Board — /projects/:id/board", () => {
   it("builds columns from the project states, in sequence order, and puts each task in its state", async () => {
     setup("/projects/project-1/board", WORKSPACE);
-    const todo = await screen.findByRole("region", { name: "To Do" });
+    const todo = await screen.findByRole("region", { name: "To Do" }, { timeout: 5000 });
     expect(within(todo).getByText("Thiết kế đăng nhập")).toBeInTheDocument();
     const names = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(names).toEqual(["Backlog", "To Do", "In Progress", "Code Review", "Done"]);

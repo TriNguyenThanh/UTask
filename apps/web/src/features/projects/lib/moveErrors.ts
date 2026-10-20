@@ -7,7 +7,11 @@ import { ApiError } from "@/lib/api/errors";
 export function issueWriteErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return "Không thể cập nhật issue. Vui lòng thử lại.";
   if (error.code === "TEACHER_MUTATION_RESTRICTED") return "Giảng viên chỉ xem, không sửa được.";
-  if ((error.code === "INVALID_OPERATION" || error.code === "VALIDATION_ERROR") && error.message) {
+  if (error.code === "DAG_CYCLE_DETECTED") return "Liên kết này tạo vòng chặn.";
+  if (
+    (error.code === "INVALID_OPERATION" || error.code === "VALIDATION_ERROR" || error.code === "MEMBER_NOT_ACTIVE") &&
+    error.message
+  ) {
     return error.message;
   }
   switch (error.status) {

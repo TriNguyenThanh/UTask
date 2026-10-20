@@ -384,10 +384,14 @@ function BoardView({
           editSlot={
             real && canEditRealIssue && detail.data ? (
               <RealIssueEditor
+                projectId={projectId}
                 issueId={detail.data.issue.id}
                 epics={workspace.epics}
                 assignees={assignees}
+                issues={workspace.issues}
                 textOnly={mover.role !== "leader"}
+                isLeader={mover.role === "leader"}
+                onGone={closeIssue}
               />
             ) : undefined
           }

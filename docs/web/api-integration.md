@@ -52,7 +52,8 @@ VITE_API_BASE_URL=
 | 9 | Work Project: danh sách dự án của tôi, vỏ dự án + trang Thông tin & thành viên, tạo dự án từ trang nhóm (Leader), sửa/lưu trữ/mở lại dự án, lấp `project` ở trang giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
 | 10 | Work: Board và Backlog chỉ đọc (cột theo `State` của dự án, sprint, epic, panel chi tiết task) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
 | 11 | Work: ghi task cốt lõi (tạo issue, kéo thả/menu đổi cột, chặn/bỏ chặn, sửa trong panel, tạo và tick nhiệm vụ con) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
-| 12+ | Work (epic/nhãn/quan hệ, sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
+| 12 | Work: epic (tạo/sửa/xóa), nhãn (quản lý + gán), liên kết task, lưu trữ/xóa/khôi phục task | Một phần (đã smoke API thật và giao diện Backlog trên staging; xem giới hạn) |
+| 13+ | Work (sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -342,11 +343,29 @@ Trạng thái: **Một phần**. Mã: `lib/api/work/endpoints.tasks.ts` (`create
 Giới hạn:
 
 - Backlog vẫn chỉ đọc: thêm/bớt sprint thuộc Phase 13, thứ tự trong section Backlog chưa có ngữ nghĩa neighbor hợp lệ.
-- Chưa gán nhãn trong panel (nhãn chưa vào workspace; Phase 12). Chưa có nút chặn trong panel, dùng menu thẻ trên Board. Menu chặn ẩn với task COMPLETED/CANCELLED.
+- Chưa có nút chặn trong panel, dùng menu thẻ trên Board. Menu chặn ẩn với task COMPLETED/CANCELLED.
 - Tick nhiệm vụ con chuyển sang state COMPLETED đầu tiên; bỏ tick chuyển sang state UNSTARTED đầu tiên (đặt cuối cột).
 - Task tạo mới không thuộc sprint nên chỉ hiện ở Backlog, không hiện trên Board.
 - Kiểm tra trên: `tsc`, 70 file test cả khi có và không có `.env.local` (test đầu tiên của `RealWorkspace` có lần chậm khi cả bộ chạy song song), build. ESLint không chạy được (thiếu module).
 - Smoke trình duyệt (staging): Leader tạo issue, đổi cột bằng menu và tải lại, chặn/bỏ chặn, sửa tiêu đề trong panel, tạo nhiệm vụ con; Teacher không có nút tạo issue hay menu thao tác. Chưa smoke: kéo thả bằng chuột, thành viên không phải Leader, `VERSION_CONFLICT` trên staging, tick nhiệm vụ con.
+
+## Work epic, nhãn, liên kết, lưu trữ/xóa (Phase 12)
+
+Trạng thái: **Một phần**. Mã: `lib/api/work/endpoints.tasks.ts` (epic, nhãn, `setTaskLabels`, `createRelation`/`deleteRelation`, `changeTaskLifecycle`, `listTasksInScope`), hook `lib/query/workMetaHooks.ts`, giao diện `EpicDialog`, `LabelManagerDialog`, `IssueExtras`, `RealBacklogTools`.
+
+- **Epic** (cột Epics ở Backlog): Leader tạo/sửa/xóa. Người phụ trách epic (không phải Leader) chỉ sửa tên, mô tả, trạng thái; form tắt ô người phụ trách và hai ô ngày. Client chặn `start_date > target_date` trước khi gửi (server trả 400 `VALIDATION_ERROR` với `details` rỗng). Epic không có `version` nên không có hộp "nạp lại sau xung đột".
+- **Nhãn**: Leader quản lý (tạo/đổi tên/màu/xóa) từ "Quản lý nhãn" ở Backlog; màu phải `#RRGGBB`. Xóa nhãn gỡ khỏi mọi task nên mọi cache Work được làm mới. Gán/bỏ nhãn ở panel dùng `POST tasks/{id}/labels/` (`ADD`/`REMOVE`) kèm `expected_version`; Leader hoặc người được giao đều làm được.
+- **Liên kết** (panel): `BLOCKS`, `BLOCKED_BY`, `DUPLICATE`, `RELATES_TO`, hiển thị theo góc nhìn task đang xem (`expand=relations` chỉ có ở `getTask`). Mã lỗi vòng chặn thật là `DAG_CYCLE_DETECTED` (409), hiện "Liên kết này tạo vòng chặn."; liên kết trùng là 409 `INVALID_OPERATION`.
+- **Lưu trữ/xóa/khôi phục** (Leader): nút trong panel kèm `ConfirmDialog`, sau thành công panel đóng. Backlog có bộ chọn "Đang hoạt động / Đã lưu trữ / Đã xóa" (`status=archived|deleted`), Leader mở lại hoặc khôi phục từ đó. Xóa mềm cascade cả nhiệm vụ con; khôi phục con khi cha còn bị xóa trả `INVALID_OPERATION`, UI hiện nguyên văn.
+- Không gửi `Idempotency-Key` ở mọi lệnh Phase 12 (backend không đăng ký receipt cho chúng).
+
+Giới hạn:
+
+- Không có giao diện đổi cha hoặc đổi `type` của task: backend không có URL cho `reparent_task` và `type` bất biến.
+- Danh sách "Đã lưu trữ/Đã xóa" là danh sách phẳng (mã, tiêu đề), không mở được panel.
+- Nhãn chưa hiện trên thẻ Board/Backlog và chưa lọc theo nhãn (workspace chưa chứa nhãn của từng task).
+- Đích liên kết chỉ chọn trong issue đã tải ở Board/Backlog (không gồm nhiệm vụ con).
+- Kiểm tra: `tsc`, 74 file / 980 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật cho epic (cả lỗi ngày), nhãn, gán nhãn, liên kết, vòng chặn, trùng, lưu trữ/mở lại/xóa/khôi phục; giao diện Backlog tạo epic (lỗi ngày rồi thành công), xóa epic, mở hộp nhãn, tab "Đã lưu trữ". Chưa smoke giao diện: gán nhãn và liên kết trong panel, xóa/lưu trữ từ panel, khôi phục từ tab, thành viên không phải Leader.
 
 ## Việc cần backend (tổng hợp)
 

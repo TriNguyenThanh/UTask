@@ -132,7 +132,7 @@ export function useRealIssueWrites(projectId: string): IssueWrites {
 }
 
 /** Sau lệnh ghi không lạc quan: tải lại mọi dữ liệu Work (kể cả khi 409, vì dữ liệu đang hiện đã cũ). */
-function useRefetchingMutation<V, R>(run: (variables: V) => Promise<R>) {
+export function useRefetchingMutation<V, R>(run: (variables: V) => Promise<R>) {
   const queryClient = useQueryClient();
   const refetch = () => queryClient.invalidateQueries({ queryKey: workKeys.all });
   return useMutation({

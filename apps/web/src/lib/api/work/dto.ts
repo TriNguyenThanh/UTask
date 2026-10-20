@@ -56,6 +56,18 @@ export type TaskPriorityDto = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type SprintStatusDto = "DRAFT" | "ACTIVE" | "COMPLETED";
 export type EpicStatusDto = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
+export type RelationTypeDto = "BLOCKS" | "BLOCKED_BY" | "DUPLICATE" | "RELATES_TO";
+
+/** Liên kết task theo góc nhìn của task đang xem (`expand=relations`). */
+export interface RelationDto {
+  id: string;
+  related_task_id: string;
+  related_task_code: string;
+  relation_type: RelationTypeDto;
+}
+
+export type TaskScopeDto = "active" | "archived" | "deleted";
+
 export interface StateDto {
   id: string;
   project_id: string;
@@ -157,4 +169,6 @@ export interface TaskDto {
   assignees?: TaskAssigneeDto[];
   /** Chỉ có ở trang chi tiết (`expand=subtasks`). */
   subtasks?: TaskDto[];
+  /** Chỉ có ở trang chi tiết (`expand=relations`). */
+  relations?: RelationDto[];
 }
