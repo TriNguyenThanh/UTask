@@ -28,7 +28,13 @@ VITE_API_BASE_URL=
   (`vite.config.ts`) vì CORS của staging không cho `http://localhost:5173`.
   Proxy bỏ `Origin`/`Referer` và ghi lại `Domain` của cookie; nếu không,
   `refresh` và `logout-all` bị 403 `PERMISSION_DENIED`.
-- `.env.production` giữ nguyên chế độ mock.
+- `.env.production` không được commit (bị `.gitignore`). Production đặt biến trên
+  Vercel: `VITE_ENABLE_MOCKS=true` (phần chưa có backend vẫn dùng MSW) và
+  `VITE_REAL_SERVICES=auth,classroom`; **không** đặt `VITE_API_BASE_URL`.
+  `apps/web/vercel.json` rewrite `/api/*` sang `https://utask-api.u-code.dev`
+  để trình duyệt gọi cùng origin (không cần CORS), kèm fallback SPA về
+  `index.html`. Rewrite không bỏ được `Origin`, nên `refresh`/`logout-all` chỉ
+  chạy khi backend xử lý xong B2.
 
 ## Hiện trạng theo Phase
 
