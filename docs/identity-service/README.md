@@ -113,6 +113,11 @@ Lỗi có `success=false`, `data=null`, `meta=null`, `error={"code":"...","detai
 `details` luôn là mảng; giữ `WWW-Authenticate` và `Retry-After` khi áp dụng.
 JWKS là ngoại lệ theo giao thức: `{"keys":[...]}`.
 
+Thông báo thành công/lỗi và `error.details[].issue` dùng tiếng Việt. Django/DRF dùng
+locale `vi`; thông báo nghiệp vụ được viết tại nơi phát sinh, thông báo đặc thù của
+dj-rest-auth được chuẩn hóa trong `common`. HTTP status, mã lỗi và đường dẫn trường
+giữ nguyên; lỗi đọc dữ liệu không trả nội dung thô của bộ phân tích JSON.
+
 <a id="xac-thuc-va-quyen"></a>
 
 ## Xác thực và quyền ở service gọi

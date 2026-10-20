@@ -27,7 +27,7 @@ Mọi phản hồi nghiệp vụ từ `identity-service` (thành công hoặc th
 ```json
 {
   "success": true,
-  "message": "Đăng nhập hệ thống thành công.",
+  "message": "Đăng nhập thành công.",
   "data": {},
   "meta": {
     "page": 1,
@@ -42,12 +42,15 @@ Mọi phản hồi nghiệp vụ từ `identity-service` (thành công hoặc th
 ```
 
 `data={}` ở ví dụ khung chỉ minh họa vị trí payload; dữ liệu thực tế theo từng endpoint.
+`message` và `error.details[].issue` dùng tiếng Việt, gồm lỗi validation của thư viện.
+Giữ nguyên HTTP status, `error.code`, tên trường và đường dẫn trường; không trả nguyên
+thông báo nội bộ, lỗi phân tích JSON hoặc lỗi nhà cung cấp cho client.
 
 Khi phát sinh lỗi (HTTP 4xx / 5xx), trường `data` và `meta` mang giá trị `null`, trường `error` cung cấp chi tiết lỗi có cấu trúc:
 ```json
 {
   "success": false,
-  "message": "Thông tin đăng nhập không chính xác hoặc tài khoản đang bị khóa.",
+  "message": "Email, tên đăng nhập hoặc mật khẩu không đúng.",
   "data": null,
   "meta": null,
   "error": {
