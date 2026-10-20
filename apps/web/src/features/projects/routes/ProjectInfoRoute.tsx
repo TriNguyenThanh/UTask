@@ -9,7 +9,11 @@ import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { ApiError } from "@/lib/api/errors";
 import { UNKNOWN_NAME } from "@/lib/api/classroom/teacherLoaders";
 import { useRealProjectContext } from "@/features/projects/components/RealProjectLayout";
+import { ProjectDashboardSection } from "@/features/projects/components/ProjectDashboard";
+import { parseCapacity } from "@/features/projects/lib/capacity";
+import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
 import { usePatchProject, useSetProjectArchived } from "@/lib/query/workHooks";
+import { useSetMemberCapacity } from "@/lib/query/workSprintHooks";
 import { useUserNames } from "@/lib/query/teacherClassHooks";
 import type { ProjectDto, ProjectMemberDto } from "@/lib/api/work/dto";
 
@@ -277,7 +281,55 @@ const ROLE_LABEL: Record<string, string> = {
   MEMBER: "Thành viên",
 };
 
-function MembersTable({ members }: { members: ProjectMemberDto[] }) {
+/** Leader sửa số giờ/tuần ngay trong bảng; chỉ gửi khi giá trị hợp lệ và khác giá trị hiện tại. */
+function CapacityCell({ projectId, member }: { projectId: string; member: ProjectMemberDto }) {
+  const save = useSetMemberCapacity(projectId);
+  const [text, setText] = useState(String(member.weekly_capacity));
+  const [synced, setSynced] = useState(member.weekly_capacity);
+  if (member.weekly_capacity !== synced) {
+    setSynced(member.weekly_capacity);
+    setText(String(member.weekly_capacity));
+  }
+  const parsed = parseCapacity(text);
+  const changed = parsed !== null && parsed !== member.weekly_capacity;
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (parsed === null || !changed) return;
+        save.mutate({ userId: member.user_id, weeklyCapacity: parsed });
+      }}
+    >
+      <Input
+        value={text}
+        inputMode="numeric"
+        className="h-8 w-20"
+        aria-label={`Giờ/tuần của ${member.display_name || "thành viên"}`}
+        aria-invalid={parsed === null ? true : undefined}
+        disabled={save.isPending}
+        onChange={(event) => setText(event.target.value)}
+      />
+      {changed ? (
+        <Button type="submit" size="sm" disabled={save.isPending}>
+          Lưu
+        </Button>
+      ) : null}
+      {parsed === null ? <span className="text-xs text-destructive">Nhập số nguyên ≥ 0</span> : null}
+      {save.error ? <span className="text-xs text-destructive">{issueWriteErrorMessage(save.error)}</span> : null}
+    </form>
+  );
+}
+
+function MembersTable({
+  members,
+  projectId,
+  canEditCapacity,
+}: {
+  members: ProjectMemberDto[];
+  projectId: string;
+  canEditCapacity: boolean;
+}) {
   const userIds = members.filter((m) => !m.display_name).map((m) => m.user_id);
   const namesQuery = useUserNames(userIds);
 
@@ -307,7 +359,9 @@ function MembersTable({ members }: { members: ProjectMemberDto[] }) {
                       {ROLE_LABEL[member.role] ?? member.role}
                     </Badge>
                   </td>
-                  <td className="px-4 py-2">{member.weekly_capacity}</td>
+                  <td className="px-4 py-2">
+                    {canEditCapacity ? <CapacityCell projectId={projectId} member={member} /> : member.weekly_capacity}
+                  </td>
                 </tr>
               );
             })}
@@ -396,13 +450,15 @@ export function Component() {
         </section>
       ) : null}
 
+      <ProjectDashboardSection projectId={projectId} members={members} />
+
       {/* Members */}
       <section className="rounded-md border bg-card">
         <div className="border-b px-4 py-3">
           <h2 className="font-semibold">Thành viên</h2>
         </div>
         <div className="p-4">
-          <MembersTable members={members} />
+          <MembersTable members={members} projectId={projectId} canEditCapacity={isLeader && !isArchived} />
         </div>
       </section>
 

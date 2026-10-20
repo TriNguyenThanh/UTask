@@ -53,7 +53,8 @@ VITE_API_BASE_URL=
 | 10 | Work: Board và Backlog chỉ đọc (cột theo `State` của dự án, sprint, epic, panel chi tiết task) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
 | 11 | Work: ghi task cốt lõi (tạo issue, kéo thả/menu đổi cột, chặn/bỏ chặn, sửa trong panel, tạo và tick nhiệm vụ con) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
 | 12 | Work: epic (tạo/sửa/xóa), nhãn (quản lý + gán), liên kết task, lưu trữ/xóa/khôi phục task | Một phần (đã smoke API thật và giao diện Backlog trên staging; xem giới hạn) |
-| 13+ | Work (sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
+| 13 | Work: sprint (tạo/sửa/bắt đầu/kết thúc), thêm/bớt issue khỏi sprint (menu và kéo thả Backlog), tiến độ + burndown, tổng quan dự án, sửa capacity | Một phần (đã smoke API thật và giao diện tạo/bắt đầu sprint trên staging; xem giới hạn) |
+| 14+ | Work (comment, activity, đính kèm, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -366,6 +367,17 @@ Giới hạn:
 - Nhãn chưa hiện trên thẻ Board/Backlog và chưa lọc theo nhãn (workspace chưa chứa nhãn của từng task).
 - Đích liên kết chỉ chọn trong issue đã tải ở Board/Backlog (không gồm nhiệm vụ con).
 - Kiểm tra: `tsc`, 74 file / 980 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật cho epic (cả lỗi ngày), nhãn, gán nhãn, liên kết, vòng chặn, trùng, lưu trữ/mở lại/xóa/khôi phục; giao diện Backlog tạo epic (lỗi ngày rồi thành công), xóa epic, mở hộp nhãn, tab "Đã lưu trữ". Chưa smoke giao diện: gán nhãn và liên kết trong panel, xóa/lưu trữ từ panel, khôi phục từ tab, thành viên không phải Leader.
+
+## Work sprint, tiến độ, tổng quan (Phase 13)
+
+- Quyền: chỉ Leader tạo/sửa/bắt đầu/kết thúc sprint, đổi phạm vi sprint và sửa capacity. Thành viên và giảng viên chỉ xem. Dự án lưu trữ ẩn mọi nút ghi.
+- Mọi lệnh ghi sprint đọc lại `version` của sprint ngay trước khi gửi (workspace không giữ `version` sprint). `start`, `tasks`, `close` gửi `Idempotency-Key`; tạo sprint, sửa sprint và capacity thì không.
+- Bắt đầu cần đủ hai ngày và chưa có sprint đang chạy (nút tắt kèm lý do nếu thiếu ngày). Kết thúc chọn sprint nháp đích hoặc trả issue chưa xong về Product Backlog.
+- Đổi sprint của issue dùng lại menu/kéo thả Backlog (`useIssueMover`). Backlog thật giờ ghi được. Đổi sprint là REMOVE rồi ADD, **không nguyên tử**; sprint đang chạy bắt buộc có lý do (`scope_change_reason`). Đổi sprint không đổi `version` của task.
+- Tiến độ và burndown (theo điểm ước lượng) lấy từ server cho sprint đang chạy; đường lý tưởng tự vẽ phía client. Tổng quan dự án ở trang Thông tin; `GET .../dashboard/` **không nhận query param** (có param → 400 trên staging).
+- Capacity sửa ngay trong bảng thành viên; chỉ Leader, dự án chưa lưu trữ.
+- Giới hạn: workspace bỏ sprint đã hoàn thành; Backlog không có issue thì ẩn cả sprint và thanh công cụ sprint; chưa có giao diện lưu trữ/xóa sprint; kiểm tra thành viên phải còn hoạt động mới gán capacity (422 `MEMBER_NOT_ACTIVE`).
+- Kiểm tra: `tsc`, 79 file / 1017 test cả khi có và không có `.env.local`, build; ESLint không chạy được. Smoke staging: API thật (tạo, bắt đầu thiếu ngày → 400 `INVALID_OPERATION`, thêm vào sprint đang chạy thiếu lý do → 422, có lý do → `is_scope_creep`, progress, burndown, dashboard, kết thúc có đích, capacity); giao diện tạo sprint và bắt đầu sprint (hiện tiến độ). Chưa smoke giao diện: menu đổi sprint, hộp kết thúc sprint, sửa capacity, thành viên không phải Leader (có test thành phần).
 
 ## Việc cần backend (tổng hợp)
 
