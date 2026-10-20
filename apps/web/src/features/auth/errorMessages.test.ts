@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { loginErrorMessage } from "@/features/auth/errorMessages";
+import { loginErrorMessage, oldPasswordMessages } from "@/features/auth/errorMessages";
 import { ApiError } from "@/lib/api/errors";
 
 function error(init: { status: number; code?: string; message?: string; retryAfterSeconds?: number }) {
   return new ApiError({ message: "Từ máy chủ", ...init });
 }
+
+describe("oldPasswordMessages", () => {
+  it("translates the Django wrong-old-password message and keeps others", () => {
+    expect(
+      oldPasswordMessages(["Your old password was entered incorrectly. Please enter it again.", "Khác"]),
+    ).toEqual(["Mật khẩu hiện tại không đúng.", "Khác"]);
+    expect(oldPasswordMessages(undefined)).toBeUndefined();
+  });
+});
 
 describe("loginErrorMessage", () => {
   it.each([

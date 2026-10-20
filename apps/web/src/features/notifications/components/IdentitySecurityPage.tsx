@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { oldPasswordMessages } from "@/features/auth/errorMessages";
 import { REVOKE_FAILED_MESSAGE, useSignOut } from "@/features/auth/useSignOut";
 import { FieldError } from "@/features/notifications/components/FieldError";
 import { SettingsHeader } from "@/features/notifications/components/SettingsHeader";
@@ -87,7 +88,7 @@ function PasswordSection() {
             onChange={(event) => setOldPassword(event.target.value)}
             aria-invalid={fieldErrors.old_password ? true : undefined}
           />
-          <FieldError messages={fieldErrors.old_password} />
+          <FieldError messages={oldPasswordMessages(fieldErrors.old_password)} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="security-new-password">Mật khẩu mới</Label>

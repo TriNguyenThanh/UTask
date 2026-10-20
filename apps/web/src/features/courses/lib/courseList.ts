@@ -10,10 +10,21 @@ export const STATUS_FILTERS: readonly { id: StatusFilter; label: string }[] = [
   { id: "assigned", label: "Đã có nhóm" },
 ];
 
-export function membershipBadge(membership: TeamMembership): {
+/**
+ * Lớp đã đóng hoặc khóa lập nhóm: sinh viên chưa có nhóm không còn "cần lập nhóm"
+ * và không còn nút thành lập nhóm.
+ */
+export function needsTeam(enrollment: Pick<CourseEnrollment, "membership" | "formationClosed">): boolean {
+  return enrollment.membership.status === "none" && !enrollment.formationClosed;
+}
+
+export function membershipBadge(membership: TeamMembership, formationClosed = false): {
   label: string;
   className: string;
 } {
+  if (membership.status === "none" && formationClosed) {
+    return { label: "Đã khóa lập nhóm", className: "border-border bg-muted text-muted-foreground" };
+  }
   switch (membership.status) {
     case "none":
       return {
@@ -39,8 +50,8 @@ export function membershipBadge(membership: TeamMembership): {
   }
 }
 
-export function courseCtaLabel(membership: TeamMembership): string {
-  if (membership.status === "none") return "Thành lập nhóm";
+export function courseCtaLabel(membership: TeamMembership, formationClosed = false): string {
+  if (membership.status === "none") return formationClosed ? "Xem lớp" : "Thành lập nhóm";
   if (membership.status === "pending") return "Theo dõi yêu cầu";
   return "Xem nhóm & Đề tài";
 }
@@ -56,7 +67,9 @@ export function matchesFilters(
   query: string,
   status: StatusFilter,
 ): boolean {
-  if (status !== "all" && enrollment.membership.status !== status) return false;
+  if (status === "none" ? !needsTeam(enrollment) : status !== "all" && enrollment.membership.status !== status) {
+    return false;
+  }
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
   return `${enrollment.courseCode} ${enrollment.courseName}`.toLowerCase().includes(needle);
@@ -95,6 +108,8 @@ export function summarizeCourses(enrollments: readonly CourseEnrollment[]): Reco
     pending: 0,
     assigned: 0,
   };
-  for (const enrollment of enrollments) counts[enrollment.membership.status] += 1;
+  for (const enrollment of enrollments) {
+    if (enrollment.membership.status !== "none" || needsTeam(enrollment)) counts[enrollment.membership.status] += 1;
+  }
   return counts;
 }

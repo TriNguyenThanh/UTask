@@ -117,7 +117,7 @@ describe("IdentitySecurityPage — change password", () => {
 
     await fillAndSubmit(user, "wrong-old", "Newpass#2026", "Newpass#2026");
 
-    expect(await screen.findByText("Your old password was entered incorrectly.")).toBeInTheDocument();
+    expect(await screen.findByText("Mật khẩu hiện tại không đúng.")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/settings/security");
   });
 
