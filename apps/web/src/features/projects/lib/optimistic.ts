@@ -2,7 +2,7 @@ import { compareByRank } from "@/features/projects/lib/rank";
 import type { Issue, ProjectWorkspace } from "@/features/projects/types";
 
 export type IssuePatch = Partial<
-  Pick<Issue, "status" | "sprintId" | "rank" | "blocked" | "blockedReason">
+  Pick<Issue, "status" | "statusId" | "stateGroup" | "sprintId" | "rank" | "blocked" | "blockedReason">
 >;
 
 /**

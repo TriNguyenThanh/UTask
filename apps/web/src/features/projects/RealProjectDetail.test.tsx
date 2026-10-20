@@ -149,18 +149,6 @@ describe("RealProjectDetail — /projects/:projectId/info", () => {
     expect(screen.getByRole("button", { name: "Mở lại dự án" })).toBeInTheDocument();
   });
 
-  it("/projects/x/board in real mode shows 'Bảng công việc chưa khả dụng'", async () => {
-    const project = buildProject({ id: "x" });
-    vi.stubEnv("VITE_REAL_SERVICES", "auth,classroom,work");
-    server.use(
-      ...workHandlers({ projects: [project], members: { x: [leaderMember()] } }),
-      ...classroomHandlers(classroomFixture()),
-      ...createAuthHandlers("default", createMemoryRepository("default")),
-    );
-    renderAppRoutes("/projects/x/board", leaderTestSession);
-    expect(await screen.findByText("Bảng công việc chưa khả dụng")).toBeInTheDocument();
-  });
-
   it("/projects/x redirects to /projects/x/info in real mode", async () => {
     const project = buildProject({ id: "x" });
     vi.stubEnv("VITE_REAL_SERVICES", "auth,classroom,work");

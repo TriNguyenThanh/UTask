@@ -1,5 +1,7 @@
 import { isRealService } from "@/lib/config/services";
-import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
+import { RealWorkspaceBoundary } from "@/features/projects/components/RealWorkspaceBoundary";
+import { useRealProjectContext } from "@/features/projects/components/RealProjectLayout";
+import { useRealIssueDetail, type IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
 import { Plus, Zap } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -7,7 +9,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
-import { useIssueMover } from "@/features/projects/hooks/useIssueMover";
+import { useIssueMover, type IssueMover } from "@/features/projects/hooks/useIssueMover";
 import { DraggableIssueCard } from "@/features/projects/dnd/DraggableIssueCard";
 import {
   useBoardAutoScroll,
@@ -16,14 +18,14 @@ import {
 } from "@/features/projects/dnd/boardDnd";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
-import { COLUMNS, daysLeft, formatShortDate } from "@/features/projects/issueMeta";
+import { daysLeft, formatShortDate, statusForGroup } from "@/features/projects/issueMeta";
 import {
   matchesFilters,
   useIssueFilters,
   type FlagFilter,
   type IssueFilters,
 } from "@/features/projects/lib/issueFilters";
-import type { Issue, Sprint } from "@/features/projects/types";
+import type { Issue, ProjectState, Sprint } from "@/features/projects/types";
 import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import {
   aiRequiresKey,
@@ -47,20 +49,21 @@ import { cn } from "@/lib/utils";
 const BOARD_FLAGS: readonly FlagFilter[] = ["mine", "pr", "bug", "blocked", "overdue"];
 
 function BoardColumn({
-  column,
+  state,
   issues,
   onOpenIssue,
   mover,
 }: Readonly<{
-  column: (typeof COLUMNS)[number];
+  state: ProjectState;
   issues: Issue[];
   onOpenIssue: (key: string) => void;
-  mover: ReturnType<typeof useIssueMover>;
+  mover: IssueMover;
 }>) {
   const points = issues.reduce((sum, issue) => sum + issue.storyPoints, 0);
   const columnRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const isOver = useColumnDropTarget(columnRef, listRef, column.status, mover.enabled);
+  const status = statusForGroup(state.group);
+  const isOver = useColumnDropTarget(columnRef, listRef, status, state.id, mover.enabled);
   return (
     <section
       ref={columnRef}
@@ -68,12 +71,16 @@ function BoardColumn({
         "flex max-h-full w-72 min-w-[18rem] flex-1 flex-col rounded-lg border border-outline-subtle/60 bg-muted/50 p-3 transition-colors",
         isOver && "border-primary/50 bg-primary/10",
       )}
-      aria-label={column.label}
+      aria-label={state.name}
     >
       <div className="mb-2 flex shrink-0 items-center justify-between border-b border-outline-subtle/60 pb-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={cn("size-2 shrink-0 rounded-full", column.dotClass)} aria-hidden />
-          <h2 className="truncate text-xs font-bold uppercase tracking-wide">{column.label}</h2>
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: state.color }}
+            aria-hidden
+          />
+          <h2 className="truncate text-xs font-bold uppercase tracking-wide">{state.name}</h2>
           <span className="rounded-full border border-outline-subtle bg-card px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground">
             {issues.length}
           </span>
@@ -178,17 +185,20 @@ function BoardToolbar({
 /* Route component                                                     */
 /* ------------------------------------------------------------------ */
 
-function DemoBoard() {
+/**
+ * `real`: dữ liệu đến từ Work thật. Phase 10 chỉ đọc, nên tắt kéo-thả/menu di chuyển và không hỏi
+ * cài đặt AI của demo.
+ */
+function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: boolean }>) {
   const { projectId, workspace, viewer, readOnly } = useProjectWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilters, toggleFlag, clear } = useIssueFilters();
 
   const issueKey = searchParams.get("issue");
-  const issueQuery = useIssueDetail(projectId, issueKey);
   // Only the leader can read project settings; nobody else asks for them.
   const aiSettingsQuery = useProjectAiSettings(
     projectId,
-    viewer.kind === "team-member" && viewer.role === "leader",
+    !real && viewer.kind === "team-member" && viewer.role === "leader",
   );
 
   function openIssue(key: string) {
@@ -206,16 +216,27 @@ function DemoBoard() {
   const aiEnabled = aiSettingsQuery.data?.ai.keyConfigured ?? false;
   const permissionCtx: ProjectPermissionContext = projectPermissionContext(viewer, aiEnabled);
 
-  const sprint = useMemo(() => {
-    return workspace.sprints.find((candidate) => candidate.state === "active") ?? null;
-  }, [workspace]);
+  const sprint = useMemo(
+    () => workspace.sprints.find((candidate) => candidate.state === "active") ?? null,
+    [workspace],
+  );
+
+  const boardStates = useMemo(
+    () => [...workspace.states].filter((s) => s.group !== "CANCELLED").sort((a, b) => a.sequence - b.sequence),
+    [workspace.states],
+  );
 
   const sprintIssues = useMemo(() => {
     const sprintId = sprint?.id ?? null;
     return workspace.issues.filter((issue) => issue.sprintId === sprintId);
   }, [workspace, sprint]);
 
-  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+  const mover = useIssueMover({
+    projectId,
+    workspace,
+    role: viewerRole(viewer),
+    canWrite: real ? false : undefined,
+  });
 
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
@@ -284,11 +305,11 @@ function DemoBoard() {
       ) : (
         <div ref={setBoardElement} className="min-h-0 flex-1 overflow-x-auto bg-background p-6 short:p-3">
           <div className="flex h-full items-start gap-4">
-            {COLUMNS.map((column) => (
+            {boardStates.map((state) => (
               <BoardColumn
-                key={column.status}
-                column={column}
-                issues={visibleIssues.filter((issue) => issue.status === column.status)}
+                key={state.id}
+                state={state}
+                issues={visibleIssues.filter((issue) => issue.statusId === state.id)}
                 onOpenIssue={openIssue}
                 mover={mover}
               />
@@ -308,22 +329,25 @@ function DemoBoard() {
           issueKey={issueKey}
           epics={workspace.epics}
           sprints={workspace.sprints}
-          detail={issueQuery.data}
-          isLoading={issueQuery.isPending}
-          error={issueQuery.error}
+          detail={detail.data}
+          isLoading={detail.isPending}
+          error={detail.error}
           canBreakdownWithAI={
             permissionCtx !== null && canBreakdownTaskWithAI(permissionCtx)
           }
           aiKeyMissing={
-            permissionCtx !== null && aiRequiresKey(permissionCtx)
+            !real && permissionCtx !== null && aiRequiresKey(permissionCtx)
           }
           readOnly={readOnly}
+          states={workspace.states}
+          subtasksEditable={!real}
           onChangeStatus={
-            issueQuery.data && mover.enabled && canUpdateTask(permissionCtx, issueQuery.data.issue.isMine)
-              ? (status) =>
+            detail.data && mover.enabled && canUpdateTask(permissionCtx, detail.data.issue.isMine)
+              ? (state) =>
                   mover.requestMove({
-                    issue: issueQuery.data.issue,
-                    toStatus: status,
+                    issue: detail.data!.issue,
+                    toStatus: statusForGroup(state.group),
+                    toStateId: state.id,
                     destination: [],
                   })
               : undefined
@@ -335,7 +359,29 @@ function DemoBoard() {
   );
 }
 
+function DemoBoard() {
+  const { projectId } = useProjectWorkspaceContext();
+  const [searchParams] = useSearchParams();
+  const detail = useIssueDetail(projectId, searchParams.get("issue"));
+  return <BoardView detail={detail} real={false} />;
+}
+
+function RealBoardContent() {
+  const { workspace } = useProjectWorkspaceContext();
+  const { shell } = useRealProjectContext();
+  const [searchParams] = useSearchParams();
+  const detail = useRealIssueDetail(workspace, shell, searchParams.get("issue"));
+  return <BoardView detail={detail} real />;
+}
+
+function RealBoard() {
+  return (
+    <RealWorkspaceBoundary>
+      <RealBoardContent />
+    </RealWorkspaceBoundary>
+  );
+}
+
 export function Component() {
-  if (isRealService("work")) return <WorkModuleNotIntegrated module="board" />;
-  return <DemoBoard />;
+  return isRealService("work") ? <RealBoard /> : <DemoBoard />;
 }

@@ -1,3 +1,4 @@
+import type { ProjectWorkspace } from "@/features/projects/types";
 import type { ClassDto, CourseDto, GroupDto } from "@/lib/api/classroom/dto";
 import { getClass, listClassGroups, listCourses } from "@/lib/api/classroom/endpoints";
 import type { ApiClient } from "@/lib/api/client";
@@ -10,7 +11,17 @@ import {
   type WorkProjectShell,
 } from "@/lib/api/work/adapters";
 import type { ProjectDto } from "@/lib/api/work/dto";
-import { getProject, listProjectMembers, listProjects } from "@/lib/api/work/endpoints";
+import {
+  getProject,
+  listEpics,
+  listProjectMembers,
+  listProjects,
+  listSprints,
+  listStates,
+  listTaskIdsInSprint,
+  listTasks,
+} from "@/lib/api/work/endpoints";
+import { buildWorkspace } from "@/lib/api/work/workspaceAdapters";
 
 /** Số request song song mỗi đợt, giống `loadMembers` của giảng viên. */
 const BATCH = 5;
@@ -123,4 +134,35 @@ export async function loadGroupProjects(
 ): Promise<{ byGroup: Map<string, ProjectDto[]>; partial: boolean }> {
   const { projects, partial } = await listProjects(client, "all");
   return { byGroup: projectsByGroup(projects), partial };
+}
+
+/**
+ * Tải dữ liệu Board/Backlog. Task không có `sprint_id` nên hỏi theo từng chu kỳ
+ * DRAFT/ACTIVE (D4); task đã xong trong chu kỳ đã đóng không còn thành viên chu kỳ
+ * nên hiện như ngoài chu kỳ.
+ */
+export async function loadWorkspace(
+  client: ApiClient,
+  userId: string,
+  shell: WorkProjectShell,
+): Promise<ProjectWorkspace> {
+  const projectId = shell.project.id;
+  const [states, epics, tasks, sprints] = await Promise.all([
+    listStates(client, projectId),
+    listEpics(client, projectId),
+    listTasks(client, projectId),
+    listSprints(client, projectId),
+  ]);
+
+  const planned = sprints.filter((sprint) => sprint.status !== "COMPLETED" && sprint.archived_at === null);
+  const memberships = await inBatches(planned, async (sprint): Promise<[string, string[]]> => [
+    sprint.id,
+    await listTaskIdsInSprint(client, projectId, sprint.id),
+  ]);
+  const sprintByTask = new Map<string, string>();
+  for (const [sprintId, taskIds] of memberships) {
+    for (const taskId of taskIds) sprintByTask.set(taskId, sprintId);
+  }
+
+  return buildWorkspace({ shell, userId, states, epics, tasks, sprints, sprintByTask });
 }

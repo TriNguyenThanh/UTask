@@ -21,6 +21,7 @@ export function useColumnDropTarget(
   columnRef: RefObject<HTMLElement | null>,
   listRef: RefObject<HTMLElement | null>,
   status: IssueStatus,
+  stateId: string,
   enabled: boolean,
 ): boolean {
   const [isOver, setIsOver] = useState(false);
@@ -33,7 +34,7 @@ export function useColumnDropTarget(
       dropTargetForElements({
         element: column,
         canDrop: ({ source }) => isIssueDrag(source.data),
-        getData: () => ({ type: COLUMN_DROP, status }),
+        getData: () => ({ type: COLUMN_DROP, status, stateId }),
         onDragEnter: () => setIsOver(true),
         onDragLeave: () => setIsOver(false),
         onDrop: () => setIsOver(false),
@@ -48,7 +49,7 @@ export function useColumnDropTarget(
       );
     }
     return () => cleanups.forEach((cleanup) => cleanup());
-  }, [columnRef, listRef, status, enabled]);
+  }, [columnRef, listRef, status, stateId, enabled]);
 
   return isOver;
 }
@@ -102,12 +103,14 @@ export function useBoardDropMonitor({
         if (!issue) return;
 
         const status = column.data.status as IssueStatus;
+        const stateId = column.data.stateId as string;
         const card = targets.find((target) => target.data.type === source.data.type);
         const edge = card ? extractClosestEdge(card.data) : null;
 
         move({
           issue,
           toStatus: status,
+          toStateId: stateId,
           destination: visible(status),
           // Only the leader orders cards: dropping on a card means "next to it",
           // on the column background "at the end". A member's drop is status only.

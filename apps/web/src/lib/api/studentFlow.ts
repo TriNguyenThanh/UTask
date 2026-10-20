@@ -144,9 +144,11 @@ export function disconnectGitHubRequest(client: ApiClient): Promise<void> {
 }
 export interface MoveIssueInput {
   status?: IssueStatus;
+  /** State id; set when the move comes from a state-aware board column. */
+  statusId?: string;
   /** `null` moves the issue to the Product Backlog. */
   sprintId?: string | null;
-  rank?: string;
+  rank?: number;
   /** Required by the server when the move changes the scope of an active sprint. */
   reason?: string;
   /** The version the client last saw; a stale one gets 409. */

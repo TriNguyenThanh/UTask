@@ -5,9 +5,11 @@ import type { Issue, IssueStatus } from "@/features/projects/types";
 /** What to ask the server for after a card was dropped or a menu item chosen. */
 export interface MoveIntent {
   status?: IssueStatus;
+  /** State id from WorkService; set when status changes via a state-aware column drop. */
+  statusId?: string;
   /** `null` = Product Backlog. */
   sprintId?: string | null;
-  rank?: string;
+  rank?: number;
   /** The move changes the scope of an active sprint, so the leader must say why. */
   needsReason: boolean;
 }
@@ -16,8 +18,10 @@ export interface MoveRequest {
   issue: Issue;
   /** Team role of the viewer; `null` for an instructor, who never moves anything. */
   role: TeamRole | null;
-  /** Board: the column dropped on. */
+  /** Board: the column dropped on (legacy IssueStatus). */
   toStatus?: IssueStatus;
+  /** Board: the state id of the column dropped on. */
+  toStateId?: string;
   /** Backlog: the section dropped on; `null` is the Product Backlog. */
   toSprintId?: string | null;
   /** Cards visible in the destination list, in order. May contain the moved card. */
@@ -56,6 +60,7 @@ export function planMove(request: MoveRequest): MoveIntent | null {
   const intent: MoveIntent = { needsReason: false };
   if (request.toStatus !== undefined && request.toStatus !== issue.status) {
     intent.status = request.toStatus;
+    if (request.toStateId !== undefined) intent.statusId = request.toStateId;
   }
   if (request.toSprintId !== undefined && request.toSprintId !== issue.sprintId) {
     intent.sprintId = request.toSprintId;
