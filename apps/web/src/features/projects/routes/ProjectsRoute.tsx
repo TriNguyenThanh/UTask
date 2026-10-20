@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { RealProjectList } from "@/features/projects/components/RealProjectList";
 import { sectionPanelClass } from "@/components/layout/sectionPanel";
 import {
   ArrowRight,
@@ -399,5 +401,5 @@ export default function ProjectsRoute() {
 }
 
 export function Component() {
-  return <ProjectsRoute />;
+  return isRealService("work") ? <RealProjectList /> : <ProjectsRoute />;
 }

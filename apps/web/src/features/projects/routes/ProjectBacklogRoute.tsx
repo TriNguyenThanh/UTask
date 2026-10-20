@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
 import {
   BookOpen,
   Bug,
@@ -725,5 +727,6 @@ export default function ProjectBacklogRoute() {
 }
 
 export function Component() {
+  if (isRealService("work")) return <WorkModuleNotIntegrated module="backlog" />;
   return <ProjectBacklogRoute />;
 }

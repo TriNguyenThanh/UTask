@@ -20,6 +20,10 @@ import type {
   TeacherStudent,
   TeacherTeam,
 } from "@/lib/api/teacherFlow";
+import { pickPrimaryProject } from "@/lib/api/work/adapters";
+import type { ProjectDto } from "@/lib/api/work/dto";
+import { loadGroupProjects } from "@/lib/api/work/loaders";
+import { isRealService } from "@/lib/config/services";
 
 /** Số request song song khi đọc thành viên các nhóm. */
 const MEMBER_BATCH = 5;
@@ -135,7 +139,7 @@ export function toTeacherStudents(roster: ClassRoster): TeacherStudent[] {
   }));
 }
 
-export function toTeacherTeams(roster: ClassRoster): TeacherTeam[] {
+export function toTeacherTeams(roster: ClassRoster, projectsByGroup?: Map<string, ProjectDto[]>): TeacherTeam[] {
   return roster.groups.map((group) => {
     const members = (roster.membersByGroup[group.id] ?? []).map((member) => ({
       userId: member.user_id,
@@ -143,6 +147,7 @@ export function toTeacherTeams(roster: ClassRoster): TeacherTeam[] {
       studentCode: member.profile?.student_id ?? "",
       role: member.role === "LEADER" ? ("leader" as const) : ("member" as const),
     }));
+    const primaryProject = projectsByGroup ? pickPrimaryProject(projectsByGroup.get(group.id) ?? []) : null;
     return {
       teamId: group.id,
       name: group.name,
@@ -151,8 +156,9 @@ export function toTeacherTeams(roster: ClassRoster): TeacherTeam[] {
       memberCount: members.length,
       version: group.source_version,
       maxMembers: roster.cls.group_max_size,
-      // Project, tiến độ và hoạt động thuộc Work (B7).
-      project: null,
+      project: primaryProject
+        ? { projectId: primaryProject.id, key: primaryProject.identifier, name: primaryProject.name }
+        : null,
       progress: null,
       lastActivity: null,
     };
@@ -181,11 +187,20 @@ export async function loadInstructors(client: ApiClient, classId: string): Promi
 
 export const UNKNOWN_NAME = "Chưa rõ tên";
 
-export function toTeacherCourseDetail(roster: ClassRoster, instructors: TeacherCourseDetail["instructors"]): TeacherCourseDetail {
+export function toTeacherCourseDetail(
+  roster: ClassRoster,
+  instructors: TeacherCourseDetail["instructors"],
+  projectsByGroup?: Map<string, ProjectDto[]>,
+): TeacherCourseDetail {
   const { cls } = roster;
   const grouped = groupedUserIds(roster);
+  const teamsWithoutProject =
+    projectsByGroup !== undefined
+      ? roster.groups.filter((group) => (projectsByGroup.get(group.id) ?? []).length === 0).length
+      : null;
   return {
     ...summaryBase(cls, roster.course),
+    teamsWithoutProject,
     studentCount: roster.enrollments.length,
     studentsWithoutTeam: roster.enrollments.filter((enrollment) => !grouped.has(enrollment.user_id)).length,
     teamCount: roster.groups.length,
@@ -212,9 +227,14 @@ export async function loadTeacherCourse(
   rosterKey: readonly unknown[],
   classId: string,
 ): Promise<TeacherCourseDetail> {
-  const [roster, instructors] = await Promise.all([
+  const gpPromise = isRealService("work")
+    ? loadGroupProjects(client).catch(() => undefined)
+    : Promise.resolve(undefined);
+  const [roster, instructors, gp] = await Promise.all([
     fetchRoster(queryClient, client, rosterKey, classId),
     loadInstructors(client, classId),
+    gpPromise,
   ]);
-  return toTeacherCourseDetail(roster, instructors);
+  const projectsByGroup = gp === undefined || gp.partial ? undefined : gp.byGroup;
+  return toTeacherCourseDetail(roster, instructors, projectsByGroup);
 }

@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
 import { Plus, Zap } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -176,7 +178,7 @@ function BoardToolbar({
 /* Route component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function Component() {
+function DemoBoard() {
   const { projectId, workspace, viewer, readOnly } = useProjectWorkspaceContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilters, toggleFlag, clear } = useIssueFilters();
@@ -331,4 +333,9 @@ export function Component() {
       ) : null}
     </div>
   );
+}
+
+export function Component() {
+  if (isRealService("work")) return <WorkModuleNotIntegrated module="board" />;
+  return <DemoBoard />;
 }

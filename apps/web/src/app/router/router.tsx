@@ -1,9 +1,10 @@
-import { Navigate, createBrowserRouter, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { RequireAuth } from "@/app/router/RequireAuth";
 import { HomeRedirect, RequireTeacherSpace } from "@/app/router/RequireTeacherSpace";
 import { RequireProjectManagePermission } from "@/features/projects/routes/RequireProjectManagePermission";
+import { ProjectIndexRedirect } from "@/features/projects/routes/ProjectIndexRedirect";
 import { RouteError } from "@/app/router/RouteError";
 
 /** Exported so tests exercise the real route table, guards included. */
@@ -67,7 +68,7 @@ export const appRoutes: RouteObject[] = [
         handle: { title: "Dự án" },
         lazy: () => import("@/features/projects/routes/ProjectWorkspaceLayout"),
         children: [
-          { index: true, element: <Navigate to="backlog" replace /> },
+          { index: true, element: <ProjectIndexRedirect /> },
           {
             path: "backlog",
             lazy: () => import("@/features/projects/routes/ProjectBacklogRoute"),
@@ -90,6 +91,7 @@ export const appRoutes: RouteObject[] = [
               },
             ],
           },
+          { path: "info", lazy: () => import("@/features/projects/routes/ProjectInfoRoute") },
         ],
       },
       {

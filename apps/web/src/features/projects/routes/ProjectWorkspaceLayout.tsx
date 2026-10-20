@@ -18,6 +18,8 @@ import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types"
 import { isReadOnlyViewer } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
+import { isRealService } from "@/lib/config/services";
+import { RealProjectLayout } from "@/features/projects/components/RealProjectLayout";
 
 /** Module heading per tab, shown under the project breadcrumb. */
 export const projectModuleTitles = {
@@ -225,5 +227,5 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
   );
 }
 export function Component() {
-  return <ProjectWorkspaceLayout />;
+  return isRealService("work") ? <RealProjectLayout /> : <ProjectWorkspaceLayout />;
 }

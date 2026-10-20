@@ -49,7 +49,16 @@ export function RealTeamDetail() {
         <div>
           <h2 className="text-xl font-bold tracking-tight">{team.name}</h2>
           <p className="text-sm text-muted-foreground">
-            {team.memberCount}/{team.maxMembers} thành viên. Project và tiến độ chưa có dữ liệu (cần Work Service).
+            {team.memberCount}/{team.maxMembers} thành viên.{" "}
+            {team.project
+              ? <>
+                  Dự án:{" "}
+                  <Link to={`/projects/${team.project.projectId}/info`} className="font-mono font-medium hover:underline">
+                    {team.project.key}
+                  </Link>{" "}
+                  {team.project.name}. Tiến độ chưa có dữ liệu (cần Work Service).
+                </>
+              : "Project và tiến độ chưa có dữ liệu (cần Work Service)."}
           </p>
         </div>
         {backLink}

@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
 import { KeyRound, LoaderCircle, Sparkles, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -318,5 +320,6 @@ export default function ProjectSettingsRoute() {
   );
 }
 export function Component() {
+  if (isRealService("work")) return <WorkModuleNotIntegrated module="settings" />;
   return <ProjectSettingsRoute />;
 }

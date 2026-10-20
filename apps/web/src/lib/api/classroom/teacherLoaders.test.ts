@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { http } from "msw";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   loadInstructors,
@@ -8,8 +8,11 @@ import {
   loadTeacherCourses,
   toTeacherStudents,
   toTeacherTeams,
+  toTeacherCourseDetail,
   type ClassRoster,
 } from "@/lib/api/classroom/teacherLoaders";
+import type { TeacherCourseDetail } from "@/lib/api/teacherFlow";
+import type { ProjectDto } from "@/lib/api/work/dto";
 import { createApiClient } from "@/lib/api/client";
 import { server } from "@/mocks/server";
 import {
@@ -165,5 +168,91 @@ describe("roster adapters", () => {
     const [team] = toTeacherTeams(roster);
     expect(team).toMatchObject({ teamId: "g1", name: "Nhóm 1", memberCount: 2, maxMembers: 4, project: null, progress: null, lastActivity: null });
     expect(team.leaders).toEqual([{ userId: "u1", name: "Nguyễn Văn An" }]);
+  });
+});
+
+describe("toTeacherTeams with projectsByGroup", () => {
+  const roster: ClassRoster = {
+    cls: buildClass({ group_max_size: 4 }),
+    course: buildCourse(),
+    enrollments: fixture().enrollments?.["class-1"] ?? [],
+    groups: [buildGroup({ id: "g1", name: "Nhóm 1" }), buildGroup({ id: "g2", name: "Nhóm 2" })],
+    membersByGroup: { g1: fixture().members?.g1 ?? [], g2: [] },
+  };
+
+  const activeProject = {
+    id: "p1", identifier: "NEXUS", name: "Hệ thống Nexus",
+    description: "", target_goals: "", tech_stack: {},
+    start_date: null, end_date: null,
+    classroom_group_id: "g1", class_id: "class-1",
+    group_source_version: 1, version: 1, board_revision: 0,
+    github_repo_name: null, github_repo_id: null,
+    github_connection_status: null, github_synced_at: null,
+    created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z", archived_at: null,
+  } as const;
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("fills project when projectsByGroup has an active project for the group", () => {
+    const projectsByGroup = new Map([["g1", [activeProject]], ["g2", []]]);
+    const [team1, team2] = toTeacherTeams(roster, projectsByGroup);
+    expect(team1.project).toEqual({ projectId: "p1", key: "NEXUS", name: "Hệ thống Nexus" });
+    expect(team2.project).toBeNull();
+  });
+
+  it("leaves project null when projectsByGroup is undefined (not called with Work)", () => {
+    const [team] = toTeacherTeams(roster);
+    expect(team.project).toBeNull();
+  });
+
+  it("leaves project null when the group's only projects are all archived", () => {
+    const archived = { ...activeProject, archived_at: "2026-10-01T00:00:00Z" };
+    const projectsByGroup = new Map([["g1", [archived]]]);
+    const [team] = toTeacherTeams(roster, projectsByGroup);
+    expect(team.project).toBeNull();
+  });
+});
+
+describe("toTeacherCourseDetail with projectsByGroup", () => {
+  const roster: ClassRoster = {
+    cls: buildClass({ group_max_size: 4 }),
+    course: buildCourse(),
+    enrollments: fixture().enrollments?.["class-1"] ?? [],
+    groups: [buildGroup({ id: "g1", name: "Nhóm 1" }), buildGroup({ id: "g2", name: "Nhóm 2" })],
+    membersByGroup: { g1: fixture().members?.g1 ?? [], g2: [] },
+  };
+  const noInstructors: TeacherCourseDetail["instructors"] = [];
+
+  function proj(id: string, groupId: string): ProjectDto {
+    return {
+      id, identifier: id.toUpperCase(), name: `Dự án ${id}`,
+      description: "", target_goals: "", tech_stack: {},
+      start_date: null, end_date: null,
+      classroom_group_id: groupId, class_id: "class-1",
+      group_source_version: 1, version: 1, board_revision: 0,
+      github_repo_name: null, github_repo_id: null,
+      github_connection_status: null, github_synced_at: null,
+      created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z", archived_at: null,
+    };
+  }
+
+  it("teamsWithoutProject is null when projectsByGroup not provided", () => {
+    expect(toTeacherCourseDetail(roster, noInstructors).teamsWithoutProject).toBeNull();
+  });
+
+  it("counts groups with empty project array when projectsByGroup provided", () => {
+    const projectsByGroup = new Map<string, ProjectDto[]>([["g1", [proj("p1", "g1")]], ["g2", []]]);
+    expect(toTeacherCourseDetail(roster, noInstructors, projectsByGroup).teamsWithoutProject).toBe(1);
+  });
+
+  it("counts all groups when every project array is empty", () => {
+    const projectsByGroup = new Map<string, ProjectDto[]>([["g1", []], ["g2", []]]);
+    expect(toTeacherCourseDetail(roster, noInstructors, projectsByGroup).teamsWithoutProject).toBe(2);
+  });
+
+  it("loadTeacherCourses still returns teamsWithoutProject null (unchanged)", async () => {
+    server.use(...classroomHandlers(fixture()));
+    const { courses } = await loadTeacherCourses(client);
+    expect(courses[0].teamsWithoutProject).toBeNull();
   });
 });
