@@ -8,8 +8,8 @@ schema trong tài liệu service và không tạo hợp đồng giả.
 ## Hợp đồng Integration đã chốt
 
 - [`integration.project.connection.changed.v1.json`](integration.project.connection.changed.v1.json):
-  schema M0, **Thiết kế mục tiêu — producer/consumer chưa triển khai**, chỉ
-  bật từ M6. Topic `utask.integration.events`, key Project ID; Work là consumer
+  **Đã triển khai phía producer outbox/publisher, flag mặc định tắt**;
+  consumer Work thật chưa nghiệm thu. Topic `utask.integration.events`, key Project ID; Work là consumer
   đầu tiên. Event không cấp quyền hoặc tự xác nhận Task link. Quy tắc outbox,
   chống lặp, version và ACL tại [ADR-003](../../docs/adr/003-integration-auth-and-contracts.md);
   ranh giới Work/AI và thứ tự rollout tại

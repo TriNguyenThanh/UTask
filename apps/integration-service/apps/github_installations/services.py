@@ -235,6 +235,13 @@ def invalidate_installation(*, installation_id, event, removed_repository_ids=()
     if event not in statuses:
         raise ValueError("Invalid installation event")
     with transaction.atomic():
+        from apps.github_connections.services import invalidate_connections
+
+        invalidate_connections(
+            installation_id=installation_id,
+            event=event,
+            removed_repository_ids=removed_repository_ids,
+        )
         row = GitHubInstallation.objects.select_for_update().filter(pk=installation_id).first()
         if row is None:
             return None

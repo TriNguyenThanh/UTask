@@ -4,9 +4,9 @@ info:
   version: 1.4.0
   description: Integration sở hữu mapping và credential GitHub App mã hóa, consent PKCE,
     installation/repository discovery, kết nối repository của Project, context GitHub đã lọc
-    và webhook bền vững. API public M4 đã triển khai. Các API internal M5/M6 trong phiên bản
-    này là hợp đồng mục tiêu, chưa phải bằng chứng runtime; Work và AI phải dùng key riêng và
-    internal path luôn bị chặn tại gateway.
+    và webhook bền vững. Provider public và internal đã triển khai trong source và kiểm thử;
+    flags connection/Kafka/AI mặc định tắt. Work/AI thật chưa nghiệm thu tích hợp runtime;
+    mỗi caller dùng key riêng và internal path luôn bị chặn tại gateway.
 servers:
 - url: /api/integrations
   description: Qua gateway; internal path bị chặn.
@@ -476,7 +476,7 @@ paths:
       description: Work đã kiểm quyền Leader trước khi gọi và forward Bearer actor. Integration
         xác minh actor qua Identity, kiểm quyền repository live, idempotency và CAS nhưng chỉ tạo
         operation PREPARED/PENDING. Work phải lưu projection cùng confirm/abort intent bền vững.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [work]
       security:
       - ActorBearer: []
@@ -516,7 +516,7 @@ paths:
       description: Work dispatcher gọi idempotent. Integration đọc receipt qua internal Work API
         bằng service key chiều Integration sang Work, rồi chỉ finalize khi project, operation,
         generation, repository và trạng thái khớp. Không cần tái sử dụng Bearer actor cũ.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [work]
       security:
       - ServiceKey: []
@@ -550,7 +550,7 @@ paths:
       summary: Hủy operation mà Work không áp dụng
       description: Chỉ hủy operation PREPARED có cùng project, operation và generation. Abort
         muộn không được thay đổi connection hoặc generation mới hơn. Retry cùng payload thành công.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [work]
       security:
       - ServiceKey: []
@@ -588,7 +588,7 @@ paths:
       summary: Đọc trạng thái operation để phục hồi retry
       description: Work phải đọc endpoint này sau timeout hoặc mất response trước khi quyết định
         retry prepare/confirm/abort. Endpoint không tự xác nhận operation.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [work]
       security:
       - ServiceKey: []
@@ -616,7 +616,7 @@ paths:
       description: Work kiểm quyền thành viên trước khi gọi. Integration chỉ trả metadata GitHub
         đã allowlist sau khi kiểm connection CONNECTED, repository/generation khớp và quyền provider
         còn hiệu lực. Không tạo TaskGitHubLink.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [work]
       security:
       - ActorBearer: []
@@ -658,7 +658,7 @@ paths:
       description: Chỉ AI gọi với service key riêng và Bearer actor. Integration fail closed khi
         Work không xác nhận action github.read. Kết quả là ContextDocument tương thích AI, tối đa
         20 item mỗi loại; không trả token, raw payload, Kafka metadata hoặc quyền hạ tầng.
-      x-utask-status: design-approved-m5
+      x-utask-status: implemented
       x-utask-callers: [ai]
       security:
       - ActorBearer: []
@@ -673,12 +673,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitHubContextDocument'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/ServiceDenied'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -783,6 +787,8 @@ components:
         minLength: 1
         maxLength: 100
         pattern: ^[A-Za-z0-9._:-]+$
+        not:
+          enum: ['.', '..']
     ServiceKeyHeader:
       name: X-Service-Key
       in: header
@@ -1186,11 +1192,14 @@ components:
           minLength: 1
           maxLength: 100
           pattern: ^[A-Za-z0-9._:-]+$
+          not:
+            enum: ['.', '..']
         action:
           enum: [CONNECT, DISCONNECT]
         expected_generation:
           type: integer
           minimum: 0
+          maximum: 9223372036854775806
         github_repo_id:
           type: [string, 'null']
           pattern: ^[1-9][0-9]{0,99}$
@@ -1217,9 +1226,12 @@ components:
           minLength: 1
           maxLength: 100
           pattern: ^[A-Za-z0-9._:-]+$
+          not:
+            enum: ['.', '..']
         generation:
           type: integer
           minimum: 1
+          maximum: 9223372036854775806
     ConnectionFact:
       type: object
       additionalProperties: false
@@ -1351,6 +1363,7 @@ components:
         generation:
           type: integer
           minimum: 1
+          maximum: 9223372036854775806
         link_type:
           enum: [BRANCH, COMMIT, PULL_REQUEST]
         ref_id:
@@ -1400,7 +1413,7 @@ components:
         url:
           type: [string, 'null']
           format: uri
-          pattern: ^https://github\.com/
+          pattern: '^https://github\.com/[^?#\s\\]+$'
           maxLength: 1000
         is_verified:
           const: true
@@ -1434,7 +1447,7 @@ components:
         url:
           type: string
           format: uri
-          pattern: ^https://github\.com/
+          pattern: '^https://github\.com/[^?#\s\\]+$'
           maxLength: 1000
         occurred_at:
           type: string

@@ -49,11 +49,11 @@ def test_openapi_separates_implemented_public_and_target_internal_security(contr
     ]
     assert prepare["security"] == [{"ActorBearer": [], "ServiceKey": []}]
     assert prepare["x-utask-callers"] == ["work"]
-    assert prepare["x-utask-status"] == "design-approved-m5"
+    assert prepare["x-utask-status"] == "implemented"
     context = contract["paths"]["/api/v1/internal/projects/{project_id}/github/context"]["get"]
     assert context["security"] == [{"ActorBearer": [], "ServiceKey": []}]
     assert context["x-utask-callers"] == ["ai"]
-    assert context["x-utask-status"] == "design-approved-m5"
+    assert context["x-utask-status"] == "implemented"
     field = GitHubAccount._meta.get_field("user_id")
     assert field.get_internal_type() == "UUIDField"
     assert field.remote_field is None
@@ -232,14 +232,14 @@ def test_unimplemented_or_legacy_provider_endpoints_are_closed(client, path):
     assert client.post(path, data={}, content_type="application/json").status_code == 404
 
 
-def test_connection_event_schema_remains_design_not_running_publisher():
+def test_connection_event_schema_matches_implemented_opt_in_publisher():
     schema = json.loads(EVENT.read_text())
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     for example in schema["examples"]:
         validator.validate(example)
         assert example["aggregate_id"] == example["payload"]["project_id"]
-    assert schema["x-utask-status"] == "design-approved-m6"
+    assert schema["x-utask-status"] == "implemented"
 
 
 @pytest.mark.parametrize(

@@ -120,6 +120,9 @@ def store_credential(*, user_id, identity):
 
 def revoke_credential(*, user_id, provider_revoked=False):
     """Caller holds generation; retained secrets are usable only by a revocation job."""
+    from apps.github_connections.services import disconnect_for_user
+
+    disconnect_for_user(user_id)
     row = GitHubCredential.objects.select_for_update().filter(user_id=user_id).first()
     if row is None or row.status == GitHubCredential.Status.REVOKED:
         return

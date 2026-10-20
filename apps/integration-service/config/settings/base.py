@@ -8,6 +8,7 @@ INSTALLED_APPS = [
     "apps.github_accounts.apps.GitHubAccountsConfig",
     "apps.github_installations",
     "apps.github_jobs",
+    "apps.github_connections",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -81,3 +82,48 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 86400.0,
     },
 }
+
+# Provider-side integration is deployed dark until Work/AI callbacks and secrets exist.
+INTEGRATION_CONNECTIONS_ENABLED = (
+    os.environ.get("INTEGRATION_CONNECTIONS_ENABLED", "false").lower() == "true"
+)
+INTEGRATION_AI_CONTEXT_ENABLED = (
+    os.environ.get("INTEGRATION_AI_CONTEXT_ENABLED", "false").lower() == "true"
+)
+INTEGRATION_SERVICE_KEYS = os.environ.get("INTEGRATION_SERVICE_KEYS", "{}")
+INTEGRATION_WORK_URL = os.environ.get("INTEGRATION_WORK_URL", "http://work-service:8000")
+INTEGRATION_WORK_SERVICE_KEY = os.environ.get("INTEGRATION_WORK_SERVICE_KEY", "")
+INTEGRATION_KAFKA_ENABLED = os.environ.get("INTEGRATION_KAFKA_ENABLED", "false").lower() == "true"
+INTEGRATION_KAFKA = {
+    "bootstrap.servers": os.environ.get("INTEGRATION_KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
+    "security.protocol": os.environ.get("INTEGRATION_KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
+    "sasl.mechanism": os.environ.get("INTEGRATION_KAFKA_SASL_MECHANISM", ""),
+    "sasl.username": os.environ.get("INTEGRATION_KAFKA_SASL_USERNAME", ""),
+    "sasl.password": os.environ.get("INTEGRATION_KAFKA_SASL_PASSWORD", ""),
+    "ssl.ca.location": os.environ.get("INTEGRATION_KAFKA_SSL_CA_LOCATION", ""),
+    "ssl.certificate.location": os.environ.get("INTEGRATION_KAFKA_SSL_CERTIFICATE_LOCATION", ""),
+    "ssl.key.location": os.environ.get("INTEGRATION_KAFKA_SSL_KEY_LOCATION", ""),
+    "ssl.key.password": os.environ.get("INTEGRATION_KAFKA_SSL_KEY_PASSWORD", ""),
+}
+if not INTEGRATION_KAFKA["security.protocol"].startswith("SASL"):
+    INTEGRATION_KAFKA.pop("sasl.mechanism")
+if INTEGRATION_KAFKA_ENABLED:
+    from apps.github_connections.publisher import build_producer_config
+
+    build_producer_config(INTEGRATION_KAFKA)
+CELERY_BEAT_SCHEDULE.update(
+    {
+        "publish-integration-outbox": {
+            "task": "apps.github_connections.tasks.publish_connection_events",
+            "schedule": 5.0,
+        },
+        "expire-integration-operations": {
+            "task": "apps.github_connections.tasks.expire_connection_operations",
+            "schedule": 60.0,
+        },
+        "cleanup-integration-outbox": {
+            "task": "apps.github_connections.tasks.cleanup_connection_events",
+            "schedule": 86400.0,
+        },
+    }
+)

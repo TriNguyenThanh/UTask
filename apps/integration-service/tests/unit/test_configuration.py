@@ -127,6 +127,7 @@ def test_production_loads_only_service_database_credentials(production_environme
         "apps.github_accounts.apps.GitHubAccountsConfig",
         "apps.github_installations",
         "apps.github_jobs",
+        "apps.github_connections",
     ]
 
 
