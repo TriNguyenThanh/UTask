@@ -22,7 +22,7 @@ const COPY = {
   },
   transfer: {
     title: "Chuyển quyền Trưởng nhóm",
-    description: "Thành viên được chọn sẽ trở thành Trưởng nhóm; bạn thành thành viên thường.",
+    description: "Thành viên được chọn sẽ trở thành Trưởng nhóm; bạn trở thành thành viên thường.",
     confirm: "Chuyển quyền",
     success: "Đã chuyển quyền Trưởng nhóm.",
   },

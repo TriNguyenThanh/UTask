@@ -48,6 +48,13 @@ describe("toCourseEnrollment", () => {
     });
   });
 
+  it("marks formation closed for archived classes and locked grouping", () => {
+    const none = { status: "none" } as const;
+    expect(toCourseEnrollment(buildClass(), buildCourse(), none).formationClosed).toBe(false);
+    expect(toCourseEnrollment(buildClass({ status: "ARCHIVED" }), buildCourse(), none).formationClosed).toBe(true);
+    expect(toCourseEnrollment(buildClass({ grouping_phase: "LOCKED" }), buildCourse(), none).formationClosed).toBe(true);
+  });
+
   it("falls back to the class code when the course is not listed", () => {
     expect(toCourseEnrollment(buildClass(), undefined, { status: "none" }).courseCode).toBe("SE100.N11");
   });

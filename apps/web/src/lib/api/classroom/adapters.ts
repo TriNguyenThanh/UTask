@@ -38,6 +38,7 @@ export function toCourseEnrollment(
     teamFormation: TEAM_FORMATION,
     projectId: null,
     membership,
+    formationClosed: cls.status !== "OPEN" || cls.grouping_phase !== "FORMING",
   };
 }
 

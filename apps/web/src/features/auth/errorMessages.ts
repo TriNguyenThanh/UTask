@@ -59,3 +59,10 @@ export function activationErrorMessage(error: ApiError): string {
 export function isInvalidResetLink(error: ApiError): boolean {
   return Boolean(error.fieldErrors.token?.length || error.fieldErrors.uid?.length || error.code === "INVALID_TOKEN");
 }
+
+/** Django trả lỗi mật khẩu cũ bằng tiếng Anh; các thông báo lạ giữ nguyên. */
+export function oldPasswordMessages(messages: readonly string[] | undefined): string[] | undefined {
+  return messages?.map((message) =>
+    /old password was entered incorrectly/i.test(message) ? "Mật khẩu hiện tại không đúng." : message,
+  );
+}

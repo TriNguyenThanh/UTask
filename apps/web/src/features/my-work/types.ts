@@ -41,6 +41,8 @@ export interface CourseEnrollment {
    */
   projectId: string | null;
   membership: TeamMembership;
+  /** Lớp đã đóng/lưu trữ hoặc đã khóa lập nhóm; vắng mặt nghĩa là còn lập nhóm được. */
+  formationClosed?: boolean;
 }
 
 export type TaskPriority = "high" | "medium" | "low";
