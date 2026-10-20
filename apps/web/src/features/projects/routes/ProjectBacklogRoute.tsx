@@ -1,5 +1,5 @@
 import { isRealService } from "@/lib/config/services";
-import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
+import { RealWorkspaceBoundary } from "@/features/projects/components/RealWorkspaceBoundary";
 import {
   BookOpen,
   Bug,
@@ -430,13 +430,14 @@ function BacklogSkeleton() {
   );
 }
 
-export default function ProjectBacklogRoute() {
+/** `real`: dữ liệu Work thật, chỉ đọc ở Phase 10; AI chưa tích hợp nên ẩn thanh AI. */
+function BacklogView({ real }: Readonly<{ real: boolean }>) {
   const navigate = useNavigate();
   const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
   // Only the leader can read project settings; nobody else asks for them.
   const { data: aiSettings } = useProjectAiSettings(
     projectId,
-    viewer.kind === "team-member" && viewer.role === "leader",
+    !real && viewer.kind === "team-member" && viewer.role === "leader",
   );
 
   const { filters, setFilters, toggleFlag, clear: clearFilters } = useIssueFilters();
@@ -464,7 +465,12 @@ export default function ProjectBacklogRoute() {
   const canCompleteSprint = canManageSprint(permCtx);
   const showCreateEpic = canCreateTask(permCtx);
 
-  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+  const mover = useIssueMover({
+    projectId,
+    workspace,
+    role: viewerRole(viewer),
+    canWrite: real ? false : undefined,
+  });
   const backlogSectionRef = useRef<HTMLElement | null>(null);
   const backlogOver = useSectionDropTarget(
     backlogSectionRef,
@@ -623,7 +629,7 @@ export default function ProjectBacklogRoute() {
           </div>
 
           {/* Leader-only toolbar */}
-          {isLeader ? (
+          {isLeader && !real ? (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-2.5">
               <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700">
                 <Sparkles className="size-4" aria-hidden />
@@ -726,7 +732,18 @@ export default function ProjectBacklogRoute() {
   );
 }
 
+export default function ProjectBacklogRoute() {
+  return <BacklogView real={false} />;
+}
+
+function RealBacklog() {
+  return (
+    <RealWorkspaceBoundary>
+      <BacklogView real />
+    </RealWorkspaceBoundary>
+  );
+}
+
 export function Component() {
-  if (isRealService("work")) return <WorkModuleNotIntegrated module="backlog" />;
-  return <ProjectBacklogRoute />;
+  return isRealService("work") ? <RealBacklog /> : <ProjectBacklogRoute />;
 }

@@ -14,7 +14,7 @@ import {
   type ProjectIssueOverlay,
 } from "@/mocks/data/studentFlow";
 import type { Issue, IssueStatus, ProjectWorkspace } from "@/features/projects/types";
-import { STATUS_LABELS } from "@/features/projects/issueMeta";
+import { DEMO_STATES, STATUS_LABELS, statusForGroup } from "@/features/projects/issueMeta";
 import type { MockCreatedTeam, MockDatabase, MockIssueState } from "@/mocks/data/database";
 import {
   accessibleProjectsForUser,
@@ -294,6 +294,8 @@ function recordIssueChange(
 function stateOf(issue: Issue): MockIssueState {
   return {
     status: issue.status,
+    statusId: issue.statusId,
+    stateGroup: issue.stateGroup,
     sprintId: issue.sprintId,
     rank: issue.rank,
     version: issue.version,
@@ -305,7 +307,7 @@ function stateOf(issue: Issue): MockIssueState {
 type ParsedMove = {
   status?: IssueStatus;
   sprintId?: string | null;
-  rank?: string;
+  rank?: number;
   reason: string;
 };
 
@@ -316,7 +318,7 @@ function parseMove(context: WriteContext): Response | ParsedMove {
   if (body.status !== undefined && !ISSUE_STATUSES.includes(body.status as IssueStatus)) {
     return validationError("status", "Trạng thái không hợp lệ.");
   }
-  if (body.rank !== undefined && (typeof body.rank !== "string" || body.rank === "")) {
+  if (body.rank !== undefined && (typeof body.rank !== "number" || !isFinite(body.rank))) {
     return validationError("rank", "Thứ tự không hợp lệ.");
   }
   const sprintId = body.sprintId as string | null | undefined;
@@ -348,7 +350,7 @@ function parseMove(context: WriteContext): Response | ParsedMove {
   return {
     status: body.status as IssueStatus | undefined,
     sprintId,
-    rank: body.rank as string | undefined,
+    rank: body.rank as number | undefined,
     reason,
   };
 }
@@ -386,9 +388,13 @@ function createIssueWriteHandlers(
       const move = parseMove(context);
       if (move instanceof Response) return move;
       const { issue, userId, workspace } = context;
+      const newStatus = move.status ?? issue.status;
+      const stateForStatus = DEMO_STATES.find((s) => statusForGroup(s.group) === newStatus) ?? DEMO_STATES[0];
       const next: MockIssueState = {
         ...stateOf(issue),
-        status: move.status ?? issue.status,
+        status: newStatus,
+        statusId: stateForStatus.id,
+        stateGroup: stateForStatus.group,
         sprintId: move.sprintId === undefined ? issue.sprintId : move.sprintId,
         rank: move.rank ?? issue.rank,
         version: issue.version + 1,

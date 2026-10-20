@@ -13,8 +13,7 @@ import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { COLUMNS } from "@/features/projects/issueMeta";
-import type { Epic, IssueDetail, IssueStatus, Sprint } from "@/features/projects/types";
+import type { Epic, IssueDetail, ProjectState, Sprint } from "@/features/projects/types";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +21,6 @@ import { cn } from "@/lib/utils";
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const STATUS_OPTIONS = COLUMNS.map((column) => ({ value: column.status, label: column.label }));
 
 const PRIORITY_LABELS: Record<string, string> = {
   high: "Cao (High)",
@@ -259,12 +257,14 @@ function IssueTitleBlock({ issue, sprint }: Readonly<{ issue: IssueDetail["issue
 }
 
 function IssueStatusField({
-  status,
+  statusId,
+  states,
   onChange,
 }: Readonly<{
-  status: IssueDetail["issue"]["status"];
+  statusId: string;
+  states: readonly ProjectState[];
   /** Present only when the viewer may change the status; otherwise the field is read-only. */
-  onChange?: (status: IssueStatus) => void;
+  onChange?: (state: ProjectState) => void;
 }>) {
   const editable = onChange !== undefined;
   return (
@@ -277,18 +277,21 @@ function IssueStatusField({
       </label>
       <select
         id="issue-status-select"
-        value={status}
+        value={statusId}
         disabled={!editable}
-        onChange={(event) => onChange?.(event.target.value as IssueStatus)}
+        onChange={(event) => {
+          const next = states.find((state) => state.id === event.target.value);
+          if (next) onChange?.(next);
+        }}
         title={editable ? undefined : "Bạn không thể đổi trạng thái của issue này"}
         className={cn(
           "mt-1.5 w-full max-w-xs rounded-md border border-outline-subtle px-3 py-1.5 text-xs font-medium",
           editable ? "bg-card" : "cursor-not-allowed bg-muted text-muted-foreground",
         )}
       >
-        {STATUS_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
+        {states.map((state) => (
+          <option key={state.id} value={state.id}>
+            {state.name}
           </option>
         ))}
       </select>
@@ -530,6 +533,8 @@ function IssueDetailBody({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly,
+  states,
+  subtasksEditable,
   onChangeStatus,
   onClose,
 }: Readonly<{
@@ -544,7 +549,9 @@ function IssueDetailBody({
   canBreakdownWithAI: boolean;
   aiKeyMissing: boolean;
   readOnly: boolean;
-  onChangeStatus?: (status: IssueStatus) => void;
+  states: readonly ProjectState[];
+  subtasksEditable: boolean;
+  onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
 }>) {
   return (
@@ -553,12 +560,12 @@ function IssueDetailBody({
 
       <div className="grid items-start gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
-          <IssueStatusField status={issue.status} onChange={onChangeStatus} />
+          <IssueStatusField statusId={issue.statusId} states={states} onChange={onChangeStatus} />
           <IssueDescription detail={detail} />
           <SubtasksSection
             subtasks={subtasks}
             onToggle={onToggleSubtask}
-            readOnly={readOnly}
+            readOnly={readOnly || !subtasksEditable}
             projectId={projectId}
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
@@ -589,6 +596,8 @@ export function IssuePanel({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly = false,
+  states,
+  subtasksEditable = true,
   onChangeStatus,
   onClose,
 }: Readonly<{
@@ -606,8 +615,12 @@ export function IssuePanel({
   aiKeyMissing: boolean;
   /** Instructor view: no subtask toggling, and a note that comments are view-only. */
   readOnly?: boolean;
+  /** Cột (trạng thái) của dự án, theo thứ tự hiển thị; là các lựa chọn của ô Trạng thái. */
+  states: readonly ProjectState[];
+  /** `false` khi chưa có API sửa nhiệm vụ con: ô đánh dấu bị khóa. */
+  subtasksEditable?: boolean;
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
-  onChangeStatus?: (status: IssueStatus) => void;
+  onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
 }>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -713,6 +726,8 @@ export function IssuePanel({
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
             readOnly={readOnly}
+            states={states}
+            subtasksEditable={subtasksEditable}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
           />

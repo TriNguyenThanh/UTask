@@ -31,7 +31,7 @@ export const projectModuleTitles = {
 
 export type ProjectModule = keyof typeof projectModuleTitles;
 
-interface ProjectWorkspaceContextValue {
+export interface ProjectWorkspaceContextValue {
   projectId: string;
   workspace: ProjectWorkspace;
   viewer: ProjectViewer;
@@ -42,6 +42,11 @@ interface ProjectWorkspaceContextValue {
 
 const ProjectWorkspaceContext =
   createContext<ProjectWorkspaceContextValue | null>(null);
+
+/** Chế độ Work thật dựng cùng context này từ API (`RealWorkspaceBoundary`) để dùng lại Board/Backlog. */
+export const ProjectWorkspaceProvider = ProjectWorkspaceContext.Provider;
+
+export const moduleOfPathname = moduleFromPathname;
 
 export function useProjectWorkspaceContext(): ProjectWorkspaceContextValue {
   const value = useContext(ProjectWorkspaceContext);

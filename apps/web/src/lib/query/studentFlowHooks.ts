@@ -320,9 +320,10 @@ export function useMoveIssue(projectId: string) {
         ...input,
         version: currentIssueVersion(queryClient, projectId, issueKey),
       }),
-    onMutate: ({ issueKey, status, sprintId, rank }: MoveIssueVariables) =>
+    onMutate: ({ issueKey, status, statusId, sprintId, rank }: MoveIssueVariables) =>
       applyOptimisticIssue(queryClient, projectId, issueKey, {
         ...(status !== undefined ? { status } : {}),
+        ...(statusId !== undefined ? { statusId } : {}),
         ...(sprintId !== undefined ? { sprintId } : {}),
         ...(rank !== undefined ? { rank } : {}),
       }),

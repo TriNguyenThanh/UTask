@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { isConflict } from "@/features/courses/lib/groupErrors";
 import { useApiClient } from "@/lib/api/ApiClientProvider";
-import { loadGroupProjects, loadProjectCards, loadProjectShell } from "@/lib/api/work/loaders";
+import type { WorkProjectShell } from "@/lib/api/work/adapters";
+import { loadGroupProjects, loadProjectCards, loadProjectShell, loadWorkspace } from "@/lib/api/work/loaders";
 import {
   createProject,
+  getTask,
   patchProject,
   setProjectArchived,
   type CreateProjectInput,
@@ -18,6 +20,8 @@ export const workKeys = {
   projects: (userId: string) => ["work", userId, "projects"] as const,
   project: (userId: string, projectId: string) => ["work", userId, "project", projectId] as const,
   groupProjects: (userId: string) => ["work", userId, "group-projects"] as const,
+  workspace: (userId: string, projectId: string) => ["work", userId, "workspace", projectId] as const,
+  task: (userId: string, taskId: string) => ["work", userId, "task", taskId] as const,
 };
 
 function useUserId(): string {
@@ -52,6 +56,27 @@ export function useGroupProjects() {
   return useQuery({
     queryKey: workKeys.groupProjects(userId),
     queryFn: () => loadGroupProjects(client),
+  });
+}
+
+/** Board/Backlog: states, epics, tasks, sprints ghép thành `ProjectWorkspace`. */
+export function useWorkspaceReal(shell: WorkProjectShell) {
+  const client = useApiClient();
+  const userId = useUserId();
+  return useQuery({
+    queryKey: workKeys.workspace(userId, shell.project.id),
+    queryFn: () => loadWorkspace(client, userId, shell),
+  });
+}
+
+/** Chi tiết task cho `IssuePanel`; `taskId` rỗng thì không gọi. */
+export function useTaskReal(taskId: string | null) {
+  const client = useApiClient();
+  const userId = useUserId();
+  return useQuery({
+    queryKey: workKeys.task(userId, taskId ?? ""),
+    queryFn: () => getTask(client, taskId ?? ""),
+    enabled: taskId !== null,
   });
 }
 

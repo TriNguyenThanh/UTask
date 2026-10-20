@@ -58,7 +58,7 @@ describe("Issue move endpoint", () => {
     const first = (await call(PROJECT, LEADER_ID)).json.issues[0];
     const last = (await call(PROJECT, LEADER_ID)).json.issues.at(-1);
     const moved = await call(`${PROJECT}/issues/${last.key}/move`, LEADER_ID, {
-      rank: "!",
+      rank: 0.5,
       version: last.version,
     });
     expect(moved.status).toBe(200);
@@ -86,7 +86,7 @@ describe("Issue move endpoint", () => {
   it("refuses a member who tries to reorder or change the sprint of their own task", async () => {
     useRepo();
     const own = await workspaceIssue(MEMBER_ID, "NEXUS-101");
-    for (const extra of [{ rank: "!" }, { sprintId: "sprint-3" }]) {
+    for (const extra of [{ rank: 0.5 }, { sprintId: "sprint-3" }]) {
       const response = await call(`${PROJECT}/issues/NEXUS-101/move`, MEMBER_ID, {
         version: own.version,
         ...extra,
@@ -162,7 +162,7 @@ describe("Issue move endpoint", () => {
     expect(after.totalPoints).toBe(sprint2.totalPoints + issue.storyPoints);
   });
 
-  it("rejects an unknown status or sprint", async () => {
+  it("rejects an unknown status, sprint, or non-numeric rank", async () => {
     useRepo();
     const issue = await workspaceIssue(LEADER_ID, "NEXUS-101");
     expect(
@@ -171,6 +171,14 @@ describe("Issue move endpoint", () => {
     ).toBe(422);
     expect(
       (await call(`${PROJECT}/issues/NEXUS-101/move`, LEADER_ID, { sprintId: "sprint-1", version: issue.version }))
+        .status,
+    ).toBe(422);
+    expect(
+      (await call(`${PROJECT}/issues/NEXUS-101/move`, LEADER_ID, { rank: "x", version: issue.version }))
+        .status,
+    ).toBe(422);
+    expect(
+      (await call(`${PROJECT}/issues/NEXUS-101/move`, LEADER_ID, { rank: NaN, version: issue.version }))
         .status,
     ).toBe(422);
   });

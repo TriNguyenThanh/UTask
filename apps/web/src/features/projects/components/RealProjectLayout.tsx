@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from "react";
-import { Link, Outlet, useParams } from "react-router-dom";
+import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -68,6 +68,13 @@ export function RealProjectLayout() {
   return <RealProjectLayoutInner projectId={projectId} shell={query.data} />;
 }
 
+/** Các tab đã nối API Work; Mã nguồn và Cài đặt thêm vào khi tích hợp xong. */
+const REAL_TABS = [
+  { id: "backlog", label: "Backlog" },
+  { id: "board", label: "Bảng công việc" },
+  { id: "info", label: "Thông tin" },
+] as const;
+
 function RealProjectLayoutInner({
   projectId,
   shell,
@@ -84,13 +91,16 @@ function RealProjectLayoutInner({
   const isArchived = project.archived_at !== null;
   const isReadOnly = shell.myRole === null;
 
+  const { pathname } = useLocation();
+  // Board chiếm trọn chiều cao viewport trên desktop để từng cột tự cuộn.
+  const onBoard = pathname === `/projects/${projectId}/board`;
   // Build subtitle line (drop empty parts)
   const parts = [shell.classCode, shell.className, shell.groupName].filter(Boolean);
   const subtitle = parts.join(" • ");
 
   return (
     <RealProjectContext.Provider value={contextValue}>
-      <div className="flex min-h-full flex-col">
+      <div className={onBoard ? "flex min-h-full flex-col lg:h-full" : "flex min-h-full flex-col"}>
         <header className="shrink-0 border-b px-4 pt-4 md:px-6">
           <Breadcrumbs
             items={[
@@ -121,13 +131,20 @@ function RealProjectLayoutInner({
             aria-label="Project navigation"
             className={`${segmentedTabsListClass} my-3`}
           >
-            <Link
-              to={`/projects/${projectId}/info`}
-              aria-current="page"
-              className={segmentedTabClass(true)}
-            >
-              Thông tin
-            </Link>
+            {REAL_TABS.map((tab) => {
+              const to = `/projects/${projectId}/${tab.id}`;
+              const isActive = pathname === to;
+              return (
+                <Link
+                  key={tab.id}
+                  to={to}
+                  aria-current={isActive ? "page" : undefined}
+                  className={segmentedTabClass(isActive)}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
           </nav>
         </header>
         <Outlet />

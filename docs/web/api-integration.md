@@ -50,7 +50,8 @@ VITE_API_BASE_URL=
 | 7 | Classroom: giảng viên đọc lớp, tạo lớp, sửa lớp, trạng thái lớp, mã tham gia, chốt lập nhóm, thêm giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
 | 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Một phần (đã smoke API thật và trình duyệt; xem giới hạn) |
 | 9 | Work Project: danh sách dự án của tôi, vỏ dự án + trang Thông tin & thành viên, tạo dự án từ trang nhóm (Leader), sửa/lưu trữ/mở lại dự án, lấp `project` ở trang giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
-| 10+ | Work (Board, Backlog, Sprint, Task, Comment, Dashboard, GitHub, AI), Admin | Chưa triển khai |
+| 10 | Work: Board và Backlog chỉ đọc (cột theo `State` của dự án, sprint, epic, panel chi tiết task) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
+| 11+ | Work (ghi task, epic/nhãn, sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -272,7 +273,8 @@ viên đã bị loại (B12).
 ## Work Project (Phase 9)
 
 Chạy khi `VITE_REAL_SERVICES` có `work`. Kế hoạch chi tiết:
-[work-api-intergration-plan.md](work-api-intergration-plan.md).
+[work-api-intergration-plan.md](work-api-intergration-plan.md). Kế hoạch các phần
+Work còn lại (Phase 10–15, không gồm AI): [work-full-integration-plan.md](work-full-integration-plan.md).
 
 | Việc | API | Ghi chú |
 |---|---|---|
@@ -297,6 +299,34 @@ Chưa làm trong Phase 9: Board, Backlog, Sprint, Task, Comment, Dashboard,
 GitHub, AI (B14); sidebar và My Work vẫn chạy MSW (B20), nên ở chế độ thật
 `CourseEnrollment.projectId` không có người tiêu thụ; dự án smoke chỉ lưu trữ
 được vì Work không có API xóa (B18).
+
+## Work Board và Backlog chỉ đọc (Phase 10)
+
+Chạy khi `VITE_REAL_SERVICES` có `work`. Kế hoạch: [work-full-integration-plan.md](work-full-integration-plan.md).
+Mã ở `lib/api/work/` (`endpoints.{projects,tasks,sprints}.ts`, `workspaceAdapters.ts`,
+`loaders.ts` → `loadWorkspace`) và hook `useWorkspaceReal`, `useTaskReal` trong
+`lib/query/workHooks.ts`. Board/Backlog dùng lại component demo qua
+`ProjectWorkspaceContext`; `RealWorkspaceBoundary` nạp dữ liệu thật. Mọi thao
+tác ghi tắt (`canWrite=false`) cho đến Phase 11; thanh AI và liên kết AI key ẩn.
+
+Quyết định: cột Board là các `State` của dự án theo `sequence` (cột `CANCELLED` ẩn);
+`rank` là số `sort_order`; Board/Backlog đọc `GET /projects/{id}/tasks/?expand=…`;
+quan hệ task↔sprint dựng từ `tasks?sprint_id=<id>` cho sprint chưa `COMPLETED`;
+mô tả hiển thị `description_stripped`, không render `description_html`.
+
+Đã smoke trình duyệt trên staging (Leader, Teacher): Board có đủ 5 cột theo state,
+thẻ đúng cột, Backlog tách sprint/Product Backlog, lọc theo epic, panel `?issue=`
+hiện trạng thái thật của task. Tải workspace mất khoảng 8–11 giây (phần lớn do
+`members` chậm, B21).
+
+Giới hạn đã biết:
+
+- Ưu tiên `URGENT` hiển thị là "Cao"; chỉ hiện người được giao đầu tiên; `hasPullRequest` luôn `false`.
+- Người được giao hiện "?" khi `display_name` rỗng (B21).
+- Bình luận, lịch sử và liên kết GitHub trong panel trống cho đến Phase 14; nhiệm vụ con chỉ đọc.
+- Task đã xong trong sprint `COMPLETED` hiện như nằm ngoài sprint (D4).
+- Dòng Backlog hiện trạng thái suy ra từ nhóm state ("Cần làm" cho cả Backlog và To Do); Board và panel hiện đúng tên state.
+- `planMove` so sánh `status` suy ra, chưa so `statusId`: cần sửa ở Phase 11 khi bật kéo thả thật.
 
 ## Việc cần backend (tổng hợp)
 

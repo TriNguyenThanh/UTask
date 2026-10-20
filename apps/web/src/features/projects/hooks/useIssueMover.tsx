@@ -7,7 +7,7 @@ import {
 import type {
   IssueMenuGroup,
 } from "@/features/projects/components/IssueActionsMenu";
-import { COLUMNS, STATUS_LABELS } from "@/features/projects/issueMeta";
+import { DEMO_STATES, STATUS_LABELS, statusForGroup } from "@/features/projects/issueMeta";
 import {
   planMove,
   planReorderToEdge,
@@ -32,11 +32,11 @@ interface FocusRequest {
   key: string;
   status: IssueStatus;
   sprintId: string | null;
-  rank: string;
+  rank: number;
 }
 
 /** 1-based place `rank` takes among `destination` once `issue` is moved there. */
-function positionAfterMove(destination: readonly Issue[], issue: Issue, rank: string): number {
+function positionAfterMove(destination: readonly Issue[], issue: Issue, rank: number): number {
   return destination.filter((other) => other.key !== issue.key && other.rank < rank).length + 1;
 }
 
@@ -54,14 +54,29 @@ function sprintName(workspace: ProjectWorkspace, sprintId: string | null): strin
  * `enabled` is false for an instructor and whenever the demo writes are off;
  * then `requestMove` does nothing and `menuFor` returns no groups.
  */
+/** Public contract of the mover returned by `useIssueMover`. */
+export interface IssueMover {
+  enabled: boolean;
+  role: TeamRole | null;
+  flashKey: string | null;
+  canDragIssue: (issue: Issue) => boolean;
+  requestMove: (drop: MoveDrop) => void;
+  toggleBlocked: (issue: Issue) => void;
+  menuFor: (issue: Issue, context: { kind: "board" | "backlog"; destination: readonly Issue[] }) => IssueMenuGroup[];
+  dialog: ReactNode;
+}
+
 export function useIssueMover({
   projectId,
   workspace,
   role,
+  canWrite = demoWritesEnabled(),
 }: Readonly<{
   projectId: string;
   workspace: ProjectWorkspace;
   role: TeamRole | null;
+  /** Mặc định theo cờ ghi của demo; chế độ Work thật truyền `false` cho tới khi nối API ghi. */
+  canWrite?: boolean;
 }>) {
   const moveMutation = useMoveIssue(projectId);
   const blockMutation = useSetIssueBlocked(projectId);
@@ -70,7 +85,7 @@ export function useIssueMover({
   const focusRequest = useRef<FocusRequest | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const enabled = demoWritesEnabled() && role !== null;
+  const enabled = canWrite && role !== null;
   const activeSprintIds = useMemo(
     () => new Set(workspace.sprints.filter((sprint) => sprint.state === "active").map((s) => s.id)),
     [workspace.sprints],
@@ -114,6 +129,7 @@ export function useIssueMover({
       moveMutation.mutate({
         issueKey: issue.key,
         ...(intent.status !== undefined ? { status: intent.status } : {}),
+        ...(intent.statusId !== undefined ? { statusId: intent.statusId } : {}),
         ...(intent.sprintId !== undefined ? { sprintId: intent.sprintId } : {}),
         ...(intent.rank !== undefined ? { rank: intent.rank } : {}),
         ...(reason ? { reason } : {}),
@@ -185,12 +201,16 @@ export function useIssueMover({
       const groups: IssueMenuGroup[] = [];
 
       if (context.kind === "board") {
+        const states = (workspace.states.length > 0 ? workspace.states : DEMO_STATES)
+          .filter((s) => s.group !== "CANCELLED" && s.id !== issue.statusId)
+          .sort((a, b) => a.sequence - b.sequence);
         groups.push({
           label: "Chuyển trạng thái",
-          items: COLUMNS.filter((column) => column.status !== issue.status).map((column) => ({
-            id: `status-${column.status}`,
-            label: `Chuyển sang ${column.label}`,
-            onSelect: () => requestMove({ issue, toStatus: column.status, destination: [] }),
+          items: states.map((s) => ({
+            id: `status-${s.id}`,
+            label: `Chuyển sang ${s.name}`,
+            onSelect: () =>
+              requestMove({ issue, toStatus: statusForGroup(s.group), toStateId: s.id, destination: [] }),
           })),
         });
       }
@@ -237,7 +257,7 @@ export function useIssueMover({
       });
       return groups;
     },
-    [activeSprintIds, canTouch, requestMove, role, run, toggleBlocked, workspace.sprints],
+    [activeSprintIds, canTouch, requestMove, role, run, toggleBlocked, workspace.sprints, workspace.states],
   );
 
   const dialog: ReactNode = (

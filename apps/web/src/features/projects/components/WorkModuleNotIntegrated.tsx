@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/feedback/EmptyState";
 
 const MODULE_TITLES: Record<string, string> = {
-  backlog: "Backlog chưa khả dụng",
-  board: "Bảng công việc chưa khả dụng",
   code: "Mã nguồn chưa khả dụng",
   settings: "Cài đặt AI chưa khả dụng",
 };

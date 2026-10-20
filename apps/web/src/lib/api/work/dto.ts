@@ -1,6 +1,6 @@
 /**
  * DTO của Work Service (`/api/work`), nguồn Work OpenAPI 1.4, đối chiếu serializer
- * ngày 19/10/2026. Chỉ gồm phần Project; Board/Backlog/Sprint chưa tích hợp.
+ * ngày 19/10/2026. Gồm Project, State, Epic, Label, Sprint và Task (đọc).
  */
 
 export type ProjectMemberRole = "LEADER" | "MEMBER";
@@ -48,4 +48,113 @@ export interface ProjectMemberDto {
   joined_at: string;
   left_at: string | null;
   updated_at: string;
+}
+
+export type StateGroupDto = "BACKLOG" | "UNSTARTED" | "STARTED" | "REVIEW" | "COMPLETED" | "CANCELLED";
+export type TaskTypeDto = "TASK" | "BUG" | "STORY" | "SUBTASK";
+export type TaskPriorityDto = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type SprintStatusDto = "DRAFT" | "ACTIVE" | "COMPLETED";
+export type EpicStatusDto = "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+
+export interface StateDto {
+  id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  color: string;
+  sequence: number;
+  group: StateGroupDto;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface EpicDto {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  lead_user_id: string | null;
+  status: EpicStatusDto;
+  start_date: string | null;
+  target_date: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface LabelDto {
+  id: string;
+  project_id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface SprintDto {
+  id: string;
+  project_id: string;
+  name: string;
+  goal: string;
+  status: SprintStatusDto;
+  start_date: string | null;
+  end_date: string | null;
+  sort_order: number;
+  version: number;
+  started_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface TaskAssigneeDto {
+  user_id: string;
+  /** Có thể rỗng khi `UserProjection` chưa đồng bộ. */
+  display_name: string;
+  avatar_url: string | null;
+}
+
+/** Task theo `TaskSerializer`; các khóa `state/epic/labels/assignees` chỉ có khi truyền `expand`. */
+export interface TaskDto {
+  id: string;
+  project_id: string;
+  sequence_id: number;
+  /** Ví dụ `NEXUS-12`. */
+  code: string;
+  epic_id: string | null;
+  state_id: string;
+  parent_id: string | null;
+  type: TaskTypeDto;
+  source: string;
+  acceptance_criteria: string;
+  version: number;
+  title: string;
+  /** Không render (repo chưa có thư viện làm sạch HTML); dùng `description_stripped`. */
+  description_html: string;
+  description_stripped: string;
+  priority: TaskPriorityDto;
+  story_points: number | null;
+  due_date: string | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  sort_order: number;
+  created_by_user_id: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  deleted_at: string | null;
+  assignee_ids: string[];
+  label_ids: string[];
+  subtasks_count: number;
+  comments_count: number;
+  attachments_count: number;
+  state?: StateDto;
+  epic?: EpicDto | null;
+  labels?: LabelDto[];
+  assignees?: TaskAssigneeDto[];
+  /** Chỉ có ở trang chi tiết (`expand=subtasks`). */
+  subtasks?: TaskDto[];
 }

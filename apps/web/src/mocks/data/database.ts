@@ -76,7 +76,7 @@ export interface MockCreatedTeam {
 /** Fields of an issue that a write can change; only issues that were changed are stored. */
 export type MockIssueState = Pick<
   Issue,
-  "status" | "sprintId" | "rank" | "version" | "blocked" | "blockedReason"
+  "status" | "statusId" | "stateGroup" | "sprintId" | "rank" | "version" | "blocked" | "blockedReason"
 >;
 
 export interface MockDatabase {
