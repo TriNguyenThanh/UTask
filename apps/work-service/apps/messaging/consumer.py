@@ -15,13 +15,31 @@ class PoisonEvent(ValueError):
     pass
 
 
-def validate_identity_event(event):
+PROFILE_EVENT_TYPES = frozenset({"identity.user.created", "identity.user.updated"})
+NON_PROFILE_EVENT_TYPES = frozenset(
+    {
+        "identity.user.activated",
+        "identity.user.status_changed",
+        "identity.user.role_assigned",
+        "identity.user.role_revoked",
+        "identity.activation.requested",
+        "identity.student.imported",
+        "identity.password_reset.requested",
+        "identity.oauth.github_linked",
+        "identity.oauth.github_unlinked",
+    }
+)
+
+
+def validate_identity_envelope(event):
+    """Check shared Identity v1 binding without reading other consumers' payloads."""
     if (
         not isinstance(event, dict)
         or event.get("producer") != "identity-service"
         or type(event.get("event_version")) is not int
         or event["event_version"] != 1
-        or event.get("event_type") not in {"identity.user.created", "identity.user.updated"}
+        or not isinstance(event.get("event_type"), str)
+        or event.get("event_type") not in PROFILE_EVENT_TYPES | NON_PROFILE_EVENT_TYPES
     ):
         raise PoisonEvent("Unsupported Identity event contract")
     try:
@@ -33,9 +51,20 @@ def validate_identity_event(event):
             not isinstance(stamp, datetime)
             or stamp.tzinfo is None
             or event["aggregate_id"] != str(user_id)
-            or not isinstance(data["display_name"], str)
-            or len(data["display_name"]) > 200
         ):
+            raise ValueError()
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise PoisonEvent("Invalid Identity envelope") from exc
+    return user_id, stamp
+
+
+def validate_identity_event(event):
+    user_id, stamp = validate_identity_envelope(event)
+    if event["event_type"] not in PROFILE_EVENT_TYPES:
+        raise PoisonEvent("Not an Identity profile event")
+    try:
+        data = event["data"]
+        if not isinstance(data["display_name"], str) or len(data["display_name"]) > 200:
             raise ValueError()
         avatar = data.get("avatar_url")
         if avatar is not None and (
@@ -111,7 +140,15 @@ def process_record(record, broker, *, consume=consume_event, dlq):
 
     try:
         event = json.loads(record.value())
-        consume(event)
+        if (
+            isinstance(event, dict)
+            and isinstance(event.get("event_type"), str)
+            and event["event_type"] in NON_PROFILE_EVENT_TYPES
+        ):
+            # Other consumers own these events. Do not decode mail or write projections.
+            validate_identity_envelope(event)
+        else:
+            consume(event)
     except (PoisonEvent, json.JSONDecodeError, UnicodeError) as exc:
         dlq.publish(record, reason=type(exc).__name__)
     broker.commit(message=record, asynchronous=False)

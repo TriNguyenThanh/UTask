@@ -1,13 +1,83 @@
 import io
+import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from django.core.management.base import CommandError
 
-from apps.messaging.consumer import PoisonEvent, validate_identity_event
+from apps.messaging.consumer import PoisonEvent, process_record, validate_identity_event
 from apps.messaging.management.commands.consume_identity import Command
+from tests.fixtures.identity import identity_event
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        "identity.user.activated",
+        "identity.user.status_changed",
+        "identity.user.role_assigned",
+        "identity.user.role_revoked",
+        "identity.activation.requested",
+        "identity.student.imported",
+        "identity.password_reset.requested",
+        "identity.oauth.github_linked",
+        "identity.oauth.github_unlinked",
+    ],
+)
+def test_valid_non_profile_identity_event_advances_without_effect_or_dlq(event_type):
+    event = identity_event(uuid4())
+    event["event_type"] = event_type
+    event["data"] = {"user_id": event["aggregate_id"], "secret": {"ciphertext": "not-decoded"}}
+    record = SimpleNamespace(value=lambda: json.dumps(event).encode())
+    consume, dlq, broker = Mock(), Mock(), Mock()
+    process_record(record, broker, consume=consume, dlq=dlq)
+    consume.assert_not_called()
+    dlq.publish.assert_not_called()
+    broker.commit.assert_called_once_with(message=record, asynchronous=False)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"event_version": 2},
+        {"event_version": True},
+        {"producer": "other-service"},
+        {"event_type": "identity.unknown"},
+        {"event_type": []},
+        {"occurred_at": "not-a-date"},
+        {"aggregate_id": str(uuid4())},
+        {"event_id": "not-a-uuid"},
+        {"data": {}},
+    ],
+)
+def test_invalid_identity_event_still_waits_for_dlq_ack_before_offset(change):
+    event = identity_event(uuid4())
+    event["event_type"] = "identity.activation.requested"
+    event["data"] = {"user_id": event["aggregate_id"]}
+    event.update(change)
+    record = SimpleNamespace(value=lambda: json.dumps(event).encode())
+    calls = []
+    dlq, broker = Mock(), Mock()
+    dlq.publish.side_effect = lambda *args, **kwargs: calls.append("dlq-ack")
+    broker.commit.side_effect = lambda **kwargs: calls.append("commit")
+    process_record(record, broker, dlq=dlq)
+    assert calls == ["dlq-ack", "commit"]
+    dlq.publish.assert_called_once_with(record, reason="PoisonEvent")
+
+
+def test_invalid_non_profile_event_does_not_advance_when_dlq_fails():
+    event = identity_event(uuid4())
+    event.update(event_type="identity.user.activated", event_version=2)
+    record = SimpleNamespace(value=lambda: json.dumps(event).encode())
+    dlq, broker = Mock(), Mock()
+    dlq.publish.side_effect = RuntimeError("DLQ not acknowledged")
+    with pytest.raises(RuntimeError, match="DLQ not acknowledged"):
+        process_record(record, broker, dlq=dlq)
+    broker.commit.assert_not_called()
 
 
 @pytest.mark.parametrize(
