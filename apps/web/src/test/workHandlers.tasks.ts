@@ -1,6 +1,6 @@
 import { http, type HttpHandler } from "msw";
 
-import type { EpicDto, LabelDto, SprintDto, StateDto, TaskDto } from "@/lib/api/work/dto";
+import type { EpicDto, LabelDto, RelationDto, RelationTypeDto, SprintDto, StateDto, TaskDto } from "@/lib/api/work/dto";
 import { envelope, envelopeError } from "@/test/classroomHandlers";
 import { failure, listResponse, record, type BaseWorkFixture, type WorkError } from "@/test/workHandlers.shared";
 
@@ -117,7 +117,16 @@ export function buildTask(overrides: Partial<TaskDto> = {}): TaskDto {
   };
 }
 
+/** Liên kết lưu theo dạng chuẩn của backend: `BLOCKED_BY` được lưu thành `BLOCKS` đảo chiều. */
+export interface StoredRelation {
+  id: string;
+  task_id: string;
+  related_task_id: string;
+  relation_type: Exclude<RelationTypeDto, "BLOCKED_BY">;
+}
+
 export interface TaskFixture extends BaseWorkFixture {
+  relations?: StoredRelation[];
   states?: StateDto[];
   epics?: EpicDto[];
   labels?: LabelDto[];
@@ -136,6 +145,22 @@ export interface TaskFixture extends BaseWorkFixture {
 
 const TASK_QUERY_KEYS = new Set(["cursor", "page_size", "status", "fields", "expand", "sprint_id", "state_id", "epic_id", "parent_id", "type", "priority", "is_blocked", "due_date_from", "due_date_to", "assignee_id", "label_id", "search"]);
 
+/** Góc nhìn của `task`: liên kết `BLOCKS` lưu ngược thì hiện là `BLOCKED_BY`. */
+function relationsOf(task: TaskDto, fixture: TaskFixture): RelationDto[] {
+  return (fixture.relations ?? [])
+    .filter((relation) => relation.task_id === task.id || relation.related_task_id === task.id)
+    .map((relation) => {
+      const otherId = relation.task_id === task.id ? relation.related_task_id : relation.task_id;
+      return {
+        id: relation.id,
+        related_task_id: otherId,
+        related_task_code: fixture.tasks?.find((other) => other.id === otherId)?.code ?? otherId,
+        relation_type:
+          relation.relation_type === "BLOCKS" && relation.related_task_id === task.id ? "BLOCKED_BY" : relation.relation_type,
+      };
+    });
+}
+
 function expandTask(task: TaskDto, expand: string[], fixture: TaskFixture): TaskDto {
   const result: TaskDto = { ...task };
   if (expand.includes("state")) {
@@ -153,6 +178,9 @@ function expandTask(task: TaskDto, expand: string[], fixture: TaskFixture): Task
       display_name: fixture.userNames?.[userId] ?? "",
       avatar_url: null,
     }));
+  }
+  if (expand.includes("relations")) {
+    result.relations = relationsOf(task, fixture);
   }
   if (expand.includes("subtasks")) {
     result.subtasks = (fixture.tasks ?? []).filter((candidate) => candidate.parent_id === task.id);
@@ -182,7 +210,13 @@ export function taskHandlers(fixture: TaskFixture): HttpHandler[] {
           return envelopeError(422, "VALIDATION_ERROR", "Tham số truy vấn không được hỗ trợ.");
         }
       }
-      let rows = (fixture.tasks ?? []).filter((task) => task.archived_at === null && task.deleted_at === null);
+      const scope = url.searchParams.get("status") ?? "active";
+      let rows = (fixture.tasks ?? []).filter((task) => {
+        if (scope === "deleted") return task.deleted_at !== null;
+        if (scope === "archived") return task.archived_at !== null && task.deleted_at === null;
+        if (scope === "all") return true;
+        return task.archived_at === null && task.deleted_at === null;
+      });
       const stateFilter = url.searchParams.get("state_id");
       if (stateFilter) rows = rows.filter((task) => task.state_id === stateFilter);
       const sprintId = url.searchParams.get("sprint_id");

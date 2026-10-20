@@ -14,13 +14,22 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
+import { useAuth } from "@/features/auth/AuthProvider";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CreateEpicButton,
+  EpicEditButton,
+  LabelManagerButton,
+  ScopedTaskList,
+  TaskScopeTabs,
+} from "@/features/projects/components/RealBacklogTools";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
@@ -48,6 +57,7 @@ import {
   viewerRole,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
+import type { TaskScopeDto } from "@/lib/api/work/dto";
 import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
@@ -433,7 +443,9 @@ function BacklogSkeleton() {
 /** `real`: dữ liệu Work thật, chỉ đọc ở Phase 10; AI chưa tích hợp nên ẩn thanh AI. */
 function BacklogView({ real }: Readonly<{ real: boolean }>) {
   const navigate = useNavigate();
-  const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
+  const { projectId, workspace: data, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
+  const { user } = useAuth();
+  const [scope, setScope] = useState<TaskScopeDto>("active");
   // Only the leader can read project settings; nobody else asks for them.
   const { data: aiSettings } = useProjectAiSettings(
     projectId,
@@ -463,7 +475,8 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
   const isLeader = permCtx.role === "leader";
   const needsAiKey = aiRequiresKey(permCtx);
   const canCompleteSprint = canManageSprint(permCtx);
-  const showCreateEpic = canCreateTask(permCtx);
+  const realCanWrite = real && !archived && !readOnly;
+  const showCreateEpic = real ? realCanWrite && isLeader : canCreateTask(permCtx);
 
   const mover = useIssueMover({
     projectId,
@@ -547,16 +560,20 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
               Epics
             </span>
             {showCreateEpic ? (
-              <Button
-                variant="link"
-                size="xs"
-                disabled
-                title="Chưa có API tạo Epic"
-                className="h-auto p-0 text-xs"
-              >
-                <Plus className="size-3.5" aria-hidden />
-                Tạo Epic
-              </Button>
+              real ? (
+                <CreateEpicButton projectId={projectId} assignees={assignees} />
+              ) : (
+                <Button
+                  variant="link"
+                  size="xs"
+                  disabled
+                  title="Chưa có API tạo Epic"
+                  className="h-auto p-0 text-xs"
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  Tạo Epic
+                </Button>
+              )
             ) : null}
           </div>
           <div className="space-y-1">
@@ -585,9 +602,8 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
               const count = workspace.issues.filter(
                 (issue) => issue.epicId === epic.id,
               ).length;
-              return (
+              const row = (
                 <button
-                  key={epic.id}
                   type="button"
                   onClick={() => setEpicFilter(epic.id)}
                   aria-pressed={epicFilter === epic.id}
@@ -611,8 +627,26 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
                   </span>
                 </button>
               );
+              if (!real || !user || !realCanWrite) return <Fragment key={epic.id}>{row}</Fragment>;
+              return (
+                <div key={epic.id} className="flex items-center gap-0.5">
+                  {row}
+                  <EpicEditButton
+                    projectId={projectId}
+                    epic={epic}
+                    role={isLeader ? "leader" : "member"}
+                    userId={user.id}
+                    assignees={assignees}
+                  />
+                </div>
+              );
             })}
           </div>
+          {real && realCanWrite && isLeader ? (
+            <div className="mt-3 border-t pt-2">
+              <LabelManagerButton projectId={projectId} />
+            </div>
+          ) : null}
         </aside>
 
         {/* Sprints + backlog */}
@@ -628,6 +662,8 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
             />
           </div>
 
+          {real ? <TaskScopeTabs scope={scope} onChange={setScope} /> : null}
+
           {/* Leader-only toolbar */}
           {isLeader && !real ? (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-2.5">
@@ -642,7 +678,9 @@ function BacklogView({ real }: Readonly<{ real: boolean }>) {
             </div>
           ) : null}
 
-          {filteredIssues.length === 0 ? (
+          {real && scope !== "active" ? (
+            <ScopedTaskList projectId={projectId} scope={scope} canRestore={realCanWrite && isLeader} />
+          ) : filteredIssues.length === 0 ? (
             <EmptyState
               title={filtersActive ? "Không có issue khớp bộ lọc" : "Backlog trống"}
               description={emptyBacklogDescription(filtersActive, readOnly)}

@@ -1,6 +1,15 @@
 import type { ApiClient } from "@/lib/api/client";
 import { collectAllPages } from "@/lib/api/pagination";
-import type { EpicDto, LabelDto, StateDto, TaskDto, TaskPriorityDto } from "@/lib/api/work/dto";
+import type {
+  EpicDto,
+  EpicStatusDto,
+  LabelDto,
+  RelationTypeDto,
+  StateDto,
+  TaskDto,
+  TaskPriorityDto,
+  TaskScopeDto,
+} from "@/lib/api/work/dto";
 import { fetchPage, ROOT } from "@/lib/api/work/endpoints.shared";
 
 const project = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
@@ -32,7 +41,7 @@ export function listTasks(client: ApiClient, projectId: string, options: ListTas
 }
 
 /** Chi tiết task; backend chỉ cho `relations/subtasks/attachments/github_links` ở trang chi tiết. */
-export async function getTask(client: ApiClient, taskId: string, expand = "state,epic,labels,assignees,subtasks") {
+export async function getTask(client: ApiClient, taskId: string, expand = "state,epic,labels,assignees,subtasks,relations") {
   const { data } = await client.requestEnvelope<TaskDto>(
     `${ROOT}/tasks/${encodeURIComponent(taskId)}/?expand=${encodeURIComponent(expand)}`,
   );
@@ -184,4 +193,140 @@ export async function listTaskOrderInState(client: ApiClient, projectId: string,
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
     .map((row) => row.id);
+}
+
+/** Task đã lưu trữ hoặc đã xóa mềm (danh sách mặc định chỉ có task đang hoạt động). */
+export function listTasksInScope(client: ApiClient, projectId: string, scope: TaskScopeDto) {
+  return collectAllPages((cursor) =>
+    fetchPage<TaskDto>(client, `${project(projectId)}/tasks/`, { cursor, params: { status: scope } }));
+}
+
+/** Lưu trữ/mở lại/xóa mềm/khôi phục: chỉ Leader, không gửi `Idempotency-Key`. `delete` xóa cả cây con. */
+export type TaskLifecycleAction = "archive" | "unarchive" | "delete" | "restore";
+
+export async function changeTaskLifecycle(
+  client: ApiClient,
+  taskId: string,
+  action: TaskLifecycleAction,
+  expectedVersion: number,
+) {
+  const { data } = await client.requestEnvelope<TaskDto>(
+    action === "delete" ? `${task(taskId)}/` : `${task(taskId)}/${action}/`,
+    { method: action === "delete" ? "DELETE" : "POST", body: { expected_version: expectedVersion } },
+  );
+  return data;
+}
+
+export async function setTaskLabels(
+  client: ApiClient,
+  taskId: string,
+  input: { expectedVersion: number; action: "ADD" | "REMOVE"; labelIds: string[] },
+) {
+  const { data } = await client.requestEnvelope<TaskDto>(`${task(taskId)}/labels/`, {
+    method: "POST",
+    body: { expected_version: input.expectedVersion, action: input.action, label_ids: input.labelIds },
+  });
+  return data;
+}
+
+export async function createRelation(
+  client: ApiClient,
+  taskId: string,
+  input: { relatedTaskId: string; relationType: RelationTypeDto },
+) {
+  const { data } = await client.requestEnvelope<{ id: string }>(`${task(taskId)}/relations/`, {
+    method: "POST",
+    body: { related_task_id: input.relatedTaskId, relation_type: input.relationType },
+  });
+  return data;
+}
+
+export async function deleteRelation(client: ApiClient, taskId: string, relationId: string) {
+  const { data } = await client.requestEnvelope<{ deleted_relation_id: string }>(
+    `${task(taskId)}/relations/${encodeURIComponent(relationId)}/`,
+    { method: "DELETE" },
+  );
+  return data;
+}
+
+export interface EpicInput {
+  name?: string;
+  description?: string;
+  leadUserId?: string | null;
+  status?: EpicStatusDto;
+  startDate?: string | null;
+  targetDate?: string | null;
+}
+
+function epicBody(input: EpicInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (input.name !== undefined) body.name = input.name;
+  if (input.description !== undefined) body.description = input.description;
+  if (input.leadUserId !== undefined) body.lead_user_id = input.leadUserId;
+  if (input.status !== undefined) body.status = input.status;
+  if (input.startDate !== undefined) body.start_date = input.startDate;
+  if (input.targetDate !== undefined) body.target_date = input.targetDate;
+  return body;
+}
+
+const epics = (projectId: string) => `${ROOT}${project(projectId)}/epics/`;
+const labels = (projectId: string) => `${ROOT}${project(projectId)}/labels/`;
+
+export async function createEpic(client: ApiClient, projectId: string, input: EpicInput & { name: string }) {
+  const { data } = await client.requestEnvelope<EpicDto>(epics(projectId), { method: "POST", body: epicBody(input) });
+  return data;
+}
+
+/** Epic không có `version`: backend ghi đè theo khóa gửi lên. */
+export async function patchEpic(client: ApiClient, projectId: string, epicId: string, input: EpicInput) {
+  const { data } = await client.requestEnvelope<EpicDto>(`${epics(projectId)}${encodeURIComponent(epicId)}/`, {
+    method: "PATCH",
+    body: epicBody(input),
+  });
+  return data;
+}
+
+export async function deleteEpic(client: ApiClient, projectId: string, epicId: string) {
+  const { data } = await client.requestEnvelope<{ deleted_epic_id: string }>(
+    `${epics(projectId)}${encodeURIComponent(epicId)}/`,
+    { method: "DELETE" },
+  );
+  return data;
+}
+
+export interface LabelInput {
+  name: string;
+  /** `#RRGGBB`. */
+  color: string;
+  description?: string | null;
+}
+
+export async function createLabel(client: ApiClient, projectId: string, input: LabelInput) {
+  const { data } = await client.requestEnvelope<LabelDto>(labels(projectId), { method: "POST", body: labelBody(input) });
+  return data;
+}
+
+function labelBody(input: Partial<LabelInput>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (input.name !== undefined) body.name = input.name;
+  if (input.color !== undefined) body.color = input.color;
+  if (input.description !== undefined) body.description = input.description;
+  return body;
+}
+
+export async function patchLabel(client: ApiClient, projectId: string, labelId: string, input: Partial<LabelInput>) {
+  const { data } = await client.requestEnvelope<LabelDto>(`${labels(projectId)}${encodeURIComponent(labelId)}/`, {
+    method: "PATCH",
+    body: labelBody(input),
+  });
+  return data;
+}
+
+/** Xóa nhãn gỡ nó khỏi mọi task nên mọi cache task phải làm mới. */
+export async function deleteLabel(client: ApiClient, projectId: string, labelId: string) {
+  const { data } = await client.requestEnvelope<{ deleted_label_id: string }>(
+    `${labels(projectId)}${encodeURIComponent(labelId)}/`,
+    { method: "DELETE" },
+  );
+  return data;
 }

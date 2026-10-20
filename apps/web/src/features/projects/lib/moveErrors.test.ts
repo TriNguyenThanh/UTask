@@ -16,6 +16,11 @@ describe("issueWriteErrorMessage", () => {
     expect(issueWriteErrorMessage(error(422, "VALIDATION_ERROR", "Tiêu đề quá dài."))).toBe("Tiêu đề quá dài.");
   });
 
+  it("names a blocking cycle and shows the server text for an inactive member", () => {
+    expect(issueWriteErrorMessage(error(409, "DAG_CYCLE_DETECTED", "Liên kết phụ thuộc tạo thành vòng lặp không hợp lệ."))).toBe("Liên kết này tạo vòng chặn.");
+    expect(issueWriteErrorMessage(error(422, "MEMBER_NOT_ACTIVE", "Người phụ trách phải là thành viên đang hoạt động."))).toBe("Người phụ trách phải là thành viên đang hoạt động.");
+  });
+
   it("falls back to the status for everything else", () => {
     expect(issueWriteErrorMessage(error(403, "FORBIDDEN"))).toBe("Bạn không có quyền thực hiện thay đổi này.");
     expect(issueWriteErrorMessage(error(409, "VERSION_CONFLICT"))).toBe("Issue vừa được người khác cập nhật. Bảng đã được tải lại.");

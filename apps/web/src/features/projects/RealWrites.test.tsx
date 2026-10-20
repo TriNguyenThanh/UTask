@@ -208,7 +208,7 @@ describe("Issue panel edits", () => {
     const user = userEvent.setup();
     const { calls } = setup("/projects/project-1/board?issue=NEXUS-1", { tasks: freshTasks() });
     await user.type(await screen.findByLabelText("Tiêu đề nhiệm vụ con", {}, { timeout: 5000 }), "Việc con mới");
-    await user.click(screen.getByRole("button", { name: "Thêm" }));
+    await user.click(within(screen.getByRole("form", { name: "Thêm nhiệm vụ con" })).getByRole("button", { name: "Thêm" }));
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]).toMatchObject({ method: "POST", path: "/tasks/t1/subtasks/", body: { title: "Việc con mới" } });
     expect(writes(calls)[0].idempotencyKey).toBeTruthy();
