@@ -5,6 +5,7 @@ import { useRealIssueDetail, type IssueDetailState } from "@/features/projects/h
 import { Plus, Zap } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,12 @@ import {
   useColumnDropTarget,
 } from "@/features/projects/dnd/boardDnd";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
+import { CreateIssueDialog } from "@/features/projects/components/CreateIssueDialog";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
+import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/components/RealIssueSlots";
+import type { IssueWrites } from "@/features/projects/lib/issueWrites";
+import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
+import { useRealIssueWrites, useToggleSubtask } from "@/lib/query/workWriteHooks";
 import { daysLeft, formatShortDate, statusForGroup } from "@/features/projects/issueMeta";
 import {
   matchesFilters,
@@ -129,6 +135,7 @@ function BoardToolbar({
   onToggleFlag,
   onClear,
   canCreate,
+  onCreate,
   showMine,
 }: Readonly<{
   sprint: Sprint | null;
@@ -138,6 +145,8 @@ function BoardToolbar({
   onToggleFlag: (flag: FlagFilter) => void;
   onClear: () => void;
   canCreate: boolean;
+  /** Work thật: mở form tạo issue. Bỏ trống (demo) thì nút bị khóa vì chưa có API. */
+  onCreate?: () => void;
   /** An instructor has no tasks of their own, so there is no "mine" filter. */
   showMine: boolean;
 }>) {
@@ -172,7 +181,12 @@ function BoardToolbar({
       </div>
 
       {canCreate ? (
-        <Button size="sm" disabled title="Chưa có API tạo issue" aria-label="Tạo issue (chưa khả dụng)">
+        <Button
+          size="sm"
+          disabled={!onCreate}
+          onClick={onCreate}
+          {...(onCreate ? {} : { title: "Chưa có API tạo issue", "aria-label": "Tạo issue (chưa khả dụng)" })}
+        >
           <Plus aria-hidden />
           Tạo Issue
         </Button>
@@ -189,8 +203,18 @@ function BoardToolbar({
  * `real`: dữ liệu đến từ Work thật. Phase 10 chỉ đọc, nên tắt kéo-thả/menu di chuyển và không hỏi
  * cài đặt AI của demo.
  */
-function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: boolean }>) {
-  const { projectId, workspace, viewer, readOnly } = useProjectWorkspaceContext();
+function BoardView({
+  detail,
+  real,
+  realTools,
+}: Readonly<{
+  detail: IssueDetailState;
+  real: boolean;
+  /** Work thật: cách ghi Board và tick nhiệm vụ con. */
+  realTools?: { writes: IssueWrites; toggleSubtask: (subtaskId: string, done: boolean) => void };
+}>) {
+  const { projectId, workspace, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
+  const [createOpen, setCreateOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilters, toggleFlag, clear } = useIssueFilters();
 
@@ -235,8 +259,13 @@ function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: 
     projectId,
     workspace,
     role: viewerRole(viewer),
-    canWrite: real ? false : undefined,
+    canWrite: real ? !archived && !readOnly : undefined,
+    writes: realTools?.writes,
   });
+
+  // Work thật: Leader sửa mọi issue, thành viên chỉ issue của mình; dự án lưu trữ và giảng viên chỉ đọc.
+  const canEditRealIssue =
+    real && !archived && !readOnly && detail.data !== undefined && (mover.role === "leader" || detail.data.issue.isMine);
 
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
@@ -263,7 +292,8 @@ function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: 
         onFiltersChange={setFilters}
         onToggleFlag={toggleFlag}
         onClear={clear}
-        canCreate={permissionCtx !== null && canCreateTask(permissionCtx)}
+        canCreate={permissionCtx !== null && canCreateTask(permissionCtx) && !archived}
+        onCreate={real ? () => setCreateOpen(true) : undefined}
         showMine={!readOnly}
       />
 
@@ -320,6 +350,16 @@ function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: 
 
       {mover.dialog}
 
+      {real ? (
+        <CreateIssueDialog
+          projectId={projectId}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          epics={workspace.epics}
+          assignees={assignees}
+        />
+      ) : null}
+
       {/* Panel is a sibling overlay: the board above never remounts, so
           filter and scroll state survive panel open/close. */}
       {issueKey !== null ? (
@@ -340,7 +380,21 @@ function BoardView({ detail, real }: Readonly<{ detail: IssueDetailState; real: 
           }
           readOnly={readOnly}
           states={workspace.states}
-          subtasksEditable={!real}
+          subtasksEditable={!real || canEditRealIssue}
+          editSlot={
+            real && canEditRealIssue && detail.data ? (
+              <RealIssueEditor
+                issueId={detail.data.issue.id}
+                epics={workspace.epics}
+                assignees={assignees}
+                textOnly={mover.role !== "leader"}
+              />
+            ) : undefined
+          }
+          subtaskCreateSlot={
+            real && canEditRealIssue && detail.data ? <SubtaskCreateForm parentId={detail.data.issue.id} /> : undefined
+          }
+          onToggleSubtaskRemote={real ? realTools?.toggleSubtask : undefined}
           onChangeStatus={
             detail.data && mover.enabled && canUpdateTask(permissionCtx, detail.data.issue.isMine)
               ? (state) =>
@@ -367,11 +421,15 @@ function DemoBoard() {
 }
 
 function RealBoardContent() {
-  const { workspace } = useProjectWorkspaceContext();
+  const { projectId, workspace } = useProjectWorkspaceContext();
   const { shell } = useRealProjectContext();
   const [searchParams] = useSearchParams();
   const detail = useRealIssueDetail(workspace, shell, searchParams.get("issue"));
-  return <BoardView detail={detail} real />;
+  const writes = useRealIssueWrites(projectId);
+  const toggle = useToggleSubtask(projectId, workspace.states);
+  const toggleSubtask = (subtaskId: string, done: boolean) =>
+    toggle.mutate({ subtaskId, done }, { onError: (error) => toast.error(issueWriteErrorMessage(error)) });
+  return <BoardView detail={detail} real realTools={{ writes, toggleSubtask }} />;
 }
 
 function RealBoard() {

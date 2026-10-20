@@ -3,13 +3,20 @@ import { describe, expect, it } from "vitest";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import {
+  blockTask,
+  createSubtask,
+  createTask,
   getTask,
   listEpics,
   listLabels,
   listSprints,
   listStates,
   listTaskIdsInSprint,
+  listTaskOrderInState,
   listTasks,
+  patchTask,
+  transitionTask,
+  unblockTask,
 } from "@/lib/api/work/endpoints";
 import { server } from "@/mocks/server";
 import {
@@ -19,6 +26,7 @@ import {
   buildSprint,
   buildTask,
   workHandlers,
+  type WorkCall,
   type WorkFixture,
 } from "@/test/workHandlers";
 
@@ -106,5 +114,73 @@ describe("getTask", () => {
   it("rejects with 404 for an unknown task", async () => {
     use({ tasks: [] });
     await expect(getTask(client, "nope")).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("task writes", () => {
+  const states = buildDefaultStates();
+  const KEY = "key-1";
+
+  function setup(tasks = [buildTask({ id: "a", version: 3 })]) {
+    const calls: WorkCall[] = [];
+    use({ states, tasks, calls });
+    return { calls, tasks };
+  }
+
+  it("createTask sends the idempotency key and only the fields that were set", async () => {
+    const { calls } = setup();
+    const created = await createTask(client, "project-1", { title: "Mới", priority: "HIGH", storyPoints: 3, idempotencyKey: KEY });
+    expect(created.title).toBe("Mới");
+    expect(calls[0]).toMatchObject({ method: "POST", idempotencyKey: KEY, body: { title: "Mới", priority: "HIGH", story_points: 3 } });
+    expect(Object.keys(calls[0].body ?? {})).not.toContain("state_id");
+  });
+
+  it("patchTask sends expected_version and no Idempotency-Key, and can clear a nullable field", async () => {
+    const { calls } = setup();
+    await patchTask(client, "a", { expectedVersion: 3, title: "Đổi", dueDate: null });
+    expect(calls[0]).toMatchObject({ method: "PATCH", idempotencyKey: null, body: { expected_version: 3, title: "Đổi", due_date: null } });
+    expect(Object.keys(calls[0].body ?? {})).not.toContain("priority");
+  });
+
+  it("patchTask surfaces VERSION_CONFLICT on a stale version", async () => {
+    setup();
+    const error = await patchTask(client, "a", { expectedVersion: 1, title: "x" }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("VERSION_CONFLICT");
+  });
+
+  it("transitionTask always sends both neighbours, null when absent", async () => {
+    const { calls } = setup();
+    const moved = await transitionTask(client, "a", { expectedVersion: 3, targetStateId: "state-doing", previousTaskId: null, nextTaskId: null });
+    expect(moved.state_id).toBe("state-doing");
+    expect(calls[0].body).toEqual({ expected_version: 3, target_state_id: "state-doing", previous_task_id: null, next_task_id: null });
+    expect(calls[0].idempotencyKey).toBeNull();
+  });
+
+  it("blockTask and unblockTask use PATCH without a key", async () => {
+    const { calls } = setup();
+    const blocked = await blockTask(client, "a", { expectedVersion: 3, blockedReason: "Chờ API" });
+    expect(blocked.is_blocked).toBe(true);
+    const unblocked = await unblockTask(client, "a", { expectedVersion: blocked.version });
+    expect(unblocked.is_blocked).toBe(false);
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH /tasks/a/block/", "PATCH /tasks/a/unblock/"]);
+    expect(calls.every((call) => call.idempotencyKey === null)).toBe(true);
+  });
+
+  it("createSubtask posts under the parent with a key", async () => {
+    const { calls } = setup();
+    const sub = await createSubtask(client, "a", { title: "Con", idempotencyKey: KEY });
+    expect(sub.parent_id).toBe("a");
+    expect(calls[0]).toMatchObject({ path: "/tasks/a/subtasks/", idempotencyKey: KEY, body: { title: "Con" } });
+  });
+
+  it("listTaskOrderInState returns every task of the state sorted by sort_order", async () => {
+    setup([
+      buildTask({ id: "b", sort_order: 20000 }),
+      buildTask({ id: "a", sort_order: 10000 }),
+      buildTask({ id: "x", state_id: "state-doing", sort_order: 5 }),
+      buildTask({ id: "gone", sort_order: 1, archived_at: "2026-09-02T00:00:00Z" }),
+    ]);
+    expect(await listTaskOrderInState(client, "project-1", "state-todo")).toEqual(["a", "b"]);
   });
 });

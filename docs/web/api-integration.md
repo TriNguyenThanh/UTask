@@ -51,7 +51,8 @@ VITE_API_BASE_URL=
 | 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Một phần (đã smoke API thật và trình duyệt; xem giới hạn) |
 | 9 | Work Project: danh sách dự án của tôi, vỏ dự án + trang Thông tin & thành viên, tạo dự án từ trang nhóm (Leader), sửa/lưu trữ/mở lại dự án, lấp `project` ở trang giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
 | 10 | Work: Board và Backlog chỉ đọc (cột theo `State` của dự án, sprint, epic, panel chi tiết task) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
-| 11+ | Work (ghi task, epic/nhãn, sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
+| 11 | Work: ghi task cốt lõi (tạo issue, kéo thả/menu đổi cột, chặn/bỏ chặn, sửa trong panel, tạo và tick nhiệm vụ con) | Một phần (đã smoke trình duyệt trên staging với Leader và Teacher; xem giới hạn) |
+| 12+ | Work (epic/nhãn/quan hệ, sprint, comment, dashboard, GitHub), Admin; AI làm cuối trong plan riêng | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -323,10 +324,29 @@ Giới hạn đã biết:
 
 - Ưu tiên `URGENT` hiển thị là "Cao"; chỉ hiện người được giao đầu tiên; `hasPullRequest` luôn `false`.
 - Người được giao hiện "?" khi `display_name` rỗng (B21).
-- Bình luận, lịch sử và liên kết GitHub trong panel trống cho đến Phase 14; nhiệm vụ con chỉ đọc.
+- Bình luận, lịch sử và liên kết GitHub trong panel trống cho đến Phase 14.
 - Task đã xong trong sprint `COMPLETED` hiện như nằm ngoài sprint (D4).
 - Dòng Backlog hiện trạng thái suy ra từ nhóm state ("Cần làm" cho cả Backlog và To Do); Board và panel hiện đúng tên state.
-- `planMove` so sánh `status` suy ra, chưa so `statusId`: cần sửa ở Phase 11 khi bật kéo thả thật.
+
+## Work ghi task cốt lõi (Phase 11)
+
+Trạng thái: **Một phần**. Mã: `lib/api/work/endpoints.tasks.ts` (`createTask`, `createSubtask`, `patchTask`, `transitionTask`, `blockTask`, `unblockTask`, `listTaskOrderInState`), hook `lib/query/workWriteHooks.ts`, `features/projects/lib/transitionNeighbours.ts`.
+
+- Quyền: Leader ghi mọi task; thành viên chỉ task được giao cho mình (và chỉ sửa title/mô tả/tiêu chí); giảng viên và dự án lưu trữ không có nút ghi.
+- `Idempotency-Key` chỉ ở tạo issue và tạo nhiệm vụ con; PATCH, transition, block, unblock không gửi. Block/unblock là `PATCH`.
+- Đổi cột: server tính vị trí trên **cột đầy đủ** (gồm nhiệm vụ con và task ngoài sprint đang chạy), nên neighbor không lấy từ cột Board đang hiện. Client gọi `GET tasks?state_id=&fields=id,sort_order` rồi `planNeighbours` chọn hàng xóm liền kề; chuyển cột từ menu thì xếp cuối cột.
+- Cập nhật lạc quan, hoàn tác và tải lại khi lỗi. Thành công chỉ ghi `version` và `sort_order` thật, không tải lại workspace.
+- `VERSION_CONFLICT` ở form sửa: hiện "Dữ liệu đã được cập nhật bởi thao tác khác…" và nạp lại form theo bản mới.
+- `description_html` gửi đúng text nhập, không render HTML.
+
+Giới hạn:
+
+- Backlog vẫn chỉ đọc: thêm/bớt sprint thuộc Phase 13, thứ tự trong section Backlog chưa có ngữ nghĩa neighbor hợp lệ.
+- Chưa gán nhãn trong panel (nhãn chưa vào workspace; Phase 12). Chưa có nút chặn trong panel, dùng menu thẻ trên Board. Menu chặn ẩn với task COMPLETED/CANCELLED.
+- Tick nhiệm vụ con chuyển sang state COMPLETED đầu tiên; bỏ tick chuyển sang state UNSTARTED đầu tiên (đặt cuối cột).
+- Task tạo mới không thuộc sprint nên chỉ hiện ở Backlog, không hiện trên Board.
+- Kiểm tra trên: `tsc`, 70 file test cả khi có và không có `.env.local` (test đầu tiên của `RealWorkspace` có lần chậm khi cả bộ chạy song song), build. ESLint không chạy được (thiếu module).
+- Smoke trình duyệt (staging): Leader tạo issue, đổi cột bằng menu và tải lại, chặn/bỏ chặn, sửa tiêu đề trong panel, tạo nhiệm vụ con; Teacher không có nút tạo issue hay menu thao tác. Chưa smoke: kéo thả bằng chuột, thành viên không phải Leader, `VERSION_CONFLICT` trên staging, tick nhiệm vụ con.
 
 ## Việc cần backend (tổng hợp)
 

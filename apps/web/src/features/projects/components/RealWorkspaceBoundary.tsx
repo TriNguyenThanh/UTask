@@ -10,6 +10,7 @@ import {
   type ProjectWorkspaceContextValue,
 } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import { isReadOnlyViewer } from "@/lib/permissions";
+import { useUserNames } from "@/lib/query/teacherClassHooks";
 import { useWorkspaceReal } from "@/lib/query/workHooks";
 
 /**
@@ -21,6 +22,16 @@ export function RealWorkspaceBoundary({ children }: Readonly<{ children: ReactNo
   const { pathname } = useLocation();
   const query = useWorkspaceReal(shell);
   const workspace = query.data;
+  const active = useMemo(() => shell.members.filter((member) => member.status === "ACTIVE"), [shell.members]);
+  const namesQuery = useUserNames(active.filter((m) => !m.display_name).map((m) => m.user_id));
+  const assignees = useMemo(
+    () =>
+      active.map((member) => ({
+        userId: member.user_id,
+        name: member.display_name || namesQuery.data?.get(member.user_id) || "Thành viên",
+      })),
+    [active, namesQuery.data],
+  );
 
   const value = useMemo<ProjectWorkspaceContextValue | null>(
     () =>
@@ -31,9 +42,11 @@ export function RealWorkspaceBoundary({ children }: Readonly<{ children: ReactNo
             viewer: workspace.viewer,
             readOnly: isReadOnlyViewer(workspace.viewer),
             activeModule: moduleOfPathname(pathname),
+            archived: shell.project.archived_at !== null,
+            assignees,
           }
         : null,
-    [projectId, workspace, pathname],
+    [projectId, workspace, pathname, shell.project.archived_at, assignees],
   );
 
   if (query.isPending) return <PageSkeleton label="Đang tải công việc" />;

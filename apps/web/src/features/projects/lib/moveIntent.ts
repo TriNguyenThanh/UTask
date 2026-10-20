@@ -51,15 +51,25 @@ export function planMove(request: MoveRequest): MoveIntent | null {
   const { issue, role } = request;
   if (role === null) return null;
 
+  // Hai state có thể cùng nhóm (Backlog và To Do đều là "todo"): khi biết state đích thì so theo id.
+  const stateChanged =
+    request.toStateId !== undefined
+      ? request.toStateId !== issue.statusId
+      : request.toStatus !== undefined && request.toStatus !== issue.status;
+  const targetStatus = request.toStatus ?? issue.status;
+
   if (role === "member") {
-    if (!issue.isMine) return null;
-    if (request.toStatus === undefined || request.toStatus === issue.status) return null;
-    return { status: request.toStatus, needsReason: false };
+    if (!issue.isMine || !stateChanged) return null;
+    return {
+      status: targetStatus,
+      ...(request.toStateId !== undefined ? { statusId: request.toStateId } : {}),
+      needsReason: false,
+    };
   }
 
   const intent: MoveIntent = { needsReason: false };
-  if (request.toStatus !== undefined && request.toStatus !== issue.status) {
-    intent.status = request.toStatus;
+  if (stateChanged) {
+    intent.status = targetStatus;
     if (request.toStateId !== undefined) intent.statusId = request.toStateId;
   }
   if (request.toSprintId !== undefined && request.toSprintId !== issue.sprintId) {

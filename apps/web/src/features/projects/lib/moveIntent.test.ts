@@ -215,3 +215,26 @@ describe("planReorderToEdge", () => {
     expect(planReorderToEdge({ ...base, issue: C, edge: "last" })).toBeNull();
   });
 });
+
+describe("planMove: states that share a group", () => {
+  it("treats Backlog -> To Do as a move when the target state id differs", () => {
+    const intent = planMove({
+      issue: A, role: "leader", toStatus: "todo", toStateId: "state-other-todo", destination: [], activeSprintIds: NO_ACTIVE,
+    });
+    expect(intent).toEqual({ status: "todo", statusId: "state-other-todo", needsReason: false });
+  });
+
+  it("is a no-op when the target state id is the issue's own state", () => {
+    expect(
+      planMove({ issue: A, role: "leader", toStatus: "todo", toStateId: "state-todo", destination: [], activeSprintIds: NO_ACTIVE }),
+    ).toBeNull();
+  });
+
+  it("keeps the state id for a member moving their own task", () => {
+    const mine = issue("M", 3000, { isMine: true });
+    const intent = planMove({
+      issue: mine, role: "member", toStatus: "todo", toStateId: "state-other-todo", destination: [], activeSprintIds: NO_ACTIVE,
+    });
+    expect(intent).toEqual({ status: "todo", statusId: "state-other-todo", needsReason: false });
+  });
+});

@@ -18,6 +18,7 @@ import type { Issue, IssueStatus, ProjectWorkspace } from "@/features/projects/t
 import type { TeamRole } from "@/features/my-work/types";
 import { demoWritesEnabled } from "@/lib/featureFlags";
 import { useMoveIssue, useSetIssueBlocked } from "@/lib/query/studentFlowHooks";
+import type { IssueWrites } from "@/features/projects/lib/issueWrites";
 
 const FLASH_MS = 700;
 
@@ -71,15 +72,37 @@ export function useIssueMover({
   workspace,
   role,
   canWrite = demoWritesEnabled(),
+  writes: realWrites,
 }: Readonly<{
   projectId: string;
   workspace: ProjectWorkspace;
   role: TeamRole | null;
-  /** Mặc định theo cờ ghi của demo; chế độ Work thật truyền `false` cho tới khi nối API ghi. */
+  /** Mặc định theo cờ ghi của demo; chế độ Work thật truyền theo vai và trạng thái dự án. */
   canWrite?: boolean;
+  /** Cách ghi thật (Work). Bỏ trống thì ghi vào MSW demo. */
+  writes?: IssueWrites;
 }>) {
   const moveMutation = useMoveIssue(projectId);
   const blockMutation = useSetIssueBlocked(projectId);
+  const moveDemo = moveMutation.mutate;
+  const blockDemo = blockMutation.mutate;
+  const writes = useMemo<IssueWrites>(
+    () =>
+      realWrites ?? {
+        move: ({ issue, intent, reason }) =>
+          moveDemo({
+            issueKey: issue.key,
+            ...(intent.status !== undefined ? { status: intent.status } : {}),
+            ...(intent.statusId !== undefined ? { statusId: intent.statusId } : {}),
+            ...(intent.sprintId !== undefined ? { sprintId: intent.sprintId } : {}),
+            ...(intent.rank !== undefined ? { rank: intent.rank } : {}),
+            ...(reason ? { reason } : {}),
+          }),
+        setBlocked: ({ issue, blocked, reason }) =>
+          blockDemo({ issueKey: issue.key, blocked, ...(reason ? { reason } : {}) }),
+      },
+    [blockDemo, moveDemo, realWrites],
+  );
   const [pending, setPending] = useState<Pending | null>(null);
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const focusRequest = useRef<FocusRequest | null>(null);
@@ -126,20 +149,16 @@ export function useIssueMover({
         rank: intent.rank ?? issue.rank,
       };
       focusRequest.current = { key: issue.key, ...target };
-      moveMutation.mutate({
-        issueKey: issue.key,
-        ...(intent.status !== undefined ? { status: intent.status } : {}),
-        ...(intent.statusId !== undefined ? { statusId: intent.statusId } : {}),
-        ...(intent.sprintId !== undefined ? { sprintId: intent.sprintId } : {}),
-        ...(intent.rank !== undefined ? { rank: intent.rank } : {}),
-        ...(reason ? { reason } : {}),
-      });
+      writes.move({ issue, intent, ...(reason ? { reason } : {}) });
 
       const parts: string[] = [];
       if (intent.status !== undefined) {
-        parts.push(
-          `đã chuyển từ ${STATUS_LABELS[issue.status]} sang ${STATUS_LABELS[intent.status]}`,
-        );
+        // Hai state cùng nhóm có cùng nhãn nhóm, nên khi đó đọc tên state để người nghe phân biệt được.
+        const label = (id: string | undefined, status: IssueStatus) =>
+          intent.status === issue.status
+            ? (workspace.states.find((state) => state.id === id)?.name ?? STATUS_LABELS[status])
+            : STATUS_LABELS[status];
+        parts.push(`đã chuyển từ ${label(issue.statusId, issue.status)} sang ${label(intent.statusId, intent.status)}`);
       }
       if (intent.sprintId !== undefined) {
         parts.push(`đã chuyển sang ${sprintName(workspace, intent.sprintId)}`);
@@ -150,7 +169,7 @@ export function useIssueMover({
       announce(`${issue.key} ${parts.join(", ")}`);
       flash(issue.key);
     },
-    [flash, moveMutation, workspace],
+    [flash, workspace, writes],
   );
 
   const requestMove = useCallback(
@@ -169,11 +188,11 @@ export function useIssueMover({
 
   const setBlocked = useCallback(
     (issue: Issue, blocked: boolean, reason?: string) => {
-      blockMutation.mutate({ issueKey: issue.key, blocked, ...(reason ? { reason } : {}) });
+      writes.setBlocked({ issue, blocked, ...(reason ? { reason } : {}) });
       announce(blocked ? `${issue.key} đã được đánh dấu bị chặn` : `${issue.key} không còn bị chặn`);
       flash(issue.key);
     },
-    [blockMutation, flash],
+    [flash, writes],
   );
 
   const toggleBlocked = useCallback(
@@ -246,15 +265,19 @@ export function useIssueMover({
         }
       }
 
-      groups.push({
-        items: [
-          {
-            id: "blocked",
-            label: issue.blocked ? "Bỏ đánh dấu bị chặn" : "Đánh dấu bị chặn…",
-            onSelect: () => toggleBlocked(issue),
-          },
-        ],
-      });
+      // Server từ chối chặn task đã xong/đóng: không đưa mục này ra.
+      const closed = issue.stateGroup === "COMPLETED" || issue.stateGroup === "CANCELLED";
+      if (issue.blocked || !closed) {
+        groups.push({
+          items: [
+            {
+              id: "blocked",
+              label: issue.blocked ? "Bỏ đánh dấu bị chặn" : "Đánh dấu bị chặn…",
+              onSelect: () => toggleBlocked(issue),
+            },
+          ],
+        });
+      }
       return groups;
     },
     [activeSprintIds, canTouch, requestMove, role, run, toggleBlocked, workspace.sprints, workspace.states],
