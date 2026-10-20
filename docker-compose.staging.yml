@@ -45,6 +45,13 @@ x-identity-publisher: &identity_publisher
       condition: service_healthy
     postgres:
       condition: service_healthy
+  # Process liveness only; delivery and backlog need separate flow checks.
+  healthcheck:
+    test: ["CMD", "python", "-c", "from pathlib import Path; c = Path('/proc/1/cmdline').read_bytes().split(bytes([0])); raise SystemExit(not ({b'publish_identity_outbox', b'--watch'} <= set(c)))"]
+    interval: 15s
+    timeout: 5s
+    retries: 6
+    start_period: 15s
 
 services:
 

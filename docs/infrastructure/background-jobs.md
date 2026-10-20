@@ -12,6 +12,9 @@ service đã được triển khai. Xem [cách chạy AI local](local-developmen
 Riêng Identity dùng command `publish_identity_outbox --watch` gửi outbox trực tiếp
 lên Kafka dùng chung, không dùng Celery/Beat cho bước chuyển sự kiện này theo yêu cầu
 đơn giản hóa hiện tại. Chi tiết tại [Identity](../identity-service/README.md).
+Publisher local dùng cùng `image`, `build` và `env_file` với API. Healthcheck local
+và staging kiểm đúng process `publish_identity_outbox --watch` tại PID 1; đây chỉ là
+kiểm tra process đang sống, không chứng minh Kafka nhận event hoặc backlog đã được xử lý.
 
 ## Quyền sở hữu job
 
