@@ -37,10 +37,10 @@ VITE_API_BASE_URL=
 | 0 | Proxy dev, client envelope, cờ `VITE_REAL_SERVICES`, cầu nối persona, helper idempotency/phân trang | Đã triển khai |
 | 1 | Đăng nhập, đăng xuất (thu hồi phiên hiện tại), `GET /users/me` | Đã triển khai |
 | 2 | Khôi phục phiên khi tải lại, tự làm mới access token, CSRF | Đã triển khai |
-| 3 | Hồ sơ, đổi mật khẩu, danh sách thiết bị, đăng xuất mọi thiết bị | Đã triển khai (chưa smoke trình duyệt) |
-| 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Đã triển khai ở mức form + request (end-to-end email chưa xác minh, chờ B3; chưa smoke trình duyệt) |
-| 5 | Classroom phía sinh viên: danh sách lớp, chi tiết lớp/nhóm của tôi, tham gia lớp bằng mã | Một phần (xem giới hạn; chưa smoke trình duyệt) |
-| 6 | Classroom: sinh viên tạo nhóm, vào nhóm bằng mã, cấp/tắt mã mời, rời nhóm, chuyển Trưởng nhóm, loại thành viên | Đã triển khai ở mức form + request (chưa smoke trình duyệt) |
+| 3 | Hồ sơ, đổi mật khẩu, danh sách thiết bị, đăng xuất mọi thiết bị | Đã triển khai (đã smoke trình duyệt, trừ đổi mật khẩu thành công và đăng xuất mọi thiết bị) |
+| 4 | Đăng ký, kích hoạt, quên/đặt lại mật khẩu | Đã triển khai ở mức form + request (đã smoke trình duyệt kích hoạt link sai và quên mật khẩu; end-to-end email chưa xác minh, chờ B3; chưa submit đăng ký thật) |
+| 5 | Classroom phía sinh viên: danh sách lớp, chi tiết lớp/nhóm của tôi, tham gia lớp bằng mã | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
+| 6 | Classroom: sinh viên tạo nhóm, vào nhóm bằng mã, cấp/tắt mã mời, rời nhóm, chuyển Trưởng nhóm, loại thành viên | Đã triển khai (đã smoke trình duyệt: tạo nhóm, bật mã mời, chuyển Trưởng nhóm, rời nhóm; chưa smoke giao diện vào nhóm bằng mã và loại thành viên) |
 | 7 | Classroom: giảng viên đọc lớp, tạo lớp, sửa lớp, trạng thái lớp, mã tham gia, chốt lập nhóm, thêm giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
 | 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Một phần (đã smoke API thật và trình duyệt; xem giới hạn) |
 | 9+ | Work, Admin | Chưa triển khai |
@@ -284,7 +284,23 @@ viên đã bị loại (B12).
 ## Kiểm tra đã chạy
 
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
-sau Phase 8 (52 file / 764 test). Smoke trên trình duyệt thật (Chromium, staging) đã làm cho
-Phase 1–2: sai mật khẩu, đăng nhập, F5 giữ phiên, đăng xuất, và ở Phase 7–8 cho
-luồng giảng viên (xem hai phần đó). **Chưa smoke trên trình duyệt** cho Phase
-3–6 và cho refresh khi 401 hoặc hết hạn 15 phút.
+(53 file test). Chạy `vitest` phải không có `apps/web/.env.local`, vì file này
+bật `VITE_REAL_SERVICES` và làm hàng chục test mock thất bại.
+
+Smoke trình duyệt thật (Chrome qua relay, staging, `VITE_REAL_SERVICES=auth,classroom`):
+
+- Phase 1–2: đăng nhập, F5 khôi phục phiên (`refresh` rồi `users/me`), đăng
+  xuất rồi F5 (`refresh` 401, về `/login`).
+- Phase 3: lưu hồ sơ (`PATCH /users/me`), đổi mật khẩu với mật khẩu cũ sai
+  (hiện "Mật khẩu hiện tại không đúng."), danh sách và thu hồi thiết bị.
+- Phase 4: kích hoạt với key sai (404, báo liên kết không hợp lệ), quên mật khẩu
+  (trả thông báo trung tính).
+- Phase 5–6: vào lớp bằng mã sai (404) và đúng (201), tạo nhóm, bật mã mời,
+  chuyển Trưởng nhóm, rời nhóm.
+- Phase 7–8: giảng viên đọc bàn làm việc và danh sách sinh viên của lớp thật.
+  Hộp "Thêm sinh viên" chưa smoke giao diện (Chrome ngắt debugger khi tiện ích
+  trình quản lý mật khẩu chèn khung vào ô email).
+
+Đã biết, chưa xử lý: sau thao tác ghi, danh sách lớp/nhóm của sinh viên cập nhật
+chậm vài giây vì tải lại theo từng lớp rồi từng nhóm. Chưa smoke trình duyệt
+cho refresh khi 401 hoặc hết hạn 15 phút.
