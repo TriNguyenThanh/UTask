@@ -1,4 +1,5 @@
 import { toCourseDetail, toCourseEnrollment, membershipOf, instructorNameOf, type MyGroup } from "@/lib/api/classroom/adapters";
+import type { CourseEnrollment } from "@/features/my-work/types";
 import {
   getClass,
   listClasses,
@@ -16,6 +17,8 @@ import { usersBatch } from "@/lib/api/identity/endpoints";
 const PROBE_BATCH = 5;
 /** Giới hạn số nhóm dò trong một lớp để chặn N+1 (B5: chưa có `my_group` hay `member_count`). */
 export const MAX_GROUPS_PROBED = 50;
+/** Số lớp dò nhóm đồng thời; mỗi lớp vẫn dò tối đa PROBE_BATCH nhóm một lượt. */
+export const CLASS_CONCURRENCY = 3;
 
 /**
  * Tìm nhóm ACTIVE của người dùng trong lớp. API không cho biết "nhóm của tôi", và đọc
@@ -53,12 +56,19 @@ function indexCourses(courses: readonly CourseDto[]): Map<string, CourseDto> {
 export async function loadCourseEnrollments(client: ApiClient, userId: string) {
   const [classes, courses] = await Promise.all([listClasses(client), listCourses(client)]);
   const courseById = indexCourses(courses);
-  // Lớp xử lý tuần tự để tổng số request song song không vượt PROBE_BATCH.
-  const enrollments = [];
-  for (const cls of classes) {
-    const mine = await loadMyGroup(client, cls.id);
-    enrollments.push(toCourseEnrollment(cls, courseById.get(cls.course), membershipOf(userId, mine)));
+  // Mỗi lớp cần một lượt `groups` rồi vài lượt `members` nối tiếp nhau, nên dò
+  // nhiều lớp cùng lúc (có giới hạn) thay vì lần lượt từng lớp.
+  const enrollments = new Array<CourseEnrollment>(classes.length);
+  let next = 0;
+  async function worker() {
+    while (next < classes.length) {
+      const index = next++;
+      const cls = classes[index];
+      const mine = await loadMyGroup(client, cls.id);
+      enrollments[index] = toCourseEnrollment(cls, courseById.get(cls.course), membershipOf(userId, mine));
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(CLASS_CONCURRENCY, classes.length) }, worker));
   return enrollments;
 }
 

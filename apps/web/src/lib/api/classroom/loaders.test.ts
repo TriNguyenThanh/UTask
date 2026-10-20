@@ -1,7 +1,13 @@
 import { http } from "msw";
 import { describe, expect, it } from "vitest";
 
-import { loadCourseDetail, loadCourseEnrollments, loadMyGroup, MAX_GROUPS_PROBED } from "@/lib/api/classroom/loaders";
+import {
+  CLASS_CONCURRENCY,
+  loadCourseDetail,
+  loadCourseEnrollments,
+  loadMyGroup,
+  MAX_GROUPS_PROBED,
+} from "@/lib/api/classroom/loaders";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { server } from "@/mocks/server";
@@ -12,6 +18,7 @@ import {
   buildMember,
   buildTeacher,
   classroomHandlers,
+  envelope,
   envelopeError,
 } from "@/test/classroomHandlers";
 
@@ -78,6 +85,37 @@ describe("loadCourseEnrollments", () => {
     const result = await loadCourseEnrollments(client, ME);
     expect(result.map((item) => item.membership.status)).toEqual(["none", "assigned"]);
     expect(result[1].membership).toMatchObject({ role: "leader" });
+  });
+
+  it("probes several classes at once, never more than CLASS_CONCURRENCY, and keeps class order", async () => {
+    const ids = Array.from({ length: 8 }, (_, index) => `c${index + 1}`);
+    let inFlight = 0;
+    let peak = 0;
+    // Giữ các request `groups` cho tới khi đủ CLASS_CONCURRENCY request đang chờ; nếu loader
+    // chạy ít lớp hơn thế thì test treo, nếu nhiều hơn thì `peak` vượt.
+    let openGate: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    server.use(
+      http.get("/api/classroom/classes/:classId/groups/", async ({ params }) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        if (inFlight >= CLASS_CONCURRENCY) openGate();
+        await gate;
+        inFlight -= 1;
+        return envelope(params.classId === "c8" ? [buildGroup({ id: "g8", class_section: "c8" })] : []);
+      }),
+      ...classroomHandlers({
+        classes: ids.map((id) => buildClass({ id, name: id })),
+        courses: [buildCourse()],
+        members: { g8: [buildMember({ user_id: ME })] },
+      }),
+    );
+    const result = await loadCourseEnrollments(client, ME);
+    expect(result.map((item) => item.courseId)).toEqual(ids);
+    expect(result.map((item) => item.membership.status)).toEqual([...Array(7).fill("none"), "assigned"]);
+    expect(peak).toBe(CLASS_CONCURRENCY);
   });
 
   it("returns an empty list for a user with no classes", async () => {
