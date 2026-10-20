@@ -284,6 +284,19 @@ KAFKA_SASL_PASSWORD = os.environ.get("KAFKA_SASL_PASSWORD", "")
 KAFKA_SSL_CA_LOCATION = os.environ.get("KAFKA_SSL_CA_LOCATION", "")
 IDENTITY_KAFKA_TOPIC = os.environ.get("IDENTITY_KAFKA_TOPIC", "utask.identity.events")
 IDENTITY_SESSION_RETENTION_DAYS = int(os.environ.get("IDENTITY_SESSION_RETENTION_DAYS", "30"))
+IDENTITY_RECEIPT_RETENTION_DAYS = int(os.environ.get("IDENTITY_RECEIPT_RETENTION_DAYS", "7"))
+IDENTITY_OUTBOX_RETENTION_DAYS = int(os.environ.get("IDENTITY_OUTBOX_RETENTION_DAYS", "7"))
+if (
+    min(
+        IDENTITY_SESSION_RETENTION_DAYS,
+        IDENTITY_RECEIPT_RETENTION_DAYS,
+        IDENTITY_OUTBOX_RETENTION_DAYS,
+    )
+    < 1
+):
+    raise ImproperlyConfigured(
+        "Identity retention must be at least one day; audit is never purged."
+    )
 if os.environ.get("IDENTITY_REDIS_URL"):
     CACHES = {
         "default": {

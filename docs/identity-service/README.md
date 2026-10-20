@@ -219,6 +219,18 @@ Xem log bằng `docker compose logs -f identity-publisher`. Logger `identity.out
 ghi `publish_succeeded` ở mức INFO sau Kafka ACK và DB commit, gồm `event_id`,
 `event_type`, `topic`; lỗi gửi ghi `publish_failed` ở mức WARNING. Không ghi nội dung
 event, email, mã kích hoạt hay token. Khi không có sự kiện chờ, publisher không in log.
+### Dọn dữ liệu kỹ thuật
+
+Không có job dọn dữ liệu tự động. Lệnh thủ công xử lý tối đa500 bản ghi mỗi bảng;
+chỉ chạy sau khi xác nhận thời gian lưu dữ liệu cho môi trường.
+Preview: `python manage.py cleanup_identity`; chỉ thêm `--apply` mới xóa dữ liệu. Job
+chỉ xóa session đã hết hạn thêm30 ngày, receipt cũ hơn7 ngày, outbox đã published
+cũ hơn7 ngày và token/session/email-confirmation kỹ thuật đã quá hạn. Các ngưỡng
+`IDENTITY_SESSION_RETENTION_DAYS`, `IDENTITY_RECEIPT_RETENTION_DAYS`,
+`IDENTITY_OUTBOX_RETENTION_DAYS` tối thiểu một ngày; đây là mặc định kỹ thuật cấu hình
+được, không phải chính sách xóa dữ liệu cá nhân. Không xóa user/profile, audit hoặc
+event chưa publish. Audit được giữ nguyên đến khi có chính sách được phê duyệt.
+Expired mail secret được redaction dù event còn pending; TTL Redis do Redis quản lý.
 
 Google dùng allauth xác minh danh tính đăng nhập. GitHub dùng để liên kết tài khoản:
 Identity quản lý OAuth context/link, chỉ Integration đổi code và gọi GitHub API qua
