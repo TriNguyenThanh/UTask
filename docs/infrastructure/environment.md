@@ -11,6 +11,26 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `classroom-service.env`: cấu hình riêng Classroom Service, gồm
   `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
+## Web gọi API và CORS
+
+Nginx chỉ cho origin Web staging `https://utask.u-code.dev` và các origin local
+đã ghi rõ trong map đọc response API. Nginx bật gửi cookie; không dùng `*` vì
+trình duyệt từ chối wildcard khi request cần credentials. API vẫn xác thực
+`Bearer` token ở backend; CORS không cấp quyền đăng nhập hay quyền dữ liệu.
+
+Origin được phép cho CSRF vẫn giới hạn theo frontend. `.env` dùng
+`http://localhost:5173` và `http://127.0.0.1:5173`; `.env.staging` dùng
+`https://utask.u-code.dev` cho `IDENTITY_FRONTEND_URL` và
+`IDENTITY_CSRF_TRUSTED_ORIGINS`. Origin gồm scheme, host và port; không thêm
+đường dẫn `/` ở cuối. CORS allowlist và `CSRF_TRUSTED_ORIGINS` là hai kiểm tra
+riêng.
+
+Web đọc `VITE_API_BASE_URL` lúc build; mặc định mã nguồn để trống và gọi đường
+dẫn cùng origin. Khi Web chạy trên Vercel cùng API ở host riêng, cấu hình biến
+build của Vercel thành `https://utask-api.u-code.dev`; `.env.staging` trên VPS
+không được Vercel đọc. Xem [Web API client](../../apps/web/src/lib/api/ApiClientProvider.tsx)
+và [Nginx gateway](../../infra/nginx/nginx.conf).
+
 ## Chọn Kafka Docker hoặc Kafka bên ngoài
 
 **Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập

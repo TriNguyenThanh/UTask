@@ -80,6 +80,24 @@ class ClientIPIngressTests(unittest.TestCase):
         self.assertNotIn("$proxy_add_x_forwarded_for", self.nginx)
         self.assertNotRegex(self.nginx, r"\$http_(x_real_ip|x_forwarded_for)")
 
+    def test_cors_allows_only_staging_web_and_local_origins_with_credentials(self):
+        map_body = self.nginx.split('map "$host|$http_origin" $cors_origin {', 1)[1]
+        map_body = map_body.split("}", 1)[0]
+        self.assertIn('default "";', map_body)
+        self.assertIn(
+            '"utask-api.u-code.dev|https://utask.u-code.dev" $http_origin;', map_body
+        )
+        self.assertNotIn("*", map_body)
+        self.assertNotIn("null", map_body)
+        self.assertIn(
+            'add_header Access-Control-Allow-Origin $cors_origin always;', self.nginx
+        )
+        self.assertIn(
+            'add_header Access-Control-Allow-Credentials "true" always;', self.nginx
+        )
+        self.assertIn('add_header Vary "Origin" always;', self.nginx)
+        self.assertIn('if ($request_method = OPTIONS) { return 204; }', self.nginx)
+
     def test_identity_docker_mapping_has_overridable_bridge_default(self):
         source = (ROOT / "infra/env/identity-service.env").read_text(encoding="utf-8")
         values = re.findall(
