@@ -90,8 +90,8 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id) => b.includes(id));
 
 /**
- * Chỉ khóa đã đổi so với `initial`; `null` khi không đổi gì. `allowed` giới hạn khóa gửi đi
- * (thành viên thường chỉ sửa title/mô tả/tiêu chí).
+ * Chỉ khóa đã đổi so với `initial`; `null` khi không đổi gì. `allowed` giới hạn khóa gửi đi:
+ * `"text"` (thành viên thường) chỉ được sửa mô tả, khớp `require_member_fields(.., {"description_html"})` của backend.
  */
 export function toPatchInput(
   initial: IssueFormValues,
@@ -105,9 +105,11 @@ export function toPatchInput(
     patch[key] = value;
     changed = true;
   };
-  if (current.title.trim() !== initial.title.trim()) set("title", current.title.trim());
+  if (allowed === "all" && current.title.trim() !== initial.title.trim()) set("title", current.title.trim());
   if (current.description !== initial.description) set("descriptionHtml", current.description);
-  if (current.acceptanceCriteria !== initial.acceptanceCriteria) set("acceptanceCriteria", current.acceptanceCriteria);
+  if (allowed === "all" && current.acceptanceCriteria !== initial.acceptanceCriteria) {
+    set("acceptanceCriteria", current.acceptanceCriteria);
+  }
   if (allowed === "all") {
     if (current.priority !== initial.priority) set("priority", current.priority);
     if (current.storyPoints.trim() !== initial.storyPoints.trim()) set("storyPoints", storyPointsOf(current));

@@ -111,6 +111,14 @@ describe("getTask", () => {
     expect(task.subtasks?.map((subtask) => subtask.id)).toEqual(["sub"]);
   });
 
+  it("reports an archived task as read-only before it looks at the version, like the backend", async () => {
+    use({ tasks: [buildTask({ id: "old", version: 5, archived_at: "2026-09-02T00:00:00Z" })] });
+    await expect(patchTask(client, "old", { expectedVersion: 1, descriptionHtml: "x" })).rejects.toMatchObject({
+      status: 400,
+      code: "INVALID_OPERATION",
+    });
+  });
+
   it("rejects with 404 for an unknown task", async () => {
     use({ tasks: [] });
     await expect(getTask(client, "nope")).rejects.toMatchObject({ status: 404 });

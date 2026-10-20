@@ -59,5 +59,14 @@ export function RealWorkspaceBoundary({ children }: Readonly<{ children: ReactNo
   }
   if (!value) return <PageSkeleton label="Đang tải công việc" />;
 
-  return <ProjectWorkspaceProvider value={value}>{children}</ProjectWorkspaceProvider>;
+  return (
+    <ProjectWorkspaceProvider value={value}>
+      {value.workspace.partial ? (
+        <p role="status" className="mx-4 mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:mx-6">
+          Một phần dữ liệu chưa tải được (danh sách epic).
+        </p>
+      ) : null}
+      {children}
+    </ProjectWorkspaceProvider>
+  );
 }

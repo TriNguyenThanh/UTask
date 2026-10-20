@@ -14,6 +14,7 @@ import {
 import {
   buildDefaultStates,
   buildEpic,
+  buildLabel,
   buildProject,
   buildProjectMember,
   buildSprint,
@@ -65,6 +66,20 @@ describe("sortStates", () => {
 });
 
 describe("toIssue", () => {
+  it("carries the task's labels and drops deleted ones", () => {
+    const issue = toIssue(
+      buildTask({
+        labels: [
+          buildLabel({ id: "l1", name: "frontend", color: "#2563eb" }),
+          buildLabel({ id: "l2", name: "cũ", deleted_at: "2026-09-02T00:00:00Z" }),
+        ],
+      }),
+      context,
+    )!;
+    expect(issue.labels).toEqual([{ id: "l1", name: "frontend", color: "#2563eb" }]);
+    expect(toIssue(buildTask(), context)!.labels).toEqual([]);
+  });
+
   it("maps the state to column id, group and derived status", () => {
     const issue = toIssue(buildTask({ state_id: "state-review" }), context)!;
     expect(issue).toMatchObject({ statusId: "state-review", stateGroup: "REVIEW", status: "review" });

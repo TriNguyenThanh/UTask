@@ -27,6 +27,17 @@ export function assigneeLabel(userId: string, members: readonly Pick<ProjectMemb
   return name ? name : `Thành viên ${userId.slice(0, 6)}`;
 }
 
+/**
+ * Phần trăm capacity đã dùng = điểm đã giao / capacity tuần. **Ước lượng phía client**: server không
+ * trả số này. `null` khi chưa đặt capacity hoặc capacity bằng 0 (không chia được).
+ */
+export function capacityUsagePercent(allocatedPoints: number, weeklyCapacity: number | null): number | null {
+  if (weeklyCapacity === null || weeklyCapacity <= 0) return null;
+  return Math.round((allocatedPoints / weeklyCapacity) * 100);
+}
+
+const formatPercent = (value: number | null) => (value === null ? "—" : `${value}%`);
+
 /** Phần thân của bảng điều khiển; tách ra để kiểm thử không cần gọi API. */
 export function DashboardBody({
   dashboard,
@@ -74,6 +85,9 @@ export function DashboardBody({
                   <th className="px-3 py-2 text-left font-medium">Điểm</th>
                   <th className="px-3 py-2 text-left font-medium">Chưa ước lượng</th>
                   <th className="px-3 py-2 text-left font-medium">Giờ/tuần</th>
+                  <th className="px-3 py-2 text-left font-medium" title="Điểm đã giao / capacity tuần; ước lượng phía client">
+                    Dùng capacity (ước lượng)
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -84,6 +98,7 @@ export function DashboardBody({
                     <td className="px-3 py-2">{row.allocated_estimate_points}</td>
                     <td className="px-3 py-2">{row.unestimated_work_item_count}</td>
                     <td className="px-3 py-2">{row.weekly_capacity ?? "—"}</td>
+                    <td className="px-3 py-2">{formatPercent(capacityUsagePercent(row.allocated_estimate_points, row.weekly_capacity))}</td>
                   </tr>
                 ))}
               </tbody>

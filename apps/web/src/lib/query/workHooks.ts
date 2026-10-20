@@ -7,6 +7,7 @@ import type { WorkProjectShell } from "@/lib/api/work/adapters";
 import { loadGroupProjects, loadProjectCards, loadProjectShell, loadWorkspace } from "@/lib/api/work/loaders";
 import {
   createProject,
+  getProject,
   getTask,
   patchProject,
   setProjectArchived,
@@ -21,6 +22,7 @@ export const workKeys = {
   project: (userId: string, projectId: string) => ["work", userId, "project", projectId] as const,
   groupProjects: (userId: string) => ["work", userId, "group-projects"] as const,
   workspace: (userId: string, projectId: string) => ["work", userId, "workspace", projectId] as const,
+  projectRecord: (userId: string, projectId: string) => ["work", userId, "project-record", projectId] as const,
   task: (userId: string, taskId: string) => ["work", userId, "task", taskId] as const,
 };
 
@@ -47,6 +49,16 @@ export function useWorkProject(projectId: string) {
   return useQuery({
     queryKey: workKeys.project(userId, projectId),
     queryFn: () => loadProjectShell(client, userId, projectId),
+  });
+}
+
+/** Bản ghi dự án nhẹ (một lời gọi): đủ để biết dự án đã lưu trữ chưa, không dựng cả shell. */
+export function useWorkProjectRecord(projectId: string) {
+  const client = useApiClient();
+  const userId = useUserId();
+  return useQuery({
+    queryKey: workKeys.projectRecord(userId, projectId),
+    queryFn: () => getProject(client, projectId),
   });
 }
 

@@ -460,7 +460,7 @@ describe("Feedback drafts", () => {
     expect(await main.findByRole("alert")).toHaveTextContent(`vượt giới hạn ${FEEDBACK_MAX_LENGTH}`);
     const send = main.getByRole("button", { name: "Gửi phản hồi" });
     expect(send).toBeDisabled();
-    expect(send).toHaveAccessibleDescription(/chưa có hợp đồng API bình luận\/phản hồi.*chưa gửi cho ai.*không nhận được thông báo/);
+    expect(send).toHaveAccessibleDescription(/chưa nối API bình luận của Work.*chưa gửi cho ai.*không nhận được thông báo/);
     await user.click(main.getByRole("button", { name: "Xóa nháp" }));
     expect(box).toHaveValue("");
     expect(main.queryByRole("alert")).not.toBeInTheDocument();

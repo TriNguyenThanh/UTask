@@ -60,9 +60,14 @@ describe("formValuesOfTask / toPatchInput", () => {
     expect(patch).toEqual({ expectedVersion: 4, title: "Mới", storyPoints: null, dueDate: null, epicId: null });
   });
 
-  it("limits a non-leader to the text fields", () => {
-    const patch = toPatchInput(initial, { ...initial, title: "Mới", priority: "LOW", assigneeIds: [] }, 4, "text");
-    expect(patch).toEqual({ expectedVersion: 4, title: "Mới" });
-    expect(toPatchInput(initial, { ...initial, priority: "LOW" }, 4, "text")).toBeNull();
+  it("limits a non-leader to the description, the only field the backend lets them change", () => {
+    const patch = toPatchInput(
+      initial,
+      { ...initial, title: "Mới", acceptanceCriteria: "Khác", description: "Mô tả mới", priority: "LOW", assigneeIds: [] },
+      4,
+      "text",
+    );
+    expect(patch).toEqual({ expectedVersion: 4, descriptionHtml: "Mô tả mới" });
+    expect(toPatchInput(initial, { ...initial, title: "Mới", priority: "LOW" }, 4, "text")).toBeNull();
   });
 });

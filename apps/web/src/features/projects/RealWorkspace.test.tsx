@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { LEADER_ID, MEMBER_ID } from "@/mocks/data/database";
@@ -11,6 +12,7 @@ import { leaderTestSession, memberTestSession, renderAppRoutes } from "@/test/re
 import {
   buildDefaultStates,
   buildEpic,
+  buildLabel,
   buildProject,
   buildProjectMember,
   buildSprint,
@@ -74,6 +76,26 @@ describe("Real Board — /projects/:id/board", () => {
     const names = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(names).toEqual(["Backlog", "To Do", "In Progress", "Code Review", "Done"]);
     expect(within(screen.getByRole("region", { name: "In Progress" })).getByText("API đăng nhập")).toBeInTheDocument();
+  });
+
+  it("shows a card's labels, folding the extra ones", async () => {
+    const labels = ["a", "b", "c", "d"].map((id) => buildLabel({ id, name: `nhãn-${id}` }));
+    setup("/projects/project-1/board", {
+      ...WORKSPACE,
+      labels,
+      tasks: [{ ...TASKS[0], label_ids: ["a", "b", "c", "d"] }, ...TASKS.slice(1)],
+    });
+    const card = (await screen.findByText("Thiết kế đăng nhập", undefined, { timeout: 5000 })).closest("article")!;
+    const shown = within(within(card).getByRole("list", { name: "Nhãn" })).getAllByRole("listitem").map((item) => item.textContent);
+    expect(shown).toEqual(["nhãn-a", "nhãn-b", "nhãn-c", "+1"]);
+  });
+
+  it("still shows the board, with a note, when the epic list cannot be loaded", async () => {
+    setup("/projects/project-1/board", WORKSPACE);
+    // Đăng ký sau `setup` nên thắng handler epics của fixture; request chưa được gửi lúc này.
+    server.use(http.get("/api/work/projects/:projectId/epics/", () => HttpResponse.json({ error: { code: "INTERNAL_ERROR", message: "Lỗi" } }, { status: 500 })));
+    expect(await screen.findByText("Thiết kế đăng nhập", undefined, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Một phần dữ liệu chưa tải được (danh sách epic).");
   });
 
   it("shows only the active sprint, and no subtasks", async () => {

@@ -23,7 +23,8 @@ const TYPE_OPTIONS: readonly { value: IssueFormType; label: string }[] = [
 
 /**
  * Các ô của form issue, dùng chung cho tạo mới và sửa. `textOnly`: thành viên thường chỉ sửa được
- * title, mô tả và tiêu chí nghiệm thu nên các ô còn lại bị ẩn. `idPrefix` giữ id ô duy nhất khi hai form cùng hiện.
+ * mô tả (backend từ chối title/tiêu chí), nên title và tiêu chí chỉ đọc và các ô còn lại bị ẩn.
+ * `idPrefix` giữ id ô duy nhất khi hai form cùng hiện.
  */
 export function IssueFormFields({
   idPrefix,
@@ -53,6 +54,7 @@ export function IssueFormFields({
           id={id("title")}
           value={values.title}
           maxLength={TITLE_MAX}
+          readOnly={textOnly}
           autoComplete="off"
           aria-invalid={errors.title ? true : undefined}
           onChange={(event) => onChange({ title: event.target.value })}
@@ -75,6 +77,7 @@ export function IssueFormFields({
         <Textarea
           id={id("criteria")}
           rows={3}
+          readOnly={textOnly}
           value={values.acceptanceCriteria}
           onChange={(event) => onChange({ acceptanceCriteria: event.target.value })}
         />
