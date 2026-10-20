@@ -97,10 +97,15 @@ describe("Real Board — /projects/:id/board", () => {
     expect(await screen.findByText("Chưa có Sprint đang chạy")).toBeInTheDocument();
   });
 
-  it("cannot move cards: no action menu, no write request", async () => {
+  it("gives a member the action menu only on their own cards", async () => {
+    setup("/projects/project-1/board", WORKSPACE, memberTestSession);
+    await screen.findByText("Thiết kế đăng nhập");
+    expect(screen.getAllByRole("button", { name: /Thao tác cho/ })).toHaveLength(1);
+  });
+
+  it("makes no write request just by viewing the board", async () => {
     const { calls } = setup("/projects/project-1/board", WORKSPACE);
     await screen.findByText("Thiết kế đăng nhập");
-    expect(screen.queryByRole("button", { name: /Thao tác cho/ })).not.toBeInTheDocument();
     expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
   });
 
@@ -112,16 +117,16 @@ describe("Real Board — /projects/:id/board", () => {
         ...TASKS.slice(1),
       ],
     });
-    expect(await screen.findByText("Mô tả ngắn")).toBeInTheDocument();
+    expect((await screen.findAllByText("Mô tả ngắn")).length).toBeGreaterThan(0);
     expect(screen.queryByText(/alert\(1\)/)).not.toBeInTheDocument();
     expect(await screen.findByText("Việc con")).toBeInTheDocument();
   });
 
-  it("shows the task's own state in a locked status field, with no AI key link and locked subtasks", async () => {
-    setup("/projects/project-1/board?issue=NEXUS-1", WORKSPACE);
+  it("locks the status field and subtasks on a card the member does not own, with no AI key link", async () => {
+    setup("/projects/project-1/board?issue=NEXUS-2", { ...WORKSPACE, tasks: [...TASKS.slice(0, 1), buildTask({ ...TASKS[1] }), TASKS[2], buildTask({ ...TASKS[3], parent_id: "t2" })] }, memberTestSession);
     const select = await screen.findByLabelText("Trạng thái");
     expect(select).toBeDisabled();
-    expect(select).toHaveDisplayValue("To Do");
+    expect(select).toHaveDisplayValue("In Progress");
     expect(screen.queryByText(/Cấu hình AI key/)).not.toBeInTheDocument();
     expect(await screen.findByRole("checkbox", { name: /Việc con/ })).toBeDisabled();
   });

@@ -8,7 +8,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -101,9 +101,12 @@ function SubtaskList({
   subtasks,
   onToggle,
   readOnly,
+  persisted = false,
 }: Readonly<{
   subtasks: { id: string; title: string; done: boolean }[];
   onToggle: (id: string) => void;
+  /** Work thật: tick được ghi lên server, không chỉ đổi cục bộ. */
+  persisted?: boolean;
   /** Instructors see the checklist but cannot change it, not even locally. */
   readOnly: boolean;
 }>) {
@@ -149,7 +152,9 @@ function SubtaskList({
       <p className="text-[11px] text-muted-foreground">
         {readOnly
           ? "Bạn chỉ có quyền xem nhiệm vụ con."
-          : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
+          : persisted
+            ? "Đánh dấu được lưu ngay vào dự án."
+            : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
       </p>
     </div>
   );
@@ -325,7 +330,7 @@ function IssueDescription({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean }>) {
+function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing, createSlot }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean; createSlot?: ReactNode }>) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -342,10 +347,11 @@ function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdown
         />
       </div>
       {subtasks.length > 0 ? (
-        <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} />
+        <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} persisted={createSlot !== undefined} />
       ) : (
         <p className="text-xs text-muted-foreground">Chưa có nhiệm vụ con nào.</p>
       )}
+      {createSlot}
     </section>
   );
 }
@@ -535,6 +541,8 @@ function IssueDetailBody({
   readOnly,
   states,
   subtasksEditable,
+  editSlot,
+  subtaskCreateSlot,
   onChangeStatus,
   onClose,
 }: Readonly<{
@@ -551,6 +559,8 @@ function IssueDetailBody({
   readOnly: boolean;
   states: readonly ProjectState[];
   subtasksEditable: boolean;
+  editSlot?: ReactNode;
+  subtaskCreateSlot?: ReactNode;
   onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
 }>) {
@@ -561,6 +571,7 @@ function IssueDetailBody({
       <div className="grid items-start gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
           <IssueStatusField statusId={issue.statusId} states={states} onChange={onChangeStatus} />
+          {editSlot}
           <IssueDescription detail={detail} />
           <SubtasksSection
             subtasks={subtasks}
@@ -569,6 +580,7 @@ function IssueDetailBody({
             projectId={projectId}
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
+            createSlot={subtaskCreateSlot}
           />
           <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />
           <HistorySection detail={detail} />
@@ -598,6 +610,9 @@ export function IssuePanel({
   readOnly = false,
   states,
   subtasksEditable = true,
+  editSlot,
+  subtaskCreateSlot,
+  onToggleSubtaskRemote,
   onChangeStatus,
   onClose,
 }: Readonly<{
@@ -619,6 +634,12 @@ export function IssuePanel({
   states: readonly ProjectState[];
   /** `false` khi chưa có API sửa nhiệm vụ con: ô đánh dấu bị khóa. */
   subtasksEditable?: boolean;
+  /** Khối sửa issue (Work thật), đặt trên phần mô tả. */
+  editSlot?: ReactNode;
+  /** Form thêm nhiệm vụ con (Work thật). */
+  subtaskCreateSlot?: ReactNode;
+  /** Work thật: tick nhiệm vụ con ghi lên server thay vì chỉ đổi cục bộ. `done` là trạng thái muốn đặt. */
+  onToggleSubtaskRemote?: (subtaskId: string, done: boolean) => void;
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
   onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
@@ -645,6 +666,10 @@ export function IssuePanel({
   }, [detail, localDone]);
 
   function toggleSubtask(id: string) {
+    if (onToggleSubtaskRemote) {
+      onToggleSubtaskRemote(id, !(detail?.subtasks.find((s) => s.id === id)?.done ?? false));
+      return;
+    }
     setLocalDone((prev) => ({
       ...prev,
       [id]: !(prev[id] ?? detail?.subtasks.find((s) => s.id === id)?.done ?? false),
@@ -728,6 +753,8 @@ export function IssuePanel({
             readOnly={readOnly}
             states={states}
             subtasksEditable={subtasksEditable}
+            editSlot={editSlot}
+            subtaskCreateSlot={subtaskCreateSlot}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
           />

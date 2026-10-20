@@ -38,6 +38,10 @@ export interface ProjectWorkspaceContextValue {
   /** Instructors read the workspace and never change it. */
   readOnly: boolean;
   activeModule: ProjectModule;
+  /** Dự án đã lưu trữ: chỉ đọc với mọi vai (Work thật). Demo luôn `false`. */
+  archived: boolean;
+  /** Thành viên ACTIVE có thể được giao việc (Work thật). Demo để trống. */
+  assignees: readonly { userId: string; name: string }[];
 }
 
 const ProjectWorkspaceContext =
@@ -108,6 +112,8 @@ export default function ProjectWorkspaceLayout() {
             viewer: workspaceData.viewer,
             readOnly: isReadOnlyViewer(workspaceData.viewer),
             activeModule: moduleFromPathname(pathname),
+            archived: false,
+            assignees: [],
           }
         : null,
     [projectId, workspaceData, pathname],
