@@ -40,6 +40,8 @@ def jwks(_request):
 class LoginView(RestAuthLoginView):
     """Anonymous login must work even when the client still carries a revoked Bearer."""
 
+    success_message = "Đăng nhập thành công."
+
     authentication_classes = []
 
     def get_authenticate_header(self, request):
@@ -58,6 +60,7 @@ class LoginView(RestAuthLoginView):
     )
 )
 class SessionRefreshView(get_refresh_view()):
+    success_message = "Gia hạn phiên đăng nhập thành công."
     serializer_class = SessionRefreshSerializer
     throttle_scope = "dj_rest_auth"
 
@@ -77,4 +80,4 @@ class SessionRefreshView(get_refresh_view()):
 
 @require_GET
 def healthz(_request):
-    return JsonResponse(build_envelope({"status": "ok"}, "OK"))
+    return JsonResponse(build_envelope({"status": "ok"}, "Dịch vụ đang hoạt động."))

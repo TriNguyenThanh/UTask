@@ -14,4 +14,4 @@ class PasswordCompositionValidator:
             raise ValidationError(self.get_help_text(), code="password_composition")
 
     def get_help_text(self):
-        return "Password must contain uppercase and lowercase letters, a number, and a symbol."
+        return "Mật khẩu phải có chữ hoa, chữ thường, chữ số và ký tự đặc biệt."

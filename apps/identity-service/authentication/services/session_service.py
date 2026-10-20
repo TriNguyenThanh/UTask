@@ -40,7 +40,10 @@ def require_current_session(user, token):
         ).exists()
     ):
         raise AuthenticationFailed(
-            {"code": "TOKEN_REVOKED", "message": "Account or session is no longer active."}
+            {
+                "code": "TOKEN_REVOKED",
+                "message": "Phiên đăng nhập không còn hiệu lực. Vui lòng đăng nhập lại.",
+            }
         )
 
 
@@ -65,7 +68,9 @@ class SessionService:
         with transaction.atomic():
             current = User.objects.select_for_update().get(pk=user.pk)
             if not current.is_active or current.password != user.password:
-                raise AuthenticationFailed("Account credentials changed; login again.")
+                raise AuthenticationFailed(
+                    "Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại."
+                )
             token = create_token(current)
             session_id, family = uuid4(), uuid4()
             token["session_id"] = str(session_id)
@@ -100,7 +105,7 @@ class SessionService:
             session_id = UUID(verified["session_id"])
             family = UUID(verified["token_family"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise AuthenticationFailed("Invalid refresh claims.") from exc
+            raise AuthenticationFailed("Thông tin gia hạn phiên đăng nhập không hợp lệ.") from exc
         error = None
         result = None
         with transaction.atomic():
@@ -109,7 +114,7 @@ class SessionService:
                 pk=session_id, user_id=user_id, token_family=family
             ).first()
             if user is None or not user.is_active or session is None or session.is_revoked:
-                raise AuthenticationFailed("Refresh session revoked.")
+                raise AuthenticationFailed("Phiên đăng nhập đã bị thu hồi. Vui lòng đăng nhập lại.")
             if session.refresh_token_hash != hashlib.sha256(raw.encode()).hexdigest():
                 revoke_sessions(user, "REPLAY_ATTACK", family=family)
                 audit(
@@ -120,7 +125,7 @@ class SessionService:
                 )
                 error = IdentityAPIError(
                     "TOKEN_REPLAY_ATTACK_DETECTED",
-                    "Refresh replay detected; login again.",
+                    "Thông tin gia hạn phiên đã được sử dụng. Vui lòng đăng nhập lại.",
                     status_code=401,
                 )
             else:
@@ -149,14 +154,14 @@ class SessionService:
                 try:
                     token = UntypedToken(raw)
                 except TokenError as exc:
-                    raise InvalidToken("Invalid refresh credential.") from exc
+                    raise InvalidToken("Thông tin gia hạn phiên đăng nhập không hợp lệ.") from exc
                 if (
                     token.get("token_type") != "refresh"
                     or token.get("sub") != str(user.pk)
                     or token.get("token_family") != request.auth["token_family"]
                 ):
                     raise serializers.ValidationError(
-                        {"refresh": "Credential belongs to another device."}
+                        {"refresh": "Thông tin đăng xuất không thuộc thiết bị hiện tại."}
                     )
             session = UserSession.objects.get(pk=request.auth["session_id"], user=user)
             raw = OutstandingToken.objects.get(jti=session.refresh_jti).token
@@ -183,7 +188,9 @@ class SessionService:
             require_current_session(user, request.auth)
             target = UserSession.objects.filter(pk=session_id, user=user).first()
             if target is None:
-                raise IdentityAPIError("SESSION_NOT_FOUND", "Device not found.", status_code=404)
+                raise IdentityAPIError(
+                    "SESSION_NOT_FOUND", "Không tìm thấy thiết bị đăng nhập.", status_code=404
+                )
             revoke_sessions(user, "LOGOUT", family=target.token_family)
             audit(user, "SESSION_REVOKED", request, session_id=str(target.pk))
         return str(target.token_family) == request.auth["token_family"]
