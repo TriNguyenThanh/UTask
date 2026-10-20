@@ -4,7 +4,8 @@
 đã nghiệm thu local; bằng chứng tại [checkpoint 20/10/2026](checkpoint-2026-10-20.md).
 Runtime production chưa xác minh. Contract máy đọc được ở
 [OpenAPI 1.4.0](../../contracts/api/integration-service-v1.yaml). Path tính từ root server,
-chưa gồm prefix gateway. Response thành công dùng `{success:true,data:...}`.
+chưa gồm prefix gateway. Response thành công dùng `{success:true,data:...}`;
+riêng AI context trả trực tiếp `ContextDocument` để tương thích AI adapter.
 
 ## Account và consent
 
@@ -67,15 +68,15 @@ GitHub App mặc định tắt; khi tắt hoặc thiếu cấu hình, provider r
 
 ## Ngoài phạm vi đã triển khai
 
-Project/Task mutation, Work authorization/CAS, AI context, Kafka và đồng bộ
-GitHub không được cung cấp bởi các route này. Chúng là **Chưa triển khai**;
-không suy ra từ metadata account hoặc installation.
+Integration không sửa Project/Task của Work. Đồng bộ hoạt động GitHub bằng
+webhook/event riêng chưa có; context hiện đọc live theo request. Work/AI thật
+chưa nghiệm thu nối runtime, dù provider nội bộ dưới đây đã có trong source.
 
 ## Internal API M5/M6
 
-**Trạng thái: Thiết kế mục tiêu; chưa triển khai runtime.** OpenAPI 1.4.0 đã
-chốt sáu capability nội bộ, tất cả dùng `X-Service-Key` theo caller và bị chặn
-tại gateway:
+**Trạng thái: Đã triển khai phía provider; flags mặc định tắt.** OpenAPI 1.4.0
+có sáu capability nội bộ, kiểm thử PostgreSQL và HTTP stub; Work/AI thật chưa
+nghiệm thu. Tất cả dùng `X-Service-Key` theo caller và bị chặn tại gateway:
 
 | Method và path | Caller | Mục đích |
 | --- | --- | --- |
@@ -90,3 +91,16 @@ Schema request/response và error là nguồn chuẩn trong OpenAPI. Quy trình 
 caller xem [guide Work](work-service-integration-guide.md) và
 [guide AI](ai-service-integration-guide.md); quyết định kiến trúc ở
 [ADR-005](../adr/005-integration-work-ai-contracts.md).
+
+Prepare trả snapshot PENDING bất biến cả khi retry sau confirm; status phản
+ánh state operation hiện tại, confirm replay trả kết quả cuối cũ. Operation ID
+không nhận `.`/`..`. Một Project chỉ có một operation PREPARED; operation
+khác đang chờ trả 409. TTL 24 giờ, tombstone ít nhất 30 ngày sau expiry;
+receipt đang đại diện connection cuối được giữ lâu hơn. Abort/expire không
+tái sử dụng generation đã dành.
+
+Lỗi thêm: `OPERATION_CONFLICT`/`VERSION_CONFLICT` (409), `OPERATION_EXPIRED`
+(410), `WORK_UNAVAILABLE`/`CONNECTIONS_UNAVAILABLE` (503), Work không cho đọc
+context (403). Thiếu/sai key hoặc sai caller trả 403 trước khi gọi Identity.
+GitHub 401 yêu cầu cấp quyền lại; không coi dữ liệu rỗng là context hợp lệ.
+Xem [cấu hình, retry và rollout](runtime-connections.md).

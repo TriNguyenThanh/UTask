@@ -38,7 +38,7 @@ hiện chỉ có `WORK_INTEGRATION_ADAPTER`, chưa có bằng chứng các biế
 | --- | --- | --- |
 | `WORK_INTEGRATION_BASE_URL` | Work | URL nội bộ Integration, không phải URL gateway công khai. |
 | `WORK_INTEGRATION_SERVICE_KEY` | Work | Key riêng Work→Integration. |
-| `INTEGRATION_WORK_BASE_URL` | Integration | URL nội bộ Work để kiểm quyền và gửi callback receipt. |
+| `INTEGRATION_WORK_URL` | Integration | URL nội bộ Work để kiểm quyền và đọc receipt. |
 | `INTEGRATION_WORK_SERVICE_KEY` | Integration | Key riêng Integration→Work. |
 | `WORK_GITHUB_CONNECTION_ENABLED` | Work | Cờ bật luồng kết nối; mặc định `false`. |
 
@@ -50,8 +50,9 @@ response. HTTP timeout theo hướng dẫn hiện tại là 2 giây kết nối 
 ## Giao diện nội bộ
 
 Contract Integration là nguồn chuẩn cho path, schema, mã lỗi và trạng thái
-endpoint. Các endpoint dưới đây đã có trong contract với trạng thái
-`design-approved-m5`; đó là quyết định thiết kế, chưa phải bằng chứng runtime.
+endpoint. Các endpoint dưới đây đã được triển khai phía Integration với trạng
+thái `implemented`; kiểm thử dùng PostgreSQL/HTTP stub. Phần Work trong guide
+vẫn là thiết kế cần triển khai, chưa có bằng chứng tích hợp hai service thật.
 Request/response dùng envelope `success` và `data` theo schema được dẫn.
 
 | Operation | Bên gọi → bên nhận | Dữ liệu/hiệu lực |
@@ -63,7 +64,7 @@ Request/response dùng envelope `success` và `data` theo schema được dẫn.
 | `verify reference` | `POST /api/v1/internal/projects/{project_id}/github/references/verify`; Work → Integration | `ReferenceVerifyRequest`: `repo_id`, `generation`, `link_type`, `ref_id`; Bearer actor + Work service key. Trả `ReferenceFact`; không tạo `TaskGitHubLink`. |
 | `receipt` | `GET /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}`; Integration → Work | Endpoint Work mục tiêu, chỉ service key Integration→Work. Trả `applied`, `project_id`, `operation_id`, `generation`, `status`, `repo_id`, `source_version`; hiện chưa có trong contract máy đọc. |
 
-Contract đánh dấu operation Integration là thiết kế đã duyệt. Riêng callback
+Contract đánh dấu operation Integration là provider đã triển khai. Riêng callback
 receipt Work là path/schema mục tiêu cần được bổ sung vào contract Work trước
 khi triển khai; payload phải khớp operation đã commit, không chỉ trạng thái
 projection hiện thời.
@@ -106,6 +107,14 @@ Ngắt kết nối cũng dùng operation idempotent và CAS trên
 lại quyền/generation. Không gỡ GitHub App dùng chung chỉ vì một Project ngắt
 kết nối. Không giả định worker là singleton.
 
+Work cần bổ sung `DELETE /projects/{id}/github/repository/` trong API của
+chính Work, body `{operation_id,expected_connection_generation}` và quyền
+Leader ACTIVE. HTTP adapter map body này sang prepare `DISCONNECT` với
+`github_repo_id:null`; sau khi lưu pending/receipt/intent trả 202; dispatcher
+confirm chuyển projection cuối DISCONNECTED. Không gọi uninstall GitHub.
+Giữ `WORK_INTEGRATION_ADAPTER=infrastructure.integration.UnavailableIntegration`
+làm cấu hình rollback cho đến khi adapter HTTP và recovery được nghiệm thu.
+
 ## Lỗi, retry và phục hồi
 
 - Cùng operation và cùng payload được phép retry; cùng key nhưng payload khác
@@ -127,8 +136,46 @@ kết nối. Không giả định worker là singleton.
   phát lại thay đổi nghiệp vụ cho event trùng.
 
 Các thời hạn reservation 24 giờ, timeout HTTP và quy tắc generation nêu trên
-là thiết kế theo ADR/contract; chưa xác minh cấu hình runtime hay hành vi GitHub
-thật.
+đã có trong provider và kiểm thử; Work thật và GitHub trong luồng Project mới
+chưa nghiệm thu. Xem [cấu hình provider](runtime-connections.md).
+
+### Quyết định wire cho runtime provider
+
+Receipt Work trả HTTP 200 với `{success:true,data:{applied:true,project_id,
+operation_id,generation,status:"PENDING",repo_id,source_version}}`, đúng các
+trường này. `repo_id` là repo đích của CONNECT hoặc `null` cho DISCONNECT;
+`generation` và `source_version` phải bằng fact prepare đã commit. Receipt
+là bằng chứng chấp nhận operation bất biến, không phải snapshot projection có
+thể đã đổi do event. Integration so khớp toàn bộ trước khi finalize. Work phải
+giữ receipt ít nhất 30 ngày; receipt thiếu hoặc từ chối không kích hoạt connection.
+
+API quyền Work cho Integration là
+`POST /api/v1/internal/integration/projects/{project_id}/authorize`, header
+Bearer actor và key chiều Integration→Work, body duy nhất `{"action":"github.read"}`.
+HTTP 200 trả `{success:true,data:{project_id,action:"github.read",allowed:true}}`
+hoặc `allowed:false`; thiếu/sai schema hoặc timeout phải từ chối đọc context.
+
+Prepare tiêu thụ generation đúng một lần và dành một source version cho fact
+PENDING; confirm tăng source version lần nữa, chỉ phát fact cuối. Khi abort/expire,
+generation đã dùng không được tái sử dụng. Status trả snapshot operation để
+Work biết generation dành trước khi phát command tiếp theo. Connection cũ không
+phục vụ reference/context khi còn operation PREPARED. Sau invalidation, chỉ
+operation CONNECT mới cùng receipt mới có thể khôi phục quyền đọc.
+
+Work phải lưu operation đang chờ riêng với connection đã confirm gần nhất.
+Abort/expire phục hồi con trỏ về connection được chấp nhận, nhưng không giảm
+generation đã dành. Event thu hồi quyền dùng operation/generation của binding
+đã confirm cùng source version mới. Consumer ghi nhận việc thu hồi binding đó
+cả khi một operation mới đang PENDING; không để pending che mất revocation.
+Dispatcher xử lý ABORTED/EXPIRED bằng reconcile projection, không giả định
+connection cũ còn quyền. Receipt CONNECT đang đại diện binding phải giữ tới
+khi binding mới được confirm; retention 30 ngày không xóa receipt đang dùng.
+
+Cursor cho command tiếp theo lấy từ generation của operation status mới nhất;
+generation để verify reference lấy từ binding đã CONFIRMED. Sau prepare2 bị
+abort/expire, cursor vẫn 2 nhưng binding1 vẫn có thể đọc với generation1 nếu
+quyền còn hiệu lực. Không tăng generation projection binding chỉ vì reservation
+thất bại; lưu cursor riêng để command tiếp theo dùng expected_generation2.
 
 ## Kiểm tra cần có trước khi bật
 

@@ -1,7 +1,7 @@
 # ADR-005 — Hợp đồng Integration với Work và AI
 
 - Ngày: 20/10/2026.
-- Trạng thái: **Đã chốt thiết kế; runtime M5/M6 chưa triển khai.**
+- Trạng thái: **Đã chốt; provider Integration đã triển khai, flags mặc định tắt.** Work/AI thật chưa nghiệm thu.
 - Phạm vi: REST nội bộ Work/AI và event trạng thái connection của Integration.
 
 ## Bối cảnh
@@ -77,8 +77,15 @@ Contract nguồn là
 [`integration-service-v1.yaml`](../../contracts/api/integration-service-v1.yaml)
 v1.4.0 và
 [`integration.project.connection.changed.v1.json`](../../contracts/events/integration.project.connection.changed.v1.json).
-Các operation mới mang trạng thái `design-approved-m5` cho đến khi source và
-contract test đạt; event chỉ chuyển sang implemented sau khi publisher chạy.
+Các operation và event mang trạng thái `implemented` phía provider sau khi
+source, contract test và publisher được kiểm tra. Điều này không xác nhận
+dispatcher/consumer Work hoặc AI adapter thật đã triển khai.
+
+Runtime giữ riêng operation đã confirm và reservation mới. Abort/expire không
+làm mất receipt binding đang dùng; event revoke tham chiếu operation/generation
+đã được Work chấp nhận. Prepare replay dùng snapshot PENDING bất biến; confirm
+replay dùng snapshot cuối bất biến. Chi tiết wire receipt/quyền đã chốt trong
+[guide Work](../integration-service/work-service-integration-guide.md#quyết-định-wire-cho-runtime-provider).
 
 Rollout theo thứ tự: migration; deploy Integration với connection/Kafka/AI
 flags tắt; cấu hình key và Work callback; smoke internal REST; bật Work REST;

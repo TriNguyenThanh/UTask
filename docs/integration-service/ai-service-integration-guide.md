@@ -1,6 +1,6 @@
 # Tích hợp GitHub context từ AI Service
 
-**Trạng thái: Thiết kế mục tiêu. Chưa triển khai.** Adapter AI đã có domain
+**Trạng thái: Thiết kế mục tiêu phía AI; provider Integration đã triển khai.** Adapter AI đã có domain
 `github_activity` và bộ lọc trường ở mức nền; việc gọi endpoint GitHub context
 của Integration bằng service key và hợp đồng response dưới đây chưa được xác
 minh. Contract chuẩn là
@@ -55,11 +55,15 @@ cho `ContextDocument`: `available` dùng bình thường; `partial` được tr�
 workflow cùng warning để kết luận thận trọng; `stale` trả lỗi `CONTEXT_STALE`;
 `missing` phải được tool/workflow biểu diễn tường minh là không có context; không
 biến nó thành context `available` hoặc dữ liệu rỗng có vẻ đầy đủ.
-`partial` có thể phản ánh dữ liệu GitHub bị giới hạn/phân trang; agent phải thấy
-warning. Contract trả HTTP 200 cho `available`/`partial`, còn `stale`/`missing`/
-`unavailable` cũng dùng cùng schema; adapter phải kiểm tra `status`, không chỉ
+`partial` hiện phản ánh một loại hoạt động không được cấp quyền; mỗi danh sách
+là cửa sổ tối đa 20 item, không phải lịch sử đầy đủ. Agent phải thấy warning.
+Contract trả HTTP 200 cho `available`/`partial`, còn `stale`/`missing` cũng
+dùng cùng schema; lỗi khả dụng hiện trả HTTP 503/error envelope. Schema vẫn
+dành `unavailable` cho context không có nguồn dùng được; adapter phải kiểm tra `status`, không chỉ
 HTTP status. Lỗi HTTP 401/403 là lỗi xác thực/phân quyền; 429 và 503 là lỗi
 dịch vụ cần xử lý theo retry/deadline hiện có.
+HTTP 409 (`VERSION_CONFLICT` hoặc `GITHUB_REAUTH_REQUIRED`) không được dùng
+như context; thông báo cần đồng bộ/cấp quyền lại và không fallback fixture.
 `unavailable`, timeout, lỗi 5xx hoặc cấu hình thiếu phải báo context không sẵn
 sàng, có retry theo chính sách hiện hành nếu lỗi tạm thời. Payload sai schema,
 sai domain, quá lớn hoặc thời điểm không hợp lệ trả `CONTEXT_INVALID`.

@@ -111,8 +111,10 @@ cấu hình source, chưa chứng minh staging đã chạy. Hướng dẫn khung
 ## Giới hạn
 
 Không có thay đổi Work, Identity, AI, UI, Kafka, GitHub App private key hoặc
-domain sync trong M4. Work authorization/mutation và AI context vẫn
-**Chưa triển khai**. Xem [scope](scope-access.md) và [API](api.md).
+domain sync trong M4. Provider Work/AI được bổ sung sau M4 trong cùng nhánh;
+chi tiết source, cấu hình và phạm vi kiểm thử ở
+[vận hành provider](runtime-connections.md). Phía Work/AI vẫn cần triển khai
+adapter/dispatcher/consumer theo guide và nghiệm thu tích hợp thật.
 
 
 ## Smoke GitHub thật (chạy riêng)

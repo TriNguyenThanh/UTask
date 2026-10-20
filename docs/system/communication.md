@@ -26,7 +26,8 @@ riêng; số worker không được ấn định là singleton.
   Classroom đồng bộ để xác minh nhóm/lớp.
 - Integration là service duy nhất gọi trực tiếp GitHub; service khác dùng
   internal API hoặc event GitHub đã chuẩn hóa. Hợp đồng REST nội bộ Work/AI
-  hiện là **Thiết kế mục tiêu**, chưa phải endpoint runtime; xem
+  hiện **đã triển khai phía provider**, flags mặc định tắt và Work/AI thật
+  chưa nghiệm thu tích hợp; xem
   [ADR-005](../adr/005-integration-work-ai-contracts.md).
 - AI nhận ý định, lấy context qua domain tool/Context Layer có adapter internal
   REST API. Kiểm tra quyền trên target cũng gọi service sở hữu qua REST; không

@@ -358,12 +358,14 @@ flow mới và không mặc định tái sử dụng installation ID cũ.
 | TaskGitHubLink, confirm, unlink | Một phần | Work source/contract/test có; provider verification live chưa xác minh |
 | UI hoàn chỉnh cho toàn bộ luồng | Chưa xác minh | Frontend hiện không phải bằng chứng runtime backend |
 | Đồng bộ commit/branch/PR tự động | Chưa triển khai trong Integration | Cần producer/consumer, event contract, retry và reconcile |
-| AI context từ repository | Chưa triển khai | AI chỉ nhận context qua contract của service sở hữu |
+| Provider connection/reference/Kafka outbox | Đã triển khai phía Integration | PostgreSQL và HTTP stub; flags mặc định tắt; chưa nghiệm thu Work thật |
+| AI context từ repository | Một phần | Integration đã có REST context; AI adapter thật cần thực hiện guide |
 
 Thiết kế prepare/confirm/abort/status, event
 `integration.project.connection.changed` và AI context đã được chốt tại
-[ADR-005](../adr/005-integration-work-ai-contracts.md). Không mô tả các phần đó
-như đã chạy nếu chưa có adapter, worker, contract test và runtime evidence.
+[ADR-005](../adr/005-integration-work-ai-contracts.md). Provider hiện đã có source
+và test; xem [vận hành](runtime-connections.md). Chỉ ghi “đã tích hợp runtime”
+sau E2E với implementation Work/AI thật.
 
 Xem thêm [API Integration](api.md), [phạm vi và quyền](scope-access.md) và
 [contract OpenAPI](../../contracts/api/integration-service-v1.yaml).

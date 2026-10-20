@@ -44,7 +44,9 @@ tiếp tục sở hữu Project/Task, authorize và mutation; chưa có API Inte
 | Nhận webhook | HMAC hợp lệ, delivery ID duy nhất | Đã triển khai trong source; chạy thật chưa xác minh |
 | Đọc hoặc thu hồi account người khác | Không có API nhận actor tùy ý | Chưa triển khai |
 | Ghi Project/Task hoặc cấp quyền từ installation | Contract và quyền Work cần có | Chưa triển khai |
-| AI context hoặc Kafka event | Contract riêng cần quyết định | Chưa triển khai |
+| Project connection/reference | Work key; mutation/reference thêm Bearer đã xác minh; Work giữ quyền nghiệp vụ | Đã triển khai phía provider; flags mặc định tắt |
+| AI context | AI key + Bearer; Work authorize `github.read`, credential connector còn hiệu lực | Đã triển khai phía provider; chưa nghiệm thu AI thật |
+| Kafka connection event | Chỉ Integration produce; Work consume, không cấp quyền | Outbox/publisher đã có; chưa nghiệm thu Work consumer thật |
 
 ## Thiết kế mục tiêu và giới hạn
 
@@ -54,3 +56,10 @@ GitHub App registration; client không dùng GitHub App private key. Cấu hình
 registration và quyền hiệu lực trên GitHub production **Chưa xác minh**.
 Không diễn giải một installation hoặc `repository_selection` như quyền
 Project của UTask.
+
+Provider M5/M6 bổ sung connection riêng theo Project, không sửa dữ liệu Work.
+Mọi call Work/GitHub đều có timeout, không giữ transaction qua mạng; context
+fail closed nếu Work không cho phép. Quyền App cần Metadata/Contents/Pull requests
+read; Issues read tùy chọn. Thứ tự rollout và giới hạn kiểm thử tại
+[vận hành provider](runtime-connections.md), interface caller tại
+[guide Work](work-service-integration-guide.md) và [guide AI](ai-service-integration-guide.md).

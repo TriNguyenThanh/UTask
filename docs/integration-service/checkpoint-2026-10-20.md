@@ -1,8 +1,85 @@
 # Checkpoint Integration Service — 20/10/2026
 
-**Kết quả cuối ngày: các ca GitHub dev trong kế hoạch đã nghiệm thu đạt,
+## Checkpoint mới nhất — bàn giao provider theo commit
+
+**Trạng thái: Đã sửa P2 và xác minh lại phía Integration; tích hợp toàn hệ
+thống còn Một phần.** Provider đã triển khai theo [plan](plans/plan.md), flags
+mặc định tắt. Review chi tiết tại [biên bản review](review-2026-10-20.md),
+kết quả triển khai tại [biên bản provider](implementation-2026-10-20.md).
+
+- Nhánh `feat/integration-service`; base trước triển khai là
+  `b81ab01265fe6d2b465e0c5c54edf693bc9e0a61`. Thay đổi được chia thành bốn
+  commit theo dependency; danh sách bàn giao ở dưới. Nội dung plan giữ nguyên.
+  Không sửa source Work/AI.
+- **Đã triển khai phía Integration:** connection aggregate/migration,
+  prepare/confirm/abort/status, reference verification, context read-only có
+  Work authorize, lifecycle invalidation và Kafka outbox/retry/replay.
+- **P2 đã đóng:** deadline tổng 35 giây, reserve DB 10 giây, kiểm lại sau
+  claim/producer init và trừ thời gian produce khỏi flush. Riêng publisher:
+  mỗi thao tác DB budget 3 giây sau connect, mỗi SQL tối đa 1 giây bằng
+  `SET LOCAL`, giảm theo deadline. Soft timeout dừng task; event đã claim
+  vẫn phục hồi cùng ID sau lease 120 giây.
+- **Chạy mới sau sửa:** 906 test Integration trên PostgreSQL 16 riêng và
+  125 test script/hạ tầng đạt; 50 test Kafka/outbox focused của review độc lập
+  đạt. Ruff lint/format, Django check, migration drift và diff check đạt.
+  Regression trước sửa tái hiện lỗi; SQL timeout/rollback/SET LOCAL restoration,
+  claim/ACK chậm, soft timeout và lease recovery được kiểm thử.
+- **Kafka thật:** broker dừng trả về sau 25,08 giây, head pending và sequence
+  sau chưa gửi; restart/replay giữ 4 ID gốc, thứ tự, key/partition/schema đúng.
+  Image `utask/integration-service:timeout-check` build/smoke API 200, worker
+  đăng ký 3 task connection; Beat → Redis riêng → worker publish task đạt.
+- **Chưa xác minh:** Work/AI implementation thật, GitHub live cho Project
+  connection/reference, SASL/TLS/cloud và staging/production. Runtime local
+  đang chạy không được mặc định xem là image provider mới đã nghiệm thu.
+- Soft timeout được mô phỏng bằng exception; chưa thử signal/hard kill thật,
+  native/socket/commit bị treo hoặc crash sát ACK. Budget chủ động không thay
+  Celery hard limit 45 giây; consumer vẫn cần dedupe/version guard.
+- Chưa push hoặc deploy runtime hiện có; chỉ build/chạy hạ tầng test riêng.
+  Image kiểm tra mới là `utask/integration-service:timeout-check`.
+- Đã dọn 6 container test và 5 anonymous volume; dữ liệu tổng hợp test đã
+  xóa, chỉ tái tạo được bằng chạy lại. Image kiểm tra giữ lại, SHA256 publisher
+  khớp workspace. Danh sách 25 container khác giữ nguyên trước/sau cleanup.
+- GitNexus đã kiểm impact và toàn diff bằng index Git tạm trong lượt khắc
+  phục: risk CRITICAL, còn giới hạn độ chính xác graph; chi tiết tại review.
+  Khi chia commit, từng nhóm được stage tường minh và kiểm tra cả `all` lẫn
+  `staged`; không bỏ qua kết quả partial/truncated.
+
+### Các commit bàn giao
+
+1. `7ee53f9` — adapter Work/GitHub Project và service-key permission, kèm unit
+   test. Snapshot riêng của commit đạt 196 test adapter.
+2. `a712dcf` — provider connection/reference/AI context, lifecycle, migration,
+   outbox/publisher có budget timeout, dependency Kafka và contract/test tương ứng.
+   Snapshot riêng của commit đạt 670 unit/contract test.
+3. `c8f23ed` — env/Compose/certificate mount, topic Kafka và ba bộ test hạ tầng
+   liên quan.
+4. `docs(integration): hand off Work and AI connection implementation` —
+   commit chứa plan, guide Work/AI, tài liệu vận hành, review và checkpoint này.
+
+Trong lượt chia commit đã chạy lại 622 unit test và 48 contract test, lint/
+format và diff check đạt. Các kết quả PostgreSQL/Kafka/image ở trên thuộc
+lượt khắc phục trước; source runtime không thay đổi khi chia commit.
+
+### Điểm tiếp tục
+
+1. Đội Work/AI thực hiện [guide Work](work-service-integration-guide.md) và
+   [guide AI](ai-service-integration-guide.md); chốt E2E service thật rồi mới
+   kết luận đã tích hợp runtime. Khi drain, giữ provider recovery hoạt động.
+2. Nghiệm thu GitHub live cho Project, Kafka SASL/TLS nếu môi trường dùng,
+   rồi triển khai theo thứ tự flag tại [vận hành provider](runtime-connections.md).
+
+Các phần dưới đây là snapshot các lượt M4 trước trong cùng ngày, giữ nguyên
+bằng chứng lịch sử và không thay thế trạng thái provider mới nhất ở trên.
+
+## Kết quả các lượt GitHub dev M4 trước
+
+**Kết quả lượt M4: các ca GitHub dev trong kế hoạch đã nghiệm thu đạt,
 môi trường đã kết nối lại.** Xem [lượt triển khai kế hoạch nghiệm thu](#lượt-triển-khai-kế-hoạch-nghiệm-thu-trong-ngày).
 Các mục trước phần đó giữ bằng chứng của lượt chẩn đoán trước.
+
+Lượt triển khai provider Project/Work/AI sau nghiệm thu M4 được ghi riêng tại
+[biên bản provider](implementation-2026-10-20.md). Giữ các bằng chứng GitHub
+dev dưới đây theo đúng phạm vi M4; không suy ra Work/AI thật đã kết nối.
 
 **Trạng thái: Một phần.** Đã sửa mapping biến GitHub App, đồng bộ mẫu môi
 trường và kiểm tra cấu hình trên container local. Luồng thử bằng Reqable đã

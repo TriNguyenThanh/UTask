@@ -9,6 +9,8 @@ Chi tiết tại [foundation](foundation.md), [API](api.md) và
 
 ## Nguồn chuẩn
 
+- [Checkpoint mới nhất](checkpoint-2026-10-20.md): trạng thái bàn giao, bản sửa
+  timeout publisher và bước tiếp tục; [review provider](review-2026-10-20.md).
 - [Phạm vi và quyền](scope-access.md): ownership và ranh giới Identity/Work.
 - [API](api.md): route, request, response và trạng thái.
 - [Cách liên kết repository GitHub](github-repository-linking.md): luồng cấp
@@ -46,10 +48,13 @@ hay GitHub App private key trong M4.
 | Webhook, job durable và worker/Beat | Đã triển khai trong source | HMAC, inbox PostgreSQL, Celery/Redis, migration gate trong Compose |
 | GitHub dev theo kế hoạch nghiệm thu | Đã triển khai, đã nghiệm thu local | Consent, đọc repo, refresh thật, đổi quyền repo, uninstall/reinstall, revoke, DELETE và reconnect; xem checkpoint |
 | Staging/production | Chưa xác minh | Không deploy trong phiên nghiệm thu local |
-| Project/Task mutation, AI context, Kafka | Chưa triển khai | Ngoài phạm vi M4; Work vẫn sở hữu quyền nghiệp vụ |
+| Provider connection/reference/context/outbox | Đã triển khai trong source | Kiểm thử PostgreSQL và HTTP stub; flags mặc định tắt |
+| Project/Task mutation và tích hợp Work/AI thật | Chưa xác minh | Không sửa source Work/AI trong thay đổi provider |
 
-Contract v1.4.0 đã chốt thiết kế internal API Work/AI và giữ event connection
-v1 cho M5/M6. Sự hiện diện của contract và guide chưa chứng minh runtime đã nối.
+Provider M5/M6 hiện có connection theo Project, prepare/confirm/abort/status,
+reference, REST context và Kafka outbox. Xem
+[vận hành provider Work/AI](runtime-connections.md). Work dispatcher/consumer
+và adapter AI thật vẫn cần triển khai theo guide và nghiệm thu tích hợp.
 
 ## Mốc triển khai
 
