@@ -18,6 +18,8 @@ import {
   teacherTeamRequest,
   teacherTeamsRequest,
 } from "@/lib/api/teacherFlow";
+import { loadGroupProjects } from "@/lib/api/work/loaders";
+import type { ProjectDto } from "@/lib/api/work/dto";
 
 /**
  * Teacher cache keys are scoped by the signed-in user AND the class, so one
@@ -96,14 +98,20 @@ export function useTeacherTeams(courseId: string) {
   const userId = useTeacherUserId();
   return useQuery({
     queryKey: teacherKeys.teams(userId ?? "anonymous", courseId),
-    queryFn: async () =>
-      isRealService("classroom")
-        ? {
-            teams: toTeacherTeams(
-              await fetchRoster(queryClient, client, teacherKeys.roster(userId ?? "anonymous", courseId), courseId),
-            ),
-          }
-        : teacherTeamsRequest(client, courseId),
+    queryFn: async () => {
+      if (!isRealService("classroom")) return teacherTeamsRequest(client, courseId);
+      const roster = await fetchRoster(queryClient, client, teacherKeys.roster(userId ?? "anonymous", courseId), courseId);
+      let projectsByGroup: Map<string, ProjectDto[]> | undefined;
+      if (isRealService("work")) {
+        try {
+          const gp = await loadGroupProjects(client);
+          if (!gp.partial) projectsByGroup = gp.byGroup;
+        } catch {
+          // Work unavailable: teams still render, project field stays null.
+        }
+      }
+      return { teams: toTeacherTeams(roster, projectsByGroup) };
+    },
     enabled: userId !== null,
   });
 }

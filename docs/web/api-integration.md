@@ -49,7 +49,8 @@ VITE_API_BASE_URL=
 | 6 | Classroom: sinh viên tạo nhóm, vào nhóm bằng mã, cấp/tắt mã mời, rời nhóm, chuyển Trưởng nhóm, loại thành viên | Đã triển khai (đã smoke trình duyệt: tạo nhóm, bật mã mời, chuyển Trưởng nhóm, rời nhóm; chưa smoke giao diện vào nhóm bằng mã và loại thành viên) |
 | 7 | Classroom: giảng viên đọc lớp, tạo lớp, sửa lớp, trạng thái lớp, mã tham gia, chốt lập nhóm, thêm giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
 | 8 | Classroom: danh sách sinh viên, nhập danh sách, cho sinh viên rời lớp, chỉnh nhóm, lịch sử | Một phần (đã smoke API thật và trình duyệt; xem giới hạn) |
-| 9+ | Work, Admin | Chưa triển khai |
+| 9 | Work Project: danh sách dự án của tôi, vỏ dự án + trang Thông tin & thành viên, tạo dự án từ trang nhóm (Leader), sửa/lưu trữ/mở lại dự án, lấp `project` ở trang giảng viên | Một phần (đã smoke trình duyệt trên staging; xem giới hạn) |
+| 10+ | Work (Board, Backlog, Sprint, Task, Comment, Dashboard, GitHub, AI), Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -268,6 +269,35 @@ Chưa làm trong Phase 8: duyệt yêu cầu gia nhập chờ (B6), phân trang 
 quá 50 dòng, nút "Bỏ khỏi nhóm" riêng ngoài hộp điều chỉnh, ghi danh lại sinh
 viên đã bị loại (B12).
 
+## Work Project (Phase 9)
+
+Chạy khi `VITE_REAL_SERVICES` có `work`. Kế hoạch chi tiết:
+[work-api-intergration-plan.md](work-api-intergration-plan.md).
+
+| Việc | API | Ghi chú |
+|---|---|---|
+| Danh sách dự án | `GET /api/work/projects/?status=all` (tải hết, `page_size=100`) | Tab Đang hoạt động/Đã lưu trữ lọc phía client. `meta.scope.partial` hiện banner cảnh báo (giảng viên có thể thiếu dự án của lớp mình phụ trách) |
+| Vỏ dự án, Thông tin & thành viên | `GET /projects/{id}/`, `GET /projects/{id}/members/?status=ACTIVE` | Tên lớp/môn/nhóm tra thêm từ Classroom, lỗi thì để trống. Người ngoài dự án nhận 404 → "Không tìm thấy dự án". Backlog, Board, Code, Cài đặt hiện "chưa khả dụng" |
+| Tạo dự án | `POST /projects/` + `Idempotency-Key` | Chỉ Leader, nút ở trang nhóm. `identifier` `^[A-Z0-9]{2,10}$` duy nhất toàn hệ thống (`DUPLICATE_IDENTIFIER` → lỗi ở ô mã). Gửi lại cùng khóa khi bấm thử lại |
+| Sửa dự án | `PATCH /projects/{id}/` + `expected_version` | Chỉ Leader, chỉ gửi trường đổi. `VERSION_CONFLICT` tải lại dữ liệu |
+| Lưu trữ / mở lại | `POST /projects/{id}/archive/`, `/unarchive/` + `expected_version` | Không gửi `Idempotency-Key` (backend không dedupe). `version` lấy từ phản hồi |
+| Giảng viên | Nhóm → dự án qua `GET /projects/` | `TeacherTeam.project` và `teamsWithoutProject` chỉ có khi `partial` không bật; ngược lại giữ "chưa có dữ liệu" |
+
+Đã smoke trình duyệt trên staging (STUDENT Leader và TEACHER): `/projects` rỗng,
+tạo dự án từ trang nhóm, chuyển hướng sang `/projects/{id}/info`, danh sách có
+dự án, sửa tên, lưu trữ rồi mở lại, `/projects/{id}/board` hiện "chưa khả dụng",
+tạo trùng `identifier` hiện lỗi ở ô mã, giảng viên thấy "Chế độ chỉ xem" không
+có nút sửa/lưu trữ và thấy tên dự án ở trang nhóm. Quan sát: `GET
+/projects/{id}/members/` mất khoảng 5 giây trên staging (lệnh ghi chờ tải lại
+xong mới hết "Đang lưu…"); `weekly_capacity` của Leader mới tạo là 0. Chưa
+smoke: 503 `CLASSROOM_UNAVAILABLE`, `partial`, dự án của lớp đã `ARCHIVED`,
+nhiều dự án một nhóm, tạo dự án khi `CONCURRENT_MUTATION_IN_PROGRESS`.
+
+Chưa làm trong Phase 9: Board, Backlog, Sprint, Task, Comment, Dashboard,
+GitHub, AI (B14); sidebar và My Work vẫn chạy MSW (B20), nên ở chế độ thật
+`CourseEnrollment.projectId` không có người tiêu thụ; dự án smoke chỉ lưu trữ
+được vì Work không có API xóa (B18).
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -278,7 +308,7 @@ viên đã bị loại (B12).
 | B4 | Schema Classroom: khai báo enum trong OpenAPI; khóa của `profile` (`display_name, email, student_id, avatar_url`); cấu trúc `Activity.changes` (khóa `students[]`/`results[]` của import đã xác định từ mã nguồn và đã kiểm trên staging ở Phase 8, nhưng chưa có trong OpenAPI); khóa lạ trong một dòng import bị đánh dấu lỗi ở dòng đó (`VALIDATION_ERROR`) chứ không từ chối cả yêu cầu |
 | B5 | Thêm vào API: `Group.member_count`, `Group.leader_id`, `Class.enrolled_count`, `Class.grouped_count`, `Class.primary_teacher_id`, course `{id, code, name}` nhúng trong Class, và "nhóm của tôi" của lớp. Hiện sinh viên không biết số thành viên/trưởng nhóm của nhóm khác và phải dò từng nhóm; giảng viên phải tải thành viên của từng nhóm để biết sinh viên chưa có nhóm |
 | B6 | Tính năng UI chưa có API: đề tài, yêu cầu gia nhập chờ duyệt, hạn đăng ký nhóm, kỹ năng cần/trách nhiệm, giám sát của giảng viên (tín hiệu, quá hạn, hoạt động gần nhất, project của nhóm), tổng quan My Work, thông báo, GitHub |
-| B7 | Khoảng trống Work (xem kế hoạch Phase 9+ khi tới lượt) |
+| B7 | Khoảng trống Work: xem B14–B21 |
 | B8 | Ngữ nghĩa `preferences`; giá trị `refresh` trong body đăng nhập (frontend bỏ qua) |
 | B9 | Tra cứu người dùng theo email (Phase 7 buộc phải nhập UUID để thêm giảng viên đồng phụ trách) |
 | Mới | Đăng nhập email chưa xác minh trả `VALIDATION_ERROR` "E-mail is not verified." thay vì `ACCOUNT_PENDING_ACTIVATION`; đăng ký mật khẩu nhận mọi tên miền trong khi OAuth sinh viên yêu cầu `.edu.vn` |
@@ -286,6 +316,14 @@ viên đã bị loại (B12).
 | B11 | Giảng viên không đưa được Trưởng nhóm duy nhất của một nhóm ra khỏi nhóm hoặc lớp: `adjust-member` và `enrollments/{id}/exit/` trả 409 `LEADER_SUCCESSOR_REQUIRED`, mà người kế nhiệm phải là thành viên cùng nhóm (nếu không có thì 404). Hiện phải xếp thêm một người vào nhóm trước. Cần cho phép giải thể/bỏ nhóm một người hoặc cho nhóm không có Leader khi nó chỉ còn một người |
 | B12 | Sinh viên đã rời hoặc bị loại khỏi lớp không ghi danh lại được bằng thêm/nhập danh sách (`ENROLLMENT_INACTIVE`); chưa có API khôi phục ghi danh. Giảng viên bấm "Loại khỏi lớp" nhầm thì không hoàn tác được trên giao diện |
 | B13 | Lịch sử lớp/nhóm chỉ lấy trang đầu (50 dòng mới nhất); chưa có cách lọc theo loại sự kiện hay người làm. `Activity.changes` (B4f) chưa có hợp đồng nên giao diện chỉ hiện việc gì, ai, lúc nào |
+| B14 | Work không có API cấu hình AI key (BYOK) → tab Cài đặt ở chế độ thật không nối được |
+| B15 | `Project` thiếu tên môn/lớp/nhóm và tóm tắt sprint/tiến độ; đề nghị nhúng `class {code,name}`, `group {name}`, `active_sprint {name,end_date,done_points,total_points}` để bỏ N+1 (danh sách dự án hiện gọi thêm `getClass`, `listClassGroups`, `members` cho từng dự án) |
+| B16 | STUDENT gọi `GET /projects/?classroom_group_id=` bị 403; đề nghị cho thành viên lọc nhóm của chính mình. Frontend tải hết rồi lọc phía client |
+| B17 | `tech_stack` là object tự do, chưa có cấu trúc hay tài liệu; frontend luôn gửi `{}` |
+| B18 | Một nhóm có nhiều dự án nhưng không có khái niệm "dự án chính"; `identifier` duy nhất toàn hệ thống dễ trùng giữa các lớp; chưa có API xóa dự án |
+| B19 | Liên kết Classroom↔Work (`GET /api/classroom/groups/{id}/projects/`) cập nhật bất đồng bộ qua Kafka; cần xác nhận consumer chạy trên staging và độ trễ tối đa. Phase 9 hỏi thẳng Work |
+| B20 | Sidebar và My Work vẫn chạy MSW (`/api/work/api/v1/my-work/overview`); Work chưa có API tổng quan công việc của tôi |
+| B21 | `GET /projects/{id}/members/` chậm (~5 giây trên staging); `ProjectMember.display_name` có thể rỗng khi `UserProjection` chưa đồng bộ, frontend tra lại qua `users/batch` |
 
 ## Kiểm tra đã chạy
 

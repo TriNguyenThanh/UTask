@@ -42,6 +42,7 @@ import type {
 import { CreateGroupDialog } from "@/features/courses/components/CreateGroupDialog";
 import { InviteCodeCard } from "@/features/courses/components/InviteCodeCard";
 import { JoinGroupDialog } from "@/features/courses/components/JoinGroupDialog";
+import { TeamProjectSection } from "@/features/courses/components/TeamProjectSection";
 import { useGroupCommands } from "@/features/courses/hooks/useGroupCommands";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/errors";
@@ -988,6 +989,10 @@ function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
         }
       />
       {commands.dialog}
+
+      {isRealService("work") ? (
+        <TeamProjectSection groupId={team.teamId} isLeader={team.isLeader} />
+      ) : null}
 
       {team.repository ? (
         <section className="pt-2">
