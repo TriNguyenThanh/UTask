@@ -253,3 +253,63 @@ export interface TaskDto {
   /** Chỉ có ở trang chi tiết (`expand=relations`). */
   relations?: RelationDto[];
 }
+
+/** Bình luận trên task hoặc dự án (`CommentSerializer`). `deleted_at` luôn `null` trong danh sách. */
+export interface CommentDto {
+  id: string;
+  project_id: string;
+  task_id: string | null;
+  user_id: string;
+  /** Có thể rỗng khi `UserProjection` chưa đồng bộ. */
+  display_name: string;
+  avatar_url: string | null;
+  content_html: string;
+  content_stripped: string;
+  /** Server tự gắn khi tác giả là giảng viên đã xác minh. */
+  is_teacher_feedback: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  mentioned_user_ids: string[];
+}
+
+/** Dòng lịch sử của task. `old_value`/`new_value` là chuỗi thô (thường là JSON đã tuần tự hóa). */
+export interface ActivityDto {
+  id: string;
+  actor_user_id: string | null;
+  verb: string;
+  field: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+}
+
+export type AttachmentStatusDto = "PENDING" | "CONFIRMED" | "EXPIRED";
+
+export interface AttachmentDto {
+  id: string;
+  project_id: string;
+  task_id: string | null;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  status: AttachmentStatusDto;
+  expires_at: string | null;
+  confirmed_at: string | null;
+  deleted_at: string | null;
+  uploaded_by_user_id: string;
+  created_at: string;
+}
+
+/** Phản hồi xin quyền tải lên: `PUT` thẳng `presigned_url` với đúng `headers`, hạn `expires_in` giây. */
+export interface AttachmentPresignDto {
+  attachment_id: string;
+  presigned_url: string;
+  headers: Record<string, string>;
+  expires_in: number;
+}
+
+export interface AttachmentDownloadDto {
+  download_url: string;
+  expires_in: number;
+}

@@ -27,7 +27,8 @@ const priorityMeta: Record<TaskPriority, { label: string; icon: typeof ChevronsU
 };
 
 /** Exported for direct unit testing of the day-count math; not part of the UI. */
-export function formatDue(dueAt: string, now: Date): string {
+export function formatDue(dueAt: string | null, now: Date): string {
+  if (dueAt === null) return "Chưa đặt hạn";
   const due = new Date(dueAt);
   const sameDay = due.toDateString() === now.toDateString();
   const time = `${String(due.getHours()).padStart(2, "0")}:${String(due.getMinutes()).padStart(2, "0")}`;

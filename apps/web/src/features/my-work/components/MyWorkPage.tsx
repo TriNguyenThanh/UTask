@@ -55,6 +55,11 @@ export function MyWorkPage() {
     <div className="page-container space-y-8 px-4 pt-7 short:pt-4 sm:px-6 lg:px-8">
       {/* Tiêu đề hiển thị nằm ở Top bar. */}
       <h1 className="sr-only">Bàn làm việc của tôi</h1>
+      {overview.partial ? (
+        <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Một phần dữ liệu chưa tải được.
+        </p>
+      ) : null}
 
       <MyTasksSection
         tasks={overview.tasks}

@@ -543,6 +543,9 @@ function IssueDetailBody({
   subtasksEditable,
   editSlot,
   subtaskCreateSlot,
+  commentsSlot,
+  historySlot,
+  attachmentsSlot,
   onChangeStatus,
   onClose,
 }: Readonly<{
@@ -561,6 +564,10 @@ function IssueDetailBody({
   subtasksEditable: boolean;
   editSlot?: ReactNode;
   subtaskCreateSlot?: ReactNode;
+  /** Work thật: thay khối bình luận, lịch sử và đính kèm bằng dữ liệu server. */
+  commentsSlot?: ReactNode;
+  historySlot?: ReactNode;
+  attachmentsSlot?: ReactNode;
   onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
 }>) {
@@ -582,8 +589,9 @@ function IssueDetailBody({
             aiKeyMissing={aiKeyMissing}
             createSlot={subtaskCreateSlot}
           />
-          <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />
-          <HistorySection detail={detail} />
+          {commentsSlot ?? <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />}
+          {attachmentsSlot}
+          {historySlot ?? <HistorySection detail={detail} />}
         </div>
 
         <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} />
@@ -612,6 +620,9 @@ export function IssuePanel({
   subtasksEditable = true,
   editSlot,
   subtaskCreateSlot,
+  commentsSlot,
+  historySlot,
+  attachmentsSlot,
   onToggleSubtaskRemote,
   onChangeStatus,
   onClose,
@@ -638,6 +649,10 @@ export function IssuePanel({
   editSlot?: ReactNode;
   /** Form thêm nhiệm vụ con (Work thật). */
   subtaskCreateSlot?: ReactNode;
+  /** Work thật: bình luận, lịch sử và tệp đính kèm từ server thay cho khối demo. */
+  commentsSlot?: ReactNode;
+  historySlot?: ReactNode;
+  attachmentsSlot?: ReactNode;
   /** Work thật: tick nhiệm vụ con ghi lên server thay vì chỉ đổi cục bộ. `done` là trạng thái muốn đặt. */
   onToggleSubtaskRemote?: (subtaskId: string, done: boolean) => void;
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
@@ -755,6 +770,9 @@ export function IssuePanel({
             subtasksEditable={subtasksEditable}
             editSlot={editSlot}
             subtaskCreateSlot={subtaskCreateSlot}
+            commentsSlot={commentsSlot}
+            historySlot={historySlot}
+            attachmentsSlot={attachmentsSlot}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
           />

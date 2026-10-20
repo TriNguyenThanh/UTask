@@ -44,3 +44,19 @@ export function sprintWriteErrorMessage(error: unknown): string {
   }
   return issueWriteErrorMessage(error);
 }
+
+/**
+ * Lỗi khi gửi bình luận hoặc tải tệp. Lỗi 422/400 nghiệp vụ và lỗi mạng/kho lưu trữ (status 0) đã mang
+ * thông báo tiếng Việt cụ thể nên được giữ nguyên; 503 là kho lưu trữ chưa sẵn sàng và không tự thử lại.
+ */
+export function collabWriteErrorMessage(error: unknown): string {
+  const fallback = "Không thể gửi lúc này. Vui lòng thử lại.";
+  if (!(error instanceof ApiError)) return fallback;
+  if (error.code === "TEACHER_MUTATION_RESTRICTED") return "Giảng viên chỉ được bình luận, không sửa tệp đính kèm.";
+  if (error.code === "STORAGE_REJECTED") return error.message;
+  if (error.status === 503) return "Kho lưu trữ chưa sẵn sàng, hãy thử lại.";
+  if (error.status === 403) return "Bạn không có quyền thực hiện thao tác này.";
+  if (error.status === 404) return "Nội dung không còn tồn tại. Hãy tải lại.";
+  if ((error.status === 0 || error.status === 400 || error.status === 422) && error.message) return error.message;
+  return fallback;
+}

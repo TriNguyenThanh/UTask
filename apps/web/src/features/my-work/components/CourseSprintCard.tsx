@@ -45,7 +45,9 @@ export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: D
               {sprint.teamName} · {sprint.role === "leader" ? "Leader" : "Member"}
             </span>
           </div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">GVHD: {sprint.instructorName}</p>
+          {sprint.instructorName ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">GVHD: {sprint.instructorName}</p>
+          ) : null}
         </div>
 
         <div className="flex-1 md:max-w-md">

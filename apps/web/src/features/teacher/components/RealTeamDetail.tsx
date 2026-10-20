@@ -1,3 +1,6 @@
+import { RealTeamProgress } from "@/features/teacher/components/RealTeamProgress";
+import { RealTeamFeedback } from "@/features/teacher/components/RealTeamFeedback";
+import { isRealService } from "@/lib/config/services";
 import { Link, useParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -56,7 +59,7 @@ export function RealTeamDetail() {
                   <Link to={`/projects/${team.project.projectId}/info`} className="font-mono font-medium hover:underline">
                     {team.project.key}
                   </Link>{" "}
-                  {team.project.name}. Tiến độ chưa có dữ liệu (cần Work Service).
+                  {team.project.name}.{isRealService("work") ? "" : " Tiến độ chưa có dữ liệu (cần Work Service)."}
                 </>
               : "Project và tiến độ chưa có dữ liệu (cần Work Service)."}
           </p>
@@ -88,6 +91,14 @@ export function RealTeamDetail() {
         </CardContent>
       </Card>
 
+      {team.project && isRealService("work") ? <RealTeamProgress projectId={team.project.projectId} /> : null}
+
+      {team.project && isRealService("work") ? (
+        <RealTeamFeedback
+          projectId={team.project.projectId}
+          members={team.members.map((member) => ({ userId: member.userId, name: member.name }))}
+        />
+      ) : null}
       <ActivityList scope={{ groupId: team.teamId }} title="Lịch sử nhóm" />
     </div>
   );

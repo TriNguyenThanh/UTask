@@ -21,6 +21,7 @@ const buckets: { id: TaskBucketId; label: string }[] = [
   { id: "today", label: "Hôm nay" },
   { id: "week", label: "Tuần này" },
   { id: "overdue", label: "Quá hạn" },
+  { id: "undated", label: "Chưa đặt hạn" },
 ];
 
 interface CourseOption {
@@ -139,7 +140,9 @@ export function MyTasksSection({
               ? "Bạn không có nhiệm vụ nào quá hạn. Tiếp tục phát huy!"
               : bucket === "today"
                 ? "Không có việc gì cần làm trong hôm nay. Xem tab 'Tuần này' để chuẩn bị trước."
-                : "Không có nhiệm vụ nào trong 7 ngày tới."
+                : bucket === "undated"
+                  ? "Mọi nhiệm vụ đang mở của bạn đều đã có hạn."
+                  : "Không có nhiệm vụ nào trong 7 ngày tới."
           }
         />
       ) : (
