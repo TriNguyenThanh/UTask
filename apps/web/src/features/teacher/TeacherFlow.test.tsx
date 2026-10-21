@@ -143,10 +143,11 @@ describe("Teacher home (T01)", () => {
     expect(within(list).getAllByText("Chưa ghi nhận hoạt động")).toHaveLength(2);
   });
 
-  it("links Tạo lớp to the form page, which exists", async () => {
+  it("offers Tạo lớp as a dialog button on Home, not a page link", async () => {
     setup("/teacher");
     await screen.findByRole("heading", { name: "Bàn làm việc giảng viên" });
-    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
+    expect(screen.getByRole("button", { name: "Tạo lớp" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Tạo lớp" })).not.toBeInTheDocument();
   });
 
   it("keeps the term filter in the URL and distinguishes it from having no classes", async () => {
@@ -163,7 +164,7 @@ describe("Teacher home (T01)", () => {
   it("shows an empty state for a teacher with no classes", async () => {
     setup("/teacher", teacherTestSession, "teacher-empty");
     expect(await screen.findByText("Chưa phụ trách lớp nào", { selector: "h2" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
+    expect(screen.getByRole("button", { name: "Tạo lớp" })).toBeInTheDocument();
   });
 
   it("shows a loading skeleton while the classes load", async () => {

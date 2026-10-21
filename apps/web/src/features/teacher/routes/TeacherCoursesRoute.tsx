@@ -1,10 +1,10 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
+import { CreateClassButton } from "@/features/teacher/components/CreateClassButton";
 import { Input } from "@/components/ui/input";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
 import { CourseCard, courseLabel } from "@/features/teacher/components/shared";
@@ -52,9 +52,7 @@ export function Component() {
         title="Lớp phụ trách"
         description="Các lớp bạn được phân công hoặc đã tạo."
       >
-        <Button asChild>
-          <Link to="/teacher/courses/new">Tạo lớp</Link>
-        </Button>
+        <CreateClassButton />
       </PageHeader>
 
       {all.length === 0 ? (

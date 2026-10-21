@@ -110,11 +110,6 @@ export const appRoutes: RouteObject[] = [
             lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute"),
           },
           {
-            path: "courses/new",
-            handle: { title: "Tạo lớp" },
-            lazy: () => import("@/features/teacher/routes/TeacherCourseCreateRoute"),
-          },
-          {
             path: "courses/:courseId",
             handle: { title: "Lớp phụ trách" },
             lazy: () => import("@/features/teacher/routes/TeacherCourseLayout"),

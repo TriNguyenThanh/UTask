@@ -1,17 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { GraduationCap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { Link, useNavigate } from "react-router-dom";
 
-import { PageSkeleton } from "@/components/feedback/PageSkeleton";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { applyFieldErrors } from "@/features/auth/formErrors";
-import { UnsavedChangesGuard } from "@/features/teacher/components/UnsavedChangesGuard";
+import { FormBody, FormFooter, FormSection } from "@/features/teacher/components/ClassFormLayout";
 import { classErrorMessage } from "@/features/teacher/lib/classErrors";
 import {
   NEW_COURSE,
@@ -37,20 +33,27 @@ const CLASS_FIELDS = {
 const COURSE_FIELDS = { code: "newCourseCode", name: "newCourseName" } as const;
 
 const selectClass =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60";
 
 /**
- * T03 với Classroom thật: chọn môn có sẵn hoặc tạo môn mới, rồi tạo lớp. Hai
- * lệnh dùng hai khóa idempotency riêng; khóa đổi khi người dùng sửa dữ liệu
- * (nội dung đổi thì là ý định mới), giữ nguyên khi chỉ thử lại.
+ * T03 với Classroom thật, nằm trong hộp thoại "Tạo lớp". Classroom có hai thực thể: **môn học** (Course, mã duy
+ * nhất, dùng chung) và **lớp học** (ClassSection, thuộc một môn, có học kỳ, ngày và sĩ số nhóm). Form tách hai
+ * phần đó: chọn hoặc tạo môn, và thông tin lớp. Hai lệnh dùng hai khóa idempotency riêng; khóa đổi khi người dùng
+ * sửa dữ liệu (nội dung đổi thì là ý định mới), giữ nguyên khi chỉ thử lại.
  */
-export function ClassCreateForm() {
-  const navigate = useNavigate();
+export function ClassCreateForm({
+  onCreated,
+  onCancel,
+  onDirtyChange,
+}: Readonly<{
+  onCreated: (classId: string) => void;
+  onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}>) {
   const courses = useCourseOptions();
   const createCourse = useCreateCourse();
   const createClass = useCreateClass();
   const [formError, setFormError] = useState<string | null>(null);
-  const [createdId, setCreatedId] = useState<string | null>(null);
   const keys = useRef({ course: newIdempotencyKey(), cls: newIdempotencyKey() });
   // Môn vừa tạo: thử lại sau khi tạo lớp lỗi không tạo môn lần hai.
   const createdCourse = useRef<{ id: string; code: string; name: string } | null>(null);
@@ -61,11 +64,12 @@ export function ClassCreateForm() {
     mode: "onChange",
   });
   const choice = useWatch({ control: form.control, name: "courseChoice" });
-  const dirty = form.formState.isDirty && createdId === null;
+  const dirty = form.formState.isDirty;
+  const chosenCourse = (courses.data ?? []).find((course) => course.id === choice);
 
   useEffect(() => {
-    if (createdId) void navigate(`/teacher/courses/${createdId}`);
-  }, [createdId, navigate]);
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   useEffect(() => {
     const subscription = form.watch(() => {
@@ -108,7 +112,7 @@ export function ClassCreateForm() {
         groupMaxSize: Number(values.maxMembers),
         idempotencyKey: keys.current.cls,
       });
-      setCreatedId(cls.id);
+      onCreated(cls.id);
     } catch (error) {
       reportFailure(error, CLASS_FIELDS);
     }
@@ -122,215 +126,200 @@ export function ClassCreateForm() {
     setFormError(classErrorMessage(error));
   }
 
-  if (courses.isPending) {
-    return <PageSkeleton label="Đang tải danh sách môn học" />;
-  }
-
   const submitting = createCourse.isPending || createClass.isPending;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="space-y-3">
-        <Breadcrumbs
-          items={[
-            { label: "Trang chủ", to: "/teacher" },
-            { label: "Lớp phụ trách", to: "/teacher/courses" },
-            { label: "Tạo lớp" },
-          ]}
-        />
-        <PageHeader
-          title="Tạo lớp"
-          description="Chọn môn học, nhập thông tin lớp. Bạn sẽ là giảng viên phụ trách chính của lớp."
-        />
-      </div>
-
-      {courses.isError ? (
-        <Alert variant="destructive">
-          <AlertDescription>
-            Không tải được danh sách môn học.{" "}
-            <Button type="button" variant="link" className="h-auto p-0" onClick={() => void courses.refetch()}>
-              Thử lại
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <Form {...form}>
-        <form
-          noValidate
-          aria-label="Thông tin lớp mới"
-          className="max-w-2xl space-y-5"
-          onSubmit={(event) => void form.handleSubmit(submit)(event)}
-        >
-          <FormField
-            control={form.control}
-            name="courseChoice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Môn học</FormLabel>
-                <FormControl>
-                  <select className={selectClass} {...field}>
-                    <option value="">Chọn môn học…</option>
-                    {(courses.data ?? []).map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.code} — {course.name}
-                      </option>
-                    ))}
-                    <option value={NEW_COURSE}>+ Tạo môn học mới</option>
-                  </select>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {choice === NEW_COURSE ? (
-            <div className="grid items-start gap-5 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="newCourseCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mã môn mới</FormLabel>
-                    <FormControl>
-                      <Input placeholder="SE330" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="newCourseName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tên môn mới</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Đồ án Chuyên ngành" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          ) : null}
-          <div className="grid items-start gap-5 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="classCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mã lớp</FormLabel>
-                  <FormControl>
-                    <Input placeholder="SE330.P11" {...field} />
-                  </FormControl>
-                  <FormDescription>Mã lớp không trùng với lớp khác.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="term"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Học kỳ</FormLabel>
-                  <FormControl>
-                    <Input placeholder="HK1 2026–2027" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tên lớp</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ví dụ: Đồ án Chuyên ngành Công nghệ Phần mềm" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid items-start gap-5 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="startsOn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ngày bắt đầu</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="endsOn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ngày kết thúc</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <div className="grid items-start gap-5 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="minMembers"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sĩ số nhóm tối thiểu</FormLabel>
-                  <FormControl>
-                    <Input inputMode="numeric" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="maxMembers"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sĩ số nhóm tối đa</FormLabel>
-                  <FormControl>
-                    <Input inputMode="numeric" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="space-y-3 border-t pt-5">
-            {formError ? (
+    <Form {...form}>
+      <form
+        noValidate
+        aria-label="Thông tin lớp mới"
+        className="flex min-h-0 flex-1 flex-col"
+        onSubmit={(event) => void form.handleSubmit(submit)(event)}
+      >
+        <FormBody>
+          <FormSection>
+            {courses.isError ? (
               <p role="alert" className="text-sm text-destructive">
-                {formError}
+                Không tải được danh sách môn học.{" "}
+                <Button type="button" variant="link" className="h-auto p-0" onClick={() => void courses.refetch()}>
+                  Thử lại
+                </Button>
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Đang tạo lớp…" : "Tạo lớp"}
-              </Button>
-              <Button asChild variant="ghost">
-                <Link to="/teacher/courses">Hủy</Link>
-              </Button>
-            </div>
-          </div>
-        </form>
-      </Form>
+            <FormField
+              control={form.control}
+              name="courseChoice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Môn học</FormLabel>
+                  <FormControl>
+                    <select className={selectClass} disabled={courses.isPending} {...field}>
+                      <option value="">{courses.isPending ? "Đang tải danh sách môn học…" : "Chọn môn học…"}</option>
+                      {(courses.data ?? []).map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.code} — {course.name}
+                        </option>
+                      ))}
+                      <option value={NEW_COURSE}>+ Tạo môn học mới</option>
+                    </select>
+                  </FormControl>
+                  {chosenCourse ? (
+                    <FormDescription>
+                      Lớp mới thuộc môn {chosenCourse.code} — {chosenCourse.name}.
+                    </FormDescription>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {choice === NEW_COURSE ? (
+              <div className="grid items-start gap-4 rounded-lg border border-dashed bg-muted/30 p-4 sm:grid-cols-[1fr_2fr]">
+                <FormField
+                  control={form.control}
+                  name="newCourseCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Mã môn mới</FormLabel>
+                      <FormControl>
+                        <Input placeholder="SE330" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="newCourseName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tên môn mới</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Đồ án Chuyên ngành" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ) : null}
+          </FormSection>
 
-      <UnsavedChangesGuard dirty={dirty} />
-    </div>
+          <FormSection icon={GraduationCap} title="Thông tin lớp học">
+            <div className="grid items-start gap-4 sm:grid-cols-[1fr_1fr]">
+              <FormField
+                control={form.control}
+                name="classCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mã lớp</FormLabel>
+                    <FormControl>
+                      <Input placeholder="SE330.P11" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="term"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Học kỳ</FormLabel>
+                    <FormControl>
+                      <Input placeholder="HK1 2026–2027" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tên lớp</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ví dụ: Đồ án Chuyên ngành Công nghệ Phần mềm" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid items-start gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="startsOn"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ngày bắt đầu</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="endsOn"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ngày kết thúc</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid items-start gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="minMembers"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sĩ số nhóm tối thiểu</FormLabel>
+                    <FormControl>
+                      <Input inputMode="numeric" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="maxMembers"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sĩ số nhóm tối đa</FormLabel>
+                    <FormControl>
+                      <Input inputMode="numeric" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </FormSection>
+
+          {formError ? (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {formError}
+            </p>
+          ) : null}
+        </FormBody>
+
+        <FormFooter>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+            Hủy
+          </Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Đang tạo lớp…" : "Tạo lớp"}
+          </Button>
+        </FormFooter>
+      </form>
+    </Form>
   );
 }

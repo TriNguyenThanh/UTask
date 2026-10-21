@@ -33,7 +33,7 @@ export function toCourseEnrollment(
   return {
     courseId: cls.id,
     courseCode: course?.code ?? cls.code,
-    courseName: cls.name,
+    courseName: course?.name ?? cls.name,
     semester: cls.term,
     teamFormation: TEAM_FORMATION,
     projectId: null,

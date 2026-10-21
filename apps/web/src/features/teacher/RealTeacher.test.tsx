@@ -61,12 +61,41 @@ describe("real class creation", () => {
     await user.type(page.getByLabelText("Ngày kết thúc"), "2027-01-15");
   }
 
+  async function openCreate(user: ReturnType<typeof userEvent.setup>, fx?: ReturnType<typeof fixture>) {
+    if (fx) setup("/teacher/courses", fx);
+    else setup("/teacher/courses");
+    await user.click(await (await main()).findByRole("button", { name: "Tạo lớp" }));
+    return within(await screen.findByRole("dialog", { name: "Tạo lớp" }));
+  }
+
+  it("opens a dialog on the class list instead of leaving the page, and explains course vs class", async () => {
+    const user = userEvent.setup();
+    const page = await openCreate(user);
+    expect(screen.getByRole("heading", { name: "Lớp phụ trách", hidden: true })).toBeInTheDocument();
+    expect(page.getByText("Thông tin lớp học")).toBeInTheDocument();
+    expect(page.queryByText("Thông tin môn học")).not.toBeInTheDocument();
+    expect(page.queryByText(/Bước \d/)).not.toBeInTheDocument();
+    await user.selectOptions(await page.findByLabelText("Môn học"), "course-1");
+    expect(await page.findByText(/^Lớp mới thuộc môn /)).toBeInTheDocument();
+  });
+
+  it("closes with Hủy without sending anything, and starts empty when reopened", async () => {
+    const seen = record("post", "/api/classroom/classes/", () => envelope(buildClass(), { status: 201 }));
+    const user = userEvent.setup();
+    const page = await openCreate(user);
+    await user.type(page.getByLabelText("Tên lớp"), "Dở dang");
+    await user.click(page.getByRole("button", { name: "Hủy" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(await (await main()).findByRole("button", { name: "Tạo lớp" }));
+    expect(await within(await screen.findByRole("dialog")).findByLabelText("Tên lớp")).toHaveValue("");
+    expect(seen).toHaveLength(0);
+  });
+
   it("creates the class under an existing course, with one idempotency key, then opens it", async () => {
     const created = buildClass({ id: "class-new", name: "Đồ án chuyên ngành" });
     const seen = record("post", "/api/classroom/classes/", () => envelope(created, { status: 201 }));
-    setup("/teacher/courses/new", fixture({ classes: [created] }));
     const user = userEvent.setup();
-    const page = await main();
+    const page = await openCreate(user, fixture({ classes: [created] }));
     await user.selectOptions(await page.findByLabelText("Môn học"), "course-2");
     await fillClass(user, page);
     await user.click(page.getByRole("button", { name: "Tạo lớp" }));
@@ -89,9 +118,8 @@ describe("real class creation", () => {
       order.push("class");
       return envelope(buildClass({ id: "class-new" }), { status: 201 });
     });
-    setup("/teacher/courses/new");
     const user = userEvent.setup();
-    const page = await main();
+    const page = await openCreate(user);
     await user.selectOptions(await page.findByLabelText("Môn học"), "new");
     await user.type(page.getByLabelText("Mã môn mới"), "new1");
     await user.type(page.getByLabelText("Tên môn mới"), "Môn mới");
@@ -112,9 +140,8 @@ describe("real class creation", () => {
         ),
       ),
     );
-    setup("/teacher/courses/new");
     const user = userEvent.setup();
-    const page = await main();
+    const page = await openCreate(user);
     await user.selectOptions(await page.findByLabelText("Môn học"), "course-1");
     await fillClass(user, page);
     await user.click(page.getByRole("button", { name: "Tạo lớp" }));
@@ -125,9 +152,8 @@ describe("real class creation", () => {
 
   it("refuses to submit an invalid form without calling the server", async () => {
     const seen = record("post", "/api/classroom/classes/", () => envelope(buildClass(), { status: 201 }));
-    setup("/teacher/courses/new");
     const user = userEvent.setup();
-    const page = await main();
+    const page = await openCreate(user);
     await user.click(await page.findByRole("button", { name: "Tạo lớp" }));
     expect(await page.findByText("Chọn môn học hoặc tạo môn mới.")).toBeInTheDocument();
     expect(seen).toHaveLength(0);
@@ -135,9 +161,8 @@ describe("real class creation", () => {
 
   it("shows the server's refusal when the account is not a teacher", async () => {
     server.use(http.post("/api/classroom/classes/", () => envelopeError(403, "PERMISSION_DENIED", "Chỉ giảng viên mới được tạo lớp.")));
-    setup("/teacher/courses/new");
     const user = userEvent.setup();
-    const page = await main();
+    const page = await openCreate(user);
     await user.selectOptions(await page.findByLabelText("Môn học"), "course-1");
     await fillClass(user, page);
     await user.click(page.getByRole("button", { name: "Tạo lớp" }));

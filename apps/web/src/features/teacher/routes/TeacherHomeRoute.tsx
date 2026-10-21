@@ -1,10 +1,10 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
+import { CreateClassButton } from "@/features/teacher/components/CreateClassButton";
 import { AttentionPanel } from "@/features/teacher/components/AttentionPanel";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
 import {
@@ -85,9 +85,7 @@ export function Component() {
         title="Bàn làm việc giảng viên"
         description="Các lớp và nhóm bạn phụ trách."
       >
-        <Button asChild>
-          <Link to="/teacher/courses/new">Tạo lớp</Link>
-        </Button>
+        <CreateClassButton />
       </PageHeader>
 
       {all.length === 0 ? (
