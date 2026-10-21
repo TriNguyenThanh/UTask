@@ -297,3 +297,11 @@ Tài liệu chi tiết: [API](../architecture/Identity_Service_API_Specification
 [ERD](../diagram/identity-service/erd.md),
 [use case](../diagram/identity-service/usecase.md), [sequence](../diagram/identity-service/sequence.md),
 [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md).
+
+## Bàn giao tích hợp Notification
+
+Contacts, service key kiểm phiên và ba sự kiện mail đã có source/test. Đội
+Identity xem [hướng dẫn liên service](../notification-service/implementation.md)
+và [checkpoint Notification](../notification-service/checkpoint-2026-10-22.md)
+để phối hợp rollout. SMTP Gmail đã ACK thư thử riêng; luồng Identity thật qua
+Kafka tới Gmail và staging vẫn chưa nghiệm thu.

@@ -58,3 +58,11 @@ sau commit. Job nội bộ như deadline scan dùng Celery + Redis thuộc Work.
 AI proposal chỉ được áp dụng sau user xác nhận, kiểm tra quyền và business rule.
 Xem [giao tiếp](../system/communication.md) và
 [job nền](../infrastructure/background-jobs.md).
+
+## Bàn giao tích hợp Notification
+
+Work đã có producer sự kiện được Notification hỗ trợ và API resolve đơn/lô
+để kiểm quyền, dữ liệu hiện tại. Xem
+[hướng dẫn liên service](../notification-service/implementation.md) và
+[checkpoint Notification](../notification-service/checkpoint-2026-10-22.md).
+Không coi test provider là nghiệm thu toàn tuyến Work thật → Kafka → Gmail.
