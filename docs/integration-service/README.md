@@ -17,7 +17,8 @@ Chi tiết tại [foundation](foundation.md), [API](api.md) và
   quyền, cài App, đọc repository live, chọn repo chính cho Project và liên kết
   hoạt động GitHub vào Task.
 - [Hướng dẫn tích hợp Work](work-service-integration-guide.md): adapter REST,
-  prepare/confirm/abort, Kafka consumer và rollout phía Work (**Thiết kế mục tiêu**).
+  prepare/confirm/abort, Kafka consumer và rollout phía Work (**Đã triển khai
+  trong source; HTTP/Kafka test riêng đạt, GitHub live/staging chưa xác minh**).
 - [Hướng dẫn tích hợp AI](ai-service-integration-guide.md): REST context
   `github_activity`, service key và mapping lỗi phía AI (**Thiết kế mục tiêu**).
 - [Foundation](foundation.md): bằng chứng source, cấu hình và kiểm thử.
@@ -49,12 +50,13 @@ hay GitHub App private key trong M4.
 | GitHub dev theo kế hoạch nghiệm thu | Đã triển khai, đã nghiệm thu local | Consent, đọc repo, refresh thật, đổi quyền repo, uninstall/reinstall, revoke, DELETE và reconnect; xem checkpoint |
 | Staging/production | Chưa xác minh | Không deploy trong phiên nghiệm thu local |
 | Provider connection/reference/context/outbox | Đã triển khai trong source | Kiểm thử PostgreSQL và HTTP stub; flags mặc định tắt |
-| Project/Task mutation và tích hợp Work/AI thật | Chưa xác minh | Không sửa source Work/AI trong thay đổi provider |
+| Kết nối Project và Task reference phía Work | Đã triển khai trong source | Hai backend qua HTTP/PostgreSQL/Kafka test riêng; GitHub/Identity stub, xem [Work](../project-service/github-integration.md) |
+| AI authorize/context và GitHub live cho Project | Chưa xác minh | Không nằm trong lượt triển khai Work này |
 
 Provider M5/M6 hiện có connection theo Project, prepare/confirm/abort/status,
 reference, REST context và Kafka outbox. Xem
-[vận hành provider Work/AI](runtime-connections.md). Work dispatcher/consumer
-và adapter AI thật vẫn cần triển khai theo guide và nghiệm thu tích hợp.
+[vận hành provider Work/AI](runtime-connections.md). Phía Work đã có task phục
+hồi/consumer; adapter AI và nghiệm thu GitHub live cho Project là phạm vi riêng.
 
 ## Mốc triển khai
 

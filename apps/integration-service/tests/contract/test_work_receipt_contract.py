@@ -1,4 +1,4 @@
-"""Work receipt mục tiêu khớp consumer Integration; không gọi DB hoặc HTTP thật."""
+"""Hợp đồng receipt Work đã triển khai khớp consumer; không gọi DB hoặc HTTP thật."""
 
 import copy
 import json
@@ -62,15 +62,15 @@ def test_work_openapi_and_external_references_are_valid():
     validate_url(API.as_uri())
 
 
-def test_receipt_contract_is_internal_planned_and_service_key_only(contract):
+def test_receipt_contract_is_internal_implemented_and_service_key_only(contract):
     assert contract["info"]["version"] == "1.5"
     assert contract["servers"] == [{"url": "/api/work", "description": "Work API qua gateway"}]
     path = contract["paths"][RECEIPT_PATH]
-    assert path["servers"] == [{"url": "http://work-service:8000"}]
-    assert set(path) == {"servers", "get"}
+    assert set(path) == {"get"}
     operation = path["get"]
+    assert operation["servers"] == [{"url": "http://work-service:8000"}]
     assert operation["operationId"] == "internal_integration_github_receipt"
-    assert operation["x-implementation-status"] == "planned"
+    assert operation["x-implementation-status"] == "implemented"
     assert operation["x-utask-callers"] == ["integration"]
     assert operation["security"] == [{"WorkServiceKey": []}]
     assert "requestBody" not in operation
@@ -91,7 +91,7 @@ def test_receipt_contract_is_internal_planned_and_service_key_only(contract):
         "name": "X-Service-Key",
     }
     responses = operation["responses"]
-    assert set(responses) == {"200", "400", "403", "404", "503"}
+    assert set(responses) == {"200", "400", "403", "404", "500", "503"}
     cache = responses["200"]["headers"]["Cache-Control"]
     assert cache["required"] is True
     assert cache["schema"] == {"type": "string", "const": "no-store"}

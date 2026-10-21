@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:utask:integration:project-connection-changed:v1",
   "title": "Integration project connection changed v1",
-  "description": "Provider outbox/publisher đã triển khai, feature flag mặc định tắt. Consumer Work thật chưa nghiệm thu. Không cấp quyền hoặc tự xác nhận Task link.",
+  "description": "Provider outbox/publisher đã triển khai, feature flag mặc định tắt. Đã kiểm connect/disconnect qua consumer Work trên staging local, chưa nghiệm thu mọi tình huống provider. Không cấp quyền hoặc tự xác nhận Task link.",
   "x-utask-status": "implemented",
   "x-kafka-topic": "utask.integration.events",
   "x-kafka-key": "payload.project_id",
