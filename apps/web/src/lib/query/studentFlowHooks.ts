@@ -1,5 +1,10 @@
+import { useSyncExternalStore } from "react";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { isRealService } from "@/lib/config/services";
+import { notificationPageRequest, unreadNotificationCountRequest } from "@/features/notifications/api";
 import { myWorkKeys } from "@/features/my-work/queries";
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -152,36 +157,74 @@ export function useSaveAiKey(projectId: string) {
   });
 }
 
+function subscribeVisibility(callback: () => void) {
+  document.addEventListener("visibilitychange", callback);
+  return () => document.removeEventListener("visibilitychange", callback);
+}
+
+function useVisibleTab() {
+  return useSyncExternalStore(subscribeVisibility, () => document.visibilityState === "visible");
+}
+
 export function useNotifications() {
   const client = useApiClient();
+  const { user } = useAuth();
+  const live = isRealService("notifications");
+  const visible = useVisibleTab();
+  const query = useInfiniteQuery({
+    queryKey: [...studentFlowKeys.notifications, user?.id, live, "list"],
+    initialPageParam: "",
+    queryFn: async ({ pageParam, signal }) => live
+      ? notificationPageRequest(client, pageParam, signal)
+      : { results: await notificationsRequest(client), next: null },
+    getNextPageParam: (lastPage) => lastPage.next ?? undefined,
+    enabled: !!user,
+    refetchInterval: live && visible ? 30_000 : false,
+    refetchIntervalInBackground: false,
+  });
+  return { ...query, data: query.data?.pages.flatMap((page) => page.results) };
+}
+
+export function useUnreadNotificationCount() {
+  const visible = useVisibleTab();
+  const client = useApiClient();
+  const { user } = useAuth();
+  const live = isRealService("notifications");
   return useQuery({
-    queryKey: studentFlowKeys.notifications,
-    queryFn: () => notificationsRequest(client),
+    queryKey: [...studentFlowKeys.notifications, user?.id, live, "unread"],
+    queryFn: ({ signal }) => unreadNotificationCountRequest(client, signal),
+    enabled: !!user && live,
+    refetchInterval: visible ? 30_000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useMarkNotificationRead() {
   const client = useApiClient();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const live = isRealService("notifications");
   return useMutation({
-    mutationFn: (id: string) => markNotificationReadRequest(client, id),
+    mutationFn: (id: string) => live
+      ? client.request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "POST" })
+      : markNotificationReadRequest(client, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: studentFlowKeys.notifications,
-      });
+      void queryClient.invalidateQueries({ queryKey: [...studentFlowKeys.notifications, user?.id, live] });
     },
   });
 }
 
 export function useMarkAllNotificationsRead() {
   const client = useApiClient();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const live = isRealService("notifications");
   return useMutation({
-    mutationFn: () => markAllNotificationsReadRequest(client),
+    mutationFn: () => live
+      ? client.request("/api/notifications/read-all", { method: "POST" })
+      : markAllNotificationsReadRequest(client),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: studentFlowKeys.notifications,
-      });
+      void queryClient.invalidateQueries({ queryKey: [...studentFlowKeys.notifications, user?.id, live] });
     },
   });
 }

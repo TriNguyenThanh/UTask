@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { Bell } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,6 +14,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
+  useUnreadNotificationCount,
 } from "@/lib/query/studentFlowHooks";
 
 const PREVIEW_COUNT = 5;
@@ -23,13 +25,14 @@ export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const query = useNotifications();
+  const unreadQuery = useUnreadNotificationCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const now = useMemo(() => new Date(), []);
   const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
 
   const items = query.data ?? [];
-  const unreadCount = items.filter((item) => !item.read).length;
+  const unreadCount = unreadQuery.data?.count ?? items.filter((item) => !item.read).length;
   const latest = [...items]
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, PREVIEW_COUNT);
@@ -61,7 +64,8 @@ export function NotificationBell() {
               variant="link"
               size="sm"
               className="h-auto p-0 text-xs"
-              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+              onClick={() => markAllRead.mutate(undefined, { onError: () => toast.error("Không thể đánh dấu đã đọc. Vui lòng thử lại.") })}
             >
               Đánh dấu tất cả đã đọc
             </Button>
@@ -91,7 +95,7 @@ export function NotificationBell() {
                     type="button"
                     className="flex w-full items-start gap-2 px-4 py-2.5 text-left hover:bg-muted"
                     onClick={() => {
-                      if (!item.read) markRead.mutate(item.id);
+                      if (!item.read) markRead.mutate(item.id, { onError: () => toast.error("Không thể đánh dấu đã đọc. Vui lòng thử lại.") });
                       if (item.target) {
                         setOpen(false);
                         navigate(targetUrl(item.target, teacherOnly));
