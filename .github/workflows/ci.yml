@@ -17,6 +17,11 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: read
+      actions: read
     outputs:
       services: ${{ steps.services.outputs.services }}
       checks: ${{ steps.services.outputs.checks }}
@@ -28,15 +33,28 @@ jobs:
       release_matrix: ${{ steps.services.outputs.release_matrix }}
       release_needed: ${{ steps.services.outputs.release_needed }}
       web_ready: ${{ steps.services.outputs.web_ready }}
-      shared: ${{ steps.filter.outputs.shared }}
+      shared: ${{ steps.filter.outputs.shared == 'true' || steps.staging.outputs.reconcile == 'true' }}
       web: ${{ steps.filter.outputs.web }}
-      deployment: ${{ steps.filter.outputs.deployment }}
+      deployment: ${{ steps.filter.outputs.deployment == 'true' || steps.staging.outputs.reconcile == 'true' }}
+      deployment_state: ${{ steps.staging.outputs.deployment_state }}
+      ci_reused: ${{ steps.reuse.outputs.reused == 'true' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
+      - name: Resolve last successful staging deployment
+        id: staging
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python scripts/staging_release.py
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.staging.outputs.base_sha }}
+          ref: ${{ github.event_name == 'push' && github.sha || '' }}
           list-files: json
           filters: |
             shared:
@@ -54,6 +72,7 @@ jobs:
               - 'apps/web/**'
             deployment:
               - 'scripts/discover_services.py'
+              - 'scripts/staging_release.py'
               - 'scripts/deploy_staging.sh'
               - '.github/workflows/ci.yml'
               - '.github/workflows/release-staging.yml'
@@ -66,13 +85,73 @@ jobs:
         id: services
         env:
           CHANGED_FILES: ${{ steps.filter.outputs.code_files }}
-          SHARED_CHANGED: ${{ steps.filter.outputs.shared }}
-          DEPLOYMENT_CHANGED: ${{ steps.filter.outputs.deployment }}
+          SHARED_CHANGED: ${{ steps.filter.outputs.shared == 'true' || steps.staging.outputs.reconcile == 'true' }}
+          DEPLOYMENT_CHANGED: ${{ steps.filter.outputs.deployment == 'true' || steps.staging.outputs.reconcile == 'true' }}
         run: uv run --no-project --with PyYAML==6.0.3 python scripts/discover_services.py
+
+      - name: Find the merged PR's latest CI run
+        id: previous
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const repo = context.repo;
+              const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {...repo, commit_sha: context.sha, per_page: 100});
+              const pr = prs.find(p => p.merged_at && p.base.ref === 'main' && p.merge_commit_sha === context.sha);
+              if (!pr) return;
+              const {data} = await github.rest.actions.listWorkflowRuns({
+                ...repo, workflow_id: 'ci.yml', event: 'pull_request', head_sha: pr.head.sha, per_page: 100
+              });
+              const run = data.workflow_runs[0];
+              if (run?.conclusion === 'success') core.setOutput('run_id', String(run.id));
+            } catch {
+              core.info('Previous PR checks unavailable; running CI normally.');
+            }
+      - name: Download previous PR validation
+        id: validation
+        if: steps.previous.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-validation
+          run-id: ${{ steps.previous.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/utask-pr-ci
+      - name: Verify previous PR validation covers this release
+        id: reuse
+        if: steps.validation.outcome == 'success'
+        env:
+          VALIDATION_FILE: ${{ runner.temp }}/utask-pr-ci/ci-validation.json
+          CHECKS: ${{ steps.services.outputs.checks }}
+          COMPOSE_REQUIRED: ${{ steps.filter.outputs.shared == 'true' || steps.services.outputs.release_needed == 'true' }}
+          WEB_REQUIRED: ${{ steps.services.outputs.web_ready == 'true' && (steps.filter.outputs.shared == 'true' || steps.staging.outputs.reconcile == 'true' || steps.filter.outputs.web == 'true') }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          reused = False
+          try:
+              proof = json.loads(Path(os.environ['VALIDATION_FILE']).read_text())
+              tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+              required = json.loads(os.environ['CHECKS'])['include']
+              reused = (
+                  proof['tree'] == tree
+                  and all(check in proof['checks'] for check in required)
+                  and (os.environ['COMPOSE_REQUIRED'] != 'true' or proof['compose'] is True)
+                  and (os.environ['WEB_REQUIRED'] != 'true' or proof['web'] is True)
+              )
+          except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError):
+              pass
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'reused={str(reused).lower()}\n')
+          print('Reusing successful PR validation' if reused else 'Running CI: PR validation does not cover this commit')
+          PY
 
   compose-config:
     needs: changes
-    if: needs.changes.outputs.shared == 'true' || needs.changes.outputs.release_needed == 'true'
+    if: needs.changes.outputs.ci_reused != 'true' && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.release_needed == 'true')
     runs-on: ubuntu-latest
     env:
       COMPOSE_PROFILES: ${{ join(fromJSON(needs.changes.outputs.services), ',') }}
@@ -99,7 +178,7 @@ jobs:
 
   python-services:
     needs: changes
-    if: needs.changes.outputs.checks_needed == 'true'
+    if: needs.changes.outputs.ci_reused != 'true' && needs.changes.outputs.checks_needed == 'true'
     name: Check ${{ matrix.service }}
     strategy:
       fail-fast: false
@@ -114,7 +193,7 @@ jobs:
 
   web:
     needs: changes
-    if: needs.changes.outputs.web_ready == 'true' && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true')
+    if: needs.changes.outputs.ci_reused != 'true' && needs.changes.outputs.web_ready == 'true' && (needs.changes.outputs.shared == 'true' || needs.changes.outputs.web == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -156,6 +235,8 @@ jobs:
               "python-services": selected.get("checks_needed") == "true",
               "web": selected.get("web_ready") == "true" and (selected.get("shared") == "true" or selected.get("web") == "true"),
           }
+          if selected.get('ci_reused') == 'true':
+              required = {'changes': True}
           failed = [name for name, job in results.items()
                     if job["result"] in ("failure", "cancelled")
                     or (required.get(name, False) and job["result"] != "success")]
@@ -163,6 +244,34 @@ jobs:
               raise SystemExit(f"CI failed: {', '.join(failed)}")
           print("All selected checks passed")
           PY
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+      - name: Record successful PR validation
+        if: github.event_name == 'pull_request'
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          results = json.loads(os.environ['RESULTS'])
+          selected = results['changes']['outputs']
+          proof = {
+              'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'checks': json.loads(selected['checks'])['include'] if results['python-services']['result'] == 'success' else [],
+              'compose': results['compose-config']['result'] == 'success',
+              'web': results['web']['result'] == 'success',
+          }
+          Path('ci-validation.json').write_text(json.dumps(proof))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
+        with:
+          name: ci-validation
+          path: ci-validation.json
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
 
   release-staging:
     needs:
@@ -178,9 +287,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+      deployments: read
     uses: ./.github/workflows/release-staging.yml
     with:
       source_sha: ${{ github.sha }}
+      deployment_state: ${{ needs.changes.outputs.deployment_state }}
       services: ${{ needs.changes.outputs.release_matrix }}
       migration_services: ${{ join(fromJSON(needs.changes.outputs.django_services), ' ') }}
       gateway_health_paths: ${{ needs.changes.outputs.gateway_health_paths }}

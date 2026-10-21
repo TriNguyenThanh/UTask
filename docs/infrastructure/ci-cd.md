@@ -16,6 +16,76 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` build các service đang bật từ commit đã qua CI, chuyển digest (mã xác định nội dung image) giữa các job bằng artifact của GitHub Actions. VPS dùng `docker-compose.staging.yml` cùng file ghi đè `staging-images.json` để chạy đúng image, migration rồi cập nhật container qua SSH.
 
+## Dùng lại kết quả CI của Pull Request sau merge
+
+Khi CI của PR thành công, job `CI result` lưu artifact `ci-validation` trong
+7 ngày. Artifact chỉ chứa mã Git tree (đại diện nội dung toàn bộ file đã commit),
+danh sách service và các kiểm tra Compose/Web thực sự đã đạt; không chứa secret
+hay image Docker.
+
+Sau push `main`, job `changes` tìm PR đã merge tại đúng commit đó và lần chạy
+`ci.yml` mới nhất cho head của PR. Nếu lần chạy thành công, workflow đọc artifact
+và đối chiếu nội dung code cùng phạm vi kiểm thử cần cho lần release hiện tại.
+Nếu đều khớp, các job lint/test/Compose/Web được bỏ qua và `CI result` chấp nhận
+kết quả đã xác minh để tiếp tục build image rồi deploy. Commit merge có thể khác
+mã commit merge thử của PR nhưng chỉ được dùng lại nếu Git tree giống hệt.
+
+Không tìm được PR, lần chạy mới nhất chưa thành công, artifact hết hạn/không tải
+được, code khác hoặc thiếu kiểm tra service còn tồn từ lần chưa deploy thì CI
+chạy lại theo lựa chọn hiện có. Không dùng một lần xanh cũ hơn để bỏ qua lần
+chạy mới nhất bị lỗi. Push trực tiếp cũng đi qua CI bình thường.
+
+Phần này chỉ dùng lại kết quả kiểm thử; build image phát hành vẫn lấy đúng SHA
+trên `main`. Quyết định có release hay không vẫn so với lần deploy thành công
+gần nhất. Không thay cấu hình `.env` hoặc yêu cầu thêm token; job đọc bằng
+`GITHUB_TOKEN` với quyền `actions: read` và `pull-requests: read`.
+Việc bảo vệ `main` bằng required status checks vẫn cần thiết để chặn merge PR lỗi.
+Xem [workflow artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data)
+và [download-artifact](https://github.com/actions/download-artifact/tree/v4).
+
+## Mốc so sánh và các thay đổi chưa deploy
+
+Pull Request vẫn lọc thay đổi so với nhánh đích. Với push `main`,
+[staging_release.py](../../scripts/staging_release.py) đọc lịch sử Deployment
+của Environment `staging` và lấy SHA (mã commit) có trạng thái deploy thành công
+gần nhất làm mốc. `paths-filter` so sánh trực tiếp mốc này với đúng SHA đang chạy
+CI; các service bị ảnh hưởng bởi phần thay đổi còn tồn cũng được kiểm thử.
+Không lấy lần CI thành công hoặc lần build image thành công làm mốc triển khai.
+
+| Tình huống | Quyết định |
+| --- | --- |
+| Deploy A thành công, B chỉ sửa test | Chạy các kiểm tra liên quan, không release; mốc vẫn là A. |
+| A chưa deploy được, B sửa test | Kiểm tra cả phần code chưa deploy; release B nếu các kiểm tra đạt. |
+| Chưa có deployment thành công | Kiểm tra và release đầy đủ các service đang bật. |
+| Có lần deploy lỗi sau mốc thành công | Buộc kiểm tra và triển khai lại đầy đủ, kể cả khi code đã được hoàn nguyên về mốc cũ. |
+| Không đọc được lịch sử hoặc không xác định được trạng thái | Báo lỗi, không tự bỏ qua release. |
+
+File trong thư mục `tests/`, `tests.py`, `conftest.py`, `test_*.py` và `*_test.py`
+vẫn kích hoạt kiểm thử service nhưng riêng các file này không kích hoạt release.
+Các đầu vào triển khai khác tiếp tục theo bộ lọc trong `ci.yml`; không thêm
+biến cấu hình vào `.env`.
+
+Workflow chỉ đọc lịch sử bằng quyền `deployments: read` của `GITHUB_TOKEN`.
+GitHub ghi nhận trạng thái của job gắn Environment; job deploy chỉ thành công
+sau khi script hoàn tất migration, chờ container và kiểm tra health qua gateway.
+Xem [Deployment statuses](https://docs.github.com/en/rest/deployments/statuses).
+Trạng thái này xác nhận lần triển khai qua workflow, không phải giám sát liên tục
+VPS hoặc xác nhận các thay đổi thủ công ngoài workflow.
+
+Sau khi vào nhóm concurrency `staging`, workflow đọc lại lịch sử trước khi build,
+và kiểm tra thêm trước mọi thay đổi trên VPS để bảo vệ cả trường hợp chạy lại
+riêng job deploy. Bản đã được triển khai hoặc đã có bản mới hơn sẽ không được
+triển khai đè. Nếu trạng thái staging thay đổi làm kế hoạch kiểm thử không còn
+khớp, workflow dừng và yêu cầu chạy lại toàn bộ CI. Job deploy bỏ qua bản ghi
+`in_progress` của chính nó; không bỏ qua deployment đang chạy của workflow khác.
+Mốc Git phải là tổ tiên của commit định triển khai; triển khai lùi tự động bị chặn.
+
+Deployment còn `pending`, `queued` hoặc `in_progress` luôn chặn release khác,
+kể cả khi nó bắt đầu trước mốc thành công gần nhất. Bản ghi không có status
+chỉ được bỏ qua nếu có thời điểm tạo cũ hơn mốc thành công; thiếu thời điểm tạo,
+chưa có lần thành công hoặc bản ghi mới hơn thì workflow dừng để tránh kết luận
+sai trạng thái staging. Lỗi HTTP/API vẫn làm workflow dừng.
+
 ## Phạm vi service đang triển khai
 
 CI và script local dùng `scripts/discover_services.py` để tự nhận diện thư mục trực
@@ -321,7 +391,8 @@ Actions chỉ tái sử dụng layer build. Mỗi job xuất artifact riêng ch�
 worker sở hữu bởi app đó. Job deploy tải artifact của cùng workflow run, kiểm tra đủ
 app được chọn rồi ghép `staging-images.json`. Compose trên VPS đọc image theo digest,
 không dùng tag registry để chọn phiên bản. Chạy lại riêng job deploy dùng artifact
-cũ còn lưu; chạy lại job build có thể tạo digest khác và thay artifact của job đó.
+cũ còn lưu nhưng vẫn phải qua bước đối chiếu trạng thái staging; nếu kế hoạch đã
+cũ thì cần chạy lại toàn bộ CI. Chạy lại job build có thể tạo digest khác và thay artifact của job đó.
 Quyền registry và thời hạn lưu artifact vẫn cần quản lý; không xóa image còn dùng
 trên VPS hoặc cần cho phục hồi.
 

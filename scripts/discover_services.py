@@ -208,10 +208,21 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
                     f"{name}: declare DJANGO_SETTINGS_MODULE in pytest settings"
                 )
             test_env.setdefault("DJANGO_SETTINGS_MODULE", service["settings"])
-        code_changed = any(path.startswith(f"apps/{name}/") for path in changed_files)
+        service_files = [
+            Path(path).relative_to(f"apps/{name}")
+            for path in changed_files
+            if path.startswith(f"apps/{name}/")
+        ]
+        code_changed = any(
+            "tests" not in path.parts
+            and path.name not in {"conftest.py", "tests.py"}
+            and not path.name.startswith("test_")
+            and not path.name.endswith("_test.py")
+            for path in service_files
+        )
         changed = code_changed or deployment
         release_needed = release_needed or changed
-        if shared or changed:
+        if shared or service_files or deployment:
             checks.append(
                 {
                     "service": name,
