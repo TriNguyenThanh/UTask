@@ -1,4 +1,5 @@
 import { isRealService } from "@/lib/config/services";
+import { createAiHandlers } from "@/mocks/handlers/ai";
 import { createAuthHandlers } from "@/mocks/handlers/auth";
 import { createMyWorkHandlers } from "@/mocks/handlers/myWork";
 import { createStudentFlowHandlers } from "@/mocks/handlers/studentFlow";
@@ -11,6 +12,7 @@ export function createMockHandlers(scenario: MockScenario, repository: MockRepos
   return [
     // Service thật không còn handler mock: lỗi của service thật không bao giờ rơi về MSW.
     ...(isRealService("auth") ? [] : createAuthHandlers(scenario, repository)),
+    ...(isRealService("ai") ? [] : createAiHandlers()),
     ...createMyWorkHandlers(scenario, repository),
     ...createStudentFlowHandlers(scenario, repository),
     ...createTeacherFlowHandlers(scenario, repository),

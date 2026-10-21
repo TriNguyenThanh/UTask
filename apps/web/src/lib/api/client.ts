@@ -40,7 +40,7 @@ const detailSchema = z.object({ field: z.string().optional(), issue: z.string() 
 const errorEnvelopeSchema = z.object({
   success: z.literal(false).optional(),
   message: z.string().optional(),
-  error: z.object({ code: z.string(), details: z.array(z.unknown()).optional() }),
+  error: z.object({ code: z.string(), message: z.string().optional(), details: z.unknown().optional() }),
 });
 const successEnvelopeSchema = z.object({
   success: z.literal(true),
@@ -82,7 +82,8 @@ function parseEnvelopeError(payload: unknown): EnvelopeError | null {
   const details: ApiErrorDetail[] = [];
   const fieldErrors: FieldErrors = {};
 
-  for (const item of parsed.data.error.details ?? []) {
+  const rawDetails = parsed.data.error.details;
+  for (const item of Array.isArray(rawDetails) ? rawDetails : []) {
     const detail = detailSchema.safeParse(item);
     if (!detail.success) {
       continue;
@@ -103,8 +104,16 @@ function messageFromPayload(payload: unknown, status: number): string {
   }
 
   const envelope = errorEnvelopeSchema.safeParse(payload);
-  if (envelope.success && envelope.data.message?.trim()) {
-    return envelope.data.message;
+  if (envelope.success) {
+    // Envelope Work/Classroom: `message` ở cấp ngoài; AI Service: `error.message`.
+    const outer = envelope.data.message?.trim();
+    if (outer) {
+      return envelope.data.message as string;
+    }
+    const inner = envelope.data.error.message?.trim();
+    if (inner) {
+      return envelope.data.error.message as string;
+    }
   }
 
   const legacy = legacyErrorSchema.safeParse(payload);
@@ -136,6 +145,18 @@ function parseRetryAfter(response: Response): number | null {
     return null;
   }
   return Number.parseInt(raw, 10);
+}
+
+/** AI Service đặt thời gian chờ trong `error.details.retry_after_seconds` (header chỉ có ở một số giới hạn). */
+function detailsRetryAfter(payload: unknown): number | null {
+  const parsed = errorEnvelopeSchema.safeParse(payload);
+  if (!parsed.success) {
+    return null;
+  }
+  const details: unknown = parsed.data.error.details;
+  const bag = z.record(z.string(), z.unknown()).safeParse(details);
+  const seconds = bag.success ? bag.data.retry_after_seconds : undefined;
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
@@ -218,7 +239,7 @@ export function createApiClient({
       requestId,
       code: envelopeError?.code,
       details: envelopeError?.details,
-      retryAfterSeconds: parseRetryAfter(response),
+      retryAfterSeconds: parseRetryAfter(response) ?? detailsRetryAfter(payload),
     });
 
     if (response.status === 401 && accessToken) {

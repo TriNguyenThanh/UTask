@@ -160,6 +160,48 @@ describe("error mapping", () => {
     expect((await catchApiError(dated.client.request("/api/x"))).retryAfterSeconds).toBeNull();
   });
 
+  it("reads an AI Service error: code and message inside error, retry delay in details", async () => {
+    const { client } = setup(
+      jsonResponse(
+        {
+          error: {
+            code: "RATE_LIMITED",
+            message: "Quá nhiều yêu cầu.",
+            details: { retry_after_seconds: 12 },
+            retryable: true,
+          },
+        },
+        { status: 429 },
+      ),
+    );
+
+    const error = await catchApiError(client.request("/api/ai/x"));
+    expect(error.code).toBe("RATE_LIMITED");
+    expect(error.message).toBe("Quá nhiều yêu cầu.");
+    expect(error.retryAfterSeconds).toBe(12);
+    expect(error.fieldErrors).toEqual({});
+    expect(error.details).toEqual([]);
+  });
+
+  it("prefers the Retry-After header over the AI details", async () => {
+    const { client } = setup(
+      jsonResponse(
+        { error: { code: "RATE_LIMITED", message: "x", details: { retry_after_seconds: 12 } } },
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "5" } },
+      ),
+    );
+
+    expect((await catchApiError(client.request("/api/ai/x"))).retryAfterSeconds).toBe(5);
+  });
+
+  it("ignores an invalid retry delay in the AI details", async () => {
+    const { client } = setup(
+      jsonResponse({ error: { code: "RATE_LIMITED", message: "x", details: { retry_after_seconds: "soon" } } }, { status: 429 }),
+    );
+
+    expect((await catchApiError(client.request("/api/ai/x"))).retryAfterSeconds).toBeNull();
+  });
+
   it("keeps legacy detail and field-array payloads working", async () => {
     const detail = setup(jsonResponse({ detail: "Sai mật khẩu." }, { status: 400 }));
     const detailError = await catchApiError(detail.client.request("/api/x"));

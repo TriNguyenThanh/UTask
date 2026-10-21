@@ -20,6 +20,7 @@ import {
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { CreateIssueDialog } from "@/features/projects/components/CreateIssueDialog";
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
+import { AiDecomposeButton } from "@/features/projects/components/ai/AiDecomposeDialog";
 import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/components/RealIssueSlots";
 import { collabSlots } from "@/features/projects/components/RealCollab";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -410,6 +411,16 @@ function BoardView({
           }
           subtaskCreateSlot={
             real && canEditRealIssue && detail.data ? <SubtaskCreateForm parentId={detail.data.issue.id} /> : undefined
+          }
+          aiSlot={
+            real && canEditRealIssue && detail.data ? (
+              <AiDecomposeButton
+                taskId={detail.data.issue.id}
+                description={detail.data.description}
+                acceptanceCriteria={detail.data.acceptanceCriteria}
+                isLeader={mover.role === "leader"}
+              />
+            ) : undefined
           }
           {...collab}
           onToggleSubtaskRemote={real ? realTools?.toggleSubtask : undefined}

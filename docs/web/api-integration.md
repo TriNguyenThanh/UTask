@@ -57,7 +57,10 @@ VITE_API_BASE_URL=
 | 14 | Work: bình luận, lịch sử hoạt động, tệp đính kèm, phản hồi của giảng viên cho dự án | Một phần (đã smoke API thật trên staging; giao diện chỉ có test thành phần; upload từ trình duyệt có thể bị CORS của R2 chặn, B30) |
 | 14 (GitHub) | Work: repository, liên kết GitHub, username GitHub, tab Code thật | Chưa triển khai (hoãn theo yêu cầu, vẫn dùng dữ liệu mock) |
 | 15 | Work: Trang chủ (My Work) và Sidebar dựng từ dự án thật, tiến độ dự án cho giảng viên | Một phần (đã kiểm API đọc trên staging; chưa smoke giao diện; xem giới hạn) |
-| 16+ | Admin; AI làm cuối trong plan riêng | Chưa triển khai |
+| 16 | AI: nền (client, cờ `ai`, polling) và AI tách nhiệm vụ con (`task_decomposition`) | Một phần (đã smoke trình duyệt: Work thật trên staging + AI giả qua MSW; AI staging chưa dùng được, xem B32) |
+| 17 | AI: gợi ý backlog (`backlog_generation`) | Chưa triển khai |
+| 18 | AI: phân tích rủi ro (`risk_analysis`, chỉ đọc) | Chưa triển khai |
+| 19+ | Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
 
@@ -403,6 +406,16 @@ Giới hạn:
 - Không có ở chế độ thật: khối GitHub của Trang chủ, số PR (`openPullRequests` luôn 0, UI không hiện), tab Code và Settings (`WorkModuleNotIntegrated`, chờ GitHub và plan AI).
 - Kiểm tra: `tsc`, test cả khi có và không có `.env.local`, build; ESLint không chạy được. Staging chỉ có dự án smoke đã lưu trữ nên fan-out Trang chủ chưa chạy với dữ liệu sống; đã kiểm `tasks?assignee_id`, `dashboard` và `comments` đọc được bằng cả hai tài khoản. Chưa smoke giao diện.
 
+## AI Service (Phase 16)
+
+- Cờ: thêm `ai` vào `VITE_REAL_SERVICES` để gọi AI Service thật. Không có `ai` thì `src/mocks/handlers/ai.ts` trả gợi ý cố định (dùng được cùng Work thật). Chỉ hiện ở chế độ Work thật; AI demo cũ (`AiSubtaskAction`, thanh "Trợ lý AI Scrum Copilot") giữ nguyên cho chế độ mock.
+- URL từ trình duyệt là `/api/ai/api/ai/v1/requests` (hai lần `/api/ai`): nginx cắt tiền tố `/api/ai/` rồi chuyển phần còn lại cho service, mà service lại phục vụ dưới `/api/ai/v1`. Phản hồi AI **không** bọc `{success, data}`; lỗi là `{error:{code,message,details:{...},request_id,retryable}}`. `client.ts` đọc được cả hai dạng (Work: `details` là mảng, `message` ở ngoài; AI: `details` là object, `message` trong `error`, thời gian chờ ở `details.retry_after_seconds`).
+- Luồng: `POST /requests` (bắt buộc `Idempotency-Key`) trả 200 khi xong trong 10 giây hoặc 202 kèm `status_url`; web hỏi lại mỗi 1,5 giây, tối đa 45 giây (server dừng cứng ở 30 giây). Đóng hộp thoại chỉ dừng chờ ở trình duyệt; request vẫn chạy ở server và vẫn tính vào giới hạn 2 yêu cầu đang chạy / 5 yêu cầu mỗi phút.
+- AI tách nhiệm vụ con: nút "AI tách nhiệm vụ con" cạnh mục Nhiệm vụ con trong panel issue, cho Leader hoặc người được giao task (dự án chưa lưu trữ, không phải giảng viên). AI chỉ **đề xuất**; người dùng bỏ chọn/sửa tiêu đề rồi bấm Accept thì web tạo từng nhiệm vụ con qua `POST /tasks/{id}/subtasks/`, tuần tự, mỗi mục một `Idempotency-Key`. Dừng ở lỗi đầu tiên; "Thử lại phần còn lại" chỉ gửi các mục chưa tạo, giữ nguyên khóa. Người không phải Leader chỉ gửi title, mô tả, tiêu chí (backend tự giao cho họ, bỏ điểm); Leader gửi thêm `story_points = round(estimate_points)`.
+- Không dùng `bulk-apply-ai` của Work: nó cần `VerifiedProposal` từ `ai_client().verify()`, mà adapter mặc định `WORK_AI_ADAPTER` là `UnavailableProposals` (luôn 503) và AI Service không có endpoint verify, kết quả cũng thiếu `local_id`, `ai_revision`, `context_version` kiểu số (xem B31). Logic apply gom trong `src/lib/api/ai/applyProposal.ts`; khi backend xong chỉ cần thay module này. Hệ quả: nhiệm vụ con tạo ra có `source=MANUAL`, không có `ai_proposal_id`.
+- `dependencies` AI trả là chuỗi tự do, chỉ hiện dạng văn bản, không tạo liên kết task. Gợi ý không lưu khi đóng hộp thoại.
+- Kiểm tra: `tsc`, test cả khi có và không có `.env.local` (96 file, 1134 test), build. ESLint không chạy được. Smoke trình duyệt (Chrome, Vite `VITE_REAL_SERVICES=auth,classroom,work`, AI qua MSW): hộp gợi ý hiện sau ~3 giây (một lần hỏi lại), Accept tạo 3 nhiệm vụ con thật trên dự án smoke staging; đã xóa sau khi kiểm. Lưu ý WSL: `node.exe` không thấy biến môi trường của WSL nếu thiếu `WSLENV=VITE_REAL_SERVICES:VITE_ENABLE_MOCKS`.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -430,6 +443,8 @@ Giới hạn:
 | B20 | Work chưa có API "việc của tôi" xuyên dự án; Trang chủ và Sidebar gom bằng N+1 lời gọi (Phase 15), chậm khi sinh viên có nhiều dự án. Cần endpoint tổng hợp nếu số dự án lớn |
 | B21 | `GET /projects/{id}/members/` chậm (~5 giây trên staging); `ProjectMember.display_name` có thể rỗng khi `UserProjection` chưa đồng bộ, frontend tra lại qua `users/batch` |
 | B30 | Preflight `OPTIONS` từ origin web tới URL presign R2 trả 403, không có header `access-control-*`; `PUT` từ Node thì qua. Nếu bucket chưa cho origin của web (method `PUT`, header `Content-Type`) thì upload từ trình duyệt sẽ bị chặn. Cần backend/ops cấu hình CORS bucket và xác nhận trên trình duyệt; nếu không, ẩn khối đính kèm |
+| B31 | `bulk-apply-ai` của Work chưa dùng được đầu-cuối: `WORK_AI_ADAPTER` mặc định `UnavailableProposals` (luôn 503 `AI_DEPENDENCY_UNAVAILABLE`); AI Service không có endpoint verify; kết quả AI thiếu `local_id`/`ai_revision` cho từng mục và `context_version` kiểu số (hiện chỉ có `fingerprint` dạng chuỗi). Cần backend thống nhất hợp đồng verify/apply và bật adapter thật; sau đó web đổi `applyProposal.ts` sang bulk để có provenance (`source=AI_*`, `ai_proposal_id`) và tạo nguyên tử |
+| B32 | AI staging chưa nhận access token Identity: `GET /api/ai/api/ai/v1/requests/<id>` với Bearer của sinh viên trả 500 `INTERNAL_ERROR` (`details.reason=AUTH_UNAVAILABLE`, "Chưa thể xác minh identity.") ngày 2026-10-21. Cần cấu hình xác thực của AI Service trên staging (issuer/JWKS hoặc URL xác thực) rồi bật `ai` trong `VITE_REAL_SERVICES` để smoke thật |
 
 ## Kiểm tra đã chạy
 
