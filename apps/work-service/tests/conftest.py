@@ -158,6 +158,7 @@ def task_api(created_project, client_for, actors):
 
 
 pytest_plugins = [
+    "tests.fixtures.ai_context",
     "tests.fixtures.board",
     "tests.fixtures.ai_proposals",
     "tests.fixtures.github",

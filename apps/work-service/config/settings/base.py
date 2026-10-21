@@ -1,3 +1,4 @@
+import json
 import os
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
@@ -123,6 +124,10 @@ CELERY_BEAT_SCHEDULE.update(
     }
 )
 WORK_AI_ADAPTER = os.environ.get("WORK_AI_ADAPTER", "infrastructure.ai.UnavailableProposals")
+try:
+    WORK_SERVICE_KEYS = json.loads(os.environ.get("WORK_SERVICE_KEYS", "{}"))
+except (ValueError, TypeError):
+    WORK_SERVICE_KEYS = None
 CELERY_TASK_ROUTES.update(
     {
         "apps.tasks.tasks.scan_deadlines": {"queue": "work-publisher"},
@@ -132,6 +137,13 @@ CELERY_TASK_ROUTES.update(
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
 )
+WORK_INTEGRATION_SERVICE_KEY = os.environ.get("WORK_INTEGRATION_SERVICE_KEY", "")
+try:
+    INTEGRATION_WORK_SERVICE_KEYS = json.loads(
+        os.environ.get("WORK_INTEGRATION_INBOUND_KEYS", "[]")
+    )
+except (ValueError, TypeError):
+    INTEGRATION_WORK_SERVICE_KEYS = None
 SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",
     "BacklogTaskTypeEnum": ["TASK", "BUG", "STORY"],
