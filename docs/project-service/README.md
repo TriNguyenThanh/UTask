@@ -4,6 +4,12 @@ Phần tích hợp hồ sơ Identity đã có source và nghiệm thu local riê
 [Work nhận sự kiện Identity](identity-events.md). Trạng thái dưới đây mô tả tài liệu
 kiến trúc tổng quan, không phủ nhận phần tích hợp đã kiểm chứng này.
 
+Phía Work nối repository/Task link với Integration đã có adapter HTTP,
+operation/receipt bền vững, recovery và consumer trong source; kiểm thử ghép
+hai backend bằng HTTP/PostgreSQL/Kafka riêng đã chạy, GitHub/Identity dùng stub.
+Tính năng mặc định tắt, chưa nghiệm thu GitHub live/staging; xem
+[kết nối GitHub của Work](github-integration.md).
+
 **Trạng thái: Thiết kế mục tiêu; hiện trạng mã nguồn nghiệp vụ chưa xác minh.**
 Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
 mục 4.2, Work là core service, dùng Python + Django + DRF và sở hữu `work_db`.
