@@ -31,7 +31,9 @@ VITE_API_BASE_URL=
 - `.env.production` không được commit (bị `.gitignore`). Production đặt biến trên
   Vercel: `VITE_ENABLE_MOCKS=true` (phần chưa có backend vẫn dùng MSW) và
   `VITE_REAL_SERVICES=auth,classroom`; **không** đặt `VITE_API_BASE_URL`.
-  `apps/web/vercel.json` rewrite `/api/*` sang `https://utask-api.u-code.dev`
+  `apps/web/vercel.json` rewrite `/api/(.*)` sang `https://utask-api.u-code.dev`
+  (không dùng `/api/:path*`: mẫu này không khớp đường dẫn có `/` cuối như
+  `/api/classroom/courses/`, Vercel trả 404 `NOT_FOUND`)
   để trình duyệt gọi cùng origin (không cần CORS), kèm fallback SPA về
   `index.html`. Rewrite không bỏ được `Origin`, nên `refresh`/`logout-all` chỉ
   chạy khi backend xử lý xong B2.

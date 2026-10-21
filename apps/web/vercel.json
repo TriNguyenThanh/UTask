@@ -7,7 +7,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://utask-api.u-code.dev/api/:path*" },
+    { "source": "/api/(.*)", "destination": "https://utask-api.u-code.dev/api/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "ignoreCommand": "if [ \"${VERCEL_GIT_COMMIT_REF:-}\" != \"main\" ]; then exit 0; fi; if [ -z \"${VERCEL_GIT_PREVIOUS_SHA:-}\" ]; then exit 1; fi; if git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- .; then exit 0; else exit 1; fi"
