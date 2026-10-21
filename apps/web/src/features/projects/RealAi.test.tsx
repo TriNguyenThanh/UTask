@@ -7,7 +7,7 @@ import { LEADER_ID, MEMBER_ID } from "@/mocks/data/database";
 import { createMemoryRepository } from "@/mocks/data/storage";
 import { createAuthHandlers } from "@/mocks/handlers/auth";
 import { server } from "@/mocks/server";
-import { aiHandlers, buildAiSubtask, type AiCall, type AiFixture } from "@/test/aiHandlers";
+import { aiHandlers, buildAiBacklogItem, buildAiSubtask, type AiCall, type AiFixture } from "@/test/aiHandlers";
 import { buildClass, buildCourse, buildGroup, classroomHandlers, envelopeError } from "@/test/classroomHandlers";
 import { leaderTestSession, memberTestSession, renderAppRoutes, teacherTestSession } from "@/test/render";
 import {
@@ -195,5 +195,82 @@ describe("AI task decomposition", () => {
     await waitFor(() => expect(posts).toHaveLength(3));
     expect(posts[2]).toEqual({ key: failedKey, title: "Viết API" });
     expect(writes(calls).filter((call) => call.path === "/tasks/t1/subtasks/")).toHaveLength(2);
+  });
+});
+
+const BACKLOG = "/projects/project-1/backlog";
+
+const BACKLOG_ITEMS: AiFixture = {
+  backlog: {
+    warnings: [],
+    items: [
+      buildAiBacklogItem({ title: "Thiết lập CI", priority: "critical", estimate_points: 2.6 }),
+      buildAiBacklogItem({ title: "Trang đăng nhập", priority: "medium", estimate_points: 3 }),
+    ],
+  },
+};
+
+async function openBacklogDialog(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "AI gợi ý backlog" }, { timeout: 5000 }));
+}
+
+describe("AI backlog generation", () => {
+  it("prefills the description from the project and creates the chosen issues with mapped priority", async () => {
+    const user = userEvent.setup();
+    const { calls, aiCalls } = setup(
+      { projects: [buildProject({ id: "project-1", description: "Mô tả A", target_goals: "Mục tiêu 1\nMục tiêu 2" })] },
+      BACKLOG_ITEMS,
+      leaderTestSession,
+      BACKLOG,
+    );
+    await openBacklogDialog(user);
+    expect(await screen.findByLabelText("Mô tả dự án")).toHaveValue("Mô tả A");
+    await user.click(screen.getByRole("button", { name: "Tạo gợi ý" }));
+
+    expect(await screen.findByDisplayValue("Thiết lập CI")).toBeInTheDocument();
+    expect(aiCalls[0].body).toMatchObject({
+      intent: "backlog_generation",
+      target: { type: "project", id: "project-1" },
+      input: { description: "Mô tả A", goals: ["Mục tiêu 1", "Mục tiêu 2"], deadline: "2026-12-31T23:59:59+07:00" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Tạo 2 issue" }));
+
+    await waitFor(() => expect(writes(calls).filter((call) => call.path === "/projects/project-1/tasks/")).toHaveLength(2));
+    const created = writes(calls).filter((call) => call.path === "/projects/project-1/tasks/");
+    expect(created[0]).toMatchObject({ body: { title: "Thiết lập CI", type: "TASK", priority: "URGENT", story_points: 3 } });
+    expect(created[1]).toMatchObject({ body: { title: "Trang đăng nhập", priority: "MEDIUM" } });
+    expect(created[0].idempotencyKey).not.toBe(created[1].idempotencyKey);
+    expect(await screen.findByText("Đã tạo 2 issue trong Product Backlog.")).toBeInTheDocument();
+  });
+
+  it("does not offer the button to a member", async () => {
+    setup({}, BACKLOG_ITEMS, memberTestSession, BACKLOG);
+    await screen.findByText("Product Backlog", {}, { timeout: 5000 });
+    expect(screen.queryByRole("button", { name: "AI gợi ý backlog" })).not.toBeInTheDocument();
+  });
+
+  it("blocks a goals list over 30 lines and sends nothing", async () => {
+    const user = userEvent.setup();
+    const { aiCalls } = setup({}, BACKLOG_ITEMS, leaderTestSession, BACKLOG);
+    await openBacklogDialog(user);
+    const goals = await screen.findByLabelText("Mục tiêu (mỗi dòng một mục)");
+    await user.clear(goals);
+    await user.click(goals);
+    await user.paste(Array.from({ length: 31 }, (_, i) => `mục ${i}`).join("\n"));
+
+    expect(await screen.findByText("Tối đa 30 mục.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tạo gợi ý" })).toBeDisabled();
+    expect(aiCalls).toHaveLength(0);
+  });
+
+  it("will not generate without a description", async () => {
+    const user = userEvent.setup();
+    setup({}, BACKLOG_ITEMS, leaderTestSession, BACKLOG);
+    await openBacklogDialog(user);
+    await user.clear(await screen.findByLabelText("Mô tả dự án"));
+
+    expect(screen.getByText("Nhập mô tả dự án.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tạo gợi ý" })).toBeDisabled();
   });
 });

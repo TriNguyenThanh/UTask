@@ -58,8 +58,8 @@ VITE_API_BASE_URL=
 | 14 (GitHub) | Work: repository, liên kết GitHub, username GitHub, tab Code thật | Chưa triển khai (hoãn theo yêu cầu, vẫn dùng dữ liệu mock) |
 | 15 | Work: Trang chủ (My Work) và Sidebar dựng từ dự án thật, tiến độ dự án cho giảng viên | Một phần (đã kiểm API đọc trên staging; chưa smoke giao diện; xem giới hạn) |
 | 16 | AI: nền (client, cờ `ai`, polling) và AI tách nhiệm vụ con (`task_decomposition`) | Một phần (đã smoke trình duyệt: Work thật trên staging + AI giả qua MSW; AI staging chưa dùng được, xem B32) |
-| 17 | AI: gợi ý backlog (`backlog_generation`) | Chưa triển khai |
-| 18 | AI: phân tích rủi ro (`risk_analysis`, chỉ đọc) | Chưa triển khai |
+| 17 | AI: gợi ý backlog (`backlog_generation`) | Một phần (AI thật bị chặn bởi B32; smoke với AI qua MSW) |
+| 18 | AI: phân tích rủi ro (`risk_analysis`, chỉ đọc) | Hoãn, không làm theo yêu cầu (DTO `AiRiskRequest` và mock vẫn còn, không có UI) |
 | 19+ | Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
@@ -406,7 +406,7 @@ Giới hạn:
 - Không có ở chế độ thật: khối GitHub của Trang chủ, số PR (`openPullRequests` luôn 0, UI không hiện), tab Code và Settings (`WorkModuleNotIntegrated`, chờ GitHub và plan AI).
 - Kiểm tra: `tsc`, test cả khi có và không có `.env.local`, build; ESLint không chạy được. Staging chỉ có dự án smoke đã lưu trữ nên fan-out Trang chủ chưa chạy với dữ liệu sống; đã kiểm `tasks?assignee_id`, `dashboard` và `comments` đọc được bằng cả hai tài khoản. Chưa smoke giao diện.
 
-## AI Service (Phase 16)
+## AI Service (Phase 16–17)
 
 - Cờ: thêm `ai` vào `VITE_REAL_SERVICES` để gọi AI Service thật. Không có `ai` thì `src/mocks/handlers/ai.ts` trả gợi ý cố định (dùng được cùng Work thật). Chỉ hiện ở chế độ Work thật; AI demo cũ (`AiSubtaskAction`, thanh "Trợ lý AI Scrum Copilot") giữ nguyên cho chế độ mock.
 - URL từ trình duyệt là `/api/ai/api/ai/v1/requests` (hai lần `/api/ai`): nginx cắt tiền tố `/api/ai/` rồi chuyển phần còn lại cho service, mà service lại phục vụ dưới `/api/ai/v1`. Phản hồi AI **không** bọc `{success, data}`; lỗi là `{error:{code,message,details:{...},request_id,retryable}}`. `client.ts` đọc được cả hai dạng (Work: `details` là mảng, `message` ở ngoài; AI: `details` là object, `message` trong `error`, thời gian chờ ở `details.retry_after_seconds`).
@@ -414,7 +414,8 @@ Giới hạn:
 - AI tách nhiệm vụ con: nút "AI tách nhiệm vụ con" cạnh mục Nhiệm vụ con trong panel issue, cho Leader hoặc người được giao task (dự án chưa lưu trữ, không phải giảng viên). AI chỉ **đề xuất**; người dùng bỏ chọn/sửa tiêu đề rồi bấm Accept thì web tạo từng nhiệm vụ con qua `POST /tasks/{id}/subtasks/`, tuần tự, mỗi mục một `Idempotency-Key`. Dừng ở lỗi đầu tiên; "Thử lại phần còn lại" chỉ gửi các mục chưa tạo, giữ nguyên khóa. Người không phải Leader chỉ gửi title, mô tả, tiêu chí (backend tự giao cho họ, bỏ điểm); Leader gửi thêm `story_points = round(estimate_points)`.
 - Không dùng `bulk-apply-ai` của Work: nó cần `VerifiedProposal` từ `ai_client().verify()`, mà adapter mặc định `WORK_AI_ADAPTER` là `UnavailableProposals` (luôn 503) và AI Service không có endpoint verify, kết quả cũng thiếu `local_id`, `ai_revision`, `context_version` kiểu số (xem B31). Logic apply gom trong `src/lib/api/ai/applyProposal.ts`; khi backend xong chỉ cần thay module này. Hệ quả: nhiệm vụ con tạo ra có `source=MANUAL`, không có `ai_proposal_id`.
 - `dependencies` AI trả là chuỗi tự do, chỉ hiện dạng văn bản, không tạo liên kết task. Gợi ý không lưu khi đóng hộp thoại.
-- Kiểm tra: `tsc`, test cả khi có và không có `.env.local` (96 file, 1134 test), build. ESLint không chạy được. Smoke trình duyệt (Chrome, Vite `VITE_REAL_SERVICES=auth,classroom,work`, AI qua MSW): hộp gợi ý hiện sau ~3 giây (một lần hỏi lại), Accept tạo 3 nhiệm vụ con thật trên dự án smoke staging; đã xóa sau khi kiểm. Lưu ý WSL: `node.exe` không thấy biến môi trường của WSL nếu thiếu `WSLENV=VITE_REAL_SERVICES:VITE_ENABLE_MOCKS`.
+- AI gợi ý backlog (Phase 17): nút "AI gợi ý backlog" cạnh "Tạo sprint" ở trang Backlog, chỉ Leader, dự án chưa lưu trữ. Form điền sẵn mô tả (hoặc tên nếu mô tả trống) và mục tiêu từ dự án; công nghệ để trống vì `tech_stack` của Work là object tự do (B17). Mỗi danh sách một mục mỗi dòng, tối đa 30 mục (vượt thì chặn gửi); `deadline` = hết ngày `end_date` giờ Việt Nam (+07:00); khóa rỗng không gửi vì AI Service từ chối. Accept tạo từng issue qua `POST /projects/{id}/tasks/` (loại TASK, `priority` low/medium/high/critical → LOW/MEDIUM/HIGH/URGENT, điểm = làm tròn `estimate_points`), cùng cơ chế tuần tự/thử lại như tách nhiệm vụ con; issue tạo ra có `source=MANUAL`. Logic form ở `features/projects/lib/aiBacklogForm.ts`.
+- Kiểm tra: `tsc`, test cả khi có và không có `.env.local` (97 file, 1147 test), build. ESLint không chạy được. Smoke trình duyệt (Chrome, Vite `VITE_REAL_SERVICES=auth,classroom,work`, AI qua MSW): Phase 16 hộp gợi ý hiện sau ~3 giây, Accept tạo 3 nhiệm vụ con thật; Phase 17 form điền sẵn mô tả, gợi ý hiện sau ~3 giây, Accept tạo 3 issue thật hiện trong Backlog trên dự án smoke staging; đã xóa sau khi kiểm. Lưu ý WSL: `node.exe` không thấy biến môi trường của WSL nếu thiếu `WSLENV=VITE_REAL_SERVICES:VITE_ENABLE_MOCKS`.
 
 ## Việc cần backend (tổng hợp)
 
