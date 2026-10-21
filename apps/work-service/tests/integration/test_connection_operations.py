@@ -1,4 +1,6 @@
+from dataclasses import asdict, replace
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -14,9 +16,11 @@ from apps.integrations.services.operations import (
     recover_operation,
 )
 from apps.integrations.tasks import recover_connections
-from apps.messaging.models import Activity, OutboxEvent
+from apps.messaging.integration_consumer import consume_connection_event
+from apps.messaging.models import Activity, ConsumedEvent, OutboxEvent
 from apps.projects.models import Project, ProjectMember
 from common.errors import WorkError
+from common.serialization import json_value
 from tests.fixtures.transactions import reject_outbox_event as reject_outbox_event
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
@@ -33,6 +37,17 @@ def request_connection(
     return (client.post if action == "CONNECT" else client.delete)(route, body, format="json")
 
 
+def event_for(fact):
+    return {
+        "event_id": str(uuid4()),
+        "event_type": "integration.project.connection.changed",
+        "event_version": 1,
+        "aggregate_id": str(fact.project_id),
+        "occurred_at": timezone.now().isoformat(),
+        "trace_id": str(uuid4()),
+        "producer": "integration-service",
+        "payload": json_value(asdict(fact)),
+    }
 
 
 def test_connect_receipt_confirm_replay_disconnect(
@@ -101,8 +116,54 @@ def test_permission_loss_persists_abort_and_cursor(
     assert not OutboxEvent.objects.filter(event_type="project.repository.requested").exists()
 
 
+def test_duplicate_event_and_revocation_during_new_pending(
+    created_project, client_for, actors, connection_provider
+):
+    request_connection(created_project, client_for, actors)
+    old = GitHubConnectionOperation.objects.get()
+    recover_operation(old.pk)
+    connected = connection_provider.operations["connect-1"]["fact"]
+    event = event_for(connected)
+    before = OutboxEvent.objects.count()
+    assert consume_connection_event(event)
+    assert consume_connection_event(event) is False
+    assert OutboxEvent.objects.count() == before
+    assert (
+        request_connection(created_project, client_for, actors, "connect-2", 1).status_code == 202
+    )
+    revoked = replace(
+        connected,
+        status="DISCONNECTED",
+        repo_id=None,
+        repo_owner=None,
+        repo_name=None,
+        default_branch=None,
+        source_version=3,
+    )
+    assert consume_connection_event(event_for(revoked))
+    project = Project.objects.get(pk=old.project_id)
+    assert project.github_connection_status == "DISCONNECTED"
+    assert GitHubConnectionOperation.objects.get(operation_id="connect-2").state == "CONFIRM"
+    assert consume_connection_event(event_for(connected))
+    project.refresh_from_db()
+    assert project.github_connection_status == "DISCONNECTED"
 
 
+def test_unknown_operation_never_grants_connection(
+    created_project, client_for, actors, connection_provider
+):
+    from apps.messaging.consumer import PoisonEvent
+
+    request_connection(created_project, client_for, actors)
+    fact = replace(
+        connection_provider.operations["connect-1"]["fact"],
+        operation_id="unknown",
+        status="CONNECTED",
+        source_version=2,
+    )
+    with pytest.raises(PoisonEvent):
+        consume_connection_event(event_for(fact))
+    assert not ConsumedEvent.objects.exists()
 
 
 def test_receipt_key_and_immutability(created_project, client_for, actors, connection_provider):
@@ -319,6 +380,20 @@ def test_exhausted_automatic_recovery_keeps_receipt_and_allows_explicit_retry(
     assert row.state == "CONFIRMED"
 
 
+def test_changed_payload_for_consumed_event_is_rejected_without_mutation(
+    created_project, client_for, actors, connection_provider
+):
+    from apps.messaging.consumer import PoisonEvent
+
+    request_connection(created_project, client_for, actors)
+    row = GitHubConnectionOperation.objects.get()
+    recover_operation(row.pk)
+    event = event_for(connection_provider.operations[row.operation_id]["fact"])
+    assert consume_connection_event(event)
+    event["payload"]["source_version"] += 1
+    with pytest.raises(PoisonEvent):
+        consume_connection_event(event)
+    assert Project.objects.get(pk=row.project_id).github_connection_version == 2
 
 
 @pytest.mark.parametrize("invalid_repo", ["repo-1", "0"])

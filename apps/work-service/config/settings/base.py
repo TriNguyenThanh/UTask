@@ -160,6 +160,12 @@ try:
     )
 except (ValueError, TypeError):
     INTEGRATION_WORK_SERVICE_KEYS = None
+WORK_INTEGRATION_KAFKA_GROUP = os.environ.get(
+    "WORK_INTEGRATION_KAFKA_GROUP", "work-integration-connections-v1"
+)
+WORK_INTEGRATION_DLQ_TOPIC = os.environ.get(
+    "WORK_INTEGRATION_DLQ_TOPIC", "utask.work.integration.dlq"
+)
 CELERY_TASK_ROUTES["apps.integrations.tasks.recover_connections"] = {"queue": "work-publisher"}
 CELERY_BEAT_SCHEDULE["github-connections"] = {
     "task": "apps.integrations.tasks.recover_connections",
