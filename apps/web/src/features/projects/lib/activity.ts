@@ -50,16 +50,30 @@ const VERB_LABELS: Record<string, string> = {
   unarchived: "đã mở lại",
 };
 
+/** Tên hiển thị theo id cho các trường tham chiếu; id không tra được giữ nguyên. */
+export type ActivityLookup = Partial<Record<string, (id: string) => string | undefined>>;
+
+function resolveIds(value: unknown, resolve: ((id: string) => string | undefined) | undefined): unknown {
+  if (!resolve) return value;
+  if (typeof value === "string") return resolve(value) ?? value;
+  if (Array.isArray(value)) return value.map((item) => resolveIds(item, resolve));
+  return value;
+}
+
 /** Câu mô tả một dòng lịch sử, không kèm tên người thực hiện. Verb lạ được giữ nguyên để không mất thông tin. */
-export function describeActivity(activity: Pick<ActivityDto, "verb" | "field" | "old_value" | "new_value">): string {
+export function describeActivity(
+  activity: Pick<ActivityDto, "verb" | "field" | "old_value" | "new_value">,
+  lookup: ActivityLookup = {},
+): string {
+  const resolve = activity.field ? lookup[activity.field] : undefined;
   const field = activity.field ? (FIELD_LABELS[activity.field] ?? activity.field) : null;
   const hasChange = activity.old_value !== null || activity.new_value !== null;
 
   if (activity.verb === "updated" || (field !== null && hasChange)) {
     const label = field ?? "dữ liệu";
     if (!hasChange) return `đã cập nhật ${label}`;
-    const before = formatActivityValue(parseActivityValue(activity.old_value));
-    const after = formatActivityValue(parseActivityValue(activity.new_value));
+    const before = formatActivityValue(resolveIds(parseActivityValue(activity.old_value), resolve));
+    const after = formatActivityValue(resolveIds(parseActivityValue(activity.new_value), resolve));
     return `đã đổi ${label}: ${before} → ${after}`;
   }
   const verb = VERB_LABELS[activity.verb] ?? activity.verb;
