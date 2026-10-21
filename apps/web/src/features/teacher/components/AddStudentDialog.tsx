@@ -135,9 +135,6 @@ export function AddStudentDialog({ course }: Readonly<{ course: TeacherCourseDet
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Thêm sinh viên vào lớp</DialogTitle>
-          <DialogDescription>
-            Lớp: {course.name}. Hệ thống đối chiếu tài khoản thật, không phải giao diện này.
-          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-4">

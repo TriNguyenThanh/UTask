@@ -32,4 +32,7 @@ Xem thêm:
   các mảng công việc, thứ tự các đợt từ mock sang tích hợp thật.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,
   ma trận quyền và user story.
+- [Đánh giá UI/UX](ux-audit.md) — báo cáo hiện trạng trải nghiệm (2026-10-21):
+  luồng chính, kết quả axe/đo DOM/responsive, danh sách phát hiện có mức độ và
+  lộ trình khắc phục.
 - Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.

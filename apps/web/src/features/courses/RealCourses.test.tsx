@@ -38,19 +38,23 @@ describe("CoursesRoute (real classroom)", () => {
   it("groups classes by term, newest first, and hides older terms until expanded", async () => {
     useRealClassroom({
       classes: [
-        buildClass({ id: "a", name: "Lớp cũ", term: "HK1 2025–2026" }),
-        buildClass({ id: "b", name: "Lớp mới", term: "HK2 2025–2026" }),
+        buildClass({ id: "a", course: "c-old", name: "Lớp cũ", term: "HK1 2025–2026" }),
+        buildClass({ id: "b", course: "c-new", name: "Lớp mới", term: "HK2 2025–2026" }),
       ],
-      courses: [buildCourse()],
+      courses: [
+        buildCourse({ id: "c-old", code: "OLD1", name: "Môn cũ" }),
+        buildCourse({ id: "c-new", code: "NEW1", name: "Môn mới" }),
+      ],
     });
     const user = userEvent.setup();
     renderApp(<CoursesRoute />, { route: "/courses", session: leaderTestSession });
 
-    expect(await screen.findByText("Lớp mới")).toBeInTheDocument();
-    expect(screen.queryByText("Lớp cũ")).not.toBeInTheDocument();
+    expect(await screen.findByText("Môn mới")).toBeInTheDocument();
+    expect(screen.queryByText("Lớp mới")).not.toBeInTheDocument();
+    expect(screen.queryByText("Môn cũ")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Xem học kỳ cũ/ }));
-    expect(await screen.findByText("Lớp cũ")).toBeInTheDocument();
+    expect(await screen.findByText("Môn cũ")).toBeInTheDocument();
   });
 
   it("shows an error state when the class list fails, without falling back to mock data", async () => {

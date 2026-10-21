@@ -55,8 +55,15 @@ describe("toCourseEnrollment", () => {
     expect(toCourseEnrollment(buildClass({ grouping_phase: "LOCKED" }), buildCourse(), none).formationClosed).toBe(true);
   });
 
-  it("falls back to the class code when the course is not listed", () => {
-    expect(toCourseEnrollment(buildClass(), undefined, { status: "none" }).courseCode).toBe("SE100.N11");
+  it("falls back to the class code and class name when the course is not listed", () => {
+    const result = toCourseEnrollment(buildClass(), undefined, { status: "none" });
+    expect(result.courseCode).toBe("SE100.N11");
+    expect(result.courseName).toBe(buildClass().name);
+  });
+
+  it("uses the subject name, not the class name, as courseName", () => {
+    const result = toCourseEnrollment(buildClass({ name: "Lớp N11" }), buildCourse({ name: "Công nghệ phần mềm" }), { status: "none" });
+    expect(result.courseName).toBe("Công nghệ phần mềm");
   });
 });
 

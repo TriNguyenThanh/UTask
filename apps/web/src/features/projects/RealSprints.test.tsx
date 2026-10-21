@@ -162,6 +162,16 @@ describe("Sprint management on the Backlog", () => {
     expect(start).toHaveAttribute("title", expect.stringContaining("ngày"));
   });
 
+  it("shows a freshly created sprint even when the project has no issues yet", async () => {
+    setup(BACKLOG, {
+      tasks: [],
+      sprintTasks: {},
+      sprints: [buildSprint({ id: "s9", name: "Sprint mới", status: "DRAFT", started_at: null })],
+    });
+    await screen.findByRole("heading", { name: "Sprint mới" }, FIND);
+    expect(screen.queryByText("Backlog trống")).not.toBeInTheDocument();
+  });
+
   it("shows progress and burndown for the running sprint", async () => {
     setup(BACKLOG, {});
     const section = await screen.findByRole("heading", { name: "Sprint 1" }, FIND).then(() => sectionOf("Sprint 1"));

@@ -717,7 +717,7 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
 
           {real && scope !== "active" ? (
             <ScopedTaskList projectId={projectId} scope={scope} canRestore={realCanWrite && isLeader} />
-          ) : filteredIssues.length === 0 ? (
+          ) : filteredIssues.length === 0 && (filtersActive || workspace.sprints.length === 0) ? (
             <EmptyState
               title={filtersActive ? "Không có issue khớp bộ lọc" : "Backlog trống"}
               description={emptyBacklogDescription(filtersActive, readOnly)}

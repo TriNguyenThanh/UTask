@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type HttpHandler } from "msw";
 import { toast } from "sonner";
@@ -55,105 +55,78 @@ afterEach(() => {
   toast.dismiss();
 });
 
-describe("Create class form (T03)", () => {
-  it("is reachable from Home and from the class list", async () => {
-    const first = setup("/teacher/courses");
-    expect(await screen.findByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
-    first.unmount();
-    setup("/teacher");
-    expect(await screen.findByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
+describe("Create class dialog (T03, demo mode)", () => {
+  async function openDialog(route = "/teacher/courses") {
+    const view = setup(route);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Tạo lớp" }));
+    return { view, user, dialog: within(await screen.findByRole("dialog", { name: "Tạo lớp" })) };
+  }
+
+  it("opens from Home and from the class list without leaving the page", async () => {
+    const list = await openDialog("/teacher/courses");
+    expect(pathname(list.view.router)).toBe("/teacher/courses");
+    list.view.unmount();
+    const home = await openDialog("/teacher");
+    expect(pathname(home.view.router)).toBe("/teacher");
   });
 
   it("says plainly that the class cannot be created yet, with the button disabled and described", async () => {
-    setup("/teacher/courses/new");
-    const main = await page();
-    expect(await main.findByText("Chưa thể tạo lớp")).toBeInTheDocument();
-    const create = main.getByRole("button", { name: "Tạo lớp" });
+    const { dialog } = await openDialog();
+    expect(await dialog.findByText("Chưa thể tạo lớp")).toBeInTheDocument();
+    const create = dialog.getByRole("button", { name: "Tạo lớp" });
     expect(create).toBeDisabled();
     expect(create).toHaveAccessibleDescription(/chưa có hợp đồng API tạo lớp/);
   });
 
   it("validates dates and team size next to the field, as the person types", async () => {
-    setup("/teacher/courses/new");
-    const user = userEvent.setup();
-    const main = await page();
-    await user.type(await main.findByLabelText("Ngày bắt đầu"), "2026-09-10");
-    await user.type(main.getByLabelText("Ngày kết thúc"), "2026-09-01");
-    expect(await main.findByText("Ngày kết thúc phải sau hoặc cùng ngày bắt đầu.")).toBeInTheDocument();
+    const { dialog, user } = await openDialog();
+    await user.type(await dialog.findByLabelText("Ngày bắt đầu"), "2026-09-10");
+    await user.type(dialog.getByLabelText("Ngày kết thúc"), "2026-09-01");
+    expect(await dialog.findByText("Ngày kết thúc phải sau hoặc cùng ngày bắt đầu.")).toBeInTheDocument();
 
-    const min = main.getByLabelText("Sĩ số nhóm tối thiểu");
-    const max = main.getByLabelText("Sĩ số nhóm tối đa");
+    const min = dialog.getByLabelText("Sĩ số nhóm tối thiểu");
+    const max = dialog.getByLabelText("Sĩ số nhóm tối đa");
     await user.clear(min);
     await user.type(min, "6");
     await user.clear(max);
     await user.type(max, "4");
-    expect(await main.findByText("Sĩ số tối đa phải lớn hơn hoặc bằng sĩ số tối thiểu.")).toBeInTheDocument();
+    expect(await dialog.findByText("Sĩ số tối đa phải lớn hơn hoặc bằng sĩ số tối thiểu.")).toBeInTheDocument();
   });
 
   it("reports a valid form as valid but still not creatable, and sends nothing", async () => {
     const tracker = trackRequests();
-    setup("/teacher/courses/new");
-    const user = userEvent.setup();
-    const main = await page();
-    await user.type(await main.findByLabelText("Tên lớp"), "Đồ án mới");
-    await user.type(main.getByLabelText("Học kỳ"), "HK2 2026-2027");
-    await user.type(main.getByLabelText("Ngày bắt đầu"), "2027-02-01");
-    await user.type(main.getByLabelText("Ngày kết thúc"), "2027-06-01");
-    await user.click(main.getByRole("button", { name: "Kiểm tra thông tin" }));
-    expect(await main.findByText("Thông tin đúng định dạng. Việc tạo lớp vẫn chưa khả dụng.")).toBeInTheDocument();
+    const { dialog, user } = await openDialog();
+    await user.type(await dialog.findByLabelText("Tên lớp"), "Đồ án mới");
+    await user.type(dialog.getByLabelText("Học kỳ"), "HK2 2026-2027");
+    await user.type(dialog.getByLabelText("Ngày bắt đầu"), "2027-02-01");
+    await user.type(dialog.getByLabelText("Ngày kết thúc"), "2027-06-01");
+    await user.click(dialog.getByRole("button", { name: "Kiểm tra thông tin" }));
+    expect(await dialog.findByText("Thông tin đúng định dạng. Việc tạo lớp vẫn chưa khả dụng.")).toBeInTheDocument();
     tracker.stop();
     expect(tracker.writes()).toEqual([]);
   });
 
-  it("asks before leaving a form that has been edited, and lets the person stay or leave", async () => {
-    const view = setup("/teacher/courses/new");
-    const user = userEvent.setup();
-    const main = await page();
-    await user.type(await main.findByLabelText("Tên lớp"), "Đang nhập dở");
-
-    await user.click(main.getByRole("link", { name: "Hủy" }));
-    const dialog = await screen.findByRole("dialog", { name: "Rời khỏi trang?" });
-    expect(pathname(view.router)).toBe("/teacher/courses/new");
-    await user.click(within(dialog).getByRole("button", { name: /Ở lại/ }));
+  it("closes with Hủy and stays on the same page", async () => {
+    const { view, user, dialog } = await openDialog();
+    await user.type(await dialog.findByLabelText("Tên lớp"), "Dở dang");
+    await user.click(dialog.getByRole("button", { name: "Hủy" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(pathname(view.router)).toBe("/teacher/courses/new");
-    expect(main.getByLabelText("Tên lớp")).toHaveValue("Đang nhập dở");
-
-    await user.click(main.getByRole("link", { name: "Hủy" }));
-    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Rời trang" }));
-    await waitFor(() => expect(pathname(view.router)).toBe("/teacher/courses"));
+    expect(pathname(view.router)).toBe("/teacher/courses");
   });
 
-  it("also asks when the tab is closed or refreshed, but only for an edited form", async () => {
-    setup("/teacher/courses/new");
-    const user = userEvent.setup();
-    const main = await page();
-    const fire = () => {
-      const event = new Event("beforeunload", { cancelable: true });
-      window.dispatchEvent(event);
-      return event.defaultPrevented;
-    };
-    await main.findByLabelText("Tên lớp");
-    expect(fire()).toBe(false);
-    await user.type(main.getByLabelText("Tên lớp"), "Dở dang");
-    expect(fire()).toBe(true);
-    await user.clear(main.getByLabelText("Tên lớp"));
-    await waitFor(() => expect(fire()).toBe(false));
-  });
+  it("does not close on an outside click once something was typed, but does when untouched", async () => {
+    const { user, dialog } = await openDialog();
+    await user.type(await dialog.findByLabelText("Tên lớp"), "Đang nhập dở");
+    fireEvent.pointerDown(document.body);
+    expect(screen.getByRole("dialog", { name: "Tạo lớp" })).toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "Hủy" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-  it("leaves without asking when nothing was typed", async () => {
-    const view = setup("/teacher/courses/new");
-    const main = await page();
-    await userEvent.setup().click(await main.findByRole("link", { name: "Hủy" }));
-    await waitFor(() => expect(pathname(view.router)).toBe("/teacher/courses"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("keeps a student out of the form", async () => {
-    // The guard is the Teacher space guard; covered for every /teacher route, spot-checked here.
-    const { studentTestSession } = await import("@/test/render");
-    setup("/teacher/courses/new", studentTestSession);
-    expect(await screen.findByText("Không đủ quyền truy cập")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Tạo lớp" }));
+    await screen.findByRole("dialog", { name: "Tạo lớp" });
+    fireEvent.pointerDown(document.body);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
 
