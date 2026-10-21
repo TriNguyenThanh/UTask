@@ -19,7 +19,10 @@ import { ApiError } from "@/lib/api/errors";
 import type { GitHubAccountDto } from "@/lib/api/integration/dto";
 import {
   useGitHubAccount,
+  useGitHubInstallations,
+  useGitHubRepositories,
   useStartGitHubAuthorization,
+  useStartGitHubInstallation,
   useUnlinkGitHubAccount,
 } from "@/lib/query/integrationHooks";
 
@@ -188,6 +191,118 @@ function AccountCard({ account }: { account: GitHubAccountDto }) {
   );
 }
 
+function selectionLabel(selection: string): string {
+  if (selection === "all") return "Tất cả repo";
+  if (selection === "selected") return "Repo được chọn";
+  return selection;
+}
+
+function RepositoryList({ installationId }: { installationId: string }) {
+  const repositories = useGitHubRepositories(installationId);
+  const items = repositories.data?.pages.flatMap((page) => page.items) ?? [];
+
+  if (repositories.isError) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        {githubErrorMessage(repositories.error)}
+      </p>
+    );
+  }
+  if (repositories.isPending) {
+    return <Skeleton className="h-10 w-full" role="status" aria-label="Đang tải repository" />;
+  }
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">Chưa có repository nào.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      <ul className="divide-y rounded-md border" aria-label="Repository">
+        {items.map((repository) => (
+          <li key={repository.repository_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+            <span className="font-medium">{repository.full_name}</span>
+            {repository.private ? <Badge variant="outline">Private</Badge> : null}
+          </li>
+        ))}
+      </ul>
+      {repositories.hasNextPage ? (
+        <Button variant="outline" size="sm" onClick={() => repositories.fetchNextPage()} disabled={repositories.isFetchingNextPage}>
+          Tải thêm
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function InstallationsCard({ account }: { account: GitHubAccountDto }) {
+  const start = useStartGitHubInstallation();
+  const installations = useGitHubInstallations();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const linked = githubAccountView(account) === "linked";
+  const items = installations.data?.pages.flatMap((page) => page.items) ?? [];
+
+  function handleStart() {
+    start.mutate(undefined, { onError: (error) => toast.error(githubErrorMessage(error)) });
+  }
+
+  return (
+    <section aria-labelledby="github-app-title" className="space-y-4 border-b pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <h3 id="github-app-title" className="text-base font-semibold">
+            GitHub App
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {linked ? "Cài GitHub App vào tài khoản hoặc tổ chức chứa repository của đồ án." : "Cần liên kết GitHub trước."}
+          </p>
+        </div>
+        <Button size="sm" onClick={handleStart} disabled={!linked || start.isPending}>
+          {linked ? "Cài/cập nhật GitHub App" : "Cài GitHub App"}
+        </Button>
+      </div>
+
+      {!linked ? null : installations.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {githubErrorMessage(installations.error)}
+        </p>
+      ) : installations.isPending ? (
+        <Skeleton className="h-12 w-full" role="status" aria-label="Đang tải danh sách cài đặt" />
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Chưa cài GitHub App cho tài khoản/tổ chức nào.</p>
+      ) : (
+        <div className="space-y-3">
+          <ul className="space-y-2" aria-label="Cài đặt GitHub App">
+            {items.map((installation) => (
+              <li key={installation.installation_id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(selectedId === installation.installation_id ? null : installation.installation_id)}
+                  aria-expanded={selectedId === installation.installation_id}
+                  className="flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted"
+                >
+                  <span className="font-medium">
+                    {installation.account.login} ({installation.account.type})
+                  </span>
+                  <span className="text-muted-foreground">{selectionLabel(installation.repository_selection)}</span>
+                </button>
+                {selectedId === installation.installation_id ? (
+                  <div className="pt-2 pl-3">
+                    <RepositoryList installationId={installation.installation_id} />
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {installations.hasNextPage ? (
+            <Button variant="outline" size="sm" onClick={() => installations.fetchNextPage()} disabled={installations.isFetchingNextPage}>
+              Tải thêm cài đặt
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function RealGitHubIntegration() {
   const accountQuery = useGitHubAccount();
 
@@ -216,7 +331,10 @@ export function RealGitHubIntegration() {
             </Button>
           </div>
         ) : accountQuery.data ? (
-          <AccountCard account={accountQuery.data} />
+          <>
+            <AccountCard account={accountQuery.data} />
+            <InstallationsCard account={accountQuery.data} />
+          </>
         ) : (
           <Skeleton className="h-24 w-full" role="status" aria-label="Đang tải trạng thái GitHub" />
         )}

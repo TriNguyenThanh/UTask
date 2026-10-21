@@ -1,11 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
-import type { GitHubAuthorizationCompleteBody } from "@/lib/api/integration/dto";
+import type { GitHubAuthorizationCompleteBody, GitHubInstallationCompleteBody } from "@/lib/api/integration/dto";
 import {
   completeGitHubAuthorization,
+  completeGitHubInstallation,
   getGitHubAccount,
+  listGitHubInstallations,
+  listGitHubRepositories,
   startGitHubAuthorization,
+  startGitHubInstallation,
   unlinkGitHubAccount,
 } from "@/lib/api/integration/endpoints";
 import { isRealService } from "@/lib/config/services";
@@ -54,5 +58,47 @@ export function useUnlinkGitHubAccount() {
       queryClient.setQueryData(integrationKeys.account, data);
       return queryClient.invalidateQueries({ queryKey: integrationKeys.installations });
     },
+  });
+}
+
+export function useStartGitHubInstallation() {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: () => startGitHubInstallation(client),
+    onSuccess: (data) => window.location.assign(data.installation_url),
+  });
+}
+
+export function useCompleteGitHubInstallation() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GitHubInstallationCompleteBody) => completeGitHubInstallation(client, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: integrationKeys.installations }),
+  });
+}
+
+/** Chỉ tải khi Integration thật được bật và quyền GitHub của tài khoản đang `ACTIVE`. */
+export function useGitHubInstallations() {
+  const client = useApiClient();
+  const account = useGitHubAccount();
+  const active = account.data?.status === "LINKED" && account.data.authorization_status === "ACTIVE";
+  return useInfiniteQuery({
+    queryKey: integrationKeys.installations,
+    queryFn: ({ pageParam }) => listGitHubInstallations(client, { page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (page) => page.next_page ?? undefined,
+    enabled: isRealService("integration") && active,
+  });
+}
+
+export function useGitHubRepositories(installationId: string | null) {
+  const client = useApiClient();
+  return useInfiniteQuery({
+    queryKey: integrationKeys.repositories(installationId ?? ""),
+    queryFn: ({ pageParam }) => listGitHubRepositories(client, installationId ?? "", { page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (page) => page.next_page ?? undefined,
+    enabled: installationId !== null,
   });
 }

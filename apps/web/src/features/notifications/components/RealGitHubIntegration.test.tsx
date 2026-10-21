@@ -9,12 +9,15 @@ import {
   RealGitHubIntegration,
 } from "@/features/notifications/components/RealGitHubIntegration";
 import { Component as AuthorizationCallback } from "@/features/notifications/routes/GitHubAuthorizationCallbackRoute";
+import { Component as InstallationCallback } from "@/features/notifications/routes/GitHubInstallationCallbackRoute";
 import { ApiError } from "@/lib/api/errors";
 import { createMemoryRepository } from "@/mocks/data/storage";
 import { createAuthHandlers } from "@/mocks/handlers/auth";
 import { server } from "@/mocks/server";
 import {
   buildGitHubAccount,
+  buildInstallation,
+  buildRepository,
   buildUnlinkedGitHubAccount,
   integrationHandlers,
   type IntegrationCall,
@@ -40,6 +43,7 @@ function setup(
     routes: [
       { path: "/settings/integrations", element },
       { path: "/settings/integrations/github/callback", element },
+      { path: "/settings/integrations/github/setup", element },
     ],
   });
   return { calls, ...view };
@@ -207,5 +211,137 @@ describe("GitHubAuthorizationCallbackRoute", () => {
     server.use(...integrationHandlers({ account: buildUnlinkedGitHubAccount(), calls }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Thử lại liên kết" }));
     await waitFor(() => expect(assign).toHaveBeenCalled());
+  });
+});
+
+describe("GitHub App card", () => {
+  const repos = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      buildRepository({ repository_id: `repo-${index}`, full_name: `utask-org/repo-${index}`, private: index === 0 }),
+    );
+
+  it("disables installation and asks to link GitHub first when the account is not ACTIVE", async () => {
+    const { calls } = setup({ account: buildUnlinkedGitHubAccount(), installations: [buildInstallation()] });
+
+    expect(await screen.findByText("Cần liên kết GitHub trước.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cài GitHub App" })).toBeDisabled();
+    expect(calls.some((call) => call.path.endsWith("/installations"))).toBe(false);
+  });
+
+  it("lists installations with account and repository selection", async () => {
+    setup({
+      account: buildGitHubAccount(),
+      installations: [
+        buildInstallation(),
+        buildInstallation({ installation_id: "inst-2", account: { id: "3", login: "octocat", type: "User" }, repository_selection: "all" }),
+      ],
+    });
+
+    expect(await screen.findByText("utask-org (Organization)")).toBeInTheDocument();
+    expect(screen.getByText("Repo được chọn")).toBeInTheDocument();
+    expect(screen.getByText("octocat (User)")).toBeInTheDocument();
+    expect(screen.getByText("Tất cả repo")).toBeInTheDocument();
+  });
+
+  it("shows an empty state when no installation exists", async () => {
+    setup({ account: buildGitHubAccount(), installations: [] });
+
+    expect(await screen.findByText("Chưa cài GitHub App cho tài khoản/tổ chức nào.")).toBeInTheDocument();
+  });
+
+  it("opens repositories with a Private label and loads page 2 on demand", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup({
+      account: buildGitHubAccount(),
+      installations: [buildInstallation()],
+      repositories: { "inst-1": repos(3) },
+      pageSize: 2,
+    });
+
+    await user.click(await screen.findByText("utask-org (Organization)"));
+    expect(await screen.findByText("utask-org/repo-0")).toBeInTheDocument();
+    expect(screen.getByText("Private")).toBeInTheDocument();
+    expect(screen.queryByText("utask-org/repo-2")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Tải thêm" }));
+
+    expect(await screen.findByText("utask-org/repo-2")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tải thêm" })).not.toBeInTheDocument();
+    expect(calls.filter((call) => call.path.endsWith("/repositories")).map((call) => call.search)).toEqual([
+      "?page=1&per_page=100",
+      "?page=2&per_page=100",
+    ]);
+  });
+
+  it("redirects to the installation URL when installing", async () => {
+    const assign = stubLocationAssign();
+    setup({ account: buildGitHubAccount(), installations: [] });
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Cài/cập nhật GitHub App" }));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://github.com/apps/utask/installations/new?state=s2"));
+  });
+});
+
+describe("GitHubInstallationCallbackRoute", () => {
+  const setupUrl = (query: string) => `/settings/integrations/github/setup?${query}`;
+  const full = "state=s2&installation_id=7&setup_action=install";
+
+  it("completes once and returns to settings when the installation is ACTIVE", async () => {
+    const { calls, router } = setup(
+      { account: buildGitHubAccount() },
+      <InstallationCallback />,
+      setupUrl(full),
+      { wrapper: StrictMode },
+    );
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/settings/integrations"));
+    const posts = calls.filter((call) => call.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.body).toEqual({ state: "s2", installation_id: "7", setup_action: "install" });
+  });
+
+  it("shows a pending message when the organisation owner has not approved", async () => {
+    const { router } = setup(
+      { account: buildGitHubAccount(), installationComplete: { status: "PENDING_APPROVAL", installation_id: "7" } },
+      <InstallationCallback />,
+      setupUrl(full),
+    );
+
+    expect(await screen.findByText("Yêu cầu cài đặt đang chờ chủ tổ chức duyệt.")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/settings/integrations/github/setup");
+  });
+
+  it("does not call the API for setup_action=request without installation_id", async () => {
+    const { calls } = setup(
+      { account: buildGitHubAccount() },
+      <InstallationCallback />,
+      setupUrl("state=s2&setup_action=request"),
+    );
+
+    expect(await screen.findByText("Đã gửi yêu cầu cài đặt, chờ chủ tổ chức duyệt.")).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["missing state", "installation_id=7&setup_action=install"],
+    ["unknown setup_action", "state=s2&installation_id=7&setup_action=bogus"],
+    ["missing installation_id", "state=s2&setup_action=install"],
+  ])("rejects %s without calling the API", async (_name, query) => {
+    const { calls } = setup({ account: buildGitHubAccount() }, <InstallationCallback />, setupUrl(query));
+
+    expect(await screen.findByText("Liên kết callback không hợp lệ.")).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("shows the mapped error when complete fails", async () => {
+    setup(
+      { account: buildGitHubAccount(), failWith: { status: 409, code: "GITHUB_CONSENT_CONFLICT", message: "x" } },
+      <InstallationCallback />,
+      setupUrl(full),
+    );
+
+    expect(await screen.findByText("Phiên cấp quyền đã thay đổi, vui lòng thử lại.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thử lại cài đặt" })).toBeInTheDocument();
   });
 });
