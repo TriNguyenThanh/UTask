@@ -62,12 +62,21 @@ phục hồi worker và dead-letter cần thiết kế trước migration.
 Integration M1 đã có role/login riêng qua `INTEGRATION_DB_USER` và
 `INTEGRATION_DB_PASSWORD`, không nhận tài khoản quản trị trong container app.
 Role không có quyền superuser/tạo database/tạo role/replication/bypass RLS,
-chỉ sở hữu database và schema Integration. Script hạn chế PUBLIC CONNECT/TEMP
-trên các database được quản lý, `postgres` và `template1`, giữ quyền tài khoản
-chung đang phục vụ service khác. Custom role/DB ngoài repo cần ACL rõ ràng;
-không suy việc tách Integration là đã tách toàn cluster.
+chỉ sở hữu database và schema Integration. Bootstrap hiện chỉ tạo database còn thiếu, không tạo role hay thu hồi PUBLIC
+CONNECT/TEMP; role/grant đã có trong môi trường cũ được giữ nguyên. Custom
+role/DB ngoài repo cần ACL rõ ràng; không suy việc tách Integration là đã tách
+toàn cluster.
 
 Identity/Work/Classroom vẫn dùng credential chung, còn thiếu so với baseline.
 AI dùng PostgreSQL riêng theo [cấu hình AI](../ai-service/README.md).
 Kiểm tra bootstrap M1 ở [Integration foundation](../integration-service/foundation.md);
 chưa xác minh database/role staging thực tế. Xem [biến môi trường](../infrastructure/environment.md).
+
+### Notification dùng credential chung theo yêu cầu hiện tại
+
+Notification vẫn sở hữu database `notification_db`, nhưng runtime dùng chung
+`POSTGRES_USER`/`POSTGRES_PASSWORD` với Identity/Work/Classroom theo yêu cầu
+đơn giản hóa. Bootstrap đã bỏ khối tạo role/ACL riêng của Notification;
+không còn kiểm tra username khác quản trị. Đây là hiện trạng chưa đáp ứng
+credential riêng theo baseline, không cấp phép đọc DB service khác trong code.
+Role/ACL đã tồn tại trong volume cũ không bị xóa hoặc sửa tự động.

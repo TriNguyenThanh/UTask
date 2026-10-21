@@ -5,6 +5,11 @@ Service Django/DRF sở hữu inbox Kafka, thông báo in-app, tùy chọn email
 thái giao thư trong PostgreSQL riêng. Redis/Celery chuyển job nội bộ; Kafka
 chỉ truyền sự kiện giữa service. GitHub/AI và Web Push chưa thuộc phạm vi này.
 
+Notification dùng database riêng `notification_db` và credential `POSTGRES_*`
+chung như Identity/Work/Classroom theo yêu cầu cấu hình hiện tại. Không còn
+kiểm tra hoặc tạo role riêng từ `NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD`.
+Chi tiết tại [vận hành](operations.md).
+
 ## Tài liệu bàn giao
 
 - [Checkpoint 22/10/2026](checkpoint-2026-10-22.md): hiện trạng, bằng chứng và phần việc tiếp tục.

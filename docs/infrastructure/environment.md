@@ -430,8 +430,11 @@ và khôi phục có chủ đích trước khi sử dụng database đích.
 
 ## Notification Service
 
-Mapping `infra/env/notification-service.env` chỉ cấp credential database riêng
-`NOTIFICATION_DB_*`, không nhận PostgreSQL administrator. Các key nội bộ, Gmail
+Notification dùng credential `POSTGRES_*` chung từ `infra/env/database.env`,
+như Identity/Work/Classroom. `infra/env/notification-service.env` mapping
+`NOTIFICATION_DB_NAME` thành `DATABASE_NAME`; không còn đọc
+`NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD`. Đây là hiện trạng theo yêu
+cầu đơn giản hóa, chưa đáp ứng tách credential theo baseline. Các key nội bộ, Gmail
 App Password, AES key ring và cờ rollout theo
 [runbook Notification](../notification-service/operations.md).
 `NOTIFICATION_EMAIL_ENABLED=false` mặc định; ba cờ nhận Identity/Work và gửi
