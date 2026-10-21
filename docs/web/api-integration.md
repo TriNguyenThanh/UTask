@@ -62,6 +62,7 @@ VITE_API_BASE_URL=
 | 16 | AI: nền (client, cờ `ai`, polling) và AI tách nhiệm vụ con (`task_decomposition`) | Một phần (đã smoke trình duyệt: Work thật trên staging + AI giả qua MSW; AI staging chưa dùng được, xem B32) |
 | 17 | AI: gợi ý backlog (`backlog_generation`) | Một phần (AI thật bị chặn bởi B32; smoke với AI qua MSW) |
 | 18 | AI: phân tích rủi ro (`risk_analysis`, chỉ đọc) | Hoãn, không làm theo yêu cầu (DTO `AiRiskRequest` và mock vẫn còn, không có UI) |
+| GitHub | GitHub qua Integration và Work (xem mục "GitHub qua Integration và Work"; không trùng Phase 18 AI ở trên) | Một phần (web xong, kiểm bằng MSW; staging Chưa xác minh do B33–B37) |
 | 19+ | Admin | Chưa triển khai |
 
 ## Phiên và token (Phase 1–2)
@@ -106,7 +107,7 @@ mock cũ (`routes/SettingsProfileRoute.tsx`, `SettingsSecurityRoute.tsx`).
   quyết định, frontend không sao chép.
 - **Đăng xuất mọi thiết bị**: hộp thoại xác nhận → `POST /logout-all` → `/login`
   kèm số phiên đã thu hồi. Nếu gọi lỗi, hiện cảnh báo máy chủ chưa thu hồi.
-- Cài đặt GitHub/thông báo vẫn là demo MSW (`Chưa triển khai` ở backend).
+- Cài đặt thông báo vẫn là demo MSW (`Chưa triển khai` ở backend). Cài đặt GitHub chạy thật khi bật `integration`: xem mục "GitHub qua Integration và Work".
 
 ## Đăng ký, kích hoạt, khôi phục mật khẩu (Phase 4)
 
@@ -390,7 +391,7 @@ Giới hạn:
 
 ## Work cộng tác: bình luận, lịch sử, đính kèm (Phase 14)
 
-- Phạm vi: **không gồm GitHub** (repository, liên kết, username, tab Code) — hoãn theo yêu cầu, giữ dữ liệu mock.
+- Phạm vi: **không gồm GitHub** (repository, liên kết, username, tab Code); phần này làm sau, xem mục "GitHub qua Integration và Work".
 - Bình luận (panel issue, chế độ thật): gửi **text thuần** làm `content_html` (repo chưa có thư viện sanitize); không bao giờ gửi `is_teacher_feedback` (server tự gắn huy hiệu). Không dùng `Idempotency-Key`. Người nhắc (@) chọn từ thành viên, mention ngoài dự án → 422 và giữ nguyên nội dung. Chỉ tác giả sửa; tác giả hoặc Leader xóa. Dự án lưu trữ ẩn ô soạn.
 - Lịch sử: `GET tasks/{id}/activities/`; giá trị cũ/mới là chuỗi thô, `parseActivityValue` thử JSON rồi trả nguyên văn. Chưa có lịch sử cấp dự án.
 - Đính kèm: presign → `PUT` thẳng lên R2 bằng `fetch` (không gửi token) → confirm có `Idempotency-Key`. Client kiểm loại tệp (7 loại) và cỡ ≤ 25 MB trước. Link tải lấy mới ngay trước khi mở, không cache. 503 → "Kho lưu trữ chưa sẵn sàng", không tự thử lại; R2 từ chối → thông báo chọn lại tệp.
@@ -421,7 +422,7 @@ Giới hạn:
 
 ## GitHub qua Integration và Work (Phase 18)
 
-Trạng thái: **Một phần** (đang làm theo từng giai đoạn; mục dưới ghi phần đã có). Kế hoạch: nối web với Integration Service (liên kết tài khoản, cài GitHub App, xem repo) và các route GitHub của Work (username, repository dự án, link task). Theo ADR-004, Integration sở hữu liên kết tài khoản GitHub, nên web dùng luồng consent của Integration, **không** dùng `/api/auth/oauth/github` của Identity.
+Trạng thái: **Một phần** (web đã làm đủ 6 giai đoạn theo contract; phần chạy thật trên staging còn chờ backend B33–B37). Nối web với Integration Service (liên kết tài khoản, cài GitHub App, xem repo) và các route GitHub của Work (username, repository dự án, link task). Theo ADR-004, Integration sở hữu liên kết tài khoản GitHub, nên web dùng luồng consent của Integration, **không** dùng `/api/auth/oauth/github` của Identity.
 
 ### Nền tảng client Integration (giai đoạn 1)
 
@@ -483,6 +484,20 @@ Test dùng `src/test/integrationHandlers.ts` (MSW): handler `start` trả 400 n�
 - Client chỉ kiểm PR phải là số nguyên dương (bỏ `#` đầu); `github_ref_id` gửi nguyên văn, server chuẩn hóa. `Idempotency-Key` giữ nguyên khi thử lại cùng input, sinh mới khi input đổi hoặc sau khi thành công.
 - Lỗi: 503 `INTEGRATION_UNAVAILABLE` → thông báo B34; `INVALID_OPERATION` (ví dụ dự án chưa nối repo, link chưa `is_verified`) → hiện message server kèm link tới tab Code. Staging: **Chưa xác minh** thao tác ghi (B34 chặn); đã kiểm bằng MSW.
 
+### Trạng thái tổng hợp GitHub
+
+| Phần | Web | Staging | Chặn bởi |
+|---|---|---|---|
+| Liên kết tài khoản (giai đoạn 2) | Đã triển khai | Chưa xác minh | B33 |
+| Cài GitHub App, xem repo (giai đoạn 3) | Đã triển khai | Chưa xác minh | B33 |
+| Username thành viên (giai đoạn 4) | Đã triển khai | Chưa xác minh | B37 |
+| Kết nối repo cho dự án (giai đoạn 5) | Một phần (không có ngắt kết nối) | Chưa xác minh | B34, B35 |
+| Link GitHub của task (giai đoạn 6) | Một phần | Chưa xác minh | B34 |
+| Hoạt động commit/PR ở tab Code | Chưa triển khai | Chưa triển khai | B36 |
+
+Các mã B33–B37 nằm ở bảng "Việc cần backend (tổng hợp)" bên dưới.
+
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
@@ -523,6 +538,8 @@ Test dùng `src/test/integrationHandlers.ts` (MSW): handler `start` trả 400 n�
 Từ `apps/web`: `tsc --noEmit`, `vitest run`, `tsc -b && vite build` đều đạt
 (53 file test). Chạy `vitest` phải không có `apps/web/.env.local`, vì file này
 bật `VITE_REAL_SERVICES` và làm hàng chục test mock thất bại.
+
+GitHub (giai đoạn 1–6), từ `apps/web`: `tsc --noEmit`, `vitest run` (108 file, 1275 test), `tsc -b && vite build` đều đạt. Một lần chạy full có 5 test không liên quan fail khi máy tải nặng, chạy lại thì pass. Smoke staging: tài khoản/cài đặt/tab Code như các mục giai đoạn 2, 3, 5; panel issue của PRJ1 chưa mở được vì Backlog báo lỗi tải (`classroom/groups/{id}/members/` trả 404 với 3 nhóm; chưa xác minh đây là nguyên nhân).
 
 Smoke trình duyệt thật (Chrome qua relay, staging, `VITE_REAL_SERVICES=auth,classroom`):
 
