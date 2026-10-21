@@ -185,6 +185,10 @@ def contract_request(settings, signup_data):
             headers = {"HTTP_X_SERVICE_KEY": "contract-work"}
         elif route.endswith("/oauth/GITHUB"):
             headers = {"HTTP_X_SERVICE_KEY": "contract-integration"}
+        elif route.endswith("/notification-contacts"):
+            settings.NOTIFICATION_SERVICE_TOKEN = "contract-notification"
+            headers = {"HTTP_X_SERVICE_TOKEN": "contract-notification"}
+            body = {"user_ids": [str(user.pk)]}
 
         url = route.format(user_id=target_id, session_id=UserSession.objects.get(user=user).pk)
         return getattr(client, method)(url, body, format="json", **headers)
@@ -224,6 +228,68 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
     assert schema["components"]["securitySchemes"]["jwtAuth"]["scheme"] == "bearer"
 
 
+@pytest.mark.contract
+def test_notification_contacts_schema_describes_service_token_and_bounded_uuid_batch(
+    exported_schema,
+):
+    operation = exported_schema["paths"]["/api/v1/internal/users/notification-contacts"]["post"]
+    assert not operation.get("security")
+    assert any(
+        parameter["name"] == "X-Service-Token"
+        and parameter["in"] == "header"
+        and parameter["required"]
+        for parameter in operation["parameters"]
+    )
+    assert operation["requestBody"]["required"] is True
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    validator = Draft202012Validator(
+        {**request_schema, "components": exported_schema["components"]},
+        format_checker=FormatChecker(),
+    )
+    assert validator.is_valid({"user_ids": [str(uuid4())]})
+    assert validator.is_valid({"user_ids": [str(uuid4())] * 100})
+    for body in ({}, {"user_ids": []}, {"user_ids": [str(uuid4())] * 101}, {"user_ids": ["bad"]}):
+        assert not validator.is_valid(body)
+    response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    validator = Draft202012Validator(
+        {**response_schema, "components": exported_schema["components"]}
+    )
+    assert validator.is_valid({"users": []})
+    assert not validator.is_valid({"success": True, "data": {"users": []}})
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    "token,body,status",
+    [
+        ("", {}, 403),
+        ("wrong", {}, 403),
+        ("notification-contract-token", {}, 400),
+        ("notification-contract-token", {"user_ids": []}, 400),
+        ("notification-contract-token", {"user_ids": ["invalid"]}, 400),
+    ],
+)
+def test_notification_contact_errors_conform_to_documented_envelope(
+    exported_schema, settings, token, body, status
+):
+    settings.NOTIFICATION_SERVICE_TOKEN = "notification-contract-token"
+    route = "/api/v1/internal/users/notification-contacts"
+    response = APIClient().post(route, body, format="json", HTTP_X_SERVICE_TOKEN=token)
+    assert response.status_code == status
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["message"] in {
+        "Bạn không có quyền thực hiện thao tác này.",
+        "Dữ liệu đầu vào không hợp lệ.",
+    }
+    body_schema = exported_schema["paths"][route]["post"]["responses"][str(status)]["content"][
+        "application/json"
+    ]["schema"]
+    Draft202012Validator({**body_schema, "components": exported_schema["components"]}).validate(
+        payload
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.django_db
 @pytest.mark.postgres
@@ -246,6 +312,9 @@ def test_live_responses_conform_to_exported_envelopes(
     assert response["Content-Type"].startswith("application/json")
     if route.endswith("jwks.json"):
         assert set(response.json()) == {"keys"}
+    elif route.endswith("/notification-contacts"):
+        assert set(response.json()) == {"users"}
+        assert len(response.json()["users"]) == 1
     else:
         assert set(response.json()) == {"success", "message", "data", "meta", "error"}
         assert response.json()["success"] is (status < 400)
