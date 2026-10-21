@@ -11,6 +11,7 @@ import {
   SignalList,
   StatCard,
   TeacherQueryError,
+  WorkDataUnavailable,
   activityText,
   formatDate,
   formatDateTime,
@@ -98,7 +99,7 @@ function WorkCell({ row }: Readonly<{ row: TeacherOversightRow }>) {
   );
 }
 
-export function Component() {
+function DemoOversight() {
   const course = useTeacherCourseContext();
   const oversight = useTeacherOversight(course.courseId);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -296,4 +297,9 @@ export function Component() {
       </section>
     </div>
   );
+}
+
+export function Component() {
+  const course = useTeacherCourseContext();
+  return course.classroom ? <WorkDataUnavailable title="Giám sát tiến độ" /> : <DemoOversight />;
 }

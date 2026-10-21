@@ -50,6 +50,17 @@ export interface Epic {
 export type IssueType = "story" | "task" | "bug";
 export type IssueStatus = "todo" | "in-progress" | "review" | "done";
 
+export type StateGroup = "BACKLOG" | "UNSTARTED" | "STARTED" | "REVIEW" | "COMPLETED" | "CANCELLED";
+
+export interface ProjectState {
+  id: string;
+  name: string;
+  color: string;
+  sequence: number;
+  group: StateGroup;
+  isDefault: boolean;
+}
+
 export interface Issue {
   id: string;
   key: string;
@@ -70,15 +81,20 @@ export interface Issue {
   updatedAt: string;
   /**
    * Position within the project: every list (board column, backlog section)
-   * orders its cards by this string. A fractional index, so moving one card
-   * writes one new key and never renumbers its neighbours.
+   * orders its cards by this number.
    */
-  rank: string;
+  rank: number;
+  /** State id from WorkService; links to `ProjectWorkspace.states`. */
+  statusId: string;
+  /** State group; drives board column membership. */
+  stateGroup: StateGroup;
   /** Bumped on every write; a stale value on a move gets a 409. */
   version: number;
   /** A flag on the card, not a column: a blocked card keeps its status. */
   blocked: boolean;
   blockedReason: string | null;
+  /** Nhãn của task (Work thật); demo không có nhãn nên để trống. */
+  labels?: { id: string; name: string; color: string }[];
 }
 
 export interface Sprint {
@@ -110,6 +126,10 @@ export interface ProjectWorkspace {
   epics: Epic[];
   sprints: Sprint[];
   issues: Issue[];
+  /** Board columns in sequence order; built from WorkService states. */
+  states: ProjectState[];
+  /** Một phần dữ liệu phụ (epic) không tải được; Board và Backlog vẫn dùng được. */
+  partial?: boolean;
 }
 
 export interface IssueComment {

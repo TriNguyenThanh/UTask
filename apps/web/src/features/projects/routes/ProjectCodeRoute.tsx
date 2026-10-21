@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
 import {
   GitBranch,
   GitCommitHorizontal,
@@ -179,7 +181,7 @@ function RepoStrip({ code }: Readonly<{ code: ProjectCode }>) {
         </div>
       </div>
       <div className="flex items-center gap-1.5 rounded border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground">
-        <span className="font-bold text-amber-600">💡 Smart Commit:</span>
+        <span className="font-bold text-amber-800">💡 Smart Commit:</span>
         <span>
           Gõ kèm mã:{" "}
           <code className="rounded bg-secondary px-1 py-0.5 font-mono text-foreground">
@@ -258,7 +260,7 @@ function MetricsRow({ code }: Readonly<{ code: ProjectCode }>) {
               {stats.pullRequests.open} open
             </span>
             <span aria-hidden>•</span>
-            <span className="font-semibold text-amber-600">
+            <span className="font-semibold text-amber-800">
               {stats.pullRequests.review} review
             </span>
           </span>
@@ -350,7 +352,7 @@ function ContributorRow({
                     href={githubUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-primary hover:underline"
+                    className="text-primary underline underline-offset-2"
                   >
                     @{contributor.githubUsername}
                   </a>
@@ -898,5 +900,6 @@ export default function ProjectCodeRoute() {
   );
 }
 export function Component() {
+  if (isRealService("work")) return <WorkModuleNotIntegrated module="code" />;
   return <ProjectCodeRoute />;
 }

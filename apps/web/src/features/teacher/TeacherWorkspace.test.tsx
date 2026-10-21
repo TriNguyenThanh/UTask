@@ -226,8 +226,8 @@ describe("Workspace as an instructor (read-only)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Chi tiết issue NEXUS-104" });
     await within(dialog).findByText(/Bình luận \(Comments\)/);
     expect(within(dialog).getByRole("textbox", { name: /Soạn bình luận cho task/ })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Gửi phản hồi" })).toBeDisabled();
-    expect(within(dialog).getAllByText(/chưa có hợp đồng API bình luận/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("button", { name: "Gửi phản hồi" })).toHaveAttribute("aria-disabled", "true");
+    expect(within(dialog).getAllByText(/chưa nối API bình luận của Work/).length).toBeGreaterThan(0);
     // The existing comments are still readable.
     expect(within(dialog).getByText(/wireframe trang kết quả thanh toán/)).toBeInTheDocument();
   });

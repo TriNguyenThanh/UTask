@@ -2,6 +2,8 @@
 
 **Trạng thái tài liệu: Phase 0 (rà soát, chốt nền) hoàn tất; Phase 1 (nền quyền, graph mock dùng chung, giao diện đọc lớp) đã triển khai trên dữ liệu Demo MSW. Kết quả và bằng chứng ở [§13](#13-kết-quả-phase-1); giao diện được dựng lại theo thiết kế Stitch và thêm màn Giám sát ở [§14](#14-cập-nhật-theo-thiết-kế-stitch); Phase 2 (dashboard nhóm T08, workspace chỉ xem cho giảng viên) ở [§15](#15-kết-quả-phase-2--từ-nhóm-đến-workspace-chỉ-xem); Phase 3–5 (form tạo lớp, cài đặt lớp, import CSV, nháp phản hồi, xem trước điều chỉnh nhóm, tín hiệu rủi ro) ở [§16](#16-kết-quả-phase-3-4-5--tổ-chức-lớp-phản-hồiđiều-chỉnh-nhóm-rủi-ro), chỉ ở mức giao diện/demo. Chưa có backend, hợp đồng API hay thao tác ghi nào của Teacher.**
 
+> **Cập nhật tích hợp (Phase 7–8):** câu "chưa có backend … thao tác ghi" ở trên mô tả thiết kế và dữ liệu Demo MSW. Khi `VITE_REAL_SERVICES` chứa `classroom`, giảng viên đọc và ghi lớp, sinh viên, nhóm và lịch sử qua Classroom thật; phạm vi, hợp đồng, giới hạn và việc cần backend ở [api-integration.md](api-integration.md). Giám sát, tín hiệu và project của nhóm vẫn chờ Work.
+
 Căn cứ: nhánh `fix/frontend-student-flow`, HEAD `c9df96b` (08/10/2026); phần
 Phase 1 nằm trong working tree, chưa commit. Mọi kết
 luận "hiện trạng" dưới đây dựa trên mã nguồn ở HEAD. Bằng chứng lấy từ nhánh
@@ -175,7 +177,6 @@ trách" (analysis §2.2) chưa có đặc tả hành động: mặc định ch�
 | --- | --- | --- |
 | `/teacher` | T01 Home giảng viên | P0 |
 | `/teacher/courses` | T02 Danh sách lớp phụ trách | P0 |
-| `/teacher/courses/new` | T03 Tạo lớp | Đã triển khai giao diện; gửi disabled chờ contract (§16) |
 | `/teacher/courses/:courseId` | T04 Tổng quan lớp | P0 |
 | `/teacher/courses/:courseId/students` | T05 Sinh viên | P0 |
 | `/teacher/courses/:courseId/students/import` | T06 Nhập danh sách | Đã triển khai xem trước CSV; gửi disabled chờ contract (§16) |
@@ -223,7 +224,7 @@ không lộ sự tồn tại (khớp cách xử lý R2).
 | --- | --- | --- | --- | --- |
 | T01 Home | Header "Bàn làm việc giảng viên" + bộ lọc học kỳ; hàng chỉ số (lớp phụ trách, nhóm, sinh viên chưa có nhóm, nhóm cần chú ý); lưới thẻ lớp (tên, mã môn, học kỳ, số SV/nhóm, chưa có nhóm, hoạt động gần nhất có thời điểm) | Tạo lớp (disabled kèm lý do đến khi có contract) | Chưa có lớp; chỉ số thiếu dữ liệu hiển thị "Chưa có dữ liệu" | Chỉ số 4 → 2 → 1 cột |
 | T02 Danh sách lớp | Tìm kiếm tên/mã + lọc học kỳ; bảng (desktop) / card (mobile) | Mở lớp; Tạo lớp | Không có kết quả lọc khác với chưa có lớp | Bảng cuộn trong vùng riêng |
-| T03 Tạo lớp | Form: tên lớp, mã môn (tùy chọn), học kỳ, ngày bắt đầu/kết thúc, giới hạn thành viên nhóm min/max | Hủy; Tạo lớp | Validation min ≤ max, kết thúc ≥ bắt đầu; lỗi field cạnh field, lỗi chung đầu form; submit disabled + lý do khi chưa có contract; rời trang khi form đã sửa phải xác nhận | Một cột |
+| T03 Tạo lớp | Hộp thoại (không phải trang). Form: tên lớp, mã môn (tùy chọn), học kỳ, ngày bắt đầu/kết thúc, giới hạn thành viên nhóm min/max | Hủy; Tạo lớp | Validation min ≤ max, kết thúc ≥ bắt đầu; lỗi field cạnh field, lỗi chung đầu form; submit disabled + lý do khi chưa có contract; nhấp ra ngoài không đóng khi đã nhập dở | Một cột |
 | T04 Tổng quan lớp | Header tên lớp, học kỳ, giảng viên phụ trách, mã tham gia (sao chép); tabs có route riêng: Tổng quan / Sinh viên / Nhóm / Cài đặt; bảng nhóm: tên, Leader, sĩ số, project, tiến độ, cập nhật gần nhất | Mở nhóm; mở workspace | Nhóm chưa có project hiện "Chưa có project" (không gán lý do); clipboard lỗi không báo thành công | Tabs cuộn ngang; bảng → card |
 | T05 Sinh viên | Lọc tên/email/MSSV, có/chưa có nhóm; bảng MSSV, tên, email, nhóm, vai trò trong nhóm của lớp này | Thêm sinh viên (dialog), Nhập danh sách | Lớp rỗng; trạng thái kích hoạt chỉ hiện khi nguồn có | Bảng → card |
 | T06 Import | 3 bước: Chọn file → Kiểm tra định dạng (client) → Kết quả; bảng preview theo `row_number` | Xác nhận nhập (disabled đến khi có contract) | File sai định dạng, thiếu cột, trùng trong file; ghi rõ đối chiếu tài khoản xảy ra ở backend; không hiện mật khẩu/link kích hoạt | Bảng cuộn ngang |
@@ -979,7 +980,7 @@ các read model demo đã có (`TeacherSignal`, `asOf`) trên đường dẫn MS
 
 | Hạng mục | Route / thành phần | Trạng thái |
 | --- | --- | --- |
-| T03 tạo lớp | `/teacher/courses/new` | Form đủ trường (tên, mã môn tùy chọn, học kỳ, ngày bắt đầu/kết thúc, sĩ số tối thiểu/tối đa), kiểm tra ngay khi nhập, nút "Kiểm tra thông tin"; "Tạo lớp" disabled; cảnh báo xác nhận khi rời trang đã sửa (`useBlocker`) |
+| T03 tạo lớp | Hộp thoại "Tạo lớp" mở từ nút ở `/teacher` và `/teacher/courses` (không còn route `/teacher/courses/new`) | Hai nhóm ô, không đánh số bước, không câu giải thích: ô **Môn học** (Course: chọn môn có sẵn hoặc tạo môn mới) ở trên, rồi nhóm có tiêu đề **Thông tin lớp học** (ClassSection: mã lớp, tên, học kỳ, ngày, sĩ số nhóm). Classroom thật: tạo môn (nếu mới) rồi tạo lớp, xong vào `/teacher/courses/:classId`. Demo: kiểm tra định dạng, nút "Tạo lớp" disabled. Nhấp ra ngoài không đóng hộp thoại khi đã nhập dở |
 | T10 cài đặt lớp | `/teacher/courses/:courseId/settings` (tab Cài đặt giờ là liên kết thật) | Thông tin lớp, mã tham gia + sao chép, giảng viên phụ trách; "Đổi mã", "Vô hiệu mã" disabled; không có nút sửa/xóa lớp |
 | Thêm từng sinh viên | Hộp thoại ở trang Sinh viên | Kiểm tra định dạng email, cần email hoặc MSSV; "Thêm vào lớp" disabled; không có ô mật khẩu hay nhóm |
 | T06 thêm danh sách | `/teacher/courses/:courseId/students/import` | Hiện trạng: 3 bước chọn CSV → kiểm tra và xem trước theo `row_number` → kết quả minh họa; nút xác nhận bị tắt. Thiết kế mục tiêu phải đọc Excel ở Web rồi gửi JSON |
@@ -1093,7 +1094,7 @@ commit tự build và test đều xanh nên dùng `git add -p` cho các file đ�
 
 1. `feat(web): add class creation form, class settings, add-student dialog and CSV import preview`
    - `features/teacher/lib/{courseForm,csvImport}.ts`, `components/{JoinCode,AddStudentDialog}.tsx`
-   - `routes/{TeacherCourseCreateRoute,TeacherCourseSettingsRoute,TeacherStudentImportRoute}.tsx`
+   - `components/{CreateClassButton,ClassCreateForm,DemoClassCreateForm}.tsx`, `routes/{TeacherCourseSettingsRoute,TeacherStudentImportRoute}.tsx`
    - `routes/{TeacherCourseLayout,TeacherCourseStudentsRoute,TeacherCoursesRoute}.tsx`, `app/router/router.tsx`
 2. `feat(web): add feedback drafts and team adjustment preview`
    - `lib/{drafts,teamAdjustment}.ts`, `components/{FeedbackComposer,TeamAdjustDialog}.tsx`

@@ -247,7 +247,7 @@ describe("Issue panel status", () => {
 
     const select = await screen.findByLabelText("Trạng thái");
     await waitFor(() => expect(select).toBeEnabled());
-    await user.selectOptions(select, "review");
+    await user.selectOptions(select, "state-review");
 
     await waitFor(() =>
       expect(within(column("Chờ Review (In Review)")).getByText("NEXUS-101")).toBeInTheDocument(),

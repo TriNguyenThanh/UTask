@@ -1,4 +1,4 @@
-import type { Issue, IssueStatus } from "@/features/projects/types";
+import type { Issue, IssueStatus, ProjectState, StateGroup } from "@/features/projects/types";
 
 /** Board columns, in workflow order. One source for Board, Backlog and IssuePanel. */
 export const COLUMNS: { status: IssueStatus; label: string; dotClass: string }[] = [
@@ -6,6 +6,22 @@ export const COLUMNS: { status: IssueStatus; label: string; dotClass: string }[]
   { status: "in-progress", label: "Đang làm (In Progress)", dotClass: "bg-blue-500" },
   { status: "review", label: "Chờ Review (In Review)", dotClass: "bg-amber-500" },
   { status: "done", label: "Hoàn thành (Done)", dotClass: "bg-emerald-600" },
+];
+
+/** Maps a WorkService StateGroup to the legacy IssueStatus used by UI components. */
+export function statusForGroup(group: StateGroup): IssueStatus {
+  if (group === "STARTED") return "in-progress";
+  if (group === "REVIEW") return "review";
+  if (group === "COMPLETED" || group === "CANCELLED") return "done";
+  return "todo"; // BACKLOG | UNSTARTED
+}
+
+/** Stable demo states matching the legacy COLUMNS labels; used by fixtures and tests. */
+export const DEMO_STATES: ProjectState[] = [
+  { id: "state-todo", name: "Cần làm (To Do)", color: "#94a3b8", sequence: 1, group: "UNSTARTED", isDefault: true },
+  { id: "state-in-progress", name: "Đang làm (In Progress)", color: "#3b82f6", sequence: 2, group: "STARTED", isDefault: false },
+  { id: "state-review", name: "Chờ Review (In Review)", color: "#f59e0b", sequence: 3, group: "REVIEW", isDefault: false },
+  { id: "state-done", name: "Hoàn thành (Done)", color: "#10b981", sequence: 4, group: "COMPLETED", isDefault: false },
 ];
 
 export const STATUS_LABELS: Record<IssueStatus, string> = {
@@ -28,7 +44,7 @@ export const PRIORITY_LABELS: Record<Issue["priority"], string> = {
 };
 
 export const PRIORITY_STYLES: Record<Issue["priority"], string> = {
-  high: "text-rose-600 bg-rose-50 border-rose-200",
+  high: "text-rose-700 bg-rose-50 border-rose-200",
   medium: "text-amber-700 bg-amber-50 border-amber-200",
   low: "text-slate-600 bg-slate-100 border-slate-200",
 };

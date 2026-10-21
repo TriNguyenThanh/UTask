@@ -1,7 +1,9 @@
+import { IdentitySecurityPage } from "@/features/notifications/components/IdentitySecurityPage";
 import { SettingsSecurityPage } from "@/features/notifications/components/SettingsSecurityPage";
+import { isRealService } from "@/lib/config/services";
 
 export function Component() {
-  return <SettingsSecurityPage />;
+  return isRealService("auth") ? <IdentitySecurityPage /> : <SettingsSecurityPage />;
 }
 
-export default SettingsSecurityPage;
+export default Component;

@@ -8,13 +8,14 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
+import { DiscardChangesConfirm } from "@/components/feedback/DiscardChangesConfirm";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { COLUMNS } from "@/features/projects/issueMeta";
-import type { Epic, IssueDetail, IssueStatus, Sprint } from "@/features/projects/types";
+import type { Epic, IssueDetail, ProjectState, Sprint } from "@/features/projects/types";
 import { ApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,6 @@ import { cn } from "@/lib/utils";
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const STATUS_OPTIONS = COLUMNS.map((column) => ({ value: column.status, label: column.label }));
 
 const PRIORITY_LABELS: Record<string, string> = {
   high: "Cao (High)",
@@ -31,7 +31,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
-  high: "text-rose-600 bg-rose-50 border-rose-200",
+  high: "text-rose-700 bg-rose-50 border-rose-200",
   medium: "text-amber-700 bg-amber-50 border-amber-200",
   low: "text-slate-600 bg-slate-100 border-slate-200",
 };
@@ -103,9 +103,12 @@ function SubtaskList({
   subtasks,
   onToggle,
   readOnly,
+  persisted = false,
 }: Readonly<{
   subtasks: { id: string; title: string; done: boolean }[];
   onToggle: (id: string) => void;
+  /** Work thật: tick được ghi lên server, không chỉ đổi cục bộ. */
+  persisted?: boolean;
   /** Instructors see the checklist but cannot change it, not even locally. */
   readOnly: boolean;
 }>) {
@@ -151,7 +154,9 @@ function SubtaskList({
       <p className="text-[11px] text-muted-foreground">
         {readOnly
           ? "Bạn chỉ có quyền xem nhiệm vụ con."
-          : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
+          : persisted
+            ? "Đánh dấu được lưu ngay vào dự án."
+            : "Đánh dấu chỉ áp dụng cho phiên xem hiện tại."}
       </p>
     </div>
   );
@@ -190,8 +195,13 @@ function trapTab(event: globalThis.KeyboardEvent, panel: HTMLElement) {
 }
 
 /** Escape closes; Tab is trapped inside the panel. */
-function useEscapeAndTabTrap(panelRef: RefObject<HTMLDivElement | null>, onClose: () => void) {
+function useEscapeAndTabTrap(
+  panelRef: RefObject<HTMLDivElement | null>,
+  onClose: () => void,
+  enabled: boolean,
+) {
   useEffect(() => {
+    if (!enabled) return;
     function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -202,7 +212,7 @@ function useEscapeAndTabTrap(panelRef: RefObject<HTMLDivElement | null>, onClose
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, panelRef]);
+  }, [enabled, onClose, panelRef]);
 }
 
 function AiSubtaskAction({
@@ -212,10 +222,10 @@ function AiSubtaskAction({
 }: Readonly<{ canBreakdownWithAI: boolean; aiKeyMissing: boolean; projectId: string }>) {
   if (canBreakdownWithAI) {
     return (
-      <Button variant="outline" size="xs" disabled title="Chưa có API sinh sub-tasks bằng AI">
+      <DisabledAction size="xs" reason="Chưa có API sinh sub-tasks bằng AI">
         <Sparkles aria-hidden />
         AI Tự động sinh Sub-tasks
-      </Button>
+      </DisabledAction>
     );
   }
   if (aiKeyMissing) {
@@ -259,12 +269,14 @@ function IssueTitleBlock({ issue, sprint }: Readonly<{ issue: IssueDetail["issue
 }
 
 function IssueStatusField({
-  status,
+  statusId,
+  states,
   onChange,
 }: Readonly<{
-  status: IssueDetail["issue"]["status"];
+  statusId: string;
+  states: readonly ProjectState[];
   /** Present only when the viewer may change the status; otherwise the field is read-only. */
-  onChange?: (status: IssueStatus) => void;
+  onChange?: (state: ProjectState) => void;
 }>) {
   const editable = onChange !== undefined;
   return (
@@ -277,18 +289,21 @@ function IssueStatusField({
       </label>
       <select
         id="issue-status-select"
-        value={status}
+        value={statusId}
         disabled={!editable}
-        onChange={(event) => onChange?.(event.target.value as IssueStatus)}
+        onChange={(event) => {
+          const next = states.find((state) => state.id === event.target.value);
+          if (next) onChange?.(next);
+        }}
         title={editable ? undefined : "Bạn không thể đổi trạng thái của issue này"}
         className={cn(
           "mt-1.5 w-full max-w-xs rounded-md border border-outline-subtle px-3 py-1.5 text-xs font-medium",
           editable ? "bg-card" : "cursor-not-allowed bg-muted text-muted-foreground",
         )}
       >
-        {STATUS_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
+        {states.map((state) => (
+          <option key={state.id} value={state.id}>
+            {state.name}
           </option>
         ))}
       </select>
@@ -322,7 +337,7 @@ function IssueDescription({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean }>) {
+function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing, createSlot, aiSlot }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean; createSlot?: ReactNode; aiSlot?: ReactNode }>) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -332,17 +347,20 @@ function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdown
             {subtasks.filter((s) => s.done).length}/{subtasks.length} hoàn thành
           </span>
         </h3>
-        <AiSubtaskAction
-          canBreakdownWithAI={canBreakdownWithAI}
-          aiKeyMissing={aiKeyMissing}
-          projectId={projectId}
-        />
+        {aiSlot ?? (
+          <AiSubtaskAction
+            canBreakdownWithAI={canBreakdownWithAI}
+            aiKeyMissing={aiKeyMissing}
+            projectId={projectId}
+          />
+        )}
       </div>
       {subtasks.length > 0 ? (
-        <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} />
+        <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} persisted={createSlot !== undefined} />
       ) : (
         <p className="text-xs text-muted-foreground">Chưa có nhiệm vụ con nào.</p>
       )}
+      {createSlot}
     </section>
   );
 }
@@ -421,7 +439,7 @@ function HistorySection({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void }>) {
+function IssueMeta({ issue, detail, epic, sprint, onClose, backLabel }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void; backLabel: string }>) {
   return (
     <div className="space-y-5 border-outline-subtle lg:col-span-4 lg:border-l lg:pl-6">
       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -464,14 +482,13 @@ function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: I
           <dt className="shrink-0 text-muted-foreground">Epic</dt>
           <dd className="min-w-0 truncate">
             {epic ? (
-              <span
-                className="rounded border px-2 py-0.5 text-[11px] font-semibold"
+              <span className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold text-foreground"
                 style={{
                   backgroundColor: `${epic.color}1a`,
                   borderColor: `${epic.color}55`,
-                  color: epic.color,
                 }}
               >
+                <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: epic.color }} />
                 {epic.name}
               </span>
             ) : (
@@ -512,7 +529,7 @@ function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: I
       </section>
 
       <Button variant="outline" size="sm" className="w-full" onClick={onClose}>
-        Quay lại Bảng công việc Sprint
+        {backLabel}
       </Button>
     </div>
   );
@@ -530,8 +547,17 @@ function IssueDetailBody({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly,
+  states,
+  subtasksEditable,
+  editSlot,
+  subtaskCreateSlot,
+  aiSlot,
+  commentsSlot,
+  historySlot,
+  attachmentsSlot,
   onChangeStatus,
   onClose,
+  backLabel,
 }: Readonly<{
   detail: IssueDetail;
   issue: IssueDetail["issue"];
@@ -544,8 +570,19 @@ function IssueDetailBody({
   canBreakdownWithAI: boolean;
   aiKeyMissing: boolean;
   readOnly: boolean;
-  onChangeStatus?: (status: IssueStatus) => void;
+  states: readonly ProjectState[];
+  subtasksEditable: boolean;
+  editSlot?: ReactNode;
+  subtaskCreateSlot?: ReactNode;
+  /** Work thật: thay nút AI demo bằng nút AI gọi AI Service. */
+  aiSlot?: ReactNode;
+  /** Work thật: thay khối bình luận, lịch sử và đính kèm bằng dữ liệu server. */
+  commentsSlot?: ReactNode;
+  historySlot?: ReactNode;
+  attachmentsSlot?: ReactNode;
+  onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
+  backLabel: string;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -553,21 +590,25 @@ function IssueDetailBody({
 
       <div className="grid items-start gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
-          <IssueStatusField status={issue.status} onChange={onChangeStatus} />
+          <IssueStatusField statusId={issue.statusId} states={states} onChange={onChangeStatus} />
+          {editSlot}
           <IssueDescription detail={detail} />
           <SubtasksSection
             subtasks={subtasks}
             onToggle={onToggleSubtask}
-            readOnly={readOnly}
+            readOnly={readOnly || !subtasksEditable}
             projectId={projectId}
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
+            createSlot={subtaskCreateSlot}
+            aiSlot={aiSlot}
           />
-          <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />
-          <HistorySection detail={detail} />
+          {commentsSlot ?? <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />}
+          {attachmentsSlot}
+          {historySlot ?? <HistorySection detail={detail} />}
         </div>
 
-        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} />
+        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} backLabel={backLabel} />
       </div>
     </div>
   );
@@ -589,8 +630,19 @@ export function IssuePanel({
   canBreakdownWithAI,
   aiKeyMissing,
   readOnly = false,
+  states,
+  subtasksEditable = true,
+  editSlot,
+  subtaskCreateSlot,
+  aiSlot,
+  commentsSlot,
+  historySlot,
+  attachmentsSlot,
+  onToggleSubtaskRemote,
   onChangeStatus,
   onClose,
+  backLabel,
+  hasUnsavedChanges = false,
 }: Readonly<{
   projectId: string;
   projectName: string;
@@ -606,17 +658,43 @@ export function IssuePanel({
   aiKeyMissing: boolean;
   /** Instructor view: no subtask toggling, and a note that comments are view-only. */
   readOnly?: boolean;
+  /** Cột (trạng thái) của dự án, theo thứ tự hiển thị; là các lựa chọn của ô Trạng thái. */
+  states: readonly ProjectState[];
+  /** `false` khi chưa có API sửa nhiệm vụ con: ô đánh dấu bị khóa. */
+  subtasksEditable?: boolean;
+  /** Khối sửa issue (Work thật), đặt trên phần mô tả. */
+  editSlot?: ReactNode;
+  /** Form thêm nhiệm vụ con (Work thật). */
+  subtaskCreateSlot?: ReactNode;
+  /** Work thật: nút AI tách nhiệm vụ con (thay nút demo). */
+  aiSlot?: ReactNode;
+  /** Work thật: bình luận, lịch sử và tệp đính kèm từ server thay cho khối demo. */
+  commentsSlot?: ReactNode;
+  historySlot?: ReactNode;
+  attachmentsSlot?: ReactNode;
+  /** Work thật: tick nhiệm vụ con ghi lên server thay vì chỉ đổi cục bộ. `done` là trạng thái muốn đặt. */
+  onToggleSubtaskRemote?: (subtaskId: string, done: boolean) => void;
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
-  onChangeStatus?: (status: IssueStatus) => void;
+  onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
+  /** Chữ của nút quay lại, theo trang đang chứa panel (Board hoặc Backlog). */
+  backLabel: string;
+  /** Khối sửa đang có thay đổi chưa lưu: Esc và nhấp ra ngoài hỏi lại trước khi đóng. */
+  hasUnsavedChanges?: boolean;
 }>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   /** Local-only subtask overrides keyed by subtask id. */
   const [localDone, setLocalDone] = useState<Record<string, boolean>>({});
 
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestClose = useCallback(
+    () => (hasUnsavedChanges ? setConfirmDiscard(true) : onClose()),
+    [hasUnsavedChanges, onClose],
+  );
+
   useRestoreFocus(closeButtonRef);
-  useEscapeAndTabTrap(panelRef, onClose);
+  useEscapeAndTabTrap(panelRef, requestClose, !confirmDiscard);
 
   /* Reset local checkbox state when a different issue is opened. */
   useEffect(() => {
@@ -632,6 +710,10 @@ export function IssuePanel({
   }, [detail, localDone]);
 
   function toggleSubtask(id: string) {
+    if (onToggleSubtaskRemote) {
+      onToggleSubtaskRemote(id, !(detail?.subtasks.find((s) => s.id === id)?.done ?? false));
+      return;
+    }
     setLocalDone((prev) => ({
       ...prev,
       [id]: !(prev[id] ?? detail?.subtasks.find((s) => s.id === id)?.done ?? false),
@@ -644,9 +726,10 @@ export function IssuePanel({
   const isNotFound = error instanceof ApiError && error.status === 404;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6 md:p-8"
-      onClick={onClose}
+      onClick={requestClose}
       data-testid="issue-panel-overlay"
     >
       <div
@@ -713,11 +796,29 @@ export function IssuePanel({
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
             readOnly={readOnly}
+            states={states}
+            subtasksEditable={subtasksEditable}
+            editSlot={editSlot}
+            subtaskCreateSlot={subtaskCreateSlot}
+            aiSlot={aiSlot}
+            commentsSlot={commentsSlot}
+            historySlot={historySlot}
+            attachmentsSlot={attachmentsSlot}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
+            backLabel={backLabel}
           />
         ) : null}
       </div>
     </div>
+    <DiscardChangesConfirm
+      open={confirmDiscard}
+      onDiscard={() => {
+        setConfirmDiscard(false);
+        onClose();
+      }}
+      onKeepEditing={() => setConfirmDiscard(false)}
+    />
+    </>
   );
 }

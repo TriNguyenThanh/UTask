@@ -10,13 +10,13 @@ const priorityMeta: Record<TaskPriority, { label: string; icon: typeof ChevronsU
     label: "Cao (High)",
     icon: ChevronsUp,
     classes: "border-rose-200/60 bg-rose-50 text-rose-700",
-    iconClasses: "text-rose-600",
+    iconClasses: "text-rose-700",
   },
   medium: {
     label: "Trung bình",
     icon: Minus,
-    classes: "border-amber-200/60 bg-amber-50 text-amber-700",
-    iconClasses: "text-amber-600",
+    classes: "border-amber-200/60 bg-amber-50 text-amber-800",
+    iconClasses: "text-amber-800",
   },
   low: {
     label: "Thấp (Low)",
@@ -27,7 +27,8 @@ const priorityMeta: Record<TaskPriority, { label: string; icon: typeof ChevronsU
 };
 
 /** Exported for direct unit testing of the day-count math; not part of the UI. */
-export function formatDue(dueAt: string, now: Date): string {
+export function formatDue(dueAt: string | null, now: Date): string {
+  if (dueAt === null) return "Chưa đặt hạn";
   const due = new Date(dueAt);
   const sameDay = due.toDateString() === now.toDateString();
   const time = `${String(due.getHours()).padStart(2, "0")}:${String(due.getMinutes()).padStart(2, "0")}`;

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -22,8 +22,8 @@ const schema = z.object({
 type ReasonValues = z.infer<typeof schema>;
 
 /**
- * Asks for a written reason before a change that must leave one behind:
- * blocking a task, or changing the scope of a running sprint. Closing the
+ * Asks for a written reason before a change that must leave one behind (block a
+ * task, change a running sprint's scope, leave or change a group). Closing the
  * dialog without submitting changes nothing.
  */
 export function ReasonDialog({
@@ -47,6 +47,7 @@ export function ReasonDialog({
     reset,
     formState: { errors },
   } = useForm<ReasonValues>({ resolver: zodResolver(schema), defaultValues: { reason: "" } });
+  const fieldId = useId();
 
   // A fresh dialog each time: never show the previous reason.
   useEffect(() => {
@@ -62,16 +63,16 @@ export function ReasonDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5 py-4">
-            <Label htmlFor="issue-reason">Lý do</Label>
+            <Label htmlFor={fieldId}>Lý do</Label>
             <Textarea
-              id="issue-reason"
+              id={fieldId}
               rows={3}
               aria-invalid={errors.reason ? true : undefined}
-              aria-describedby={errors.reason ? "issue-reason-error" : undefined}
+              aria-describedby={errors.reason ? `${fieldId}-error` : undefined}
               {...register("reason")}
             />
             {errors.reason ? (
-              <p id="issue-reason-error" role="alert" className="text-xs text-destructive">
+              <p id={`${fieldId}-error`} role="alert" className="text-xs text-destructive">
                 {errors.reason.message}
               </p>
             ) : null}

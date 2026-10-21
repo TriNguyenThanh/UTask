@@ -29,14 +29,14 @@ function formFromSettings(settings: AccountSettings): ProfileForm {
 }
 
 /** Initials for avatar fallback, e.g. "Nguyễn Hoàng Nam" → "HN". */
-function initialsOf(fullName: string): string {
+export function initialsOf(fullName: string): string {
   const words = fullName.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
-function ProfileSkeleton() {
+export function ProfileSkeleton() {
   return (
     <div className="space-y-6" role="status" aria-label="Đang tải cài đặt hồ sơ">
       <Skeleton className="h-8 w-80" />

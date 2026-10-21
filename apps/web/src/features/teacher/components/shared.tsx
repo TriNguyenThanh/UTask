@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, FolderGit2, GitBranch, Users } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -57,6 +57,20 @@ export function activityText(activity: TeacherActivity | null): string {
  */
 export function isCourseUnavailable(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 403 || error.status === 404);
+}
+
+/**
+ * Real Classroom mode: progress, signals, projects and activity come from Work,
+ * which this build does not read yet. Says so instead of showing empty data
+ * that would read as "no problems".
+ */
+export function WorkDataUnavailable({ title }: Readonly<{ title: string }>) {
+  return (
+    <EmptyState
+      title={`${title} chưa khả dụng`}
+      description="Mục này cần dữ liệu tiến độ và project từ Work Service, chưa được kết nối. Danh sách sinh viên và nhóm vẫn dùng dữ liệu thật từ Classroom."
+    />
+  );
 }
 
 export function CourseUnavailable() {
@@ -246,44 +260,12 @@ export function NoData() {
   return <span className="text-base font-semibold text-muted-foreground">Chưa có dữ liệu</span>;
 }
 
-/**
- * A control for a later phase: really disabled, with the reason both as a
- * tooltip and as text a screen reader announces.
- */
-export function DisabledAction({
-  children,
-  reason,
-  variant = "outline",
-  className,
-}: Readonly<{
-  children: ReactNode;
-  reason: string;
-  variant?: "default" | "outline";
-  className?: string;
-}>) {
-  const reasonId = useId();
-  return (
-    <>
-      <Button
-        type="button"
-        variant={variant}
-        disabled
-        title={reason}
-        aria-describedby={reasonId}
-        className={className}
-      >
-        {children}
-      </Button>
-      <span id={reasonId} className="sr-only">
-        {reason}
-      </span>
-    </>
-  );
-}
-
 function CourseSignalSummary({ course }: Readonly<{ course: TeacherCourseSummary }>) {
   if (course.teamCount === 0) {
     return <p className="text-xs text-muted-foreground">Lớp chưa có nhóm nào để theo dõi.</p>;
+  }
+  if (course.teamsWithSignals === null) {
+    return <p className="text-xs text-muted-foreground">Chưa có dữ liệu tín hiệu cho lớp này.</p>;
   }
   if (course.teamsWithSignals > 0) {
     return (
@@ -333,7 +315,7 @@ export function CourseCard({ course }: Readonly<{ course: TeacherCourseSummary }
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Chưa có nhóm</dt>
-            <dd className="font-semibold">{course.studentsWithoutTeam}</dd>
+            <dd className="font-semibold">{course.studentsWithoutTeam ?? "—"}</dd>
           </div>
           <div>
             <dt className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -345,7 +327,7 @@ export function CourseCard({ course }: Readonly<{ course: TeacherCourseSummary }
             <dt className="flex items-center gap-1 text-xs text-muted-foreground">
               <FolderGit2 className="size-3.5" aria-hidden /> Nhóm chưa có project
             </dt>
-            <dd className="font-semibold">{course.teamsWithoutProject}</dd>
+            <dd className="font-semibold">{course.teamsWithoutProject ?? "—"}</dd>
           </div>
         </dl>
 

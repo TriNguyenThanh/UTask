@@ -11,6 +11,9 @@ import {
 } from "@/features/projects/issueMeta";
 import { cn } from "@/lib/utils";
 
+/** Số nhãn hiện trên thẻ; phần dư gộp thành "+n". */
+const MAX_CARD_LABELS = 3;
+
 /**
  * One card on the Kanban board. The card itself is an <article>: the open
  * button, the drag handle and the actions menu are separate controls so each
@@ -59,7 +62,7 @@ export function IssueCard({
             className={cn(
               "shrink-0 rounded border px-1 py-0.5 text-[10px] font-semibold",
               issue.type === "bug"
-                ? "border-rose-200 bg-rose-50 text-rose-600"
+                ? "border-rose-200 bg-rose-50 text-rose-700"
                 : issue.type === "story"
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-blue-200 bg-blue-50 text-blue-700",
@@ -97,6 +100,24 @@ export function IssueCard({
       >
         <span className={cn(done && "text-muted-foreground")}>{issue.title}</span>
       </PressableText>
+
+      {issue.labels && issue.labels.length > 0 ? (
+        <ul className="mb-2 flex flex-wrap gap-1" aria-label="Nhãn">
+          {issue.labels.slice(0, MAX_CARD_LABELS).map((label) => (
+            <li
+              key={label.id}
+              className="inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+              style={{ borderColor: label.color }}
+            >
+              <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+              <span className="truncate">{label.name}</span>
+            </li>
+          ))}
+          {issue.labels.length > MAX_CARD_LABELS ? (
+            <li className="text-[10px] text-muted-foreground">+{issue.labels.length - MAX_CARD_LABELS}</li>
+          ) : null}
+        </ul>
+      ) : null}
 
       {issue.blocked || overdue ? (
         <div className="mb-2 flex flex-wrap gap-1.5">

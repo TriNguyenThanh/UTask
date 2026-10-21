@@ -33,18 +33,38 @@ export interface TeacherCourseSummary {
   name: string;
   term: string;
   studentCount: number;
-  studentsWithoutTeam: number;
+  /** Null when the source cannot tell (real Classroom list: needs every group's members). */
+  studentsWithoutTeam: number | null;
   teamCount: number;
-  teamsWithoutProject: number;
-  /** Teams with at least one rule-based signal (see TeacherSignal). */
-  teamsWithSignals: number;
+  /** Null when no source knows (project data belongs to Work). */
+  teamsWithoutProject: number | null;
+  /** Teams with at least one rule-based signal (see TeacherSignal). Null when no source computes signals. */
+  teamsWithSignals: number | null;
   /** Summed over the class's teams; null when no issue in the class has a deadline. */
   overdue: (TeacherOverdue & { asOf: string }) | null;
   /** Null when no team has recorded activity. */
   lastActivity: TeacherActivity | null;
 }
 
+/**
+ * What only the real Classroom service has: the version every class command
+ * must echo, and the state those commands change. Absent in demo (MSW) data.
+ */
+export interface TeacherClassroomMeta {
+  version: number;
+  /** Class code (`Class.code`, unique per class). */
+  code: string;
+  status: "OPEN" | "CLOSED" | "ARCHIVED";
+  groupingPhase: "FORMING" | "LOCKED";
+  groupingLockedAt: string | null;
+  /** ISO 8601; the raw join code is never readable again, only when it expires. */
+  joinCodeExpiresAt: string | null;
+  startsOn: string;
+  endsOn: string;
+}
+
 export interface TeacherCourseDetail extends TeacherCourseSummary {
+  classroom?: TeacherClassroomMeta;
   instructors: { userId: string; name: string; isOwner: boolean }[];
   /** Null when the class has no join code. */
   joinCode: string | null;
@@ -60,6 +80,8 @@ export interface TeacherStudent {
   team: { teamId: string; name: string; role: "leader" | "member" } | null;
   /** Set when the student asked to join a team and is awaiting approval. */
   pendingTeam: { teamId: string; name: string } | null;
+  /** Only from the real Classroom service: the id the exit command needs. */
+  enrollmentId?: string;
 }
 
 export interface TeacherTeamProgress {
@@ -81,12 +103,17 @@ export interface TeacherTeam {
   leaders: { userId: string; name: string }[];
   members: TeacherTeamMember[];
   memberCount: number;
+  /** Only from the real Classroom service: `Group.source_version` the leader command needs. */
+  version?: number;
   maxMembers: number;
   project: { projectId: string; key: string; name: string } | null;
   /** Null when there is nothing to measure yet (not zero percent). */
   progress: TeacherTeamProgress | null;
   lastActivity: TeacherActivity | null;
 }
+
+/** A class from the real Classroom service: carries the version and state its commands need. */
+export type ClassroomCourseDetail = TeacherCourseDetail & { classroom: TeacherClassroomMeta };
 
 /**
  * A fact worth the teacher's attention, stated with its cause. Signals come

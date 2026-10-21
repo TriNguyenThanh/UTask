@@ -41,6 +41,8 @@ export interface CourseEnrollment {
    */
   projectId: string | null;
   membership: TeamMembership;
+  /** Lớp đã đóng/lưu trữ hoặc đã khóa lập nhóm; vắng mặt nghĩa là còn lập nhóm được. */
+  formationClosed?: boolean;
 }
 
 export type TaskPriority = "high" | "medium" | "low";
@@ -62,8 +64,8 @@ export interface MyTask {
   projectId: string | null;
   priority: TaskPriority;
   status: TaskStatus;
-  /** Deadline (ISO 8601). */
-  dueAt: string;
+  /** Deadline (ISO 8601); `null` khi task chưa đặt hạn. */
+  dueAt: string | null;
   subtasks?: TaskSubtaskProgress;
   /** Linked git branch name, when the task has one. */
   branchName?: string;
@@ -140,4 +142,6 @@ export interface MyWorkOverview {
   tasks: MyTask[];
   sprints: CourseSprint[];
   summary: MyWorkSummary;
+  /** Work thật: có dự án không tải được nên số liệu có thể thiếu. */
+  partial?: boolean;
 }

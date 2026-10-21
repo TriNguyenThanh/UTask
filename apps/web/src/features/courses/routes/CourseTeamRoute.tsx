@@ -9,11 +9,13 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/app/layouts/PageTitleContext";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -38,8 +40,16 @@ import type {
   TopicProposal,
   UnassignedClassmate,
 } from "@/features/courses/types";
+import { CreateGroupDialog } from "@/features/courses/components/CreateGroupDialog";
+import { InviteCodeCard } from "@/features/courses/components/InviteCodeCard";
+import { JoinGroupDialog } from "@/features/courses/components/JoinGroupDialog";
+import { TeamProjectSection } from "@/features/courses/components/TeamProjectSection";
+import { useGroupCommands } from "@/features/courses/hooks/useGroupCommands";
+import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError } from "@/lib/api/errors";
 import { canCreateTeam, canSubmitTopic, type CoursePermissionContext } from "@/lib/permissions";
+import { isRealService } from "@/lib/config/services";
+import { useClassroomCourseDetail } from "@/lib/query/classroomHooks";
 import { useCourseDetail, useCreateTeam } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
@@ -166,14 +176,12 @@ function OpenTeamsSection({ openTeams }: Readonly<{ openTeams: OpenTeamSlot[] }>
                     </div>
                   </td>
                   <td className="px-2 py-3 text-right">
-                    <Button
+                    <DisabledAction
                       size="xs"
-                      variant="outline"
-                      disabled
-                      title="Yêu cầu gia nhập sẽ khả dụng khi backend hỗ trợ"
+                      reason="Yêu cầu gia nhập sẽ khả dụng khi backend hỗ trợ"
                     >
                       Xin gia nhập
-                    </Button>
+                    </DisabledAction>
                   </td>
                 </tr>
               ))}
@@ -434,17 +442,23 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
             <span>
               Sĩ số nhóm: <strong className="text-foreground">{course.teamSize.min}–{course.teamSize.max} sinh viên</strong>
             </span>
-            <span aria-hidden>•</span>
-            <span>
-              Sĩ số lớp: <strong className="text-foreground">{course.classSize.total} sinh viên</strong>{" "}
-              (<span className="font-medium text-emerald-700">{course.classSize.teamed} đã có nhóm</span>,{" "}
-              <span className="font-semibold text-amber-700">
-                {course.classSize.total - course.classSize.teamed} chưa có nhóm
-              </span>
-              )
-            </span>
+            {course.classSize ? (
+              <>
+                <span aria-hidden>•</span>
+                <span>
+                  Sĩ số lớp: <strong className="text-foreground">{course.classSize.total} sinh viên</strong>{" "}
+                  (<span className="font-medium text-emerald-700">{course.classSize.teamed} đã có nhóm</span>,{" "}
+                  <span className="font-semibold text-amber-700">
+                    {course.classSize.total - course.classSize.teamed} chưa có nhóm
+                  </span>
+                  )
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+        {isRealService("classroom") ? <JoinGroupDialog /> : null}
         {allowCreate || deadlinePassed || !course.teamFormation.selfCreateAllowed ? (
           <Button
             className="shrink-0"
@@ -456,16 +470,28 @@ function TeamFormationView({ course }: Readonly<{ course: CourseDetail }>) {
             Tạo nhóm mới
           </Button>
         ) : null}
+        </div>
       </div>
 
       <DeadlineBanner course={course} />
 
-      <OpenTeamsSection openTeams={course.formation?.openTeams ?? []} />
-      <UnassignedClassmatesSection
-        classmates={course.formation?.unassignedClassmates ?? []}
-      />
+      {course.formation ? (
+        <>
+          <OpenTeamsSection openTeams={course.formation.openTeams} />
+          <UnassignedClassmatesSection classmates={course.formation.unassignedClassmates} />
+        </>
+      ) : (
+        <EmptyState
+          title="Bạn chưa có nhóm"
+          description="Danh sách nhóm đang mở và bạn học chưa có nhóm chưa khả dụng. Hãy xin mã mời từ Trưởng nhóm hoặc chờ Giảng viên xếp nhóm."
+        />
+      )}
 
-      <CreateTeamDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      {isRealService("classroom") ? (
+        <CreateGroupDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      ) : (
+        <CreateTeamDialog course={course} open={createOpen} onOpenChange={setCreateOpen} />
+      )}
     </div>
   );
 }
@@ -524,15 +550,13 @@ function PendingJoinRequestView({ course }: Readonly<{ course: CourseDetail }>) 
         <p className="mt-5 text-xs text-muted-foreground">
           Board, backlog và repository của nhóm sẽ mở sau khi Trưởng nhóm duyệt yêu cầu của bạn.
         </p>
-        <Button
+        <DisabledAction
           className="mt-4"
-          variant="outline"
           size="sm"
-          disabled
-          title="Chức năng hủy yêu cầu sẽ khả dụng khi backend hỗ trợ"
+          reason="Chức năng hủy yêu cầu sẽ khả dụng khi backend hỗ trợ"
         >
           Hủy yêu cầu
-        </Button>
+        </DisabledAction>
       </section>
     </div>
   );
@@ -559,56 +583,6 @@ const TOPIC_STATUS: Record<
   },
   rejected: { label: "BỊ TỪ CHỐI", className: "border-red-200 bg-red-50 text-red-800" },
 };
-
-function TopicDraftForm({ course }: Readonly<{ course: CourseDetail }>) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [objectives, setObjectives] = useState("");
-  return (
-    <form
-      className="max-w-3xl space-y-4"
-      onSubmit={(event) => event.preventDefault()}
-    >
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-title">Tên đề tài</Label>
-        <Input
-          id="topic-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="VD: Hệ thống Quản lý Chuỗi cung ứng Thông minh"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-description">Mô tả đề tài</Label>
-        <Textarea
-          id="topic-description"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          placeholder="Mô tả phạm vi, công nghệ và ý tưởng chính của đồ án..."
-          rows={4}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-objectives">Mục tiêu (mỗi dòng một mục tiêu)</Label>
-        <Textarea
-          id="topic-objectives"
-          value={objectives}
-          onChange={(event) => setObjectives(event.target.value)}
-          placeholder={"Kiến trúc Microservices gRPC.\nTích hợp IoT giám sát real-time."}
-          rows={4}
-        />
-      </div>
-      <Button
-        type="submit"
-        disabled
-        title="Nộp đề tài sẽ khả dụng khi backend hỗ trợ API đăng ký đề tài"
-      >
-        <FileText className="size-4" aria-hidden />
-        Soạn đề tài
-      </Button>
-    </form>
-  );
-}
 
 function TopicTitle({
   topic,
@@ -691,8 +665,9 @@ function TopicSection({
   permissionCtx: CoursePermissionContext;
 }>) {
   const team = course.team;
-  if (!team) return null;
-  const topic = team.topic;
+  const topic = team?.topic;
+  // Chế độ service thật chưa có API đề tài: ẩn cả mục.
+  if (!team || !topic) return null;
   const status = TOPIC_STATUS[topic.status];
   const isDraft = topic.status === "draft";
   const editableByLeader = canSubmitTopic(permissionCtx, isDraft ? null : topic.status);
@@ -723,15 +698,17 @@ function TopicSection({
 
         <div className="flex shrink-0 flex-col items-start gap-2 pt-1 lg:items-end">
           {editableByLeader && isDraft ? (
-            <TopicDraftForm course={course} />
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Chưa soạn đề tài trên UTask được: hệ thống chưa có chức năng đăng ký đề tài.
+            </p>
           ) : null}
           {editableByLeader && topic.status === "revision_required" ? (
-            <Button
-              disabled
-              title="Chỉnh sửa lại đề tài sẽ khả dụng khi backend hỗ trợ API cập nhật đề tài"
+            <DisabledAction
+              variant="default"
+              reason="Chỉnh sửa lại đề tài sẽ khả dụng khi backend hỗ trợ API cập nhật đề tài"
             >
               Chỉnh sửa lại
-            </Button>
+            </DisabledAction>
           ) : null}
           {topic.status === "approved" ? (
             <ApprovedTopicAction projectId={team.projectId} />
@@ -742,7 +719,19 @@ function TopicSection({
   );
 }
 
-function MembersSection({ teamName, members }: Readonly<{ teamName: string; members: TeamMember[] }>) {
+interface MemberManagement {
+  selfUserId: string;
+  onTransfer: (member: TeamMember) => void;
+  onRemove: (member: TeamMember) => void;
+}
+
+function MembersSection({
+  teamName,
+  members,
+  manage,
+}: Readonly<{ teamName: string; members: TeamMember[]; manage?: MemberManagement }>) {
+  // Kỹ năng/trách nhiệm chưa có API ở chế độ thật: ẩn hai cột khi không ai có dữ liệu.
+  const showSkills = members.some((member) => member.skill !== "" || member.responsibility !== "");
   return (
     <section className="space-y-3" aria-labelledby="members-heading">
       <div className="flex items-center justify-between pb-1">
@@ -754,9 +743,11 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
             {members.length} sinh viên • Trưởng nhóm phụ trách liên lạc giảng viên
           </p>
         </div>
-        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          Danh sách đã khóa
-        </span>
+        {manage ? null : (
+          <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            Danh sách đã khóa
+          </span>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
@@ -765,9 +756,14 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
               <th scope="col" className="px-2 py-3">Thành viên</th>
               <th scope="col" className="px-4 py-3">MSSV</th>
               <th scope="col" className="px-4 py-3">Email trường</th>
-              <th scope="col" className="px-4 py-3">Vai trò chuyên môn</th>
-              <th scope="col" className="px-4 py-3">Trách nhiệm trong đồ án</th>
+              {showSkills ? (
+                <>
+                  <th scope="col" className="px-4 py-3">Vai trò chuyên môn</th>
+                  <th scope="col" className="px-4 py-3">Trách nhiệm trong đồ án</th>
+                </>
+              ) : null}
               <th scope="col" className="px-2 py-3 text-right">Vai trò</th>
+              {manage ? <th scope="col" className="px-2 py-3 text-right">Thao tác</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -791,12 +787,16 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
                 </td>
                 <td className="px-4 py-3.5 font-mono font-medium">{member.studentId}</td>
                 <td className="px-4 py-3.5 text-muted-foreground">{member.email}</td>
-                <td className="px-4 py-3.5">
-                  <span className="inline-block rounded bg-muted px-2 py-0.5 font-medium">
-                    {member.skill}
-                  </span>
-                </td>
-                <td className="px-4 py-3.5 text-muted-foreground">{member.responsibility}</td>
+                {showSkills ? (
+                  <>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-block rounded bg-muted px-2 py-0.5 font-medium">
+                        {member.skill}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground">{member.responsibility}</td>
+                  </>
+                ) : null}
                 <td className="px-2 py-3.5 text-right">
                   {member.role === "leader" ? (
                     <Badge className="text-[10px] font-bold">TRƯỞNG NHÓM</Badge>
@@ -804,6 +804,20 @@ function MembersSection({ teamName, members }: Readonly<{ teamName: string; memb
                     <Badge variant="secondary" className="text-[10px] font-semibold">Thành viên</Badge>
                   )}
                 </td>
+                {manage ? (
+                  <td className="px-2 py-3.5 text-right">
+                    {member.role === "member" && member.userId !== manage.selfUserId ? (
+                      <div className="flex justify-end gap-1.5">
+                        <Button type="button" size="xs" variant="outline" onClick={() => manage.onTransfer(member)}>
+                          Chuyển quyền
+                        </Button>
+                        <Button type="button" size="xs" variant="outline" onClick={() => manage.onRemove(member)}>
+                          Loại
+                        </Button>
+                      </div>
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -843,6 +857,8 @@ function RepositoryCard({ repository }: Readonly<{ repository: string }>) {
 
 function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
   const team = course.team;
+  const { user } = useAuth();
+  const commands = useGroupCommands(team);
   if (!team) {
     return (
       <EmptyState
@@ -892,8 +908,40 @@ function TeamHubView({ course }: Readonly<{ course: CourseDetail }>) {
         </p>
       </div>
 
+      {commands.enabled ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {team.isLeader && team.version !== undefined ? (
+            <div className="min-w-64 max-w-md flex-1">
+              <InviteCodeCard groupId={team.teamId} version={team.version} expiresAt={team.inviteExpiresAt ?? null} />
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={commands.requestLeave}
+            disabled={team.isLeader}
+            title={team.isLeader ? "Hãy chuyển quyền Trưởng nhóm trước khi rời nhóm." : undefined}
+          >
+            Rời nhóm
+          </Button>
+        </div>
+      ) : null}
+
       <TopicSection course={course} permissionCtx={permissionCtx} />
-      <MembersSection teamName={team.teamName} members={team.members} />
+      <MembersSection
+        teamName={team.teamName}
+        members={team.members}
+        manage={
+          commands.enabled && team.isLeader && user
+            ? { selfUserId: user.id, onTransfer: commands.requestTransfer, onRemove: commands.requestRemove }
+            : undefined
+        }
+      />
+      {commands.dialog}
+
+      {isRealService("work") ? (
+        <TeamProjectSection groupId={team.teamId} isLeader={team.isLeader} />
+      ) : null}
 
       {team.repository ? (
         <section className="pt-2">
@@ -917,9 +965,26 @@ function teamPageTitle(status: CourseDetail["membership"]["status"] | undefined)
   return "Môn học";
 }
 
+function MockCourseTeam({ courseId }: Readonly<{ courseId: string }>) {
+  return <CourseTeamPage courseId={courseId} courseQuery={useCourseDetail(courseId)} />;
+}
+
+function RealCourseTeam({ courseId }: Readonly<{ courseId: string }>) {
+  return <CourseTeamPage courseId={courseId} courseQuery={useClassroomCourseDetail(courseId)} />;
+}
+
 export function Component() {
-  const { courseId } = useParams();
-  const courseQuery = useCourseDetail(courseId ?? "");
+  const { courseId = "" } = useParams();
+  return isRealService("classroom") ? <RealCourseTeam courseId={courseId} /> : <MockCourseTeam courseId={courseId} />;
+}
+
+function CourseTeamPage({
+  courseId,
+  courseQuery,
+}: Readonly<{
+  courseId: string;
+  courseQuery: UseQueryResult<CourseDetail>;
+}>) {
   usePageTitle(teamPageTitle(courseQuery.data?.membership.status));
 
   if (courseQuery.isPending) {

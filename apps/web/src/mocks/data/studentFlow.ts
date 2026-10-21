@@ -451,7 +451,7 @@ function buildCourseSe330WithTopic(
 /* Projects                                                            */
 /* ------------------------------------------------------------------ */
 
-import { generateNKeysBetween } from "fractional-indexing";
+import { DEMO_STATES, statusForGroup } from "@/features/projects/issueMeta";
 
 import type { MockIssueState } from "@/mocks/data/database";
 import type {
@@ -536,19 +536,23 @@ function buildProjectSummaries(now: Date, userId: string): ProjectSummary[] {
   return summaries;
 }
 
-type IssueSeed = Omit<Issue, "rank" | "version" | "blocked" | "blockedReason"> &
+type IssueSeed = Omit<Issue, "rank" | "version" | "blocked" | "blockedReason" | "statusId" | "stateGroup"> &
   Partial<Pick<Issue, "blocked" | "blockedReason">>;
 
-/** Fixtures list issues in priority order; ranks are generated from that order. */
+/** Fixtures list issues in priority order; ranks are `(index+1)*1000` (numeric D2). */
 function seedIssues(seeds: IssueSeed[]): Issue[] {
-  const ranks = generateNKeysBetween(null, null, seeds.length);
-  return seeds.map((seed, index) => ({
-    blocked: false,
-    blockedReason: null,
-    ...seed,
-    rank: ranks[index],
-    version: 1,
-  }));
+  return seeds.map((seed, index) => {
+    const state = DEMO_STATES.find((s) => statusForGroup(s.group) === seed.status) ?? DEMO_STATES[0];
+    return {
+      blocked: false,
+      blockedReason: null,
+      ...seed,
+      statusId: state.id,
+      stateGroup: state.group,
+      rank: (index + 1) * 1000,
+      version: 1,
+    };
+  });
 }
 
 function buildNexusIssues(now: Date): Issue[] {
@@ -588,6 +592,7 @@ function buildNexusWorkspace(now: Date): WorkspaceData {
       { id: "sprint-1", name: "Sprint 1: Khởi tạo", state: "completed", startDate: daysFrom(now, -25), endDate: daysFrom(now, -11), goal: "Boilerplate, CI/CD, auth cơ bản.", completedPoints: 21, totalPoints: 21 },
     ],
     issues: buildNexusIssues(now),
+    states: DEMO_STATES,
   };
 }
 
@@ -610,6 +615,7 @@ function buildDeliWorkspace(now: Date): WorkspaceData {
       { id: "d2", key: "DELI-02", type: "story", title: "Đăng nhập email + password", status: "in-progress", priority: "high", storyPoints: 8, epicId: "epic-deli-onboard", sprintId: "sprint-deli-1", assignee: { userId: MEMBER_ID, displayName: "Đặng Thảo Linh", initials: "TL" }, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, 0, 11) },
       { id: "d3", key: "DELI-03", type: "task", title: "Cài đặt CI Flutter analyze + test", status: "todo", priority: "low", storyPoints: 3, epicId: null, sprintId: null, assignee: null, hasPullRequest: false, isMine: false, updatedAt: daysFrom(now, -3) },
     ]),
+    states: DEMO_STATES,
   };
 }
 
@@ -641,8 +647,8 @@ export interface ProjectIssueOverlay {
 }
 
 function compareRank(a: Issue, b: Issue): number {
-  if (a.rank === b.rank) return a.key.localeCompare(b.key);
-  return a.rank < b.rank ? -1 : 1;
+  if (a.rank !== b.rank) return a.rank - b.rank;
+  return a.key.localeCompare(b.key);
 }
 
 /**
