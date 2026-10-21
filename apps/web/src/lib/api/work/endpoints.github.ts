@@ -79,6 +79,8 @@ export interface SettleOptions {
   intervalMs?: number;
   maxPolls?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Hủy vòng hỏi lại (ví dụ hộp thoại đóng): ném `signal.reason`, không gọi `GET` nữa. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -89,12 +91,18 @@ export async function selectProjectRepositoryAndWait(
   client: ApiClient,
   projectId: string,
   input: SelectRepositoryInput,
-  { intervalMs = 2000, maxPolls = 15, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }: SettleOptions = {},
+  {
+    intervalMs = 2000,
+    maxPolls = 15,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    signal,
+  }: SettleOptions = {},
 ) {
   let current = await selectProjectRepository(client, projectId, input);
   for (let poll = 0; poll < maxPolls; poll += 1) {
     if (current.status !== "PENDING" || current.operation_id !== input.operationId) return current;
     await sleep(intervalMs);
+    signal?.throwIfAborted();
     current = await getProjectRepository(client, projectId);
   }
   if (current.status !== "PENDING" || current.operation_id !== input.operationId) return current;

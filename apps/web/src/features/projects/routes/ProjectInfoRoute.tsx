@@ -479,7 +479,7 @@ function RealProjectInfo() {
             members={members}
             projectId={projectId}
             canEditCapacity={isLeader && !isArchived}
-            canRequestVerification={isLeader}
+            canRequestVerification={isLeader && !isArchived}
           />
         </div>
       </section>

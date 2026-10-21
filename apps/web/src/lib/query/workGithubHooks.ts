@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
 import type { GitHubLinkTypeDto } from "@/lib/api/work/dto";
@@ -55,6 +55,13 @@ export function useProjectRepository(projectId: string) {
 export function useSelectProjectRepository(projectId: string) {
   const client = useApiClient();
   const attempt = useRef<{ repoId: string; operationId: string } | null>(null);
+  // Hộp thoại đóng khi đang `PENDING` thì dừng hỏi lại; server vẫn tự xử lý thao tác đã gửi.
+  const abort = useRef(new AbortController());
+  useEffect(() => {
+    const controller = new AbortController();
+    abort.current = controller;
+    return () => controller.abort();
+  }, []);
   return useRefetchingMutation(async ({ githubRepoId, expectedGeneration }: { githubRepoId: string; expectedGeneration: number }) => {
     if (attempt.current?.repoId !== githubRepoId) {
       attempt.current = { repoId: githubRepoId, operationId: newIdempotencyKey() };
@@ -64,7 +71,7 @@ export function useSelectProjectRepository(projectId: string) {
         githubRepoId,
         expectedGeneration,
         operationId: attempt.current.operationId,
-      });
+      }, { signal: abort.current.signal });
       attempt.current = null;
       return result;
     } catch (error) {

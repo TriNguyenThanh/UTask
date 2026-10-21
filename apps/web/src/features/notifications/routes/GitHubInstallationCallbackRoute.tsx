@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { githubErrorMessage } from "@/features/notifications/components/RealGitHubIntegration";
@@ -69,7 +70,11 @@ export function Component() {
         <p role="alert" className="text-sm text-muted-foreground">
           {githubErrorMessage(complete.error)}
         </p>
-        <Button size="sm" onClick={() => restart.mutate()} disabled={restart.isPending}>
+        <Button
+          size="sm"
+          onClick={() => restart.mutate(undefined, { onError: (error) => toast.error(githubErrorMessage(error)) })}
+          disabled={restart.isPending}
+        >
           Thử lại cài đặt
         </Button>
       </Notice>

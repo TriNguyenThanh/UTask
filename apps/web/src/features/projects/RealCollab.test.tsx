@@ -297,6 +297,28 @@ describe("Issue panel on the real Board", () => {
     expect(await screen.findByText("feature/login", undefined, { timeout: 15000 })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thêm liên kết" })).toBeInTheDocument();
   }, 30000);
+
+  it("lets an active member manage links on a task assigned to someone else", async () => {
+    serve({
+      members: {
+        "project-1": [
+          buildProjectMember({ user_id: LEADER_ID, role: "LEADER", display_name: "Nguyễn Hoàng Nam" }),
+          buildProjectMember({ id: "pm-2", user_id: MEMBER_ID, role: "MEMBER", display_name: "Đặng Thảo Linh" }),
+        ],
+      },
+      userNames: { [LEADER_ID]: "Nguyễn Hoàng Nam", [MEMBER_ID]: "Đặng Thảo Linh" },
+      epics: [],
+      sprints: [buildSprint({ id: "s1", name: "Sprint 1" })],
+      sprintTasks: { s1: ["t1"] },
+      tasks: [buildTask({ id: "t1", code: "NEXUS-1", title: "Thiết kế đăng nhập", state_id: "state-todo", assignee_ids: [LEADER_ID] })],
+      githubLinks: [buildTaskGitHubLink({ id: "l1", task_id: "t1", github_ref_id: "feature/login" })],
+    });
+    renderAppRoutes("/projects/project-1/board?issue=NEXUS-1", memberTestSession);
+
+    expect(await screen.findByText("feature/login", undefined, { timeout: 15000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thêm liên kết" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xóa liên kết feature/login" })).toBeInTheDocument();
+  }, 30000);
 });
 
 describe("RealComments on a project (teacher feedback)", () => {

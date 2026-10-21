@@ -58,6 +58,8 @@ export function IssuePanelHost({
   // Work thật: Leader sửa mọi issue, thành viên chỉ issue của mình; dự án lưu trữ và giảng viên chỉ đọc.
   const canEditRealIssue =
     real && !archived && !readOnly && detail.data !== undefined && (mover.role === "leader" || detail.data.issue.isMine);
+  // Link GitHub: backend (`require_link_writer`) cho mọi thành viên ACTIVE, không chỉ Leader/người được giao.
+  const canWriteGitHubLinks = real && !archived && !readOnly && detail.data !== undefined;
 
   // Work thật: bình luận/lịch sử/tệp lấy từ server. Giảng viên (readOnly) vẫn bình luận được, dự án lưu trữ thì không.
   const collab =
@@ -115,7 +117,7 @@ export function IssuePanelHost({
       }
       githubSlot={
         real && detail.data ? (
-          <RealGitHubLinks taskId={detail.data.issue.id} projectId={projectId} editable={canEditRealIssue} />
+          <RealGitHubLinks taskId={detail.data.issue.id} projectId={projectId} editable={canWriteGitHubLinks} />
         ) : undefined
       }
       {...collab}

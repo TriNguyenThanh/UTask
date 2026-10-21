@@ -206,6 +206,20 @@ describe("selectProjectRepositoryAndWait", () => {
     );
     expect(calls.filter((c) => c.method === "GET")).toHaveLength(3);
   });
+
+  it("stops polling once the signal is aborted", async () => {
+    const calls = use({ repositoryPendingPolls: 99 });
+    const controller = new AbortController();
+    const sleep = () => {
+      controller.abort();
+      return Promise.resolve();
+    };
+
+    await expect(selectProjectRepositoryAndWait(client, "p/1", INPUT, { sleep, signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(0);
+  });
 });
 
 describe("task GitHub links", () => {

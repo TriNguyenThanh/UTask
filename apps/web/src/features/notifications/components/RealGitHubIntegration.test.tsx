@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { screen, waitFor, type RenderOptions } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 
 import {
   githubAccountView,
@@ -25,7 +26,11 @@ import {
 } from "@/test/integrationHandlers";
 import { leaderTestSession, renderApp } from "@/test/render";
 
-afterEach(() => vi.unstubAllGlobals());
+// Toast của sonner nằm ở store cấp module: xóa để test sau không thấy toast của test trước.
+afterEach(() => {
+  vi.unstubAllGlobals();
+  toast.dismiss();
+});
 
 function setup(
   fixture: IntegrationFixture,
@@ -211,6 +216,25 @@ describe("GitHubAuthorizationCallbackRoute", () => {
     server.use(...integrationHandlers({ account: buildUnlinkedGitHubAccount(), calls }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Thử lại liên kết" }));
     await waitFor(() => expect(assign).toHaveBeenCalled());
+  });
+
+  it.each([
+    [<AuthorizationCallback key="a" />, callbackUrl("code=c1&state=s1"), "Thử lại liên kết"],
+    [<InstallationCallback key="i" />, "/settings/integrations/github/setup?state=s1&installation_id=1&setup_action=install", "Thử lại cài đặt"],
+  ])("toasts the error when the retry's start also fails (%#)", async (element, url, button) => {
+    const assign = stubLocationAssign();
+    const { calls } = setup(
+      { account: buildGitHubAccount(), failWith: { status: 400, code: "INVALID_REQUEST", message: "x" } },
+      element,
+      url,
+    );
+    await screen.findByText("Phiên cấp quyền đã hết hạn hoặc không hợp lệ.");
+
+    server.use(...integrationHandlers({ account: buildGitHubAccount(), appEnabled: false, calls }));
+    await userEvent.setup().click(screen.getByRole("button", { name: button }));
+
+    expect(await screen.findByText("Máy chủ chưa bật kết nối GitHub.")).toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 

@@ -28,6 +28,8 @@ export function buildTaskGitHubLink(overrides: Partial<TaskGitHubLinkDto> = {}):
 }
 
 export interface LinkFixture extends BaseWorkFixture {
+  /** Người xác nhận link (`confirmed_by_user_id`), giống `actorId` của nhóm collab. */
+  actorId?: string;
   /** Handler ghi thẳng vào mảng này, nên test đọc lại được trạng thái. */
   githubLinks?: TaskGitHubLinkDto[];
   /** Ép mọi route link trả lỗi này. */
@@ -89,6 +91,7 @@ export function linkHandlers(fixture: LinkFixture): HttpHandler[] {
       if (!link.is_verified) return envelopeError(400, "INVALID_OPERATION", "Chưa thể xác minh đề xuất liên kết GitHub này.");
       link.confirmation_status = "CONFIRMED";
       link.confirmed_at = "2026-10-01T00:00:00Z";
+      link.confirmed_by_user_id = fixture.actorId ?? "user-1";
       return envelope(link);
     }),
     http.delete("/api/work/tasks/:taskId/github-links/:linkId/", async ({ request, params }) => {

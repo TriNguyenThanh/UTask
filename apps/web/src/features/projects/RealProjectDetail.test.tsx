@@ -320,4 +320,17 @@ describe("RealProjectDetail — GitHub column", () => {
     expect(screen.getByText("Đã xác minh")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Yêu cầu xác minh" })).not.toBeInTheDocument();
   });
+
+  it("hides the verification button on an archived project", async () => {
+    setup(
+      {
+        projects: [buildProject({ id: "project-1", archived_at: "2026-10-01T00:00:00Z" })],
+        members: { "project-1": [leaderMember(), { ...regularMember(), github_username: "linh-dev" }] },
+      },
+      leaderTestSession,
+    );
+
+    expect(await screen.findByText("@linh-dev")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Yêu cầu xác minh" })).not.toBeInTheDocument();
+  });
 });
