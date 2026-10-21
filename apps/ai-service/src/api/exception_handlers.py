@@ -10,6 +10,8 @@ from errors import ServiceError, failure, public_error
 def error_response(request: Request, error: ServiceError) -> JSONResponse:
     error = public_error(error)
     headers = {}
+    if error.status_code == 401 and error.code == "AUTHENTICATION_REQUIRED":
+        headers["WWW-Authenticate"] = "Bearer"
     retry_after = error.details.get("retry_after_seconds")
     if (
         error.status_code == 429

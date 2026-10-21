@@ -366,6 +366,10 @@ async def test_context_logging_contains_correlation_metadata_only(principal, cap
 def production_settings(**overrides):
     values = {
         "environment": "production",
+        "jwt_issuer": "https://identity.utask.internal",
+        "jwt_audience": "utask-platform",
+        "identity_service_key": "test-identity-key",
+        "credential_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "work_service_key": "work-key",
         "authorization_urls": {
             target: "http://work/authorize/{target_type}/{target_id}"
@@ -381,8 +385,8 @@ def production_settings(**overrides):
 def test_production_requires_work_config_and_enabled_github_integration_config():
     assert not production_settings().github_context_enabled
     for overrides in (
-        {"work_service_key": None},
-        {"work_service_key": " "},
+        {"work_service_auth_enabled": True, "work_service_key": None},
+        {"work_service_auth_enabled": True, "work_service_key": " "},
         {"authorization_urls": {}},
         {"context_urls": {}},
         {"github_context_enabled": True},

@@ -9,11 +9,12 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from celery.contrib.testing.worker import start_worker
-from conftest import ScriptedModel
+from conftest import ScriptedModel, identity_transport
 from google.genai import types
 
 from config import Settings
 from infrastructure.providers import AdkRuntime
+from infrastructure.security import JwtAuthenticator
 from jobs.celery_app import celery_app
 from jobs.dispatcher import CeleryPublisher
 from scripts.setup_mock import prepare_mock_environment
@@ -46,6 +47,7 @@ async def test_mock_data_uses_normal_api_celery_and_completion_pipeline(
         _env_file=(tmp_path / "infra/env/ai-service.env", tmp_path / ".env"),
         database_url=os.environ["TEST_DATABASE_URL"],
         sync_timeout_seconds=0.001,
+        identity_service_key="test-identity-key",
     )
     monkeypatch.setitem(celery_app.conf, "broker_url", broker)
     monkeypatch.setattr(main, "build_repository", lambda settings: (repository, Mock()))
@@ -57,7 +59,14 @@ async def test_mock_data_uses_normal_api_celery_and_completion_pipeline(
         return AdkRuntime(settings, ScriptedModel([call, json.dumps(result)]))
 
     monkeypatch.setattr(tasks, "AdkRuntime", executor_runtime)
-    app = main.create_app(settings=settings)
+    # Chỉ fake HTTP Identity; API và worker vẫn xác minh JWT ký thật.
+    transport = identity_transport(json.loads((tmp_path / ".env.mock/jwks.json").read_text()))
+    monkeypatch.setattr(
+        tasks, "JwtAuthenticator", lambda settings: JwtAuthenticator(settings, transport=transport)
+    )
+    app = main.create_app(
+        settings=settings, authenticator=JwtAuthenticator(settings, transport=transport)
+    )
     payload = json.loads((Path(__file__).parents[1] / "examples/requests" / sample).read_text())
     owner = (tmp_path / ".env.mock/mock-owner.jwt").read_text().strip()
     outsider = (tmp_path / ".env.mock/mock-outsider.jwt").read_text().strip()
