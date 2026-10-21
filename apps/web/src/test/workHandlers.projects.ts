@@ -1,6 +1,6 @@
 import { http, type HttpHandler } from "msw";
 
-import type { ProjectDto, ProjectMemberDto } from "@/lib/api/work/dto";
+import type { ProjectDto, ProjectMemberDto, ProjectRepositoryDto } from "@/lib/api/work/dto";
 import { envelope, envelopeError } from "@/test/classroomHandlers";
 import {
   failure,
@@ -66,12 +66,36 @@ export interface ProjectFixture extends BaseWorkFixture {
   archiveError?: WorkError;
   /** Ép hai route GitHub của thành viên trả lỗi này. */
   githubError?: WorkError;
+  /** Trạng thái repository theo project; handler POST ghi thẳng vào đây. */
+  repositories?: Record<string, ProjectRepositoryDto>;
+  repositoryError?: WorkError;
+  /** Số lần GET còn phải trả PENDING sau một POST; > 0 làm POST trả PENDING. */
+  repositoryPendingPolls?: number;
+}
+
+export function buildProjectRepository(overrides: Partial<ProjectRepositoryDto> = {}): ProjectRepositoryDto {
+  return {
+    project_id: "project-1",
+    github_repo_id: null,
+    github_repo_owner: null,
+    github_repo_name: null,
+    github_default_branch: null,
+    operation_id: null,
+    status: null,
+    connection_generation: null,
+    source_version: null,
+    synced_at: null,
+    ...overrides,
+  };
 }
 
 const STATUS_FILTERS = ["active", "archived", "all"];
 const MEMBER_STATUS_FILTERS = ["ACTIVE", "LEFT", "REMOVED", "all"];
 
 export function projectHandlers(fixture: ProjectFixture): HttpHandler[] {
+  const repositories = (fixture.repositories ??= {});
+  const repositoryFor = (projectId: string): ProjectRepositoryDto =>
+    (repositories[projectId] ??= buildProjectRepository({ project_id: projectId }));
   const find = (id: unknown) => fixture.projects.find((project) => project.id === id);
   const notFound = () => envelopeError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy dự án.");
 
@@ -202,6 +226,38 @@ export function projectHandlers(fixture: ProjectFixture): HttpHandler[] {
       if (fixture.githubError) return failure(fixture.githubError);
       if (!find(params.projectId)) return notFound();
       return envelope({ project_id: String(params.projectId), user_id: String(params.userId), requested_by_user_id: "leader" });
+    }),
+    http.get("/api/work/projects/:projectId/github/repository/", async ({ request, params }) => {
+      await record(request, fixture, `/projects/${String(params.projectId)}/github/repository/`);
+      if (fixture.repositoryError) return failure(fixture.repositoryError);
+      if (!find(params.projectId)) return notFound();
+      const repository = repositoryFor(String(params.projectId));
+      // Mỗi lần hỏi lại trong khi PENDING trừ một lượt; hết lượt thì thao tác hoàn tất.
+      if (repository.status === "PENDING" && (fixture.repositoryPendingPolls ?? 0) > 0) {
+        fixture.repositoryPendingPolls = (fixture.repositoryPendingPolls ?? 0) - 1;
+        if (fixture.repositoryPendingPolls === 0) repository.status = "CONNECTED";
+      }
+      return envelope(repository);
+    }),
+    http.post("/api/work/projects/:projectId/github/repository/", async ({ request, params }) => {
+      const body = await record(request, fixture, `/projects/${String(params.projectId)}/github/repository/`);
+      if (fixture.repositoryError) return failure(fixture.repositoryError);
+      if (!find(params.projectId)) return notFound();
+      const repository = repositoryFor(String(params.projectId));
+      if (body.expected_connection_generation !== (repository.connection_generation ?? 0)) {
+        return envelopeError(409, "VERSION_CONFLICT", "Thế hệ kết nối repository đã thay đổi.");
+      }
+      const repoId = String(body.github_repo_id);
+      Object.assign(repository, {
+        github_repo_id: repoId,
+        github_repo_owner: "utask",
+        github_repo_name: `repo-${repoId}`,
+        github_default_branch: "main",
+        operation_id: body.operation_id as string,
+        connection_generation: (repository.connection_generation ?? 0) + 1,
+        status: (fixture.repositoryPendingPolls ?? 0) > 0 ? "PENDING" : "CONNECTED",
+      });
+      return envelope(repository);
     }),
   ];
 }

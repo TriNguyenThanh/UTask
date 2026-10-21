@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/lib/api/client";
-import type { GitHubMemberMappingDto, GitHubVerificationRequestDto } from "@/lib/api/work/dto";
+import type { GitHubMemberMappingDto, GitHubVerificationRequestDto, ProjectRepositoryDto } from "@/lib/api/work/dto";
 import { ROOT } from "@/lib/api/work/endpoints.shared";
 
 const member = (projectId: string, userId: string) =>
@@ -34,4 +34,69 @@ export async function requestGitHubVerification(
     { method: "POST", idempotencyKey },
   );
   return data;
+}
+
+const repository = (projectId: string) => `${ROOT}/projects/${encodeURIComponent(projectId)}/github/repository/`;
+
+export async function getProjectRepository(client: ApiClient, projectId: string) {
+  const { data } = await client.requestEnvelope<ProjectRepositoryDto>(repository(projectId));
+  return data;
+}
+
+export interface SelectRepositoryInput {
+  githubRepoId: string;
+  /** Sinh một lần cho mỗi ý định chọn repo; dùng cả làm `Idempotency-Key`. */
+  operationId: string;
+  expectedGeneration: number;
+}
+
+/**
+ * Chỉ Leader. Backend trả 200 (xong) hoặc 202 (`status: "PENDING"`); `requestEnvelope` không trả
+ * HTTP status nên nhận diện pending bằng `data.status`.
+ */
+export async function selectProjectRepository(client: ApiClient, projectId: string, input: SelectRepositoryInput) {
+  const { data } = await client.requestEnvelope<ProjectRepositoryDto>(repository(projectId), {
+    method: "POST",
+    idempotencyKey: input.operationId,
+    body: {
+      github_repo_id: input.githubRepoId,
+      operation_id: input.operationId,
+      expected_connection_generation: input.expectedGeneration,
+    },
+  });
+  return data;
+}
+
+/** Hết số lần hỏi lại mà kết nối vẫn `PENDING` của đúng thao tác này. */
+export class RepositoryPendingTimeoutError extends Error {
+  constructor() {
+    super("Kết nối đang chờ xử lý, tải lại sau.");
+    this.name = "RepositoryPendingTimeoutError";
+  }
+}
+
+export interface SettleOptions {
+  intervalMs?: number;
+  maxPolls?: number;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Chọn repo rồi hỏi lại tới khi hết `PENDING`. Dừng khi `status` khác `PENDING` hoặc `operation_id`
+ * không còn là thao tác này (có thao tác khác ghi đè). Mặc định 15 lần x 2000ms.
+ */
+export async function selectProjectRepositoryAndWait(
+  client: ApiClient,
+  projectId: string,
+  input: SelectRepositoryInput,
+  { intervalMs = 2000, maxPolls = 15, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }: SettleOptions = {},
+) {
+  let current = await selectProjectRepository(client, projectId, input);
+  for (let poll = 0; poll < maxPolls; poll += 1) {
+    if (current.status !== "PENDING" || current.operation_id !== input.operationId) return current;
+    await sleep(intervalMs);
+    current = await getProjectRepository(client, projectId);
+  }
+  if (current.status !== "PENDING" || current.operation_id !== input.operationId) return current;
+  throw new RepositoryPendingTimeoutError();
 }

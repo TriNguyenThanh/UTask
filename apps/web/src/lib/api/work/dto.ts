@@ -327,3 +327,19 @@ export interface GitHubVerificationRequestDto {
   user_id: string;
   requested_by_user_id: string;
 }
+
+export type ProjectRepositoryStatusDto = "CONNECTED" | "PENDING" | "DISCONNECTED";
+
+/** Kết quả `GET|POST projects/{id}/github/repository/`. Project chưa nối repo thì các field đều `null`. */
+export interface ProjectRepositoryDto {
+  project_id: string;
+  github_repo_id: string | null;
+  github_repo_owner: string | null;
+  github_repo_name: string | null;
+  github_default_branch: string | null;
+  operation_id: string | null;
+  status: ProjectRepositoryStatusDto | null;
+  connection_generation: number | null;
+  source_version: number | null;
+  synced_at: string | null;
+}

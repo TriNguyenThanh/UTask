@@ -6,7 +6,7 @@ import { metaHandlers } from "@/test/workHandlers.meta";
 import { sprintHandlers, type SprintFixtureExtras } from "@/test/workHandlers.sprints";
 import { taskHandlers, type TaskFixture } from "@/test/workHandlers.tasks";
 
-export { buildProject, buildProjectMember } from "@/test/workHandlers.projects";
+export { buildProject, buildProjectMember, buildProjectRepository } from "@/test/workHandlers.projects";
 export {
   buildDefaultStates,
   buildEpic,

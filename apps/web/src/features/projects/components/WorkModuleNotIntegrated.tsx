@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/feedback/EmptyState";
 
 const MODULE_TITLES: Record<string, string> = {
-  code: "Mã nguồn chưa khả dụng",
   settings: "Cài đặt dự án chưa khả dụng",
 };
 

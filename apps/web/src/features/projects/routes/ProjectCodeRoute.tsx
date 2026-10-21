@@ -1,5 +1,5 @@
 import { isRealService } from "@/lib/config/services";
-import { WorkModuleNotIntegrated } from "@/features/projects/components/WorkModuleNotIntegrated";
+import { RealProjectCode } from "@/features/projects/components/RealProjectCode";
 import {
   GitBranch,
   GitCommitHorizontal,
@@ -900,6 +900,6 @@ export default function ProjectCodeRoute() {
   );
 }
 export function Component() {
-  if (isRealService("work")) return <WorkModuleNotIntegrated module="code" />;
+  if (isRealService("work")) return <RealProjectCode />;
   return <ProjectCodeRoute />;
 }

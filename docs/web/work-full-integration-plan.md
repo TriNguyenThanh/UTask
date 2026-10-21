@@ -133,6 +133,7 @@ Phụ thuộc: Phase 11. Độc lập với Phase 12 và 13.
 6. **GitHub link của task**: tạo (`link_type` ∈ `BRANCH|COMMIT|PULL_REQUEST`; `github_ref_id` ≤300, riêng PR phải là số nguyên dương, tự bỏ `#` đầu), confirm (server từ chối nếu `is_verified === false`), xóa. Chỉ thêm `github_links` vào `expand` của `getTask` khi `repository.status === "CONNECTED"`; app integrations vắng → 503.
 7. **Username GitHub**: chỉ chính chủ sửa (`actor.id === user_id`); đã `is_github_verified` mà đổi → 422 "Phải xác minh lại qua GitHub." Leader gọi `request-verification`.
 8. **Tab Code** (`ProjectCodeRoute`) ở chế độ thật: hiện trạng thái repo (`status`, `github_repo_owner`, `github_repo_name`, `github_default_branch`, `synced_at`) và nút kết nối/ngắt cho Leader. Work **không có** commit, branch, contributor, PR, thống kê → các khối đó hiện "Chưa khả dụng", **không** dựng số liệu. Nhánh demo giữ nguyên `ProjectCode`.
+   - Trạng thái (cập nhật theo `docs/web/api-integration.md`, mục "Kết nối repository cho dự án — tab Code (giai đoạn 5)"): `Một phần`. Đã làm: hiện trạng thái repo và Leader chọn repo từ danh sách của Integration (thay cho ô nhập `github_repo_id` thủ công); chưa có ngắt kết nối (B35) và khối commit/PR/contributor (B36); chọn repo chờ backend B34.
 9. Test: comment (mention 422, huy hiệu giảng viên, quyền xóa của Leader), attachment (kiểm client, presign hết hạn, confirm lỗi), repository (202 rồi poll, 409 generation), link (PR không hợp lệ, chưa `is_verified`), `parseActivityValue` với chuỗi không phải JSON.
 
 ### Phase 15 — My Work, sidebar, giảng viên
