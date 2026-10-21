@@ -64,7 +64,8 @@ Lockout không phải một trạng thái vòng đời của user.
 
 1. **Đăng ký:** tạo user ACTIVE, profile và role STUDENT; email được đánh dấu đã xác
    minh ngay, không chờ email kích hoạt trong giai đoạn chưa có Resend.
-   Đăng nhập riêng để nhận JWT. Tài khoản import vẫn dùng luồng kích hoạt hiện có.
+   Đăng nhập riêng để nhận JWT. Import mới cũng được đánh dấu ACTIVE/email verified
+   theo chính sách tạm; tài khoản pending cũ vẫn dùng luồng kích hoạt hiện có.
 2. **Đăng nhập:** dj-rest-auth/Django Auth/allauth kiểm email hoặc username/password;
    Identity kiểm trạng thái tài khoản rồi tạo phiên thiết bị và token SimpleJWT.
 3. **Refresh:** SimpleJWT đổi refresh token và blacklist token trước; Identity giữ
@@ -122,8 +123,16 @@ Tra cứu public/batch chỉ trả dữ liệu cho phép, không password/token/
 user khác. Provisioning nhận tối đa100 JSON rows và trả kết quả từng row. Cùng actor,
 path, key và body trả lại receipt; body khác với cùng key trả422. Classroom giữ payload
 ổn định khi retry và chịu trách nhiệm enrollment; Identity chịu trách nhiệm danh tính.
-User mới từ provisioning chưa có password dùng được; khi activate cần gửi
-`new_password1` và `new_password2` cùng key kích hoạt.
+Chính sách tạm cho user mới từ provisioning: mật khẩu ban đầu là email đã bỏ khoảng
+trắng đầu/cuối và chuyển thành chữ thường, được băm bằng Django password API.
+Tài khoản mới được tạo `ACTIVE`, EmailAddress được đánh dấu `verified=True` ngay,
+không gửi email kích hoạt và có thể đăng nhập bằng email/mật khẩu này. Đây là đánh
+dấu theo chính sách tạm, không phải bằng chứng người dùng sở hữu hộp thư. Tài khoản
+đã tồn tại giữ nguyên mật khẩu và trạng thái; không cập nhật ngược
+tài khoản đã import trước thay đổi này. User cũ chưa có mật khẩu vẫn phải gửi
+`new_password1` và `new_password2` khi kích hoạt. Không có cơ chế bắt buộc đổi mật
+khẩu ở lần đăng nhập đầu; sinh viên nên đổi ngay qua `/password-change` vì email
+là thông tin dễ đoán. Không dùng chính sách tạm này cho production.
 
 Response nghiệp vụ có cùng envelope:
 
@@ -215,8 +224,10 @@ Nghiệp vụ ở `event.data`; consumer xử lý lặp bằng `event_id`.
 | `identity.oauth.github_linked`, `identity.oauth.github_unlinked`                                  | Thông báo liên kết GitHub cho Integration           |
 
 Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tương ứng.
-`identity.student.imported` có thêm `student_id` nullable theo hợp đồng. Work cập nhật
-projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
+`identity.student.imported` có thêm `student_id` nullable theo hợp đồng.
+Import mới theo chính sách tạm không phát mail event này, chỉ phát
+`identity.user.created` với trạng thái ACTIVE; vẫn giữ schema để xử lý event cũ.
+Work cập nhật projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
 kiểm envelope rồi bỏ qua tại consumer hồ sơ, không đưa nhầm vào DLQ. Xem
 [quy tắc phía Work](../project-service/identity-events.md).
 `identity-publisher` dùng cùng image Identity và PostgreSQL chung; bật bằng Compose

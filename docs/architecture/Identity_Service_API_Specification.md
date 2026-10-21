@@ -388,7 +388,7 @@ Mã sai/hết hạn/đã dùng và mật khẩu yếu trả 400 VALIDATION_ERROR
 #### 3.2.3. Activation/verification và resend
 
 POST `/activate`, Anonymous, `{"key":"<allauth key>"}`.
-Imported user có unusable password phải thêm `new_password1,new_password2` qua SetPasswordForm.
+Chính sách tạm: tài khoản mới do import có mật khẩu ban đầu bằng email chuẩn hóa (trim/lowercase), được tạo ACTIVE/email verified ngay, không cần gọi activation. Tài khoản pending cũ có unusable password vẫn phải thêm `new_password1,new_password2` qua SetPasswordForm.
 allauth xác minh email, adapter chuyển PENDING → ACTIVE, đồng bộ is_email_verified,
 consume mọi key cũ, audit/outbox cùng transaction. 200 `data=null`, không tự login/cấp JWT.
 Mã sai/hết hạn/đã dùng: 404; trạng thái không phù hợp: 400; validation password: 400.
@@ -836,12 +836,12 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 **API nội bộ do Identity sở hữu:** `POST /api/v1/internal/users/provision-students`.
 - Chỉ Classroom gọi qua mạng backend; gateway không công khai đường `/internal/`. Header `X-Service-Key` là secret riêng Classroom → Identity do backend thêm và kiểm bằng so sánh constant-time; không gửi secret xuống trình duyệt hoặc log. Đồng thời chuyển tiếp `Authorization: Bearer <actor_access_token>`; Identity xác minh RS256/iss/aud và role TEACHER hoặc SYSTEM_ADMIN. Có token người dùng nhưng thiếu/sai service key: 403 SERVICE_ACCESS_DENIED.
 - Header `Idempotency-Key: <UUID>` bắt buộc. Receipt dùng khóa duy nhất `(user_id, endpoint_path, idempotency_key)` với user_id là actor từ token. Cùng key/body trả lại receipt; khác body trả 422 IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD. Claim và receipt được xử lý trong cùng transaction với các tài khoản/outbox; khóa giao dịch theo tuple này, không chỉ SELECT rồi chạy nghiệp vụ. Mất phản hồi sau commit: đọc receipt trước khi thực thi lại.
-- Không gọi HTTP/gửi mail trong transaction. Dùng savepoint cho từng dòng; lỗi dữ liệu một dòng được báo trong dòng đó, lỗi hạ tầng rollback cả batch. Username cho tài khoản mới do server sinh và giải quyết trùng theo unique index; password dùng Django unusable password đến khi kích hoạt.
+- Không gọi HTTP/gửi mail trong transaction. Dùng savepoint cho từng dòng; lỗi dữ liệu một dòng được báo trong dòng đó, lỗi hạ tầng rollback cả batch. Username cho tài khoản mới do server sinh và giải quyết trùng theo unique index. Chính sách tạm: mật khẩu ban đầu bằng email chuẩn hóa (trim/lowercase), băm qua Django; tạo ACTIVE và đánh dấu EmailAddress verified ngay, không yêu cầu thư kích hoạt. Việc đánh dấu không chứng minh quyền sở hữu hộp thư. Không trả password trong response hoặc thay password/trạng thái tài khoản EXISTING; không áp dụng ngược tài khoản đã import. Email dễ đoán, sinh viên nên đổi ngay sau login; chưa có cơ chế bắt buộc đổi lần đầu. Không dùng chính sách tạm này cho production.
 - Tra cứu email/MSSV kể cả user xóa mềm để không tái cấp danh tính. Email và MSSV cùng trỏ một user: dùng user đó. Nếu hai mã trỏ hai user, hoặc MSSV có user nhưng email gửi lên khác email đang lưu: IDENTITY_CONFLICT; không tự đổi email/MSSV.
 - Khi email đã có user STUDENT ACTIVE/PENDING_ACTIVATION với student_id=NULL và MSSV gửi lên chưa thuộc ai: khóa user, gán mã được Classroom xác nhận, ghi audit/outbox identity.user.updated và trả EXISTING với user_id cũ. MSSV đã có chỉ được giữ nguyên; mã khác trả IDENTITY_CONFLICT. Email-only hợp lệ được tìm/tạo user với MSSV NULL; MSSV-only chỉ tìm user có sẵn, không tạo mới khi thiếu email.
-- User đã xóa/SUSPENDED: ACCOUNT_UNAVAILABLE, không khôi phục hay ghi danh. Axes lockout không đổi account_status hoặc chặn provisioning. User TEACHER/SYSTEM_ADMIN: FLAGGED_ROLE_CONFLICT, không thêm STUDENT. User STUDENT đủ điều kiện trả EXISTING; người chưa có tài khoản tạo CREATED/PENDING_ACTIVATION.
+- User đã xóa/SUSPENDED: ACCOUNT_UNAVAILABLE, không khôi phục hay ghi danh. Axes lockout không đổi account_status hoặc chặn provisioning. User TEACHER/SYSTEM_ADMIN: FLAGGED_ROLE_CONFLICT, không thêm STUDENT. User STUDENT đủ điều kiện trả EXISTING; người chưa có tài khoản tạo CREATED/ACTIVE.
 - Nếu hai batch khác key cùng tạo/gán một định danh, unique index giải quyết tranh chấp. Bắt IntegrityError trong savepoint, đọc lại danh tính rồi trả EXISTING hoặc IDENTITY_CONFLICT; không đổi chủ sở hữu mã hoặc trả nhầm một user_id.
-- Tạo user/profile/STUDENT role/activation hash/audit; hai outbox identity.user.created (projection không secret) và identity.student.imported (mail secret mã hóa) cho tài khoản mới; token gửi thư dùng secret mã hóa theo mục 1.6. Mỗi dòng hợp lệ trả `user_id`; Identity không trả activation token trong HTTP response. Classroom dùng kết quả này để tạo enrollment.
+- Tạo user/profile/STUDENT role/EmailAddress verified/audit và outbox identity.user.created với account_status ACTIVE. Không tạo EmailConfirmation hoặc mail event identity.student.imported cho import mới; schema mail event cũ vẫn giữ nguyên. Mỗi dòng hợp lệ trả `user_id`; Identity không trả mật khẩu hoặc activation token trong HTTP response. Classroom dùng kết quả này để tạo enrollment.
 - Trả 201 nếu batch tạo ít nhất một tài khoản; trả 200 nếu không tạo mới. Các dòng lỗi vẫn nằm trong `results`.
 
 Request nội bộ:
@@ -860,7 +860,7 @@ Response nội bộ (HTTP 201):
   "message": "Đã xử lý danh sách tài khoản.",
   "data": {
     "summary": {"total_records": 1, "created_accounts": 1, "existing_accounts": 0, "flagged_records": 0, "failed_records": 0},
-    "results": [{"row_number": 2, "user_id": "a1b2c3d4-0001-4000-8000-000000000001", "email": "nguyenvana@university.edu.vn", "student_id": "20210001", "account_status": "PENDING_ACTIVATION", "account_result": "CREATED", "reason": null}]
+    "results": [{"row_number": 2, "user_id": "a1b2c3d4-0001-4000-8000-000000000001", "email": "nguyenvana@university.edu.vn", "student_id": "20210001", "account_status": "ACTIVE", "account_result": "CREATED", "reason": null}]
   },
   "meta": null,
   "error": null
@@ -1088,7 +1088,7 @@ Envelope theo4.1: event_id/type/aggregate_type/aggregate_id/occurred_at/event_ve
 | identity.user.status_changed | Admin status/restore; user_id,account_status,deleted_at(nullable) | Projection; không thay session-status runtime |
 | identity.user.role_assigned / identity.user.role_revoked | Role đổi thật; user_id,role_code,roles(sau đổi),actor_id | Projection; không cấp quyền project |
 | identity.password_reset.requested | Reset eligible; user_id,email,expires_at,secret(AES-GCM) | Notification reset template |
-| identity.student.imported | New imported account; user_id,email,student_id(nullable),expires_at,secret(AES-GCM) | Notification activation template |
+| identity.student.imported | Mail event cũ; user_id,email,student_id(nullable),expires_at,secret(AES-GCM); không phát cho import mới theo chính sách tạm | Notification activation template |
 | identity.activation.requested | Resend eligible; user_id,email,expires_at,secret(AES-GCM) | Notification activation template |
 | identity.oauth.github_linked | Link mới; user_id,github_user_id(string numeric immutable),github_username | Integration → github.account.verified |
 | identity.oauth.github_unlinked | Unlink; user_id,github_user_id(captured trước delete) | Integration → github.account.unverified |
