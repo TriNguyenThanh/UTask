@@ -321,3 +321,10 @@ Identity xem [hướng dẫn liên service](../notification-service/implementati
 và [checkpoint Notification](../notification-service/checkpoint-2026-10-22.md)
 để phối hợp rollout. SMTP Gmail đã ACK thư thử riêng; luồng Identity thật qua
 Kafka tới Gmail và staging vẫn chưa nghiệm thu.
+
+OpenAPI Identity bao gồm `POST /api/v1/internal/users/notification-contacts`:
+header `X-Service-Token` bắt buộc, body `user_ids` gồm 1–100 UUID. Response 200
+giữ JSON nội bộ `{users: [...]}`; mỗi contact có `user_id`, `email`,
+`display_name`, `account_status`. Đây là ngoại lệ với envelope API public,
+không yêu cầu Bearer; lỗi 400/403 vẫn dùng envelope lỗi chung. Schema được
+khai báo từ serializer riêng và test đối chiếu với response API thực tế.
