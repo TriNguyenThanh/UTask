@@ -9,6 +9,10 @@ from infrastructure.providers import build_litellm_model
 def model_settings(**overrides):
     values = {
         "model": "openai/example-model",
+        "jwt_issuer": "https://identity.utask.internal",
+        "jwt_audience": "utask-platform",
+        "identity_service_key": "test-identity-key",
+        "credential_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "llm_api_base": "https://llm.example.test/v1",
         "llm_api_key": "test-api-key",
         "work_service_key": "test-work-key",

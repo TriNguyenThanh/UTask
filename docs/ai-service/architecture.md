@@ -1,9 +1,10 @@
 # Kiến trúc AI Service
 
 **Trạng thái: Một phần.** Pipeline API → PostgreSQL → dispatcher → Redis/Celery
-→ ADK workflow đã triển khai trong source. JWT, domain tools và adapter REST
-đã có; integration với Identity/Work/Integration và LLM production **chưa xác
-minh**. Work provider mới có hợp đồng, **Chưa triển khai**. Retention terminal
+→ ADK workflow đã triển khai trong source. JWT verifier RS256, client kiểm tra
+session Identity, domain tools và adapter REST có source/test local; tích hợp
+runtime với Identity/Work/Integration và LLM production **Chưa xác minh**. Work
+provider mới có hợp đồng, **Chưa triển khai**. Retention terminal
 đã có source/migration/Celery beat; Kafka và specialist **Chưa triển khai**.
 
 Thiết kế theo [baseline](../architecture/README.md),
@@ -26,8 +27,11 @@ trạng thái và lưu kết quả; adapter lắp ghép framework/provider bên 
 
 ## Non-responsibilities — boundary
 
-- Identity sở hữu user/token; AI xác minh JWT ký bất đối xứng với issuer,
-  audience và public key/JWKS được cấu hình. Không tin identity header client.
+- Identity sở hữu user/token; AI chỉ chấp nhận JWT RS256 với claim bắt buộc
+  `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` tùy chọn. `sub` là UUID,
+  `token_type=access`. Mỗi lần xác thực, AI tải JWKS từ Identity, không dùng
+  PEM/URL JWKS riêng và không cache khóa. Sau chữ ký, AI hỏi session-status để
+  xác minh phiên còn active; không tin identity header client.
 - Work sở hữu Project/ProjectMember, Sprint, Task, Comment và tiến độ theo quy
   tắc; Classroom sở hữu Group/GroupMember. ID xuyên service chỉ là tham chiếu.
 - Integration là service duy nhất gọi GitHub API. AI lấy dữ liệu đã chuẩn hóa.
@@ -41,7 +45,8 @@ trạng thái và lưu kết quả; adapter lắp ghép framework/provider bên 
 
 ```text
 POST /api/ai/v1/requests
-  → JWT + input validation → Application → REST kiểm tra quyền target
+  → Bearer JWT RS256 + session-status Identity + input validation
+  → Application → AI-side REST authorize client (Work contract planned)
   → transaction AI PostgreSQL: request queued + delivery job
   → API chờ persistence tối đa 10 giây → 200 hoặc 202 + Location
 
@@ -63,10 +68,30 @@ GET /api/ai/v1/requests/{request_id}
 **Đã triển khai:**
 
 1. `main.create_app` lắp repository PostgreSQL, JWT verifier, credential vault,
-   REST authorizer và application. API không import/chạy ADK hoặc worker.
-2. Application kiểm tra quyền trước khi enqueue. Backlog chưa có target vẫn
-   cần identity hợp lệ. Endpoint quyền chưa cấu hình hoặc kết quả không có
-   `allowed: true` thì từ chối; không dùng projection làm bằng chứng quyền.
+   authorizer port và application. API không import/chạy ADK hoặc worker.
+2. Application gọi authorizer trước khi enqueue. Backlog chưa có target vẫn
+   cần identity hợp lệ. MOCK_TEST dùng fixture để kiểm tra target local; ngoài
+   mock, AI-side Work client dựng POST theo contract, nhưng Work provider chưa
+   có source nên quyền/role thực tế **Chưa triển khai**. Không dùng projection
+   làm bằng chứng quyền.
+   Khi provider trả lời, chỉ `success: true`, target/action đúng và
+   `allowed: true` mới được client chấp nhận.
+   JWT yêu cầu `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` là tùy chọn,
+   `sub` phải là UUID và `token_type` phải là `access`. Mỗi lần xác thực, AI
+   tải raw JWKS từ `AI_IDENTITY_BASE_URL/.well-known/jwks.json`, không cache.
+   Chỉ xét khóa `kty=RSA`, `use` mặc định `sig`, `alg` mặc định `RS256`; lọc
+   theo `kid` nếu JWT có, và yêu cầu còn đúng một khóa. Không dùng PEM hoặc URL
+   JWKS cấu hình riêng. Sau xác minh chữ ký, AI gọi Identity
+   `POST /api/v1/internal/auth/session-status` với Bearer token và
+   `X-Service-Key`; chỉ `success: true` cùng `data.active` boolean là response
+   hợp lệ. Phiên không active trả 401; lỗi/timeout/sai response được ghi nhận
+   là `503 AUTH_UNAVAILABLE` ở lớp nội bộ. Error envelope công khai v1 ánh xạ
+   lỗi này thành `500 INTERNAL_ERROR` với `details.reason=AUTH_UNAVAILABLE`.
+   Không cache kết quả active.
+   Work key là độc lập: `AI_WORK_SERVICE_AUTH_ENABLED=false` tạm thời bỏ riêng
+   `X-Service-Key` AI→Work; Bearer và authorize body target/intent vẫn giữ.
+   Khi bật, `AI_WORK_SERVICE_KEY` bắt buộc và được gửi. Identity key cùng
+   Integration key không bị cờ này ảnh hưởng.
 3. Repository chuẩn hóa payload, tính SHA-256 và dùng unique `(user_id,
    idempotency_key)` cùng `INSERT ... ON CONFLICT`. Request và delivery được
    lưu trong cùng transaction. POST đồng thời cùng key dùng một request/job;
@@ -78,7 +103,10 @@ GET /api/ai/v1/requests/{request_id}
 5. Celery task chỉ nhận UUID và gọi application. Claim khóa request; chỉ
    `queued` được chuyển sang `running`. Job trùng/terminal không gọi LLM.
    Deadline bắt đầu từ lần claim, không được đặt lại khi task giao lại.
-6. Worker giải mã Bearer bằng Fernet và xác minh lại JWT/quyền trước chạy.
+6. Worker giải mã Bearer bằng Fernet, tải lại JWKS và xác minh JWT RS256/session
+   với Identity, rồi kiểm tra quyền trước khi chạy. `AI_IDENTITY_BASE_URL` mặc định
+   `http://identity-service:8000`; `AI_IDENTITY_SERVICE_KEY` phải khớp entry
+   `ai` trong `IDENTITY_SERVICE_KEYS` của Identity.
    Credential không xuất hiện trong task/prompt/log, được xóa khi bàn giao kết
    quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Token hết hạn trong
    queue làm request thất bại; không giữ quyền cũ.
@@ -349,11 +377,16 @@ Xem [cách dùng mock data](mock-data.md).
 credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_context`,
 `get_team_context`, `get_progress_context`, `get_development_context`.
 
-REST adapter dùng URL template từ cấu hình; Work authorize là POST
-`{action: ai.analyze, intent}` với Bearer actor và `X-Service-Key` riêng cho
-Work. Chỉ envelope `success: true`, `data` đúng target/action và `allowed: true`
-mới cấp quyền. Work context là GET `ContextDocument` trực tiếp, không bọc envelope.
-Adapter không theo redirect, có timeout và chặn response lớn hơn 65536 byte.
+REST adapter dùng URL template từ cấu hình; AI-side Work authorize request là
+POST `{action: ai.analyze, intent}` với Bearer actor. Cờ
+`AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định chỉ bỏ header Work
+`X-Service-Key`; body, Bearer và yêu cầu authorize target/intent vẫn giữ.
+Khi cờ bật, `AI_WORK_SERVICE_KEY` là bắt buộc và được gửi. Chỉ envelope
+`success: true`, `data` đúng target/action và `allowed: true` mới được AI client
+chấp nhận. Contract Work còn `planned`; Work provider chưa có source, nên không
+khẳng định endpoint hay kiểm tra role đã chạy runtime. Work context được client
+đọc theo GET `ContextDocument` trực tiếp, không bọc envelope. Adapter không
+theo redirect, có timeout và chặn response lớn hơn 65536 byte.
 GitHub GET gửi key Integration; Integration chịu trách nhiệm hỏi Work quyền
 `github.read`, AI không kiểm tra Work thêm trong nhánh fetch GitHub.
 Adapter kiểm tra domain/thời điểm,
@@ -365,9 +398,9 @@ task decomposition cần task context, risk cần progress context. Chỉ gọi 
 hoặc development tool không thay thế dữ liệu thiết yếu. Agent vẫn tự chọn thứ
 tự lấy context và tool bổ sung.
 
-**Một phần:** adapter và unit test đã có; Work boundary đã chốt trong
-[contract](../../contracts/api/work-ai-context-v1.yaml), provider Work
-**Chưa triển khai**. Integration provider đã có source; integration live
+**Một phần:** AI-side adapter và test có source; Work boundary nằm trong
+[contract](../../contracts/api/work-ai-context-v1.yaml) ở trạng thái `planned`;
+provider Work **Chưa triển khai**. Integration provider đã có source; integration live
 **Chưa xác minh**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
 ngoài allowlist Work bị loại, không đưa tên/email/credential vào prompt.
 Tool GitHub chỉ xuất hiện khi risk Project, cờ bật và focus cho phép; Sprint
@@ -409,8 +442,9 @@ loop/retry vô hạn; không log secret/raw provider response. Work vẫn tính 
 
 - OpenAPI v1 sửa cách ghép `allOf` với `unevaluatedProperties`; giữ các trường
   v1, không phát minh schema event. Test kiểm tra payload bằng JSON Schema.
-- Auth source production và provider quyền/context Work cần được xác minh;
-  credential key phải giống giữa API/worker và được quản lý ngoài source.
+- Identity được truy vấn JWKS mỗi lần xác thực; không dùng PEM hoặc URL JWKS
+  riêng. Runtime Identity/production và provider quyền/context Work cần được
+  xác minh; `AI_WORK_SERVICE_KEY` chỉ cần khi bật cờ gửi key.
 - Nginx root giữ nguyên `/api/ai/v1/...`; internal Identity/Work/Integration
   bị chặn ở gateway. Cấu hình và test không chứng minh E2E staging đã chạy.
 - Compose root local/staging có bốn process AI, dùng database AI riêng trên

@@ -2,7 +2,8 @@
 
 **Trạng thái: Một phần.** Source/test của adapter context, tool scope, retention
 và wiring phát hành đã có; không đồng nghĩa hệ thống đã chạy E2E với Work,
-Integration và LLM production. Provider Work dưới đây **Chưa triển khai**.
+Integration và LLM production. AI-side Work client có source; Work provider
+theo contract dưới đây **Chưa triển khai**.
 Smoke LLM local ngày 15/10/2026 dùng context/quyền fixture, xem
 [checkpoint](checkpoint.md). Nguồn vị trí source là [code map](code-map.md).
 
@@ -10,27 +11,47 @@ Smoke LLM local ngày 15/10/2026 dùng context/quyền fixture, xem
 
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml) được
 [Work contract](../../contracts/api/work-service.yaml) tham chiếu và đánh dấu
-`planned`. Đội Work cần triển khai provider trước khi cấu hình đó dùng được
-trên staging. Không đọc database Work hoặc tự tạo endpoint thay thế.
+`planned`. Đội Work cần triển khai provider trước khi contract dùng được trên
+staging. AI-side client không chứng minh endpoint Work đã tồn tại. Không đọc
+database Work hoặc tự tạo endpoint thay thế.
 Chi tiết công việc, mapping và kiểm thử dành cho đội Work nằm trong
 [hướng dẫn triển khai provider Work](../project-service/ai-service-integration-guide.md).
 
 | Lời gọi | Credential và shape |
 | --- | --- |
-| AI → Work POST `/api/v1/internal/ai/targets/{target_type}/{target_id}/authorize` | Bearer actor + `AI_WORK_SERVICE_KEY` trong `X-Service-Key`; body `{action: "ai.analyze", intent}`; response envelope `success/data` chứa đúng target_type, target_id, action và allowed boolean |
-| AI → Work GET `/api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}` | Bearer actor + key AI → Work; `ContextDocument` trực tiếp, không envelope Work; Work tự resolve Project và tự kiểm quyền tại mỗi lần đọc |
+| Contract AI → Work POST `/api/v1/internal/ai/targets/{target_type}/{target_id}/authorize` (`planned`) | AI client gửi Bearer actor + body `{action: "ai.analyze", intent}`; chỉ gửi `X-Service-Key` khi `AI_WORK_SERVICE_AUTH_ENABLED=true`, khi đó cần `AI_WORK_SERVICE_KEY`; response contract `success/data` có target_type, target_id, action và allowed boolean |
+| Contract AI → Work GET `/api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}` (`planned`) | AI client gửi Bearer actor; key AI → Work chỉ khi cờ bật; `ContextDocument` trực tiếp theo contract. Chưa có Work provider source để xác minh kiểm quyền runtime |
 | AI → Integration GET `/api/v1/internal/projects/{project_id}/github/context` | Bearer actor + `AI_INTEGRATION_SERVICE_KEY`; Integration kiểm mapping/consent và gọi Work authorize `github.read` bằng key Integration → Work |
 
-AI kiểm quyền target lúc nhận request và khi worker thực thi; Work context
-được kiểm lại khi fetch. Nhánh fetch GitHub không gọi thêm Work từ AI:
+Theo luồng đã chốt, AI gửi authorize request cho target khi nhận request và
+khi worker thực thi; Work context được kiểm lại khi fetch. Hiện provider Work
+chưa có source nên các bước này **Chưa triển khai** phía Work, không xác nhận
+role authorization runtime. `AI_WORK_SERVICE_AUTH_ENABLED=false` tạm thời chỉ
+bỏ header Work `X-Service-Key`; Bearer và authorize body vẫn được gửi. Bật cờ
+thì cần Work key. Nhánh fetch GitHub không gọi thêm Work từ AI:
 Integration sở hữu quyết định quyền GitHub hiện hành. Đó không phải bỏ bước
 authorize request AI. Work phải từ chối dùng AI key cho caller Integration.
+
+## Xác thực Identity
+
+Mỗi lần xác thực Bearer, AI tải JWKS trực tiếp từ
+`{AI_IDENTITY_BASE_URL}/.well-known/jwks.json`; không dùng PEM, URL JWKS riêng
+hoặc cache khóa. AI lọc khóa RSA theo `kty`, `use` mặc định `sig`, `alg` mặc
+định `RS256`, lọc `kid` nếu JWT có, rồi yêu cầu đúng một khóa. Claim bắt buộc
+là `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` tùy chọn. AI yêu cầu
+`sub` là UUID và `token_type=access`, sau đó gọi session-status bằng Bearer và
+`AI_IDENTITY_SERVICE_KEY`. Phiên bị thu hồi trả 401; dependency lỗi phát sinh
+`503 AUTH_UNAVAILABLE` nội bộ, được error envelope v1 ánh xạ thành
+`500 INTERNAL_ERROR` công khai. Source và HTTP fake tests có sẵn; xác minh
+runtime Identity/staging/production **Chưa xác minh**. Token/JWKS do
+`setup_mock` tạo chỉ dành cho test, không dùng trong runtime.
 
 `AI_AUTHORIZATION_URLS` cần ba key project/task/sprint. `AI_CONTEXT_URLS` cần
 project/team/progress cho mỗi target, thêm task:task; task ID không do agent
 chọn. Placeholder chỉ `{target_type}`, `{target_id}`. Khi bật GitHub, thêm
 project:github_activity URL Integration và key riêng. Staging/production
-thiếu Work key/mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. Base URL
+thiếu mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. Work key chỉ cần
+khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; cờ mặc định `false`. Base URL
 provider LLM phải HTTPS ngoài development/test; URL nội bộ domain dùng cấu
 hình tĩnh HTTP/HTTPS theo network triển khai hiện có.
 
@@ -65,6 +86,10 @@ phát hành. Chưa nghiệm thu hiệu năng migration hoặc nhịp cleanup pro
 Compose root local/staging có `ai-service`, `ai-worker`, `ai-dispatcher`,
 `ai-beat`; Compose standalone có api/worker/dispatcher/beat. Một image/cấu hình
 cho bốn process; secret inject environment, không đặt vào env_file thường.
+Compose truyền `AI_WORK_SERVICE_AUTH_ENABLED`; mặc định tắt service key Work.
+Khi bật, phải cấp `AI_WORK_SERVICE_KEY` cho mọi process cần gọi Work. Khi tắt,
+chỉ header Work `X-Service-Key` bị bỏ; Bearer actor và yêu cầu authorize
+target/intent vẫn được gửi. Cờ không ảnh hưởng Identity hoặc Integration key.
 Beat chỉ lập lịch, worker thực hiện cleanup. Chạy một scheduler cho lịch này
 là cấu hình Compose hiện tại, không phải quy tắc singleton worker của baseline.
 Nginx giữ URI `/api/ai/v1/...`, chặn internal Identity/Work/Integration;
@@ -140,8 +165,8 @@ quy trình phát hành hiện hành, không tự suy ra quyền deploy/rollback.
 
 ## Những phần còn phải nghiệm thu
 
-Work provider và fixture staging; JWT Identity/rotation key; allow/deny theo
-user/target; partial/stale/missing với Integration thật; gateway AI POST/GET;
+Work provider (contract còn planned) và fixture staging; JWT Identity/rotation
+key; allow/deny theo user/target; partial/stale/missing với Integration thật; gateway AI POST/GET;
 ba intent với model pin; quota/deadline/latency; retention trên volume thật và
 khôi phục sau lỗi. Test source, mock transport, PostgreSQL/Redis test và smoke
 LLM local cần được báo riêng. Chưa có bằng chứng cho phép kết luận production

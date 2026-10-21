@@ -1,9 +1,10 @@
 # AI Service Code Map
 
 **Trạng thái: Một phần.** Runtime request/dispatcher/worker/ADK và PostgreSQL
-đã triển khai, thêm boundary context/retention và wiring gate phát hành M3.
-Provider Work **Chưa triển khai**; domain/LLM production và E2E gateway
-staging **Chưa xác minh**. Xem [production readiness](production-readiness.md).
+đã triển khai; verifier RS256, Identity session client và mock test bằng HTTP
+Identity giả có source/test local. Provider Work **Chưa triển khai**; tích hợp
+runtime domain/Identity, LLM production và E2E gateway staging **Chưa xác minh**.
+Xem [production readiness](production-readiness.md).
 Nguồn pipeline chuẩn: [architecture](architecture.md).
 
 ## Service root
@@ -26,8 +27,11 @@ src/
 
 ## API
 
-- `config.py`: nạp ai-service.env + .env root, cờ môi trường/mock và
-  SecretStr cho LLM key; cấm mock ngoài development/test.
+- `config.py`: nạp ai-service.env + .env root, cờ môi trường/mock; cấu hình
+  `AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`) và
+  `AI_IDENTITY_SERVICE_KEY`; `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định,
+  chỉ bắt buộc Work key khi bật cờ. Cấm mock ngoài development/test; staging/
+  production yêu cầu issuer/audience, Identity key và Fernet key hợp lệ.
 - `main.py`: composition root API, cleanup HTTP client/DB pool qua lifespan.
 - `api/routes.py`: `/healthz`, POST/GET `/api/ai/v1/requests`; POST 200/202,
   GET ownership; chỉ gọi application, không gọi workflow.
@@ -63,10 +67,13 @@ src/
   backlog có target cần project, phân rã cần task, risk cần progress. Agent
   vẫn chọn thứ tự và context bổ sung; không có chuỗi fetch cứng mọi domain.
 - `workflow/ports.py`: context gateway protocol; tools không thấy HTTP/SQL/Kafka.
-- `infrastructure/context_http.py`: POST Work authorize với envelope đúng
-  target/action; GET raw context, Bearer actor và service key theo đích;
-  timeout, stream giới hạn 65536 byte/freshness, không redirect. GitHub giao
-  Integration authorize Work, không gọi Work lần nữa trong nhánh fetch đó.
+- `infrastructure/context_http.py`: AI-side POST Work authorize với envelope
+  target/action; Bearer luôn gửi, `X-Service-Key` chỉ gửi khi
+  `AI_WORK_SERVICE_AUTH_ENABLED=true`. GET raw context; timeout, stream giới hạn
+  65536 byte/freshness, không redirect. Work provider chưa có source nên client
+  này không chứng minh endpoint/role authorization runtime. GitHub giao
+  Integration authorize Work bằng key Integration riêng, AI không gọi Work lần
+  nữa trong nhánh fetch đó.
 - `models/context.py`: shape project/task/team/progress/GitHub, kiểu và giới
   hạn lồng nhau; lọc trường ngoài allowlist Work, strict GitHub theo contract.
   Work boundary có hợp đồng, provider **Chưa triển khai**.
@@ -117,8 +124,16 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
 - `migrations/versions/0004_terminal_retention.py`: terminal_at/backfill/check
   và partial index; index thông thường cần maintenance window khi bảng lớn.
   `repositories.cleanup_terminal` khóa batch terminal, cascade con trong AI DB.
-- `infrastructure/security.py`: JWT và Fernet credential vault; xóa ciphertext
-  khi bàn giao completion hoặc terminal. `infrastructure/bootstrap.py`: SQLAlchemy connection pool.
+- `infrastructure/security.py`: mỗi lần xác thực tải raw JWKS từ Identity,
+  không cache hoặc dùng PEM/URL JWKS cấu hình riêng; chỉ chọn đúng một khóa RSA
+  sau khi lọc `kty`, `use`/`alg` (mặc định `sig`/`RS256`) và `kid` nếu có.
+  Xác minh claim bắt buộc `exp`, `iss`, `aud`, `sub`, `token_type` (`iat` tùy
+  chọn), UUID `sub`, `token_type=access`; gọi session-status với Bearer và
+  `X-Service-Key`, yêu cầu response 2xx cùng `success: true` và
+  `data.active` boolean. Session revoked trả 401; dependency/response lỗi phát sinh
+  `AUTH_UNAVAILABLE`. Fernet vault giữ token giữa API/worker và xóa ciphertext
+  khi bàn giao completion hoặc terminal. `infrastructure/bootstrap.py`:
+  SQLAlchemy connection pool.
 
 ## LLM providers
 
@@ -161,7 +176,9 @@ cung cấp cụ thể hoặc chạy evaluation production.
   ghi terminal result, phục hồi inbox sau restart, nhiều API consumer, token
   cũ, deadline, schema/intent/version sai và rollback transaction.
 - `test_models.py`, `test_contract.py`: request/version/range và wire schema v1.
-- `test_security.py`: JWT ký thật, issuer/audience/expiry, vault và config.
+- `test_identity_session_auth.py`: JWKS fetch từng lần, key filter/kid, JWT
+  claims và session-status; HTTP Identity fake, không bypass auth. `test_security.py`
+  kiểm tra vault/config.
 - `test_context.py`: quyền, thiếu/cũ context, HTTP lỗi/redirect/size, filter/tool budget.
 - `test_context_contract.py`: Work POST/envelope/key theo đích, typed shape,
   PII allowlist, GitHub không double authorize, tool scope/flag và limitation.
@@ -197,12 +214,13 @@ thì test hạ tầng được skip; báo rõ khi chỉ chạy unit tests.
 - `infrastructure/fixtures/domain.json`: dữ liệu Project/Task/Sprint, team,
   progress và GitHub activity giả; đóng gói cùng src trong image.
 - `examples/requests/`: payload để gọi API AI thật cho ba intent.
-- `scripts/setup_mock.py`: tiện ích credential/JWT local khi cần; không nằm
-  trong pipeline xử lý, không chạy server hoặc launcher Compose.
+- `scripts/setup_mock.py`: tạo UUID owner/outsider, access JWT RS256 và
+  `.env.mock/jwks.json` cho test HTTP Identity giả; không ghi public PEM vào
+  `.env` hoặc tạo session runtime.
 - `test_mock_context.py`: fixture/permission/boundary, chọn nguồn, ADK thật
   với LLM fake và kiểm tra lắp adapter giống nhau ở API/worker.
 - `test_mock_pipeline.py`: API → dispatcher → Redis/Celery → ADK với fixture
-  → completion/API → terminal result, PostgreSQL/Redis/JWT thật.
+  → completion/API → terminal result; JWT ký thật và Identity HTTP fake.
 
 **Đã triển khai mock data tại adapter**; domain production vẫn **Chưa xác minh**.
 Cách dùng nằm tại [mock data](mock-data.md). Không còn thư mục dev, server

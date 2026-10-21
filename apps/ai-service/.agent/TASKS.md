@@ -14,6 +14,79 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-22 — JWT theo Work và tạm bỏ caller key AI→Work
+
+- Quyết định hiện tại thay hướng dẫn PEM staging trước đó: verifier luôn GET
+  raw JWKS từ `AI_IDENTITY_BASE_URL/.well-known/jwks.json` mỗi lần xác thực,
+  không cache/PEM/URL JWKS riêng. Chọn RSA/use/alg/kid và required claims đúng
+  Work (`exp`, `iss`, `aud`, `sub`, `token_type`); `iat` không bắt buộc.
+  Kiểm UUID, access token, session Identity vẫn giữ; HTTP 401 thêm
+  `WWW-Authenticate: Bearer`. Không gọi Identity với JWT sai cấu trúc/thuật toán.
+- `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định tạm bỏ header/key AI→Work,
+  vẫn gửi Bearer, action/intent và yêu cầu quyết định quyền đúng target.
+  Bật lại flag yêu cầu Work key. Không bỏ key AI→Identity, AI→Integration
+  hoặc mã hóa Fernet. Settings, ba Compose và env example đã đồng bộ.
+- Cập nhật contract hai endpoint AI theo ngoại lệ tạm thời và ADR-005;
+  Integration→Work vẫn bắt buộc key. Provider Work **Chưa triển khai**, không
+  tự tạo endpoint giả và chưa xác minh role/quyền với Work runtime.
+- `setup_mock.py` giữ public JWKS test tại `.env.mock/jwks.json`, không ghi
+  PEM vào `.env`. Test API/worker dùng HTTP Identity giả nhưng JWT ký thật.
+- Kiểm tra: full AI suite PostgreSQL/Redis thật **585 passed**; sau bổ sung
+  auth challenge header chạy lại auth/API/admission **79 passed**. Toàn bộ
+  **170 test script** do agent hạ tầng chạy đạt. Ruff lint/format, Docker build,
+  kiểm tra diff và link tài liệu đạt. Identity/domain/LLM trong test là giả;
+  staging thật **Chưa xác minh**. Không sửa secret `.env` hoặc deploy.
+
+### 2026-10-21 — Sửa cấu hình xác thực staging và chặn thiếu secret lúc khởi động
+
+- Compose staging lấy issuer/audience mặc định từ Identity, dùng PEM trong
+  `AI_JWT_PUBLIC_KEY`, cố định JWKS rỗng và truyền Identity URL/caller key cho
+  API/worker/dispatcher/beat. `.env.example` bổ sung key caller AI và hướng dẫn
+  thay các giá trị mock khi triển khai.
+- `src/config.py` từ chối staging/production khi thiếu issuer/audience, khóa
+  xác minh, key AI→Identity hoặc Fernet key không hợp lệ. Không bắt buộc secret
+  AI khi chỉ render Compose cho profile khác.
+- `tests/test_environment_modes.py` kiểm đủ/thiếu cấu hình và Fernet sai;
+  `test_identity_session_auth.py` xác nhận `Bearer x.y.z` trả 401 trước HTTP
+  Identity/application. Các fixture production cho context/provider bổ sung
+  cấu hình auth để tiếp tục kiểm đúng boundary riêng.
+- Full suite AI trong Docker với PostgreSQL/Redis thật: **561 passed**;
+  Identity HTTP và LLM giả, không xác nhận integration staging thật.
+- Kiểm thử Compose render PEM nhiều dòng, mặc định/override Identity và cấu
+  hình dùng chung: 64 test Compose/deployment do agent chính chạy đạt;
+  toàn bộ 170 test script do agent hạ tầng chạy đạt. Lint/format, Docker build,
+  diff check và kiểm tra link tài liệu cập nhật đạt.
+- Tài liệu chuẩn: `docs/infrastructure/environment.md`, `ci-cd.md`, README và
+  code map AI. User chọn **chỉ sửa repo**; không đổi secret `.env` hiện có hoặc
+  deploy server. PEM/secret/session và luồng Identity staging thật **Chưa xác minh**.
+
+### 2026-10-21 — Xác thực JWT và phiên Identity theo Work Service
+
+- **Đã triển khai** trong `src/infrastructure/security.py`: chỉ nhận RS256,
+  kiểm chữ ký/issuer/audience/hạn/claim bắt buộc, `token_type=access`, UUID
+  `sub`; JWKS chọn khóa RSA theo alg/use/kid và từ chối khóa mơ hồ.
+- API và worker dùng chung verifier; mỗi lần xác minh đều POST Identity
+  `/api/v1/internal/auth/session-status` bằng Bearer và caller key AI.
+  Phiên bị thu hồi trả 401; thiếu key, timeout, redirect, lỗi HTTP/schema
+  đều từ chối. Giữ mapping lỗi công khai v1 cho `AUTH_UNAVAILABLE`.
+- `src/config.py` bổ sung `AI_IDENTITY_BASE_URL` và secret
+  `AI_IDENTITY_SERVICE_KEY`; Compose riêng truyền cả hai vào API/worker.
+  `scripts/setup_mock.py` và fixture đổi sang UUID ổn định, access-token claim;
+  test dùng HTTP Identity giả, không có bypass xác thực ở chế độ mock.
+- Test: `tests/test_identity_session_auth.py` bao phủ JWT/JWKS, active/revoked,
+  lỗi Identity, API và worker từ chối trước application/executor; cập nhật
+  `test_security.py`, `test_environment_modes.py`, `test_mock_context.py` và
+  `test_mock_pipeline.py`. Full suite trong Docker với PostgreSQL/Redis thật:
+  **532 passed**; sau đó thêm hai case worker revoked/unavailable và chạy lại
+  file auth: **46 passed**. Identity HTTP và LLM đều giả trong kiểm thử.
+- Ruff check/format, Docker build và `git diff --check` đạt; liên kết file nội
+  bộ của 5 tài liệu AI cập nhật không có đích thiếu. GitNexus impact/check
+  đã chạy; index chậm HEAD 2 commit nên đối chiếu source trực tiếp.
+- **Chưa xác minh** Identity runtime/staging/production. Cần inject
+  `AI_IDENTITY_SERVICE_KEY` vào Compose root local/staging, cấu hình key khớp
+  `IDENTITY_SERVICE_KEYS.ai` của Identity, issuer/audience và public key/JWKS
+  thật. Không sửa Compose root hoặc `.env.example` ngoài phạm vi AGENTS AI.
+
 ### 2026-10-21 — Context boundary, retention và gate phát hành phase 1
 
 - Trạng thái: Đã triển khai và kiểm thử local; **chưa nghiệm thu domain/LLM

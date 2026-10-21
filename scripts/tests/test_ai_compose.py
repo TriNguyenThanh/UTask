@@ -16,6 +16,108 @@ AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat")
 
 
 class AIComposeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_identity_auth_defaults_and_overrides_reach_every_process(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "IDENTITY_", "COMPOSE_", "UTASK_"))
+        }
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="test",
+            AI_JWT_ISSUER="",
+            AI_JWT_AUDIENCE="",
+            IDENTITY_JWT_ISSUER="",
+            IDENTITY_JWT_AUDIENCE="",
+            AI_CREDENTIAL_KEY="fixture-credential-key",
+            AI_IDENTITY_SERVICE_KEY="fixture-identity-service-key",
+            AI_IDENTITY_BASE_URL="",
+            AI_WORK_SERVICE_AUTH_ENABLED="",
+        )
+        cases = (
+            (
+                {},
+                "https://identity.utask.internal",
+                "utask-platform",
+                "http://identity-service:8000",
+            ),
+            (
+                {
+                    "IDENTITY_JWT_ISSUER": "https://identity.example.invalid",
+                    "IDENTITY_JWT_AUDIENCE": "identity-audience",
+                },
+                "https://identity.example.invalid",
+                "identity-audience",
+                "http://identity-service:8000",
+            ),
+            (
+                {
+                    "IDENTITY_JWT_ISSUER": "https://identity.example.invalid",
+                    "IDENTITY_JWT_AUDIENCE": "identity-audience",
+                    "AI_JWT_ISSUER": "https://override.example.invalid",
+                    "AI_JWT_AUDIENCE": "override-audience",
+                    "AI_IDENTITY_BASE_URL": "https://identity-api.example.invalid",
+                    "AI_WORK_SERVICE_AUTH_ENABLED": "true",
+                    "AI_WORK_SERVICE_KEY": "fixture-work-key",
+                },
+                "https://override.example.invalid",
+                "override-audience",
+                "https://identity-api.example.invalid",
+            ),
+        )
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for overrides, issuer, audience, identity_base in cases:
+                with self.subTest(compose=filename, overrides=overrides):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            filename,
+                            "--profile",
+                            "ai-service",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        env={**env, **overrides},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    for name in AI_PROCESSES:
+                        with self.subTest(process=name):
+                            runtime = services[name]["environment"]
+                            self.assertEqual(runtime["AI_JWT_ISSUER"], issuer)
+                            self.assertEqual(runtime["AI_JWT_AUDIENCE"], audience)
+                            self.assertNotIn("AI_JWT_PUBLIC_KEY", runtime)
+                            self.assertNotIn("AI_JWT_JWKS_URL", runtime)
+                            self.assertEqual(
+                                runtime["AI_WORK_SERVICE_AUTH_ENABLED"],
+                                overrides.get("AI_WORK_SERVICE_AUTH_ENABLED", "false"),
+                            )
+                            if "AI_WORK_SERVICE_KEY" in overrides:
+                                self.assertEqual(
+                                    runtime["AI_WORK_SERVICE_KEY"],
+                                    overrides["AI_WORK_SERVICE_KEY"],
+                                )
+                            self.assertEqual(
+                                runtime["AI_IDENTITY_BASE_URL"], identity_base
+                            )
+                            self.assertEqual(
+                                runtime["AI_IDENTITY_SERVICE_KEY"],
+                                "fixture-identity-service-key",
+                            )
+                            self.assertEqual(
+                                runtime["AI_CREDENTIAL_KEY"], "fixture-credential-key"
+                            )
+
     def test_ci_runs_compose_checks_when_either_configuration_test_changes(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         step = next(
@@ -115,6 +217,13 @@ class AIComposeTests(unittest.TestCase):
                         self.assertEqual(
                             services[name]["environment"][secret], f"${{{secret}:-}}"
                         )
+            for name in names:
+                self.assertNotIn("AI_JWT_PUBLIC_KEY", services[name]["environment"])
+                self.assertNotIn("AI_JWT_JWKS_URL", services[name]["environment"])
+                self.assertEqual(
+                    services[name]["environment"]["AI_WORK_SERVICE_AUTH_ENABLED"],
+                    "${AI_WORK_SERVICE_AUTH_ENABLED:-false}",
+                )
             beat = services[names[-1]]
             self.assertEqual(beat["image"], services[names[0]]["image"])
             self.assertEqual(beat["environment"], services[names[0]]["environment"])

@@ -16,7 +16,8 @@ paths:
     post:
       operationId: internal_ai_authorize
       x-implementation-status: planned
-      security: [{WorkBearer: [], WorkServiceKey: []}]
+      security: [{WorkBearer: []}]
+      x-temporary-service-key-optional: true
       description: >-
         Caller ai. Kiểm tra quyền đọc và intent phù hợp target tại thời điểm gọi.
         backlog_generation chỉ Project, task_decomposition chỉ Task,
@@ -48,7 +49,8 @@ paths:
     get:
       operationId: internal_ai_context
       x-implementation-status: planned
-      security: [{WorkBearer: [], WorkServiceKey: []}]
+      security: [{WorkBearer: []}]
+      x-temporary-service-key-optional: true
       description: >-
         Caller ai; tự kiểm quyền mỗi lần đọc. Project/Sprint hỗ trợ project, team,
         progress; Task hỗ trợ thêm task. Work tự resolve Project từ target.

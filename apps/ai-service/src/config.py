@@ -6,6 +6,7 @@ from string import Formatter
 from typing import Literal
 from urllib.parse import urlsplit
 
+from cryptography.fernet import Fernet
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,11 +63,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://localhost/ai_context_db"
     broker_url: str = "redis://localhost:6379/0"
     credential_key: SecretStr | None = None
-    jwt_public_key: str | None = None
-    jwt_jwks_url: str | None = None
-    jwt_issuer: str | None = None
-    jwt_audience: str | None = None
+    jwt_issuer: str = "https://identity.utask.internal"
+    jwt_audience: str = "utask-platform"
     jwt_algorithm: str = "RS256"
+    identity_base_url: str = "http://identity-service:8000"
+    identity_service_key: SecretStr | None = None
     model: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
     sync_timeout_seconds: float = Field(default=10, gt=0, le=10)
     workflow_timeout_seconds: float = Field(default=30, gt=0, le=30)
@@ -93,22 +94,40 @@ class Settings(BaseSettings):
     authorization_urls: dict[str, str] = Field(default_factory=dict)
     context_urls: dict[str, str] = Field(default_factory=dict)
     work_service_key: SecretStr | None = None
+    work_service_auth_enabled: bool = False
     integration_service_key: SecretStr | None = None
     github_context_enabled: bool = False
 
     @model_validator(mode="after")
     def safe_configuration(self) -> "Settings":
-        if self.jwt_algorithm not in {"RS256", "ES256"}:
-            raise ValueError("Chỉ hỗ trợ JWT ký bất đối xứng RS256 hoặc ES256")
-        if self.jwt_public_key and self.jwt_jwks_url:
-            raise ValueError("Chọn public key hoặc JWKS, không dùng cả hai")
+        if self.jwt_algorithm != "RS256":
+            raise ValueError("Chỉ hỗ trợ access token RS256 như Work Service")
+        if not valid_internal_url(self.identity_base_url) or "{" in self.identity_base_url:
+            raise ValueError("AI_IDENTITY_BASE_URL không hợp lệ")
         if self.mock_test and self.environment not in {"development", "test"}:
             raise ValueError("MOCK_TEST chỉ được bật trong development/test")
         templates = [*self.authorization_urls.values(), *self.context_urls.values()]
         if any(not valid_internal_url(template) for template in templates):
             raise ValueError("URL nội bộ hoặc placeholder không hợp lệ")
         if self.environment in {"staging", "production"}:
-            if not self.work_service_key or not self.work_service_key.get_secret_value().strip():
+            if not self.jwt_issuer or not self.jwt_issuer.strip():
+                raise ValueError("AI_JWT_ISSUER là bắt buộc")
+            if not self.jwt_audience or not self.jwt_audience.strip():
+                raise ValueError("AI_JWT_AUDIENCE là bắt buộc")
+            if (
+                not self.identity_service_key
+                or not self.identity_service_key.get_secret_value().strip()
+            ):
+                raise ValueError("AI_IDENTITY_SERVICE_KEY là bắt buộc")
+            if not self.credential_key:
+                raise ValueError("AI_CREDENTIAL_KEY là bắt buộc")
+            try:
+                Fernet(self.credential_key.get_secret_value().encode())
+            except (ValueError, TypeError) as error:
+                raise ValueError("AI_CREDENTIAL_KEY phải là khóa Fernet hợp lệ") from error
+            if self.work_service_auth_enabled and (
+                not self.work_service_key or not self.work_service_key.get_secret_value().strip()
+            ):
                 raise ValueError("AI_WORK_SERVICE_KEY là bắt buộc")
             if not {"project", "task", "sprint"} <= self.authorization_urls.keys():
                 raise ValueError("Thiếu URL authorize cho project/task/sprint")

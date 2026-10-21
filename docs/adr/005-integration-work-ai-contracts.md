@@ -28,6 +28,16 @@ không được dùng để tự chấp nhận operation mà Work chưa lưu.
 - Internal path bị chặn tại gateway. Service key hoặc Bearer riêng lẻ không cấp
   quyền Project.
 
+### Ngoại lệ tạm thời AI→Work — 22/10/2026
+
+Theo yêu cầu triển khai hiện tại, tạm bỏ service key riêng cho hai lời gọi
+AI→Work authorize/context (`AI_WORK_SERVICE_AUTH_ENABLED=false`). Bearer actor,
+xác thực JWT/session theo Work, kiểm tra intent/target và quyền thành viên
+hoặc teacher vẫn bắt buộc. Không áp ngoại lệ cho Integration→Work,
+AI→Integration hay AI→Identity. Khi bật lại flag, AI cần gửi Work caller key.
+Provider AI context của Work vẫn **Chưa triển khai**; thay đổi phía consumer
+không chứng minh kiểm tra role ở runtime Work đã hoạt động.
+
 ### Kết nối Project
 
 Work gọi prepare với `operation_id`, action `CONNECT`/`DISCONNECT` và expected

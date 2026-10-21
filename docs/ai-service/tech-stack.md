@@ -9,7 +9,7 @@ và [ADR-002](../adr/002-ai-request-pipeline.md).
 | API | Python 3.12, FastAPI/Uvicorn, Pydantic v2 |
 | Workflow/agent | Google ADK custom BaseAgent + LlmAgent + Runner |
 | Provider | Google ADK LiteLLM adapter; custom OpenAI-compatible endpoint qua `AI_MODEL`, `AI_LLM_API_BASE`, `AI_LLM_API_KEY` |
-| Identity | PyJWT RS256/ES256, issuer/audience, public key/JWKS |
+| Identity | PyJWT RS256 như Work, issuer/audience, GET JWKS Identity mỗi lần và kiểm tra session |
 | Context | HTTPX, REST adapter + domain tools + filter/freshness/size |
 | Job | Celery + Redis broker; worker và dispatcher riêng |
 | Persistence | PostgreSQL riêng, SQLAlchemy + Psycopg, Alembic migration, completion inbox |
