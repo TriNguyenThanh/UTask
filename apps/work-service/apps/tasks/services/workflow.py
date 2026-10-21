@@ -206,12 +206,22 @@ def bulk_transition(*, project, actor, task_ids, target_state):
         project.save(update_fields=["board_revision"])
         loaded = task_queryset().filter(pk__in=[task.pk for task in changed]).order_by("id")
         data = {row["id"]: row for row in serialize_tasks(loaded)}
+        active_users = {
+            str(value)
+            for value in project.members.filter(status="ACTIVE").values_list("user_id", flat=True)
+        }
         emit_events(
             project,
             [
                 {
                     "event_type": "task.transitioned",
-                    "data": data[str(task.pk)],
+                    "data": {
+                        **data[str(task.pk)],
+                        "actor_user_id": str(actor.id),
+                        "recipient_ids": sorted(
+                            set(data[str(task.pk)]["assignee_ids"]) & active_users - {str(actor.id)}
+                        ),
+                    },
                     "aggregate_type": "task",
                     "aggregate_id": task.pk,
                     "entity_version": task.version,

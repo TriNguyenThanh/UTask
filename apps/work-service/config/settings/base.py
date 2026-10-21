@@ -181,3 +181,5 @@ SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "MemberStatusEnum": "apps.projects.models.ProjectMember.Status",
     "ScopeActionEnum": ["ADD", "REMOVE"],
 }
+
+NOTIFICATION_SERVICE_TOKEN = os.environ.get("NOTIFICATION_SERVICE_TOKEN", "")

@@ -13,6 +13,7 @@ from apps.tasks.permissions import require_member_fields, require_task_writer
 from apps.tasks.queries import task_queryset
 from apps.tasks.serializers.presentation import serialize_tasks
 from apps.tasks.services.creation import validate_links
+from apps.tasks.services.notification_events import emit_assignment, notification_task_data
 from common.content import clean_content
 from common.errors import WorkError
 from common.responses import success_response
@@ -54,6 +55,8 @@ def persist_task(project, actor, task, changes, *, event_type="task.updated", ve
     project.board_revision += 1
     project.save(update_fields=["board_revision"])
     data = serialize_tasks(task_queryset().get(pk=task.pk), many=False)
+    if event_type == "task.transitioned":
+        data = notification_task_data(task, actor.id, data)
     emit_event(
         project,
         event_type,
@@ -80,6 +83,7 @@ def update_task(actor, task_id, payload):
             "label_ids": changes.get("label_ids", []),
         }
         _, assignees, labels = validate_links(project, links)
+        newly_assigned = set()
         junction_changed = False
         for field, manager, model, key, values in [
             ("assignee_ids", task.assignments, TaskAssignment, "user_id", assignees),
@@ -90,6 +94,8 @@ def update_task(actor, task_id, payload):
             changes.pop(field)
             current = set(manager.values_list(key, flat=True))
             if values != current:
+                if field == "assignee_ids":
+                    newly_assigned = values - current
                 manager.filter(**{key + "__in": current - values}).delete()
                 model.objects.bulk_create(
                     [model(task=task, **{key: value}) for value in sorted(values - current)]
@@ -104,6 +110,7 @@ def update_task(actor, task_id, payload):
         if junction_changed:
             changes["updated_at"] = timezone.now()
         persist_task(project, actor, task, changes)
+        emit_assignment(project, task, actor.id, newly_assigned)
         return success_response(
             serialize_tasks(task_queryset().get(pk=task.pk), many=False),
             message="Đã cập nhật công việc."
