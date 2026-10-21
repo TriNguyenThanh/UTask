@@ -11,6 +11,12 @@ một mẫu [.env.example](../../.env.example). Mỗi máy có `.env` riêng, kh
 - `classroom-service.env`: cấu hình riêng Classroom Service, gồm
   `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
 
+Phần Work kết nối Integration có URL, key hai chiều, cờ nhận lệnh và consumer
+riêng trong `infra/env/work-service.env`, cùng nguồn `.env` như các biến khác.
+Mặc định adapter unavailable và cờ tắt; cách ghép key, bật profile và recreate
+process Work nằm tại [hướng dẫn Work GitHub](../project-service/github-integration.md#cấu-hình-và-khởi-động).
+Không cần thêm giá trị cố định vào Compose hoặc sửa nghiệp vụ service khác.
+
 ## Web gọi API và CORS
 
 Nginx chỉ cho origin Web staging `https://utask.u-code.dev` và các origin local
