@@ -84,7 +84,7 @@ def test_missing_or_unsupported_provider_configuration_fails_closed(overrides, r
         ("https://llm.example.test/v1?token=secret", "development"),
         ("https://llm.example.test:invalid/v1", "development"),
         ("https://llm example.test/v1", "development"),
-        ("http://localhost:1234/v1", "production"),
+        ("https://llm.example.test/v1#fragment", "staging"),
     ],
 )
 def test_custom_provider_endpoint_must_be_safe(api_base, environment):
@@ -93,7 +93,9 @@ def test_custom_provider_endpoint_must_be_safe(api_base, environment):
     assert error.value.details == {"reason": "AI_LLM_API_BASE_INVALID"}
 
 
-def test_development_can_use_local_http_endpoint(monkeypatch):
+@pytest.mark.parametrize("environment", ["development", "test", "staging", "production"])
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_provider_accepts_http_and_https_in_all_environments(monkeypatch, environment, scheme):
     captured = {}
 
     class FakeLiteLlm:
@@ -101,11 +103,13 @@ def test_development_can_use_local_http_endpoint(monkeypatch):
             captured.update(kwargs)
 
     monkeypatch.setattr("infrastructure.providers.LiteLlm", FakeLiteLlm)
-    build_litellm_model(model_settings(llm_api_base="http://localhost:1234/v1"))
-    assert captured["api_base"] == "http://localhost:1234/v1"
+    endpoint = f"{scheme}://localhost:1234/v1"
+    build_litellm_model(model_settings(llm_api_base=endpoint, environment=environment))
+    assert captured["api_base"] == endpoint
 
 
-def test_development_can_use_http_endpoint_on_host_from_docker(monkeypatch):
+@pytest.mark.parametrize("environment", ["development", "test", "staging", "production"])
+def test_provider_accepts_docker_host_http_in_all_environments(monkeypatch, environment):
     captured = {}
 
     class FakeLiteLlm:
@@ -113,7 +117,9 @@ def test_development_can_use_http_endpoint_on_host_from_docker(monkeypatch):
             captured.update(kwargs)
 
     monkeypatch.setattr("infrastructure.providers.LiteLlm", FakeLiteLlm)
-    build_litellm_model(model_settings(llm_api_base="http://host.docker.internal:8317/v1"))
+    build_litellm_model(
+        model_settings(llm_api_base="http://host.docker.internal:8317/v1", environment=environment)
+    )
     assert captured["api_base"] == "http://host.docker.internal:8317/v1"
 
 
