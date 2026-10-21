@@ -1,5 +1,18 @@
 # Checkpoint Notification Service — 22/10/2026
 
+## Cập nhật cấu hình database sau bàn giao
+
+Theo yêu cầu dùng giống các service hiện có, Notification đã chuyển sang
+`POSTGRES_*` dùng chung như Identity/Work/Classroom; vẫn dùng database riêng.
+Bootstrap chỉ tạo database, đã bỏ kiểm tra username khác quản trị, tạo role,
+đổi owner và thu hồi quyền riêng cho Notification. Các biến
+`NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD` cũ bị bỏ qua. Xem cấu hình
+hiện hành tại [operations](operations.md).
+
+Bằng chứng về role riêng bên dưới thuộc lượt triển khai ban đầu, trước thay
+đổi này; không mô tả credential đang dùng. Không tự thay role/ACL trong volume
+cũ và không xóa dữ liệu khi đổi cấu hình.
+
 ## Kết luận bàn giao
 
 **Trạng thái tổng thể: Một phần.** Backend, producer Identity/Work, API nội bộ,
@@ -82,7 +95,7 @@ Không coi tag này là image đã phát hành hoặc service đang chạy trên
 
 1. Đội Identity/Work deploy provider đã có, cấu hình credential và xác minh
    contacts, session-status, resolve qua HTTP thật trên mạng backend.
-2. Người vận hành chuẩn bị database/role, topic/ACL Kafka, Redis, key ring và
+2. Người vận hành chuẩn bị database/credential chung, topic/ACL Kafka, Redis, key ring và
    Gmail; chạy migration trước API/worker/Beat/consumer theo [runbook](operations.md).
 3. Nghiệm thu bằng user/task/comment thử: thao tác domain thật → outbox →
    Kafka → Notification DB → in-app/email, rồi kiểm quyền bị thu hồi và giao lại event.

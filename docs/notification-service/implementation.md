@@ -154,6 +154,15 @@ Trước khi triển khai, chốt chủ sở hữu dữ liệu, ý nghĩa ngư�
 
 Nếu event mới cần đổi ranh giới service, quyền dữ liệu hoặc luồng đồng bộ/bất đồng bộ, phải có quyết định kiến trúc trong tài liệu/ADR hiện hành trước khi coi là mục tiêu triển khai.
 
+## Credential database hiện hành
+
+Notification dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` chung từ `database.env`,
+như Identity/Work/Classroom; database nghiệp vụ vẫn tách bằng
+`NOTIFICATION_DB_NAME` → `DATABASE_NAME`. Không cung cấp hoặc kiểm tra
+`NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD` riêng. Cấu hình này theo yêu
+cầu đơn giản hóa hiện tại; không suy ra đã tách quyền PostgreSQL theo service.
+Chạy Python ngoài Compose dùng `DATABASE_NAME` và `POSTGRES_*` tương tự Work.
+
 ## Triển khai theo thứ tự
 
 1. Chuẩn bị contract/schema, outbox và resolver; kiểm tra ACL/topic, network backend và cấu hình secrets theo [runbook](operations.md).
