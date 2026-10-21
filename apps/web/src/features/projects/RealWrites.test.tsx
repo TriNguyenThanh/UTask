@@ -147,6 +147,8 @@ describe("Create issue", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Tạo Issue" }, { timeout: 5000 }));
     const dialog = await screen.findByRole("dialog");
+    // Chỉ kiểm khóa của lệnh tạo: không thêm vào Sprint đang chạy.
+    await user.click(within(dialog).getByLabelText("Thêm vào Sprint đang chạy (Sprint 1)"));
     await user.type(within(dialog).getByLabelText("Tiêu đề"), "Việc mới");
     await user.click(within(dialog).getByRole("button", { name: "Tạo Issue" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Không thể cập nhật issue");
@@ -162,6 +164,69 @@ describe("Create issue", () => {
     setup("/projects/project-1/board", { tasks: freshTasks() }, memberTestSession);
     await screen.findByText("Thiết kế đăng nhập");
     expect(screen.queryByRole("button", { name: "Tạo Issue" })).not.toBeInTheDocument();
+  });
+
+  it("adds a new issue to the active sprint with the reason, so it shows on the board", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup("/projects/project-1/board", { tasks: freshTasks() });
+    await user.click(await screen.findByRole("button", { name: "Tạo Issue" }, { timeout: 5000 }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Tiêu đề"), "Việc phát sinh");
+    await user.type(within(dialog).getByLabelText("Lý do thêm vào Sprint"), "Khách hàng yêu cầu gấp");
+    await user.click(within(dialog).getByRole("button", { name: "Tạo Issue" }));
+
+    await waitFor(() => expect(writes(calls)).toHaveLength(2));
+    expect(writes(calls)[0].path).toBe("/projects/project-1/tasks/");
+    expect(writes(calls)[1]).toMatchObject({
+      path: "/sprints/s1/tasks/",
+      body: { action: "ADD", scope_change_reason: "Khách hàng yêu cầu gấp" },
+    });
+    expect(await screen.findByText(/trong Sprint 1\.$/)).toBeInTheDocument();
+    expect(await within(await screen.findByRole("region", { name: "To Do" })).findByText("Việc phát sinh")).toBeInTheDocument();
+  });
+
+  it("asks for a reason before adding to the active sprint and sends nothing without it", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup("/projects/project-1/board", { tasks: freshTasks() });
+    await user.click(await screen.findByRole("button", { name: "Tạo Issue" }, { timeout: 5000 }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Tiêu đề"), "Việc phát sinh");
+    await user.click(within(dialog).getByRole("button", { name: "Tạo Issue" }));
+
+    expect(await within(dialog).findByText("Nhập lý do thêm issue vào Sprint đang chạy.")).toBeInTheDocument();
+    expect(writes(calls)).toHaveLength(0);
+  });
+
+  it("keeps the created issue and does not create it again when adding to the sprint fails", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup("/projects/project-1/board", { tasks: freshTasks() });
+    server.use(
+      http.post("/api/work/sprints/:sprintId/tasks/", () => envelopeError(500, "INTERNAL_ERROR", "Lỗi máy chủ"), { once: true }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Tạo Issue" }, { timeout: 5000 }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Tiêu đề"), "Việc phát sinh");
+    await user.type(within(dialog).getByLabelText("Lý do thêm vào Sprint"), "Gấp");
+    await user.click(within(dialog).getByRole("button", { name: "Tạo Issue" }));
+
+    expect(await screen.findByText(/chưa thêm được vào Sprint.*Issue đang ở Product Backlog\./)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(writes(calls).filter((call) => call.path === "/projects/project-1/tasks/")).toHaveLength(1);
+  });
+});
+
+describe("Board with an empty active sprint", () => {
+  it("says the sprint has no issues instead of blaming filters, and points to the backlog", async () => {
+    setup("/projects/project-1/board", { tasks: freshTasks(), sprintTasks: { s1: [] } });
+    expect(await screen.findByText("Sprint chưa có issue", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(/Bấm "Tạo Issue" để tạo issue ngay trong Sprint/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Mở Backlog" })).toHaveAttribute("href", "/projects/project-1/backlog");
+    expect(screen.queryByText("Không có issue khớp bộ lọc")).not.toBeInTheDocument();
+  });
+
+  it("does not tell a member to create issues", async () => {
+    setup("/projects/project-1/board", { tasks: freshTasks(), sprintTasks: { s1: [] } }, memberTestSession);
+    expect(await screen.findByText(/Thêm issue vào Sprint từ trang Backlog\./, {}, { timeout: 5000 })).toBeInTheDocument();
   });
 });
 

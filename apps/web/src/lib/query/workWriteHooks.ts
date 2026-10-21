@@ -192,6 +192,13 @@ export function useCreateTask(projectId: string) {
     createTask(client, projectId, input));
 }
 
+/** Thêm một task (thường vừa tạo) vào sprint; sprint đang chạy cần `reason` (`scope_change_reason`). */
+export function useAddTaskToSprint() {
+  const client = useApiClient();
+  return useRefetchingMutation(({ taskId, sprintId, reason }: { taskId: string; sprintId: string; reason?: string }) =>
+    moveToSprint(client, taskId, null, sprintId, reason));
+}
+
 export function useCreateSubtask(parentTaskId: string) {
   const client = useApiClient();
   return useRefetchingMutation((input: TaskFieldsInput & { title: string; idempotencyKey: string }) =>
