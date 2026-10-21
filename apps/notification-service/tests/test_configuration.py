@@ -151,3 +151,46 @@ def test_other_smtp_settings_preserve_password_exactly(monkeypatch):
     monkeypatch.setenv("SMTP_PASSWORD", " abcd efgh\tijkl\u00a0mnop ")
     loaded = run_path(str(Path(__file__).resolve().parents[1] / "config/settings/base.py"))
     assert loaded["SMTP_PASSWORD"] == " abcd efgh\tijkl\u00a0mnop "
+
+
+def test_database_settings_use_shared_postgres_credentials(monkeypatch):
+    from pathlib import Path
+    from runpy import run_path
+
+    environment = {
+        "DATABASE_NAME": "notification_shared_test",
+        "POSTGRES_USER": "shared_user",
+        "POSTGRES_PASSWORD": "shared-password",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PORT": "5433",
+        "NOTIFICATION_DB_USER": "ignored_user",
+        "NOTIFICATION_DB_PASSWORD": "ignored-password",
+    }
+    for key, value in environment.items():
+        monkeypatch.setenv(key, value)
+    database = run_path(str(Path(__file__).resolve().parents[1] / "config/settings/base.py"))[
+        "DATABASES"
+    ]["default"]
+    assert {key: database[key] for key in ("NAME", "USER", "PASSWORD", "HOST", "PORT")} == {
+        "NAME": "notification_shared_test",
+        "USER": "shared_user",
+        "PASSWORD": "shared-password",
+        "HOST": "postgres",
+        "PORT": "5433",
+    }
+
+
+def test_legacy_credentials_do_not_replace_missing_shared_credentials(monkeypatch):
+    from pathlib import Path
+    from runpy import run_path
+
+    monkeypatch.delenv("POSTGRES_USER", raising=False)
+    monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+    monkeypatch.setenv("NOTIFICATION_DB_USER", "legacy_user")
+    monkeypatch.setenv("NOTIFICATION_DB_PASSWORD", "legacy-password")
+    config = valid()
+    config["DATABASES"] = run_path(
+        str(Path(__file__).resolve().parents[1] / "config/settings/base.py")
+    )["DATABASES"]
+    with pytest.raises(ImproperlyConfigured, match="database credentials"):
+        validate_production(config)

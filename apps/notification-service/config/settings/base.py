@@ -17,11 +17,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("NOTIFICATION_DB_NAME", "notification_db"),
-        "USER": os.environ.get("NOTIFICATION_DB_USER", ""),
-        "PASSWORD": os.environ.get("NOTIFICATION_DB_PASSWORD", ""),
-        "HOST": os.environ.get("NOTIFICATION_DB_HOST", "localhost"),
-        "PORT": os.environ.get("NOTIFICATION_DB_PORT", "5432"),
+        "NAME": os.environ.get("DATABASE_NAME", "notification_db"),
+        "USER": os.environ.get("POSTGRES_USER", ""),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
         "CONN_MAX_AGE": 0,
         "OPTIONS": {
             "connect_timeout": 5,
