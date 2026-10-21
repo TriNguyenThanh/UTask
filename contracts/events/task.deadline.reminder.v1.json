@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "task.deadline.reminder v1",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "const": "task.deadline.reminder"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "producer": {
+      "const": "work-service"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "due_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "deadline_revision": {
+          "type": "string"
+        },
+        "reminder_window": {
+          "type": "string",
+          "format": "date"
+        },
+        "recipient_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "uniqueItems": true
+        },
+        "intent_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "task_id",
+        "due_date",
+        "deadline_revision",
+        "reminder_window",
+        "recipient_ids",
+        "intent_id"
+      ],
+      "additionalProperties": true
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entity_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "project_sequence": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "aggregate_id",
+    "occurred_at",
+    "trace_id",
+    "producer",
+    "data",
+    "project_id",
+    "entity_version",
+    "project_sequence"
+  ],
+  "additionalProperties": false
+}

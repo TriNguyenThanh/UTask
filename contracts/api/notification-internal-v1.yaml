@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: UTask Notification internal dependencies
+  version: 1.0.0
+  description: Chỉ mạng backend. Không công bố qua gateway. Work kiểm quyền hiện tại;
+    không dùng kết quả như cấp quyền cho service khác.
+security:
+- ServiceToken: []
+paths:
+  /api/v1/internal/users/notification-contacts:
+    post:
+      operationId: notificationContacts
+      servers:
+      - url: http://identity-service:8000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - user_ids
+              properties:
+                user_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: &id001
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Thành công; user không tồn tại/đã xóa không có trong danh sách
+            contacts; resolve không đủ quyền trả eligible=false.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - users
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - user_id
+                      - email
+                      - display_name
+                      - account_status
+                      properties:
+                        user_id: *id001
+                        email:
+                          type: string
+                          format: email
+                        display_name:
+                          type: string
+                        account_status:
+                          type: string
+        '400':
+          description: Input không hợp lệ
+        '403':
+          description: Không có service token đúng
+  /api/v1/internal/notifications/resolve:
+    post:
+      operationId: resolveNotification
+      servers:
+      - url: http://work-service:8000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - &id002
+                type: object
+                additionalProperties: false
+                required:
+                - user_id
+                - event_type
+                - project_id
+                - data
+                properties:
+                  user_id: *id001
+                  project_id: *id001
+                  event_type:
+                    type: string
+                    enum:
+                    - task.assigned
+                    - task.transitioned
+                    - task.deadline.reminder
+                    - comment.mentions.added
+                    - teacher.feedback.added
+                  data:
+                    type: object
+                    additionalProperties: true
+              - type: object
+                additionalProperties: false
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    items: *id002
+      responses:
+        '200':
+          description: Thành công; user không tồn tại/đã xóa không có trong danh sách
+            contacts; resolve không đủ quyền trả eligible=false.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - &id003
+                  type: object
+                  required:
+                  - eligible
+                  - title
+                  - body
+                  - target
+                  properties:
+                    eligible:
+                      type: boolean
+                    title:
+                      type: string
+                    body:
+                      type: string
+                    target:
+                      type: object
+                      nullable: true
+                      additionalProperties: true
+                - type: object
+                  required:
+                  - results
+                  properties:
+                    results:
+                      type: array
+                      items: *id003
+        '400':
+          description: Input không hợp lệ
+        '403':
+          description: Không có service token đúng
+components:
+  securitySchemes:
+    ServiceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token

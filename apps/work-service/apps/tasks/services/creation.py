@@ -152,6 +152,21 @@ def create_tasks_locked(project, actor, items, *, source="MANUAL", task_ids=None
                 "entity_version": task.version,
             }
             for task in tasks
+        ]
+        + [
+            {
+                "event_type": "task.assigned",
+                "data": {
+                    "task_id": str(task.pk),
+                    "actor_user_id": str(actor.id),
+                    "recipient_ids": [str(value) for value in sorted(links[1] - {actor.id})],
+                },
+                "aggregate_type": "task",
+                "aggregate_id": task.pk,
+                "entity_version": task.version,
+            }
+            for task, (_, _, links) in zip(tasks, prepared, strict=True)
+            if links[1] - {actor.id}
         ],
     )
     project.board_revision += 1

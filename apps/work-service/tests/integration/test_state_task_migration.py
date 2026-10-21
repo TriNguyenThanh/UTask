@@ -11,13 +11,14 @@ from apps.projects.services.locking import lock_project
 from apps.tasks.models import Task, TaskAssignment, TaskLabel
 from apps.tasks.services.workflow import bulk_transition
 from common.authentication import Actor
+from tests.event_contracts import assert_event_contract
 from tests.fixtures.transactions import effect_state
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 
 @pytest.mark.parametrize("count", [1, 10, 50])
-def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api, count):
+def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api, count, actors):
     leader, _, create = task_api
     first = create()
     source = State.objects.get(project_id=first["project_id"], group="REVIEW")
@@ -73,10 +74,15 @@ def test_state_delete_migrates_tasks_with_batch_reads_and_exact_effects(task_api
         assert saved.state_id == target.pk and saved.completed_at is not None
         assert saved.version == 2 and saved.sort_order == index * 10000
         event = events[index - 1]
+        assert_event_contract(event)
         assert event.event_type == "task.transitioned"
         assert event.aggregate_id == str(saved.pk)
         assert event.data["entity_version"] == saved.version
-        assert event.data["data"] == leader.get(f"/tasks/{saved.pk}/").json()["data"]
+        assert event.data["data"] == {
+            **leader.get(f"/tasks/{saved.pk}/").json()["data"],
+            "actor_user_id": str(actors["leader"]),
+            "recipient_ids": [str(actors["member"])],
+        }
         history = {
             activity.field: activity
             for activity in Activity.objects.filter(task=saved, verb="updated")

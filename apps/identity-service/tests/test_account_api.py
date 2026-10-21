@@ -30,27 +30,42 @@ def test_batch_invalid_uuid_has_vietnamese_issue_and_preserves_item_path(
 
 def test_profile_update_trigger_event_and_noop(authenticated_account):
     user, client = authenticated_account()
+    create_user(student_id="TAKEN-1")
     changes = {
         "first_name": "An",
         "last_name": "Nguyễn",
+        "student_id": " sv-2026-001 ",
         "bio": "Django",
         "preferences": {"theme": "system"},
     }
     response = client.patch("/users/me", changes, format="json")
     assert response.status_code == 200
     assert response.json()["data"]["display_name"] == "Nguyễn An"
+    assert response.json()["data"]["student_id"] == "SV-2026-001"
+    user.refresh_from_db()
+    assert user.student_id == "SV-2026-001"
     event = OutboxEvent.objects.get(event_type="identity.user.updated")
     assert event.data["data"]["display_name"] == "Nguyễn An"
+    assert event.data["data"]["student_id"] == "SV-2026-001"
     assert "github_username" in event.data["data"]
     assert client.patch("/users/me", changes, format="json").status_code == 200
     assert OutboxEvent.objects.filter(event_type="identity.user.updated").count() == 1
     assert AuditLog.objects.filter(action="PROFILE_UPDATED").count() == 1
+    conflict = client.patch("/users/me", {"student_id": " taken-1 "}, format="json")
+    assert conflict.status_code == 400
+    assert conflict.json()["error"]["details"] == [
+        {"field": "student_id", "issue": "MSSV này đã được gán cho tài khoản khác."}
+    ]
+    cleared = client.patch("/users/me", {"student_id": " "}, format="json")
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["student_id"] is None
+    assert OutboxEvent.objects.filter(event_type="identity.user.updated").count() == 2
+    assert AuditLog.objects.filter(action="PROFILE_UPDATED").count() == 2
 
 
 @pytest.mark.parametrize(
     "field,status,code",
     [
-        ("student_id", 403, "STUDENT_ID_IMMUTABLE"),
         ("email", 400, "VALIDATION_ERROR"),
         ("roles", 400, "VALIDATION_ERROR"),
     ],

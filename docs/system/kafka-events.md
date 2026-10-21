@@ -53,3 +53,13 @@ mới trước khi có version/mapping chuyển đổi. Producer/consumer chưa 
 `ai.completed` là ví dụ cũ, không tự coi là alias cho `ai.analysis.completed`.
 Event kết quả AI chưa có schema được chốt; không tạo schema giả trong lần
 cập nhật tài liệu này. AI API v1 vẫn chưa phát event kết quả.
+
+## Notification Identity/Work đã triển khai trong source
+
+Consumer Notification nhận ba sự kiện mail Identity và năm loại sự kiện Work
+được chốt tại [Notification](../notification-service/README.md).
+`task.assigned` là sự kiện bổ sung người được giao; tên nhắc hạn đang chạy là
+`task.deadline.reminder`, không phải ví dụ `task.deadline.approaching`.
+Schema chuẩn nằm trong [contracts/events](../../contracts/events/README.md).
+Kafka commit sau inbox durable, gửi mail qua Celery/Redis riêng. SMTP Gmail thật đã ACK thư thử; staging và thư tới Inbox người nhận chưa xác minh.
+Không suy từ producer ACK rằng thư đã tới người nhận.

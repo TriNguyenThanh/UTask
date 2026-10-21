@@ -50,6 +50,7 @@ export const MOCK_ACTIVATION_KEY = "mock-activation-key";
 export const MOCK_RESET_TOKEN = "mock-reset-token";
 
 const PROFILE_FIELDS = new Set([
+  "student_id",
   "first_name",
   "last_name",
   "phone_number",
@@ -247,19 +248,35 @@ export function createAuthHandlers(
         return fail(401, "AUTHENTICATION_REQUIRED", "Yêu cầu thông tin xác thực để thực hiện thao tác.");
       }
       const body = await request.json() as Record<string, unknown>;
-      if ("student_id" in body) {
-        return fail(403, "STUDENT_ID_IMMUTABLE", "Không được tự sửa MSSV.");
-      }
       const unknown = Object.keys(body).filter((key) => !PROFILE_FIELDS.has(key));
       if (unknown.length > 0) {
         return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
           unknown.map((field) => ({ field, issue: "Unknown field." })));
       }
-      const updated = { ...user, ...body };
+      const normalizedStudentId = "student_id" in body
+        ? typeof body.student_id === "string"
+          ? body.student_id.trim().toUpperCase() || null
+          : body.student_id
+        : user.student_id;
+      if (normalizedStudentId !== null && typeof normalizedStudentId !== "string") {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "student_id", issue: "MSSV không hợp lệ." }]);
+      }
+      if (
+        normalizedStudentId &&
+        Object.values(db.authUsersById).some(
+          (candidate) => candidate.id !== user.id && candidate.student_id === normalizedStudentId,
+        )
+      ) {
+        return fail(400, "VALIDATION_ERROR", "Dữ liệu đầu vào không hợp lệ.",
+          [{ field: "student_id", issue: "MSSV này đã được gán cho tài khoản khác." }]);
+      }
+      const updated = { ...user, ...body, student_id: normalizedStudentId };
       updated.display_name = `${updated.last_name} ${updated.first_name}`.trim();
       db.authUsersById[user.id] = updated;
       return ok({
         display_name: updated.display_name,
+        student_id: updated.student_id,
         phone_number: updated.phone_number,
         bio: updated.bio,
         preferences: updated.preferences,

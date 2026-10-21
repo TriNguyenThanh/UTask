@@ -3,7 +3,10 @@
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from accounts.views.notification_contacts import NotificationContactsView
+
 urlpatterns = [
+    path("api/v1/internal/users/notification-contacts", NotificationContactsView.as_view()),
     path("openapi/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "docs/",

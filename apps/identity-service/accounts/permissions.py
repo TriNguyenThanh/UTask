@@ -33,7 +33,11 @@ class ServiceKeyPermission(BasePermission):
         supplied = request.headers.get("X-Service-Key", "").encode()
         accepted = False
         for caller in view.service_callers:
-            expected = settings.IDENTITY_SERVICE_KEYS.get(caller, "")
+            expected = (
+                getattr(settings, "IDENTITY_NOTIFICATION_SERVICE_KEY", "")
+                if caller == "notification"
+                else settings.IDENTITY_SERVICE_KEYS.get(caller, "")
+            )
             if isinstance(expected, str) and expected:
                 accepted |= secrets.compare_digest(supplied, expected.encode())
         if not accepted:

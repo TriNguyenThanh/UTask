@@ -28,4 +28,5 @@ DEFAULT_OPERATIONS = [
     ("/api/v1/internal/users/{user_id}/resend-activation", "post", 200),
     ("/api/v1/internal/auth/session-status", "post", 200),
     ("/api/v1/internal/users/{user_id}/oauth/GITHUB", "get", 200),
+    ("/api/v1/internal/users/notification-contacts", "post", 200),
 ]

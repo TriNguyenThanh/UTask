@@ -8,6 +8,7 @@ from apps.collaboration.models import Attachment, Comment, CommentMention
 from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
 from apps.projects.models import Project
 from apps.tasks.models import Epic, Label, Task
+from tests.event_contracts import assert_event_contract
 from tests.fixtures.project_api import foreign_scope as foreign_scope
 from tests.fixtures.storage import storage as storage
 from tests.fixtures.transactions import effect_state
@@ -403,6 +404,8 @@ def test_project_teacher_feedback_is_readable_without_mutating_task(task_api, cl
     ] == [data]
     assert teacher.get(f"/tasks/{task['id']}/comments/").json()["data"] == []
     feedback = OutboxEvent.objects.get(event_type="teacher.feedback.added")
+    assert_event_contract(feedback)
+    assert_event_contract(OutboxEvent.objects.get(event_type="comment.mentions.added"))
     assert feedback.data["data"]["id"] == data["id"]
     assert feedback.data["data"]["task_id"] is None
     assert feedback.data["data"]["scope_source_version"] == 1

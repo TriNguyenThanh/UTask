@@ -27,7 +27,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import type {
-  NotificationActionTarget,
   NotificationCategory,
   StudentNotification,
 } from "@/features/notifications/types";
@@ -35,6 +34,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
+  useUnreadNotificationCount,
 } from "@/lib/query/studentFlowHooks";
 import { formatRelative, targetUrl } from "@/features/notifications/lib/format";
 import { cn } from "@/lib/utils";
@@ -87,6 +87,7 @@ export function NotificationsPage() {
   const { user } = useAuth();
   const teacherOnly = canUseTeacherSpace(user) && !isStudentAccount(user);
   const notificationsQuery = useNotifications();
+  const unreadQuery = useUnreadNotificationCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
@@ -98,7 +99,7 @@ export function NotificationsPage() {
   const now = useMemo(() => new Date(), []);
 
   const notifications = notificationsQuery.data ?? [];
-  const unreadCount = notifications.filter((item) => !item.read).length;
+  const unreadCount = unreadQuery.data?.count ?? notifications.filter((item) => !item.read).length;
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -257,6 +258,13 @@ export function NotificationsPage() {
                   "flex cursor-pointer items-start gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-accent",
                   !item.read && "bg-primary/5",
                 )}
+                tabIndex={item.read ? undefined : 0}
+                onKeyDown={(event) => {
+                  if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    handleRowClick(item);
+                  }
+                }}
                 onClick={() => handleRowClick(item)}
                 aria-label={item.read ? "Thông báo đã đọc" : "Thông báo chưa đọc"}
               >
@@ -317,6 +325,11 @@ export function NotificationsPage() {
           ))}
         </ul>
       )}
+      {notificationsQuery.hasNextPage ? (
+        <Button variant="outline" disabled={notificationsQuery.isFetchingNextPage} onClick={() => void notificationsQuery.fetchNextPage()}>
+          {notificationsQuery.isFetchingNextPage ? "Đang tải…" : "Tải thêm thông báo"}
+        </Button>
+      ) : null}
     </div>
   );
 }

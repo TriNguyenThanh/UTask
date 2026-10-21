@@ -348,3 +348,11 @@ kết quả. `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định nên Work key kh
 buộc; khi bật cờ, Compose phải cấp `AI_WORK_SERVICE_KEY` cho các process AI.
 Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực
 hoặc Fernet key không hợp lệ. Xem [cấu hình staging](../infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
+
+## Mở rộng thông báo
+
+Notification hiện chưa consume kết quả/rủi ro AI. Khi có use case và contract
+được chốt, thực hiện theo
+[hướng dẫn thêm nguồn/event](../notification-service/implementation.md#thêm-service-hoặc-event-mới)
+và đối chiếu [checkpoint](../notification-service/checkpoint-2026-10-22.md).
+Không suy ra event/consumer đã tồn tại từ ví dụ trong baseline.

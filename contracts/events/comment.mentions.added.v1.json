@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "comment.mentions.added v1",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "const": "comment.mentions.added"
+    },
+    "event_version": {
+      "const": 1
+    },
+    "aggregate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "producer": {
+      "const": "work-service"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "comment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "recipient_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "uniqueItems": true
+        },
+        "actor_user_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "comment_id",
+        "task_id",
+        "recipient_ids",
+        "actor_user_id"
+      ],
+      "additionalProperties": true
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entity_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "project_sequence": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "aggregate_id",
+    "occurred_at",
+    "trace_id",
+    "producer",
+    "data",
+    "project_id",
+    "entity_version",
+    "project_sequence"
+  ],
+  "additionalProperties": false
+}
