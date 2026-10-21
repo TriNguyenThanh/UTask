@@ -8,7 +8,7 @@ import type {
   AiTaskDecompositionResultDto,
 } from "@/lib/api/ai/dto";
 
-const AI_PATH = "/api/ai/api/ai/v1/requests";
+const AI_PATH = "/api/ai/v1/requests";
 
 const DECOMPOSITION: AiTaskDecompositionResultDto = {
   warnings: [],

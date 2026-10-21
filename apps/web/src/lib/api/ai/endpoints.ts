@@ -2,11 +2,8 @@ import type { ApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { AiContextDto, AiRequestBody, AiResponseDto } from "@/lib/api/ai/dto";
 
-/**
- * Gateway cắt tiền tố `/api/ai/` rồi chuyển phần còn lại cho AI Service, mà service lại phục vụ
- * dưới `/api/ai/v1`; nên URL từ trình duyệt có hai lần `/api/ai`.
- */
-export const AI_ROOT = "/api/ai/api/ai/v1";
+/** Gateway chuyển nguyên đường dẫn `/api/ai/...` cho AI Service, service phục vụ dưới `/api/ai/v1`. */
+export const AI_ROOT = "/api/ai/v1";
 
 /** `Idempotency-Key` bắt buộc. Phản hồi không có envelope nên dùng `request` thô. */
 export function createAiRequest(client: ApiClient, body: AiRequestBody, idempotencyKey: string, signal?: AbortSignal) {
