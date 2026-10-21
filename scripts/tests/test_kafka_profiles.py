@@ -102,6 +102,7 @@ class KafkaProfileDeploymentTests(unittest.TestCase):
 class NativeKafkaComposeTests(unittest.TestCase):
     def test_staging_certificate_directory_is_read_only_and_ca_file_optional(self):
         recipients = {
+            "identity-publisher",
             "integration-service",
             "integration-migrate",
             "integration-worker",
