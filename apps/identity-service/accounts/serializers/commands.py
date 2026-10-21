@@ -2,15 +2,19 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rest_framework import serializers
 
-from accounts.models import AccountStatus, GlobalRoleCode, UserProfile
-from common.errors import IdentityAPIError
+from accounts.models import AccountStatus, GlobalRoleCode, User, UserProfile
 from common.serializers import StrictInputMixin
 
 
 class ProfilePatchSerializer(StrictInputMixin, serializers.ModelSerializer):
+    student_id = serializers.CharField(
+        max_length=50, required=False, allow_null=True, allow_blank=True
+    )
+
     class Meta:
         model = UserProfile
         fields = (
+            "student_id",
             "first_name",
             "last_name",
             "phone_number",
@@ -21,12 +25,8 @@ class ProfilePatchSerializer(StrictInputMixin, serializers.ModelSerializer):
             "preferences",
         )
 
-    def to_internal_value(self, data):
-        if "student_id" in data:
-            raise IdentityAPIError(
-                "STUDENT_ID_IMMUTABLE", "Không được tự sửa MSSV.", status_code=403
-            )
-        return super().to_internal_value(data)
+    def validate_student_id(self, value):
+        return User.objects.normalize_student_id(value)
 
     def validate_preferences(self, value):
         if not isinstance(value, dict):

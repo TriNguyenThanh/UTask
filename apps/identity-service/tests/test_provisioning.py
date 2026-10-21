@@ -7,7 +7,14 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import AccountStatus, AuditLog, IdempotencyRecord, OutboxEvent, User
-from tests.helpers import PASSWORD, create_user, login, mail_secret, run_concurrent
+from tests.helpers import (
+    PASSWORD,
+    create_pending_user,
+    create_user,
+    login,
+    mail_secret,
+    run_concurrent,
+)
 
 pytestmark = [
     pytest.mark.integration,
@@ -65,29 +72,25 @@ def test_provision_activation_replay_and_payload_conflict(teacher_client):
     }
     user = User.objects.get(pk=data["results"][0]["user_id"])
     assert user.student_id == "SV001"
-    assert not user.has_usable_password()
-    assert user.account_status == AccountStatus.PENDING_ACTIVATION
-    event = OutboxEvent.objects.get(aggregate_id=user.pk, event_type="identity.student.imported")
-    assert OutboxEvent.objects.filter(aggregate_id=user.pk).count() == 2
-    secret = mail_secret(event)
-    assert secret["key"] != EmailConfirmation.objects.get(email_address__user=user).key
+    assert user.check_password(user.email)
+    assert user.password != user.email
+    assert user.account_status == AccountStatus.ACTIVE
+    assert user.is_email_verified
+    assert data["results"][0]["account_status"] == "ACTIVE"
+    assert not EmailConfirmation.objects.filter(email_address__user=user).exists()
+    event = OutboxEvent.objects.get(aggregate_id=user.pk, event_type="identity.user.created")
+    assert event.data["data"]["account_status"] == "ACTIVE"
+    assert OutboxEvent.objects.filter(aggregate_id=user.pk).count() == 1
+    assert "password" not in event.data["data"]
     receipt = IdempotencyRecord.objects.get()
     assert receipt.response_body == result.json()
-    assert secret["key"] not in str(receipt.response_body)
+    assert "password" not in data["results"][0]
     replay = provision(teacher_client, [row()], key)
     assert replay.status_code == 201 and replay.json() == result.json()
-    assert OutboxEvent.objects.filter(aggregate_id=user.pk).count() == 2
+    assert OutboxEvent.objects.filter(aggregate_id=user.pk).count() == 1
     assert provision(teacher_client, [row(email="other@example.edu.vn")], key).status_code == 422
     public = APIClient()
-    assert (
-        public.post(
-            "/activate",
-            {"key": secret["key"], "new_password1": PASSWORD, "new_password2": PASSWORD},
-            format="json",
-        ).status_code
-        == 200
-    )
-    login(public, user)
+    login(public, user, password=user.email)
     assert public.get("/users/me").status_code == 200
 
 
@@ -96,6 +99,7 @@ def test_provision_existing_identity_rules_and_invalid_rows(teacher_client):
     other = create_user(student_id="OTHER")
     teacher = create_user(global_role_code="TEACHER")
     deleted = create_user(deleted_at=timezone.now())
+    pending = create_pending_user()
     result = provision(
         teacher_client,
         [
@@ -106,6 +110,7 @@ def test_provision_existing_identity_rules_and_invalid_rows(teacher_client):
             row("bad-email", None),
             {"row_number": 8, "student_id": "UNKNOWN"},
             row("", "OTHER"),
+            row(pending.email, None),
         ],
     )
     assert result.status_code == 200, result.json()
@@ -117,8 +122,14 @@ def test_provision_existing_identity_rules_and_invalid_rows(teacher_client):
     assert rows[4]["reason"] == "VALIDATION_ERROR"
     assert rows[5]["reason"] == "STUDENT_ID_NOT_FOUND"
     assert rows[6]["user_id"] == str(other.pk)
+    assert rows[7]["account_status"] == "PENDING_ACTIVATION"
     existing.refresh_from_db()
     assert existing.student_id == "ASSIGNED"
+    assert existing.check_password(PASSWORD)
+    assert not existing.check_password(existing.email)
+    pending.refresh_from_db()
+    assert not pending.is_active and not pending.is_email_verified
+    assert pending.check_password(PASSWORD)
     assert OutboxEvent.objects.filter(event_type="identity.user.updated").count() == 1
 
 
@@ -151,16 +162,24 @@ def test_provision_key_and_delegated_permissions(teacher_client, case, status, c
 
 
 def test_resend_import_activation_invalidates_old_key_and_active_guard(teacher_client):
-    result = provision(teacher_client, [row()])
-    user_id = result.json()["data"]["results"][0]["user_id"]
-    user = User.objects.get(pk=user_id)
-    old = mail_secret(OutboxEvent.objects.get(event_type="identity.student.imported"))["key"]
+    user = create_pending_user()
+    user.set_unusable_password()
+    user.save(update_fields=("password",))
+    user_id = user.pk
     url = f"/api/v1/internal/users/{user_id}/resend-activation"
     assert (
         teacher_client.post(url, {}, format="json", HTTP_X_SERVICE_KEY="test-classroom").status_code
         == 200
     )
-    new = mail_secret(OutboxEvent.objects.get(event_type="identity.activation.requested"))["key"]
+    first = OutboxEvent.objects.get(event_type="identity.activation.requested")
+    old = mail_secret(first)["key"]
+    assert (
+        teacher_client.post(url, {}, format="json", HTTP_X_SERVICE_KEY="test-classroom").status_code
+        == 200
+    )
+    new = mail_secret(
+        OutboxEvent.objects.exclude(pk=first.pk).get(event_type="identity.activation.requested")
+    )["key"]
     assert old != new
     client = APIClient()
     assert client.post("/activate", {"key": old}, format="json").status_code == 404
@@ -180,16 +199,23 @@ def test_resend_import_activation_invalidates_old_key_and_active_guard(teacher_c
     )
     user.refresh_from_db()
     assert user.is_active
+    login(client, user)
 
 
-def test_provision_rollback_when_mail_key_missing(teacher_client, settings):
+def test_provision_creates_normalized_login_without_mail_configuration(teacher_client, settings):
     settings.IDENTITY_MAIL_KEY = None
-    result = provision(teacher_client, [row()])
-    assert result.status_code == 503
-    assert not User.objects.filter(email=row()["email"]).exists()
-    assert not IdempotencyRecord.objects.exists()
-    assert not OutboxEvent.objects.exists()
-    assert not AuditLog.objects.filter(action="STUDENT_IMPORTED").exists()
+    result = provision(teacher_client, [row(email="  NEW-STUDENT@Example.EDU.VN  ")])
+    assert result.status_code == 201, result.json()
+    user = User.objects.get(pk=result.json()["data"]["results"][0]["user_id"])
+    assert user.email == "new-student@example.edu.vn"
+    assert user.is_active and user.is_email_verified
+    assert user.check_password(user.email) and user.password != user.email
+    assert not EmailConfirmation.objects.filter(email_address__user=user).exists()
+    assert not OutboxEvent.objects.filter(event_type="identity.student.imported").exists()
+    assert AuditLog.objects.filter(target_user_id=str(user.pk), action="STUDENT_IMPORTED").exists()
+    client = APIClient()
+    login(client, user, password=user.email)
+    assert client.get("/users/me").status_code == 200
 
 
 @pytest.mark.django_db(transaction=True)
@@ -210,5 +236,8 @@ def test_provision_concurrent_requests_create_one_account(teacher_session, same_
     assert sorted(status for status, _ in results) == ([201, 201] if same_key else [200, 201])
     assert len({body["data"]["results"][0]["user_id"] for _, body in results}) == 1
     assert User.objects.filter(email=row()["email"]).count() == 1
-    assert OutboxEvent.objects.filter(event_type="identity.student.imported").count() == 1
+    user = User.objects.get(email=row()["email"])
+    assert user.is_active and user.is_email_verified and user.check_password(user.email)
+    assert OutboxEvent.objects.filter(event_type="identity.user.created").count() == 1
+    assert not OutboxEvent.objects.filter(event_type="identity.student.imported").exists()
     assert IdempotencyRecord.objects.count() == (1 if same_key else 2)

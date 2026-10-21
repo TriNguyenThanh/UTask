@@ -49,10 +49,15 @@ Xem thêm: [kiến trúc](../system/architecture.md), [quyền sở hữu dữ l
   cập nhật từ sự kiện. Không đọc database Identity hoặc tạo khóa ngoại xuyên service.
 - `STUDENT`, `TEACHER`, `SYSTEM_ADMIN` là global roles. Quyền lớp, nhóm và dự án do
   Classroom/Project quản lý; global role không tự cấp quyền vào tài nguyên đó.
-- MSSV (`student_id`) thuộc Identity, có thể chưa được gán. Classroom ghi danh bằng
-  `user_id`; MSSV không thay thế UUID và không dùng làm quyền truy cập.
+- MSSV (`student_id`) thuộc Identity, có thể chưa được gán. Người dùng tự cập nhật
+  MSSV của mình qua hồ sơ; hệ thống chuẩn hóa chữ hoa và chỉ nhận mã chưa gán cho
+  tài khoản khác. MSSV tự khai chưa được đối chiếu với dữ liệu học vụ. Classroom
+  ghi danh bằng `user_id`; MSSV không thay thế UUID và
+  không dùng làm quyền truy cập. Khi đổi MSSV, giá trị cũ không được lưu thành
+  lịch sử; mã hiện tại vẫn phải duy nhất.
 - Account có ba trạng thái: `PENDING_ACTIVATION`, `ACTIVE`, `SUSPENDED`. Xóa mềm dùng
-  `deleted_at`; email/username/MSSV vẫn được giữ để tránh cấp lại nhầm danh tính.
+  `deleted_at`; email/username/MSSV hiện gắn với tài khoản đã xóa vẫn được giữ.
+  Lịch sử MSSV trước khi người dùng đổi mã chưa được lưu.
 
 Email xác minh do allauth quản lý; mật khẩu dùng Django password API và Argon2.
 Axes quản lý chống thử mật khẩu: 5 lần sai, cooldown15 phút, trả429 và Retry-After.
@@ -64,7 +69,8 @@ Lockout không phải một trạng thái vòng đời của user.
 
 1. **Đăng ký:** tạo user ACTIVE, profile và role STUDENT; email được đánh dấu đã xác
    minh ngay, không chờ email kích hoạt trong giai đoạn chưa có Resend.
-   Đăng nhập riêng để nhận JWT. Tài khoản import vẫn dùng luồng kích hoạt hiện có.
+   Đăng nhập riêng để nhận JWT. Import mới cũng được đánh dấu ACTIVE/email verified
+   theo chính sách tạm; tài khoản pending cũ vẫn dùng luồng kích hoạt hiện có.
 2. **Đăng nhập:** dj-rest-auth/Django Auth/allauth kiểm email hoặc username/password;
    Identity kiểm trạng thái tài khoản rồi tạo phiên thiết bị và token SimpleJWT.
 3. **Refresh:** SimpleJWT đổi refresh token và blacklist token trước; Identity giữ
@@ -104,7 +110,7 @@ Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `
 | Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`                         | Request/confirm anonymous; change cần Bearer và password cũ              |
 | Logout         | POST `/logout`, `/logout-all`                                                                         | Bearer                                                                   |
 | Thiết bị       | GET `/sessions`; DELETE `/sessions/{session_id}`                                                      | Bearer; phiên thuộc user hiện tại                                        |
-| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; không tự đổi role/email/MSSV qua PATCH                           |
+| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; tự sửa MSSV đã chuẩn hóa/duy nhất; không đổi email hoặc role      |
 | Tra cứu        | GET `/users/{user_id}`; POST `/users/batch`                                                           | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy  |
 | Quản trị       | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình                 |
 | Kiểm tra phiên | POST `/api/v1/internal/auth/session-status`                                                           | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai`       |
@@ -122,8 +128,16 @@ Tra cứu public/batch chỉ trả dữ liệu cho phép, không password/token/
 user khác. Provisioning nhận tối đa100 JSON rows và trả kết quả từng row. Cùng actor,
 path, key và body trả lại receipt; body khác với cùng key trả422. Classroom giữ payload
 ổn định khi retry và chịu trách nhiệm enrollment; Identity chịu trách nhiệm danh tính.
-User mới từ provisioning chưa có password dùng được; khi activate cần gửi
-`new_password1` và `new_password2` cùng key kích hoạt.
+Chính sách tạm cho user mới từ provisioning: mật khẩu ban đầu là email đã bỏ khoảng
+trắng đầu/cuối và chuyển thành chữ thường, được băm bằng Django password API.
+Tài khoản mới được tạo `ACTIVE`, EmailAddress được đánh dấu `verified=True` ngay,
+không gửi email kích hoạt và có thể đăng nhập bằng email/mật khẩu này. Đây là đánh
+dấu theo chính sách tạm, không phải bằng chứng người dùng sở hữu hộp thư. Tài khoản
+đã tồn tại giữ nguyên mật khẩu và trạng thái; không cập nhật ngược
+tài khoản đã import trước thay đổi này. User cũ chưa có mật khẩu vẫn phải gửi
+`new_password1` và `new_password2` khi kích hoạt. Không có cơ chế bắt buộc đổi mật
+khẩu ở lần đăng nhập đầu; sinh viên nên đổi ngay qua `/password-change` vì email
+là thông tin dễ đoán. Không dùng chính sách tạm này cho production.
 
 Response nghiệp vụ có cùng envelope:
 
@@ -215,8 +229,10 @@ Nghiệp vụ ở `event.data`; consumer xử lý lặp bằng `event_id`.
 | `identity.oauth.github_linked`, `identity.oauth.github_unlinked`                                  | Thông báo liên kết GitHub cho Integration           |
 
 Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tương ứng.
-`identity.student.imported` có thêm `student_id` nullable theo hợp đồng. Work cập nhật
-projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
+`identity.student.imported` có thêm `student_id` nullable theo hợp đồng.
+Import mới theo chính sách tạm không phát mail event này, chỉ phát
+`identity.user.created` với trạng thái ACTIVE; vẫn giữ schema để xử lý event cũ.
+Work cập nhật projection từ `identity.user.created/updated`; các loại Identity đã chốt khác được
 kiểm envelope rồi bỏ qua tại consumer hồ sơ, không đưa nhầm vào DLQ. Xem
 [quy tắc phía Work](../project-service/identity-events.md).
 `identity-publisher` dùng cùng image Identity và PostgreSQL chung; bật bằng Compose
