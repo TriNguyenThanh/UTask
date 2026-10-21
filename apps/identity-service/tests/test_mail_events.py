@@ -102,3 +102,5 @@ def test_kafka_publish_requires_delivery_callback_ack(outcome):
     else:
         with pytest.raises((RuntimeError, BufferError)):
             publisher.publish(event)
+    if outcome != "enqueue-error":
+        producer.flush.assert_called_once_with(31)

@@ -16,7 +16,7 @@ from messaging.mail_crypto import redact_expired_mail_secret
 logger = logging.getLogger("identity.outbox")
 
 
-def drain_outbox(*, publisher=None, batch_size=100, time_budget=20):
+def drain_outbox(*, publisher=None, batch_size=100, time_budget=35):
     if connection.in_atomic_block:
         raise RuntimeError("Outbox publishing cannot run inside a business transaction")
     if batch_size < 1 or time_budget <= 0:

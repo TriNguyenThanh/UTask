@@ -2,7 +2,9 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
+from django.utils.functional import SimpleLazyObject
 
+from messaging.kafka import KafkaPublisher
 from messaging.publisher import drain_outbox
 
 
@@ -17,10 +19,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options["batch_size"] < 1 or options["interval"] <= 0:
             raise CommandError("batch-size and interval must be positive")
+        publisher = SimpleLazyObject(KafkaPublisher)
         try:
             while True:
                 close_old_connections()
-                published = drain_outbox(batch_size=options["batch_size"])
+                published = drain_outbox(publisher=publisher, batch_size=options["batch_size"])
                 if not options["watch"]:
                     self.stdout.write(str(published))
                     return

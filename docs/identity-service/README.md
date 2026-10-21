@@ -79,6 +79,14 @@ Lockout không phải một trạng thái vòng đời của user.
 Thay đổi user/profile/role, audit và outbox được ghi trong cùng transaction.
 Identity không ghi enrollment, project membership hoặc dữ liệu repository.
 
+Khi đăng ký, service đọc lại tên hồ sơ do trigger PostgreSQL sinh trước khi
+phát `identity.user.created`; event và API dùng cùng tên đã lưu. Publisher
+`--watch` giữ producer Kafka trong suốt process, chỉ khởi tạo khi có event
+cần gửi. Delivery timeout 30 giây, flush tối đa 31 giây; lượt drain có budget
+35 giây và chỉ bắt đầu event tiếp theo khi còn budget. Retry/backoff, thứ tự
+theo user và điều kiện ACK trước `published_at` giữ nguyên. Healthcheck process
+không chứng minh backlog đã được gửi.
+
 <a id="api-de-tich-hop"></a>
 
 ## API để tích hợp

@@ -58,6 +58,9 @@ def test_register_active_login_me_refresh_logout(http_client, live_server, signu
     assert OutboxEvent.objects.filter(
         aggregate_id=user.pk, event_type="identity.user.created"
     ).exists()
+    event = OutboxEvent.objects.get(aggregate_id=user.pk, event_type="identity.user.created")
+    assert event.data["data"]["display_name"] == user.profile.display_name
+    assert event.data["data"]["display_name"]
     assert not OutboxEvent.objects.filter(
         aggregate_id=user.pk, event_type="identity.activation.requested"
     ).exists()

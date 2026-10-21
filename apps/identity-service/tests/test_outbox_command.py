@@ -15,22 +15,38 @@ def test_publisher_command_reports_one_batch():
     stdout = StringIO()
     with patch(f"{COMMAND}.drain_outbox", return_value=2) as drain:
         call_command("publish_identity_outbox", batch_size=3, stdout=stdout)
-    drain.assert_called_once_with(batch_size=3)
+    assert drain.call_args.kwargs["batch_size"] == 3
+    assert "publisher" in drain.call_args.kwargs
     assert stdout.getvalue().strip() == "2"
 
 
-def test_publisher_watch_polls_until_interrupted_and_closes_connections():
+@pytest.mark.parametrize("publish", [False, True])
+def test_publisher_watch_polls_until_interrupted_and_closes_connections(publish):
     stdout = StringIO()
+
+    def active_batch(*, publisher, batch_size):
+        publisher.publish(object())
+        return 1
+
     with (
-        patch(f"{COMMAND}.drain_outbox", side_effect=[0, 2]) as drain,
+        patch(f"{COMMAND}.drain_outbox", side_effect=active_batch if publish else [0, 2]) as drain,
         patch(f"{COMMAND}.time.sleep", side_effect=[None, KeyboardInterrupt]) as sleep,
         patch(f"{COMMAND}.close_old_connections") as close,
+        patch(f"{COMMAND}.KafkaPublisher") as producer,
     ):
         call_command("publish_identity_outbox", watch=True, interval=0.5, stdout=stdout)
     assert drain.call_count == 2
     assert sleep.call_count == 2
     sleep.assert_called_with(0.5)
     assert close.call_count == 3
+    assert (
+        drain.call_args_list[0].kwargs["publisher"] is drain.call_args_list[1].kwargs["publisher"]
+    )
+    if publish:
+        producer.assert_called_once_with()
+        assert producer.return_value.publish.call_count == 2
+    else:
+        producer.assert_not_called()  # Empty batches do not open a Kafka connection.
     assert stdout.getvalue() == ""
 
 
