@@ -576,7 +576,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 **API / actor:** `GET /users/me`. Bearer.
 
-**Luồng:** dj-rest-auth UserDetailsView và CurrentUserSerializer trả user/profile/roles/preferences; is_email_verified đọc từ allauth EmailAddress hiện tại. MSSV chỉ đọc; không token/password.
+**Luồng:** dj-rest-auth UserDetailsView và CurrentUserSerializer trả user/profile/roles/preferences; is_email_verified đọc từ allauth EmailAddress hiện tại. MSSV của chính user sửa qua PATCH; không token/password.
 
 **Lỗi và giới hạn:** Auth401; thiếu profile là lỗi dữ liệu, không dựng profile giả. Hồ sơ không thay quyền project/classroom.
 
@@ -589,11 +589,11 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-18 — Cập nhật hồ sơ cá nhân
 
-**API / actor:** `PATCH /users/me`. Bearer; first_name,last_name,phone_number,bio,academic_year,faculty,timezone,preferences.
+**API / actor:** `PATCH /users/me`. Bearer; first_name,last_name,student_id,phone_number,bio,academic_year,faculty,timezone,preferences.
 
-**Luồng:** Validate allowlist, khóa user/recheck session. Chỉ khi trường thật sự đổi mới save profile, reread display_name do trigger, audit và user.updated. Trả200 display_name/phone_number/bio/preferences; no-op không emit thêm.
+**Luồng:** Validate allowlist và chuẩn hóa MSSV thành chữ hoa sau khi trim; khóa user/recheck session; MSSV phải chưa thuộc tài khoản khác. Chỉ khi trường thật sự đổi mới lưu, reread display_name do trigger, audit và user.updated. MSSV null/blank sẽ xóa; email/role vẫn chỉ đọc. Lịch sử MSSV cũ không được lưu và mã cũ được dùng lại sau khi đổi. Trả200 display_name/student_id/phone_number/bio/preferences; no-op không emit thêm.
 
-**Lỗi và giới hạn:** MSSV403 STUDENT_ID_IMMUTABLE; email/roles/avatar_url/unknown field400 VALIDATION_ERROR. Project projection sau outbox là tích hợp chưa xác minh.
+**Lỗi và giới hạn:** MSSV trùng trả400 VALIDATION_ERROR tại field student_id; email/roles/avatar_url/unknown field400 VALIDATION_ERROR. Project projection sau outbox là tích hợp chưa xác minh.
 
 Nguồn: [accounts/services/profiles.py](../../../apps/identity-service/accounts/services/profiles.py);
 kiểm thử: [test_account_api.py](../../../apps/identity-service/tests/test_account_api.py);
