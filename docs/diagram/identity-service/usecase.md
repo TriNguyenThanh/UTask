@@ -499,7 +499,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 ### UC-ID-12 — Xác minh và kích hoạt tài khoản
 
-**API / actor:** `POST /activate`. Guest; key; new_password1/new_password2 bắt buộc nếu user import chưa có password.
+**API / actor:** `POST /activate`. Guest; key; new_password1/new_password2 bắt buộc nếu tài khoản cũ chưa có password. User import mới tạm dùng mật khẩu ban đầu bằng email chuẩn hóa, ACTIVE/email verified ngay nên không cần gọi activation.
 
 **Luồng:** Hash key để tra EmailConfirmation; khóa user pending/chưa xóa. Nếu password unusable dùng SetPasswordForm; VerifyEmailView/allauth xác minh EmailAddress. Chuyển ACTIVE, xóa confirmations, audit ACCOUNT_ACTIVATED và user.updated. Trả200 detail trong envelope; login riêng.
 
@@ -666,7 +666,7 @@ không phải kết quả chạy provider thật trong lần cập nhật tài l
 
 **API / actor:** `POST /api/v1/internal/users/provision-students`. Classroom key + actor Bearer TEACHER/SYSTEM_ADMIN; Idempotency-Key UUID; students JSON tối đa100.
 
-**Luồng:** Advisory tuple lock actor/path/key; khóa actor/targets UUID tăng dần, recheck role/session. Receipt cùng canonical hash replay; khác hash422. Per-row savepoint: existing chỉ roles={STUDENT}, match email/MSSV, code-only lookup; new pending/password unusable/profile/role/EmailConfirmation và encrypted student.imported. Receipt và mutations commit cùng transaction;201 nếu có CREATED, else200.
+**Luồng:** Advisory tuple lock actor/path/key; khóa actor/targets UUID tăng dần, recheck role/session. Receipt cùng canonical hash replay; khác hash422. Per-row savepoint: existing chỉ roles={STUDENT}, match email/MSSV, code-only lookup; new ACTIVE/mật khẩu tạm bằng email chuẩn hóa (Django băm)/profile/role/EmailAddress verified và outbox user.created. Không tạo confirmation hay thư kích hoạt cho import mới. Existing giữ nguyên mật khẩu/trạng thái. Receipt và mutations commit cùng transaction;201 nếu có CREATED, else200.
 
 **Lỗi và giới hạn:** Dữ liệu lỗi từng row; hạ tầng rollback cả batch. Race discovery/unique retry toàn ordered transaction tối đa3 lần; exhausted503. Không anonymous receipt hay enrollment, không password trong receipt.
 

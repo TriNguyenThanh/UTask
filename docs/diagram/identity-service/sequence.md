@@ -477,14 +477,14 @@ actor "Người giữ key" as U
 participant "ActivationView / VerifyEmailView" as V
 participant "allauth / SetPasswordForm" as A
 database "identity_db" as D
-U -> V : POST /auth/activate\nkey; new_password1/new_password2 nếu import
+U -> V : POST /auth/activate\nkey; new_password1/new_password2 nếu chưa có password
 V -> D : EmailConfirmation.from_key(SHA256(key))
 alt Key không có / hết7 ngày / replay
  V --> U : 404 RESOURCE_NOT_FOUND
 else Tìm thấy confirmation
  group TX-I: activate_account / confirm_activation
   V -> D : Lock user; phải pending/chưa xóa
-  alt Imported user password unusable
+  alt Tài khoản cũ có password unusable
    V -> A : SetPasswordForm kiểm hai password và policy
    A -> D : Save password
   end
@@ -589,7 +589,7 @@ loop Retry khi discovery/unique race, tối đa3 lần; dừng khi commit
     else Existing đủ điều kiện
      I -> D : Giữ UUID; gán MSSV nếu NULL khi hợp lệ\naudit/user.updated chỉ khi gán thật
     else New có email
-     I -> D : PENDING/password unusable/profile/STUDENT\nEmailAddress + confirmation; audit/user.created\nencrypted identity.student.imported
+     I -> D : ACTIVE/mật khẩu tạm=email chuẩn hóa (Django băm)/profile/STUDENT\nEmailAddress verified; audit/user.created\nKhông tạo confirmation/thư kích hoạt
     else Code-only không tìm thấy
      I -> I : Per-row STUDENT_ID_NOT_FOUND
     end

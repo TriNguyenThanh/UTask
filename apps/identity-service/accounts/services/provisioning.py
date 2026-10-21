@@ -72,20 +72,19 @@ def provision_row(request, data, locked_ids):
         return user, "EXISTING"
     if not data["email"]:
         return None, "STUDENT_ID_NOT_FOUND"
+    # Temporary import policy: the normalized email is the initial password.
     user = User.objects.create_user(
         email=data["email"],
         student_id=data["student_id"],
-        password=None,
+        password=data["email"],
         first_name=data["first_name"],
         last_name=data["last_name"],
-        account_status=AccountStatus.PENDING_ACTIVATION,
+        account_status=AccountStatus.ACTIVE,
     )
+    EmailAddress.objects.create(user=user, email=user.email, primary=True, verified=True)
     locked_ids.add(user.pk)
     account_audit(request, user, "STUDENT_IMPORTED")
     emit_user(user)
-    user._identity_activation_event = "identity.student.imported"
-    address = EmailAddress.objects.create(user=user, email=user.email, primary=True, verified=False)
-    address.send_confirmation(request)
     return user, "CREATED"
 
 
