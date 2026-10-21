@@ -18,13 +18,13 @@ function setup(...overrides: HttpHandler[]) {
 }
 
 describe("IdentityProfilePage", () => {
-  it("shows read-only account fields and editable profile fields from /users/me", async () => {
+  it("keeps email and username read-only while allowing MSSV edits", async () => {
     setup();
 
     expect(await screen.findByLabelText("Email")).toHaveValue("leader@utask.test");
     expect(screen.getByLabelText("Email")).toHaveAttribute("readonly");
     expect(screen.getByLabelText("Tên đăng nhập")).toHaveAttribute("readonly");
-    expect(screen.getByLabelText(/Mã số sinh viên/)).toHaveAttribute("readonly");
+    expect(screen.getByLabelText(/Mã số sinh viên/)).not.toHaveAttribute("readonly");
     expect(screen.getByLabelText("Múi giờ")).toHaveValue("Asia/Ho_Chi_Minh");
     expect(screen.getByRole("button", { name: /Lưu thông tin hồ sơ/ })).toBeDisabled();
   });
@@ -40,11 +40,13 @@ describe("IdentityProfilePage", () => {
     );
 
     const phone = await screen.findByLabelText("Số điện thoại");
+    const studentId = screen.getByLabelText(/Mã số sinh viên/);
     await user.type(phone, "0901234567");
+    await user.type(studentId, " sv-001 ");
     await user.click(screen.getByRole("button", { name: /Lưu thông tin hồ sơ/ }));
 
     expect(await screen.findByText("Đã lưu thông tin hồ sơ")).toBeInTheDocument();
-    expect(body).toEqual({ phone_number: "0901234567" });
+    expect(body).toEqual({ phone_number: "0901234567", student_id: "SV-001" });
   });
 
   it("keeps the saved value after a refetch (persisted by the server)", async () => {
@@ -118,15 +120,26 @@ describe("buildPatch", () => {
     expect(buildPatch(user, formFromUser(user))).toEqual({});
   });
 
-  it("trims values and ignores whitespace-only edits to an empty field", () => {
-    expect(buildPatch(user, { ...formFromUser(user), first_name: "  Bình  ", bio: "   " })).toEqual({ first_name: "Bình" });
+  it("trims text and normalizes MSSV before sending only changed fields", () => {
+    expect(buildPatch(user, {
+      ...formFromUser(user),
+      first_name: "  Bình  ",
+      bio: "   ",
+      student_id: "  sv-001 ",
+    })).toEqual({ first_name: "Bình", student_id: "SV-001" });
   });
 
   it("clears an optional field with null but never a required one", () => {
-    const filled = { ...user, phone_number: "0901", first_name: "A" };
-    expect(buildPatch(filled, { ...formFromUser(filled), phone_number: "", first_name: "" })).toEqual({
+    const filled = { ...user, phone_number: "0901", first_name: "A", student_id: "SV-001" };
+    expect(buildPatch(filled, {
+      ...formFromUser(filled),
+      phone_number: "",
+      first_name: "",
+      student_id: "",
+    })).toEqual({
       phone_number: null,
       first_name: "",
+      student_id: null,
     });
   });
 });
