@@ -81,7 +81,17 @@ hình dùng client giả, không thay cho nghiệm thu broker thật.
 | --- | --- | --- | --- |
 | Work tạo dự án | `utask.work.events` | Project UUID | Classroom `consume_work` / `utask.classroom.work.dlq` |
 | Hồ sơ Identity | `utask.identity.events` | User UUID | Work `consume_identity` / `utask.work.profile.dlq`; các loại đã chốt ngoài hồ sơ được kiểm envelope rồi bỏ qua |
-| Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Chưa có `consume_classroom` trong source Work của checkout này |
+| Classroom đổi thành viên | `utask.classroom.events` | Class UUID | Work `consume_classroom` / `utask.work.classroom.dlq` |
+| Integration đổi kết nối repository | `utask.integration.events` | Project UUID | Work `consume_integration` / `utask.work.integration.dlq`; chạy trong `work-consumer` khi chọn adapter thật |
+
+Cả ba command nhận event phía Work chạy trong một container `work-consumer`
+qua `consume_work`; mỗi nguồn giữ group, offset và retry/DLQ riêng. Một nguồn
+bị kẹt retry không giữ vòng poll của hai nguồn còn lại.
+
+Luồng Integration → Work dùng envelope `payload` theo contract Integration,
+khác `data` của Work/Identity/Classroom. Đã kiểm hai backend với Kafka test
+riêng; GitHub/Identity trong phép thử là stub, không xác nhận staging/cloud.
+Xem [cấu hình và kiểm chứng Work](../project-service/github-integration.md).
 
 Publisher chỉ ghi `published_at` sau delivery callback thành công, lỗi thử
 lại tăng dần tối đa 300 giây và không gửi vượt đầu hàng lỗi cùng aggregate.
@@ -94,12 +104,12 @@ validation/chống lặp; không ghi thẳng database hoặc bỏ qua quyền.
 
 Broker mặc định retention 7 ngày qua `KAFKA_LOG_RETENTION_MS`; áp dụng cả
 topic nghiệp vụ/DLQ không có override. Topic có cấu hình riêng phải kiểm tra
-thực tế. JSON Schema nằm trong `contracts/events/`; envelope triển khai dùng
-`data`. Kết quả HTTP/Kafka thật tại
+thực tế. JSON Schema nằm trong `contracts/events/`; envelope Work/Classroom/Identity
+dùng `data`, riêng Integration connection dùng `payload`. Kết quả HTTP/Kafka thật tại
 nghiệm thu Classroom, không xác nhận staging.
 
 Compose khai báo Kafka 3.9.0, cấu hình KRaft, volume và healthcheck. Ngoài
-phạm vi Classroom–Work nêu trên, chưa xác minh producer/consumer runtime; AI bootstrap chưa
+phạm vi Classroom–Work và test Integration–Work nêu trên, chưa xác minh producer/consumer runtime; AI bootstrap chưa
 có Kafka client. Production dùng Kafka bên ngoài theo baseline. Topic,
 partition, consumer group, retention, replay và SLA cần quyết định/kiểm tra
 riêng, không suy ra từ việc broker local khởi động được.
@@ -109,7 +119,11 @@ riêng, không suy ra từ việc broker local khởi động được.
 **Đã triển khai:** client Kafka của Work và Classroom nhận địa chỉ cùng các
 tùy chọn kết nối qua biến môi trường. Mọi client gửi sự kiện, nhận sự kiện và
 gửi thông điệp lỗi (DLQ) trong hai service dùng cùng cấu hình kết nối của service.
-**Chưa xác minh:** kết nối và gửi/nhận với Kafka cloud thật.
+**Đã xác minh ngày 21/10/2026:** container dùng cấu hình `.env.staging` kết nối
+Kafka cloud, producer idempotent nhận ACK và consumer nhận/commit một message
+trên topic chẩn đoán riêng; topic đó đã được xóa. Kết quả này không chứng minh
+toàn bộ luồng nghiệp vụ hoặc trạng thái VPS; xem
+[nghiệm thu consumer staging local](staging-consumer-verification-20261021.md).
 
 Bỏ `kafka` khỏi `COMPOSE_PROFILES` trong `.env` của máy triển khai và điền
 địa chỉ `KAFKA_BOOTSTRAP_SERVERS`. Khi đó Compose không khởi động broker Docker

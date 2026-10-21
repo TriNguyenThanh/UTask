@@ -40,8 +40,10 @@ và [Nginx gateway](../../infra/nginx/nginx.conf).
 ## Chọn Kafka Docker hoặc Kafka bên ngoài
 
 **Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập
-Aiven và đọc thông tin broker bằng hàm cấu hình của cả hai service từ máy
-phát triển; chưa nghiệm thu gửi/nhận sự kiện hoặc deploy VPS.
+Aiven và metadata; ngày 21/10/2026 đã kiểm producer ACK và consumer nhận/commit
+trên topic chẩn đoán riêng từ container dùng `.env.staging`. Đã tái hiện lỗi
+topic thiếu khi bật đủ profile như deploy; xem
+[bằng chứng và giới hạn](staging-consumer-verification-20261021.md). Chưa xác minh VPS sau khắc phục.
 Dùng cùng một bộ biến trên local và staging:
 
 ```dotenv
@@ -172,6 +174,23 @@ Django, token hoặc thông tin xác thực môi trường dùng chung.
   secret, domain, Kafka cluster ID và đường dẫn PEM bằng giá trị dành cho staging.
   Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
 - Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
+
+<a id="phan-tach-volume-local-staging"></a>
+
+### Volume khi kiểm staging trên máy local
+
+Giữ Compose project riêng cho local và staging để hai môi trường dùng volume
+riêng. Khi tái hiện deploy trên máy local, thư mục release tạm dùng bản sao
+`.env.staging` làm `.env`, image theo digest và project staging riêng; không
+đổi credential của volume local để ép nó chạy với cấu hình staging.
+
+`POSTGRES_PASSWORD` chỉ khởi tạo mật khẩu role khi volume mới. Recreate với
+giá trị khác không đổi mật khẩu đã lưu trong volume. Nếu migration báo sai mật
+khẩu trên volume cũ, xác minh đúng project/volume và credential đăng nhập TCP
+trước; không dùng `down -v`, reset mật khẩu hoặc xóa dữ liệu để vượt lỗi.
+Lượt kiểm ngày 22/10 xác nhận volume local cũ đăng nhập được bằng `.env` local,
+còn volume staging riêng chạy với credential staging; xem
+[báo cáo kiểm lại](staging-http-validation-20261021.md#kiem-lai-20261022).
 
 **Một phần:** các service Django local/staging hiện dùng chung `POSTGRES_USER` và
 `POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
