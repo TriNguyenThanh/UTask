@@ -98,7 +98,10 @@ Password login sai/không tồn tại/đã xóa/unusable trả 401 INVALID_CREDE
 Lookup, check/upgrade password và timing mitigation thuộc Django/allauth; chưa chứng minh
 cân bằng thời gian giữa mọi trạng thái. Credentials đúng nhưng SUSPENDED/PENDING bị chặn.
 Register STUDENT chuyển PENDING_ACTIVATION, xác minh email mới chuyển ACTIVE.
-Email/username/MSSV xóa mềm vẫn được reserved; client không tự gán role/MSSV.
+Email/username/MSSV hiện gắn với user xóa mềm vẫn được reserved. Người dùng được
+tự cập nhật MSSV của chính mình qua PATCH `/users/me`; Identity chuẩn hóa upper(trim)
+và từ chối mã đang gắn với tài khoản khác. Người dùng không tự cấp role. Lịch sử MSSV
+cũ chưa được lưu; khi đổi mã, giá trị cũ không còn được giữ chỗ.
 
 Forgot trả thông điệp trung tính, chỉ enqueue thư cho ACTIVE chưa xóa và có
 password dùng được. Thiếu khóa mã hóa trả 503 cho cả email tồn tại/lạ.
@@ -179,10 +182,10 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 
 ### 1.9. MSSV, Django Auth và xóa mềm
 
-- Identity giữ student_id như mã đối soát tài khoản duy nhất trong phạm vi UTask hiện tại; MSSV nullable, chuẩn hóa upper(trim), trống thành NULL. Không dùng MSSV thay UUID user_id và không dùng nó để cấp quyền.
+- Identity giữ student_id nullable, chuẩn hóa upper(trim), trống thành NULL và duy nhất trong các giá trị đang lưu. Người dùng có thể tự cập nhật MSSV của mình qua PATCH `/users/me`; mã phải chưa gán cho tài khoản khác. Identity chưa đối chiếu mã tự khai với dữ liệu học vụ. Không dùng MSSV thay UUID user_id và không dùng nó để cấp quyền.
 - Enrollment của Classroom chỉ liên kết user_id. Classroom lấy MSSV qua API/projection Identity khi cần hiển thị; không lưu bản sao MSSV có quyền chỉnh sửa trong từng enrollment.
 - USERNAME_FIELD=email; UserManager kế thừa BaseUserManager chuẩn hóa email lower(trim), tạo username nếu thiếu, dùng set_password/set_unusable_password. is_active là property của account_status=ACTIVE và deleted_at=NULL. Login đi qua Django authenticate/allauth backend và status hooks theo mục 3.1.3; không viết lại check_password/timing mitigation. Global SYSTEM_ADMIN không tự là Django superuser và không tự có quyền project.
-- MVP không xóa cứng user. Email/username/MSSV không được tái cấp sau xóa mềm. Register gặp danh tính đã xóa vẫn trả mã trùng tương ứng; provisioning trả ACCOUNT_UNAVAILABLE, không tự tạo user mới. Chỉ Admin khôi phục explicit qua PATCH users/{id}/status với restore_deleted=true và reason; giữ user_id, MSSV, roles và lịch sử, không phục hồi session cũ.
+- MVP không xóa cứng user. Email/username và MSSV hiện gắn với user xóa mềm vẫn được giữ. Register gặp danh tính đó vẫn trả mã trùng tương ứng; provisioning trả ACCOUNT_UNAVAILABLE, không tự tạo user mới. Khi user tự đổi MSSV, mã cũ không lưu trong lịch sử và có thể được dùng lại. Chỉ Admin khôi phục explicit qua PATCH users/{id}/status với restore_deleted=true và reason; giữ user_id, MSSV hiện tại, roles và lịch sử, không phục hồi session cũ.
 - Bảng user/profile/roles được tạo trong một transaction. Migration phải có CHECK và unique family theo ERD mục 4.1; không dùng validation ứng dụng thay thế các ràng buộc đó.
 
 ### 1.10. Chi tiết kỹ thuật được chốt để bàn giao (2026-10-02)
@@ -260,7 +263,6 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 | `ACCOUNT_ALREADY_ACTIVE` | 400 | Resend kích hoạt cho user đã ACTIVE. |
 | `INCORRECT_CURRENT_PASSWORD` | 400 | Mật khẩu hiện tại không khớp. |
 | `PASSWORD_CANNOT_BE_SAME_AS_OLD` | 400 | Mật khẩu mới trùng mật khẩu hiện tại. |
-| `STUDENT_ID_IMMUTABLE` | 403 | Tự sửa MSSV tại users/me. |
 | `INVALID_IMAGE_TYPE` | 400 | Loại ảnh không thuộc whitelist. |
 | `FILE_SIZE_EXCEEDS_LIMIT` | 400 | Ảnh vượt 5 MB. |
 | `OAUTH_ACCOUNT_ALREADY_LINKED` | 409 | Provider account đã thuộc user khác. |
@@ -626,13 +628,14 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 * **Phương thức:** `PATCH`
 * **Đường dẫn:** `/users/me`
 * **Xác thực:** Bearer Token bắt buộc.
-* **Mô tả:** Cập nhật thông tin họ tên, số điện thoại, tiểu sử, cài đặt. Không cho phép sửa `email` tại endpoint này (400 VALIDATION_ERROR); gửi `student_id` trả 403 STUDENT_ID_IMMUTABLE.
+* **Mô tả:** Cập nhật hồ sơ cá nhân và MSSV của chính người dùng. Email và vai trò vẫn chỉ đọc. MSSV được chuẩn hóa bằng cách bỏ khoảng trắng đầu/cuối và chuyển thành chữ hoa; mã đã gắn với tài khoản khác trả 400 VALIDATION_ERROR ở trường `student_id`. Gửi `null` hoặc chuỗi trống để xóa MSSV.
 
 * **Request Body:**
 ```json
 {
   "first_name": "Văn A",
   "last_name": "Nguyễn",
+  "student_id": "20210001",
   "phone_number": "0912345678",
   "bio": "Cập nhật định hướng Full-stack Engineer.",
   "preferences": {
@@ -642,7 +645,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 }
 ```
 
-* **Xử lý:** Cập nhật bảng `user_profiles`. Kích hoạt Trigger tạo lại `display_name = "Nguyễn Văn A"`. Ghi Outbox `identity.user.updated` sang Kafka để `work-service` đồng bộ `user_projections`.
+* **Xử lý:** Trong một transaction khóa tài khoản, cập nhật `users.student_id` và/hoặc `user_profiles`. MSSV chuẩn hóa upper(trim), nullable và duy nhất; DB unique constraint vẫn bảo vệ khi có cập nhật đồng thời. Giá trị MSSV cũ không được lưu thành lịch sử và có thể được tài khoản khác sử dụng sau khi đổi. Kích hoạt Trigger tạo lại `display_name = "Nguyễn Văn A"`. Ghi audit và Outbox `identity.user.updated` khi có trường đổi để các consumer đồng bộ hồ sơ.
 
 * **Phản hồi Thành công (HTTP 200 OK):**
 ```json
@@ -651,6 +654,7 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
   "message": "Cập nhật hồ sơ cá nhân thành công.",
   "data": {
     "display_name": "Nguyễn Văn A",
+    "student_id": "20210001",
     "phone_number": "0912345678",
     "bio": "Cập nhật định hướng Full-stack Engineer.",
     "preferences": {

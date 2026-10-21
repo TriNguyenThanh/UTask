@@ -49,10 +49,15 @@ Xem thêm: [kiến trúc](../system/architecture.md), [quyền sở hữu dữ l
   cập nhật từ sự kiện. Không đọc database Identity hoặc tạo khóa ngoại xuyên service.
 - `STUDENT`, `TEACHER`, `SYSTEM_ADMIN` là global roles. Quyền lớp, nhóm và dự án do
   Classroom/Project quản lý; global role không tự cấp quyền vào tài nguyên đó.
-- MSSV (`student_id`) thuộc Identity, có thể chưa được gán. Classroom ghi danh bằng
-  `user_id`; MSSV không thay thế UUID và không dùng làm quyền truy cập.
+- MSSV (`student_id`) thuộc Identity, có thể chưa được gán. Người dùng tự cập nhật
+  MSSV của mình qua hồ sơ; hệ thống chuẩn hóa chữ hoa và chỉ nhận mã chưa gán cho
+  tài khoản khác. MSSV tự khai chưa được đối chiếu với dữ liệu học vụ. Classroom
+  ghi danh bằng `user_id`; MSSV không thay thế UUID và
+  không dùng làm quyền truy cập. Khi đổi MSSV, giá trị cũ không được lưu thành
+  lịch sử; mã hiện tại vẫn phải duy nhất.
 - Account có ba trạng thái: `PENDING_ACTIVATION`, `ACTIVE`, `SUSPENDED`. Xóa mềm dùng
-  `deleted_at`; email/username/MSSV vẫn được giữ để tránh cấp lại nhầm danh tính.
+  `deleted_at`; email/username/MSSV hiện gắn với tài khoản đã xóa vẫn được giữ.
+  Lịch sử MSSV trước khi người dùng đổi mã chưa được lưu.
 
 Email xác minh do allauth quản lý; mật khẩu dùng Django password API và Argon2.
 Axes quản lý chống thử mật khẩu: 5 lần sai, cooldown15 phút, trả429 và Retry-After.
@@ -105,7 +110,7 @@ Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `
 | Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`                         | Request/confirm anonymous; change cần Bearer và password cũ              |
 | Logout         | POST `/logout`, `/logout-all`                                                                         | Bearer                                                                   |
 | Thiết bị       | GET `/sessions`; DELETE `/sessions/{session_id}`                                                      | Bearer; phiên thuộc user hiện tại                                        |
-| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; không tự đổi role/email/MSSV qua PATCH                           |
+| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; tự sửa MSSV đã chuẩn hóa/duy nhất; không đổi email hoặc role      |
 | Tra cứu        | GET `/users/{user_id}`; POST `/users/batch`                                                           | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy  |
 | Quản trị       | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình                 |
 | Kiểm tra phiên | POST `/api/v1/internal/auth/session-status`                                                           | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai`       |
