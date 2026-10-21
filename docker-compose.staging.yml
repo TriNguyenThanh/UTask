@@ -421,18 +421,84 @@ services:
       timeout: 10s
       retries: 6
 
-  notification-service:
+  notification-service: &notification_runtime
     profiles: [notification-service]
     image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/notification-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+    init: true
     restart: unless-stopped
     env_file:
-      - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/notification-service.env
+    volumes: *kafka_certificates
+    depends_on: &notification_dependencies
+      notification-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck: *django_healthcheck
+    x-deploy:
+      gateway_health_path: /api/notifications/healthz
+    x-ci:
+      test_env:
+        NOTIFICATION_TEST_DB_USER: utask_ci
+        NOTIFICATION_TEST_DB_PASSWORD: ci-only-postgres-password
+        NOTIFICATION_TEST_DB_NAME: notification_test
+        TEST_DATABASE_NAME: notification_test
+        NOTIFICATION_TEST_DB_HOST: 127.0.0.1
+        NOTIFICATION_TEST_DB_PORT: "5432"
+
+  notification-migrate:
+    <<: *notification_runtime
+    restart: "no"
+    command: ["python", "manage.py", "migrate", "--noinput"]
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck: *django_healthcheck
+    healthcheck:
+      disable: true
+    x-deploy:
+      role: migration
+      application: notification-service
+
+  notification-worker:
+    <<: *notification_runtime
+    command: ["celery", "-A", "config", "worker", "-Q", "notification", "--concurrency=1"]
+    x-deploy: &notification_worker
+      role: worker
+      application: notification-service
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  notification-beat:
+    <<: *notification_runtime
+    command: ["celery", "-A", "config", "beat", "--pidfile=/tmp/notification-beat.pid", "--schedule=/tmp/notification-celerybeat"]
+    x-deploy: *notification_worker
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/notification-beat.pid').read_text()), 0)"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  notification-identity-consumer:
+    <<: *notification_runtime
+    command: ["python", "manage.py", "consume_notifications", "--source", "identity"]
+    x-deploy: *notification_worker
+    healthcheck: &notification_consumer_health
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(b'consume_notifications' in p.read_bytes().split(bytes([0])) for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  notification-work-consumer:
+    <<: *notification_runtime
+    command: ["python", "manage.py", "consume_notifications", "--source", "work"]
+    x-deploy: *notification_worker
+    healthcheck: *notification_consumer_health
 
   ai-service:
     x-deploy:
