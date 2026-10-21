@@ -66,9 +66,18 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "UTask Work API",
     "OAS_VERSION": "3.1.0",
-    "VERSION": "1.4",
+    "VERSION": "1.5",
     "SERVERS": [{"url": "/api/work", "description": "Work API qua gateway"}],
     "SERVE_INCLUDE_SCHEMA": False,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "WorkServiceKey": {"type": "apiKey", "in": "header", "name": "X-Service-Key"}
+        }
+    },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.projects.api_documentation.document_ai_context",
+    ],
 }
 IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")
 IDENTITY_WORK_SERVICE_KEY = os.environ.get("IDENTITY_WORK_SERVICE_KEY", "")
