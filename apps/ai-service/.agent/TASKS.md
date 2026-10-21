@@ -14,6 +14,17 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-22 — Đồng bộ contract test với provider Work đã triển khai
+
+- `tests/test_work_context_contract.py` kiểm cả Bearer và caller key trên ba
+  operation nội bộ, trạng thái `implemented` và không còn ngoại lệ key-optional.
+  Không đổi permission provider hoặc mặc định cấu hình gửi key của AI.
+- Đồng bộ `docs/ai-service/code-map.md`: nối Work phải bật gửi service key;
+  source/test mock không thay bằng chứng phân quyền runtime.
+- Đã tái hiện assertion cũ thất bại; toàn module contract Work đạt sau sửa.
+  Deterministic evaluation đạt **30 ca**, tạo được JSON/JUnit report; Ruff
+  lint/format file test đạt. Chưa chạy lại toàn suite AI hoặc provider live.
+
 ### 2026-10-22 — Cho phép endpoint LLM HTTP ở mọi môi trường
 
 - Theo yêu cầu người dùng, bỏ riêng điều kiện cấm HTTP ở staging/production

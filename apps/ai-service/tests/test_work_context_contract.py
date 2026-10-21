@@ -274,15 +274,15 @@ async def test_work_hidden_target_404_denies_before_context_read():
     assert calls == ["POST"]
 
 
-def test_temporary_work_key_bypass_preserves_bearer_and_integration_auth_contract():
-    for path, methods in CONTRACT["paths"].items():
+def test_work_provider_contract_requires_bearer_and_service_key():
+    checked = 0
+    for methods in CONTRACT["paths"].values():
         for method in ("get", "post"):
             if method not in methods:
                 continue
             operation = methods[method]
-            if path.startswith("/api/v1/internal/ai/"):
-                assert operation["security"] == [{"WorkBearer": []}]
-                assert operation["x-temporary-service-key-optional"] is True
-                assert operation["x-implementation-status"] == "planned"
-            else:
-                assert operation["security"] == [{"WorkBearer": [], "WorkServiceKey": []}]
+            assert operation["security"] == [{"WorkBearer": [], "WorkServiceKey": []}]
+            assert operation.get("x-temporary-service-key-optional", False) is False
+            assert operation["x-implementation-status"] == "implemented"
+            checked += 1
+    assert checked == 3
