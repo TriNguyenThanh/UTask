@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BadgeCheck, Lock, Save } from "lucide-react";
+import { Lock, Save } from "lucide-react";
 
 import { ErrorState } from "@/components/feedback/ErrorState";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +15,7 @@ import type { CurrentUserDto, ProfilePatchDto } from "@/lib/api/identity/dto";
 import { useMe, usePatchMe } from "@/lib/query/identityHooks";
 
 interface ProfileForm {
+  student_id: string;
   last_name: string;
   first_name: string;
   phone_number: string;
@@ -26,6 +26,7 @@ interface ProfileForm {
 }
 
 const FIELDS = [
+  "student_id",
   "last_name",
   "first_name",
   "phone_number",
@@ -37,6 +38,7 @@ const FIELDS = [
 
 export function formFromUser(user: CurrentUserDto): ProfileForm {
   return {
+    student_id: user.student_id ?? "",
     last_name: user.last_name,
     first_name: user.first_name,
     phone_number: user.phone_number ?? "",
@@ -52,11 +54,16 @@ export function buildPatch(user: CurrentUserDto, form: ProfileForm): ProfilePatc
   const original = formFromUser(user);
   const patch: ProfilePatchDto = {};
   for (const field of FIELDS) {
-    const value = form[field].trim();
+    const value = field === "student_id" ? form[field].trim().toUpperCase() : form[field].trim();
     if (value === original[field]) {
       continue;
     }
-    const nullable = field === "phone_number" || field === "academic_year" || field === "faculty" || field === "bio";
+    const nullable =
+      field === "student_id" ||
+      field === "phone_number" ||
+      field === "academic_year" ||
+      field === "faculty" ||
+      field === "bio";
     Object.assign(patch, { [field]: nullable && value === "" ? null : value });
   }
   return patch;
@@ -121,7 +128,7 @@ export function IdentityProfilePage() {
               Thông tin tài khoản
             </h2>
             <p className="text-sm text-muted-foreground">
-              Email, tên đăng nhập và MSSV do hệ thống quản lý nên chỉ đọc.
+              Email và tên đăng nhập chỉ đọc. MSSV tự khai được chuẩn hóa chữ hoa và không được trùng.
             </p>
           </header>
 
@@ -142,22 +149,19 @@ export function IdentityProfilePage() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="profile-student-id" className="flex items-center gap-1.5">
                   Mã số sinh viên (MSSV)
-                  <Lock className="size-3.5 text-muted-foreground" aria-hidden />
                 </Label>
-                {user.student_id ? (
-                  <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-800">
-                    <BadgeCheck className="size-3 text-emerald-600" aria-hidden />
-                    Đã xác thực
-                  </Badge>
-                ) : null}
               </div>
               <Input
                 id="profile-student-id"
-                value={user.student_id ?? ""}
+                value={form.student_id}
                 placeholder="Chưa có MSSV"
-                readOnly
-                className="cursor-not-allowed font-mono"
+                maxLength={50}
+                autoComplete="off"
+                aria-invalid={fieldErrors.student_id ? true : undefined}
+                onChange={(event) => setField("student_id", event.target.value)}
               />
+              <p className="text-xs text-muted-foreground">MSSV chưa được đối chiếu với dữ liệu học vụ. Để trống để xóa.</p>
+              <FieldError messages={fieldErrors.student_id} />
             </div>
 
             <div className="space-y-1.5">
