@@ -62,7 +62,7 @@ timeout không được đổi thành kết quả cho phép.
 
 Work từ chối ref COMMIT không phải 7–40 ký tự hex bằng lỗi validation 400
 trước khi gọi Integration; provider cũng kiểm cùng định dạng ở boundary nội
-bộ. Adapter Work giữ timeout kết nối 2 giây, đọc 20 giây cho các lượt kiểm
+bộ. Adapter Work giữ timeout kết nối 30 giây, đọc 30 giây cho các lượt kiểm
 GitHub tuần tự, vẫn từ chối khi hết hạn và không giữ transaction qua HTTP.
 
 Khi liên kết thủ công cùng PR lần nữa, snapshot đã xác minh có thể cập nhật
