@@ -12,6 +12,7 @@ từ baseline. AI Service hiện có bootstrap, xem [code map](../ai-service/cod
 
 - [Kiến trúc và ranh giới service](architecture.md)
 - [Các luồng nghiệp vụ](workflows.md)
+- [Nghiệp vụ và quyền Identity, Classroom, Work](business-and-permissions.md)
 - [Giao tiếp REST và Kafka](communication.md)
 - [Quyền sở hữu dữ liệu](data-ownership.md)
 - [Danh mục sự kiện Kafka](kafka-events.md)
