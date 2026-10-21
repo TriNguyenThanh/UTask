@@ -1,10 +1,14 @@
 import logging
+from contextlib import contextmanager
 
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from rest_framework.exceptions import NotFound
 
 from apps.projects.models import Project, ProjectMember, UserProjection
+from apps.projects.permissions import active_member
+from apps.projects.services.locking import lock_project
 from common.errors import WorkError
 from common.pagination import paginate
 from infrastructure.classroom import classroom_client
@@ -96,6 +100,19 @@ def visible_project(actor, project_id, *, for_write=False):
             403,
         )
     return project
+
+
+@contextmanager
+def readable_project(actor, project_id):
+    """Chứng cứ Teacher ngoài transaction; kiểm lại scope dưới barrier Project."""
+    proof, teacher = read_project_scope(actor, project_id)
+    with transaction.atomic():
+        project = lock_project(project_id)
+        if active_member(project, actor) is None and not (
+            teacher and project.classroom_group_id == proof.classroom_group_id
+        ):
+            raise NotFound("Không tìm thấy nội dung yêu cầu.")
+        yield project
 
 
 def member_queryset(project, status="ACTIVE"):

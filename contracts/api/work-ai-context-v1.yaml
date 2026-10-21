@@ -3,7 +3,7 @@ info:
   title: Work internal AI context boundary
   version: 1.0.0
   description: >-
-    Thiết kế mục tiêu đã chốt cho đội Work; chưa triển khai provider. Đây là phần
+    Provider đã triển khai trong Work, có kiểm thử PostgreSQL/contract riêng. Đây là phần
     contract nội bộ được work-service.yaml tham chiếu, không phải API gateway.
 servers:
   - url: http://work-service:8000
@@ -15,9 +15,8 @@ paths:
       - $ref: '#/components/parameters/TargetId'
     post:
       operationId: internal_ai_authorize
-      x-implementation-status: planned
-      security: [{WorkBearer: []}]
-      x-temporary-service-key-optional: true
+      x-implementation-status: implemented
+      security: [{WorkBearer: [], WorkServiceKey: []}]
       description: >-
         Caller ai. Kiểm tra quyền đọc và intent phù hợp target tại thời điểm gọi.
         backlog_generation chỉ Project, task_decomposition chỉ Task,
@@ -48,9 +47,8 @@ paths:
         schema: {enum: [project, task, team, progress]}
     get:
       operationId: internal_ai_context
-      x-implementation-status: planned
-      security: [{WorkBearer: []}]
-      x-temporary-service-key-optional: true
+      x-implementation-status: implemented
+      security: [{WorkBearer: [], WorkServiceKey: []}]
       description: >-
         Caller ai; tự kiểm quyền mỗi lần đọc. Project/Sprint hỗ trợ project, team,
         progress; Task hỗ trợ thêm task. Work tự resolve Project từ target.
@@ -59,7 +57,12 @@ paths:
         metric/count vẫn tính trên toàn bộ scope. Loại deleted/archived task và
         thành viên không ACTIVE, dùng description đã strip HTML. Không trả PII.
         source_version dùng project.event_sequence; task dùng task.version;
-        Sprint progress dùng chuỗi sprint.version:project.event_sequence.
+        Sprint progress đang mở dùng chuỗi sprint.version:project.event_sequence.
+        Sprint đã đóng trả stale từ snapshot, giữ captured_at và cut_project_sequence;
+        AI không dùng dữ liệu này như tiến độ hiện hành. Team capacity là giờ/tuần,
+        workload là điểm ước lượng còn lại trên task gốc chưa COMPLETED/CANCELLED,
+        chia bằng allocate_points. Không quy đổi điểm thành giờ. Thiếu estimate,
+        chưa phân công hoặc phần gán người không ACTIVE được báo partial/warning.
       responses:
         '200':
           description: ContextDocument trực tiếp, không bọc envelope Work.
@@ -78,7 +81,7 @@ paths:
         schema: {type: string, format: uuid}
     post:
       operationId: internal_integration_github_authorize
-      x-implementation-status: planned
+      x-implementation-status: implemented
       security: [{WorkBearer: [], WorkServiceKey: []}]
       description: >-
         Chỉ caller integration, dùng key Integration→Work; không nhận AI key.
@@ -96,6 +99,8 @@ paths:
       responses:
         '200':
           description: Quyết định quyền.
+          headers:
+            Cache-Control: {schema: {const: no-store}}
           content:
             application/json:
               schema:

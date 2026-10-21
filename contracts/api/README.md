@@ -19,15 +19,15 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
 - [`ai-service-v1.yaml`](ai-service-v1.yaml): API AI giai đoạn 1; pipeline
   PostgreSQL/Celery/ADK đã triển khai, tích hợp domain production chưa nghiệm thu.
   Xem [code map](../../docs/ai-service/code-map.md).
-- [`work-service.yaml`](work-service.yaml): OpenAPI 1.5; receipt nội bộ
-  Integration→Work dùng `WorkGitHubOperationReceiptEnvelope` và chỉ service key,
-  giữ fact PENDING đã commit bất biến. **Thiết kế mục tiêu; provider receipt
-  Work chưa triển khai.** Xem
-  [guide Work–Integration](../../docs/integration-service/work-service-integration-guide.md).
 - [`work-ai-context-v1.yaml`](work-ai-context-v1.yaml): contract Work nội bộ
   được [`work-service.yaml`](work-service.yaml) tham chiếu; authorization và
   project/task/team/progress context **Thiết kế mục tiêu**, Work provider chưa
   triển khai. AI consumer đã có adapter và contract test bằng mock.
+
+- [`work-service.yaml`](work-service.yaml): sinh từ URLconf/view/serializer Work
+  bằng drf-spectacular; có POST/DELETE repository trả 202, con trỏ
+  `command_generation` và receipt nội bộ cho Integration. Xem
+  [cấu hình và giới hạn nghiệm thu](../../docs/project-service/github-integration.md).
 
 ## Đối chiếu baseline mới
 

@@ -1,11 +1,22 @@
 from django.urls import path
 
 from apps.projects import views
+from apps.projects.views.ai_context import AIAuthorizeView, AIContextView
 from apps.projects.views.board import BoardColumnView, BoardView
 from apps.projects.views.dashboard import DashboardView
 from apps.projects.views.states import StateDetailView
 
 urlpatterns = [
+    path(
+        "api/v1/internal/ai/targets/<str:target_type>/<str:target_id>/authorize",
+        AIAuthorizeView.as_view(),
+        name="ai-target-authorize",
+    ),
+    path(
+        "api/v1/internal/ai/targets/<str:target_type>/<str:target_id>/contexts/<str:domain>",
+        AIContextView.as_view(),
+        name="ai-target-context",
+    ),
     path("projects/", views.ProjectListCreateView.as_view(), name="project-list"),
     path("projects/<uuid:project_id>/", views.ProjectDetailView.as_view(), name="project-detail"),
     path(

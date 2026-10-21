@@ -63,3 +63,70 @@ LIST_PARAMETERS = [
     OpenApiParameter("cursor", str),
     OpenApiParameter("status", str),
 ]
+
+
+def document_connection_receipt(result, generator, request, public):
+    """Giữ ràng buộc wire của biên nhận nội bộ khi xuất OpenAPI từ serializer."""
+    path = result["paths"].get(
+        "/api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}"
+    )
+    if path is None:
+        return result
+    schemas = result["components"]["schemas"]
+    receipt = schemas["WorkGitHubOperationReceipt"]
+    receipt["additionalProperties"] = False
+    fields = receipt["properties"]
+    fields["applied"]["const"] = True
+    fields["project_id"]["not"] = {"const": "00000000-0000-0000-0000-000000000000"}
+    fields["operation_id"].update(
+        minLength=1,
+        maxLength=100,
+        **{"not": {"anyOf": [{"enum": [".", ".."]}, {"pattern": r"[\u0000-\u001f]"}]}},
+    )
+    fields["status"] = {"type": "string", "const": "PENDING"}
+    fields["repo_id"].update(
+        minLength=1,
+        maxLength=100,
+        pattern=r"^[1-9][0-9]{0,99}$",
+        **{"not": {"type": "string", "pattern": "[^0-9]"}},
+    )
+    for field in ("generation", "source_version"):
+        fields[field]["description"] = (
+            "Wire dùng token JSON integer không phần thập phân hoặc exponent "
+            "(1, không phải 1.0/1e0); consumer không ép float sang int."
+        )
+    envelope = schemas["WorkGitHubOperationReceiptEnvelope"]
+    envelope["properties"]["success"]["const"] = True
+    envelope["properties"]["data"] = {"$ref": "#/components/schemas/WorkGitHubOperationReceipt"}
+    operation = path["get"]
+    operation["servers"] = [{"url": "http://work-service:8000"}]
+    for parameter in operation["parameters"]:
+        parameter["schema"] = {
+            "$ref": "#/components/schemas/WorkGitHubOperationReceipt/properties/"
+            + parameter["name"]
+        }
+    content = operation["responses"]["200"]["content"]["application/json"]
+    content["examples"] = {
+        action: {
+            "value": {
+                "success": True,
+                "message": "Đã lấy kết quả ghi nhận yêu cầu kết nối.",
+                "data": {
+                    "applied": True,
+                    "project_id": "11111111-1111-4111-8111-111111111111",
+                    "operation_id": operation_id,
+                    "generation": generation,
+                    "status": "PENDING",
+                    "repo_id": repo_id,
+                    "source_version": source_version,
+                },
+                "meta": None,
+                "error": None,
+            }
+        }
+        for action, operation_id, generation, repo_id, source_version in (
+            ("connect", "connect:project:1", 1, "12345", 2),
+            ("disconnect", "disconnect:project:2", 2, None, 4),
+        )
+    }
+    return result

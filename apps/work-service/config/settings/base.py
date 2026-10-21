@@ -1,3 +1,4 @@
+import json
 import os
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
@@ -65,9 +66,19 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "UTask Work API",
     "OAS_VERSION": "3.1.0",
-    "VERSION": "1.4",
+    "VERSION": "1.5",
     "SERVERS": [{"url": "/api/work", "description": "Work API qua gateway"}],
     "SERVE_INCLUDE_SCHEMA": False,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "WorkServiceKey": {"type": "apiKey", "in": "header", "name": "X-Service-Key"}
+        }
+    },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.api_documentation.document_connection_receipt",
+        "apps.projects.api_documentation.document_ai_context",
+    ],
 }
 IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")
 IDENTITY_WORK_SERVICE_KEY = os.environ.get("IDENTITY_WORK_SERVICE_KEY", "")
@@ -123,6 +134,10 @@ CELERY_BEAT_SCHEDULE.update(
     }
 )
 WORK_AI_ADAPTER = os.environ.get("WORK_AI_ADAPTER", "infrastructure.ai.UnavailableProposals")
+try:
+    WORK_SERVICE_KEYS = json.loads(os.environ.get("WORK_SERVICE_KEYS", "{}"))
+except (ValueError, TypeError):
+    WORK_SERVICE_KEYS = None
 CELERY_TASK_ROUTES.update(
     {
         "apps.tasks.tasks.scan_deadlines": {"queue": "work-publisher"},
@@ -132,6 +147,30 @@ CELERY_TASK_ROUTES.update(
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
 )
+WORK_GITHUB_CONNECTION_ENABLED = (
+    os.environ.get("WORK_GITHUB_CONNECTION_ENABLED", "false").lower() == "true"
+)
+WORK_INTEGRATION_BASE_URL = os.environ.get(
+    "WORK_INTEGRATION_BASE_URL", "http://integration-service:8000"
+)
+WORK_INTEGRATION_SERVICE_KEY = os.environ.get("WORK_INTEGRATION_SERVICE_KEY", "")
+try:
+    INTEGRATION_WORK_SERVICE_KEYS = json.loads(
+        os.environ.get("WORK_INTEGRATION_INBOUND_KEYS", "[]")
+    )
+except (ValueError, TypeError):
+    INTEGRATION_WORK_SERVICE_KEYS = None
+WORK_INTEGRATION_KAFKA_GROUP = os.environ.get(
+    "WORK_INTEGRATION_KAFKA_GROUP", "work-integration-connections-v1"
+)
+WORK_INTEGRATION_DLQ_TOPIC = os.environ.get(
+    "WORK_INTEGRATION_DLQ_TOPIC", "utask.work.integration.dlq"
+)
+CELERY_TASK_ROUTES["apps.integrations.tasks.recover_connections"] = {"queue": "work-publisher"}
+CELERY_BEAT_SCHEDULE["github-connections"] = {
+    "task": "apps.integrations.tasks.recover_connections",
+    "schedule": 10.0,
+}
 SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",
     "BacklogTaskTypeEnum": ["TASK", "BUG", "STORY"],

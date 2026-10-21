@@ -32,8 +32,8 @@ class Command(BaseCommand):
                 pending = pending or consumer.poll(1)
                 if pending is None:
                     continue
-                if pending.error():
-                    raise CommandError("Kafka consumer error")
+                if error := pending.error():
+                    raise CommandError(f"Kafka consumer error: {error.name()} ({error.code()})")
                 try:
                     process_classroom_record(pending, consumer, dlq=dlq)
                 except Exception as exc:

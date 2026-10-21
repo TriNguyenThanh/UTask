@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 
 from apps.integrations.models import TaskGitHubLink
@@ -32,9 +34,18 @@ class GitHubLinkSerializer(serializers.ModelSerializer):
 
 class LinkInputSerializer(StrictInputSerializer):
     link_type = serializers.ChoiceField(choices=TaskGitHubLink.Type.choices)
-    github_ref_id = serializers.CharField(max_length=300)
+    github_ref_id = serializers.CharField(
+        max_length=300,
+        help_text="Với COMMIT, mã thay đổi GitHub phải gồm 7–40 ký tự 0–9, a–f hoặc A–F.",
+    )
 
     def validate(self, attrs):
+        if attrs["link_type"] == "COMMIT" and not re.fullmatch(
+            r"[0-9a-fA-F]{7,40}", attrs["github_ref_id"]
+        ):
+            raise serializers.ValidationError(
+                {"github_ref_id": "Mã thay đổi GitHub phải gồm 7–40 ký tự 0–9, a–f hoặc A–F."}
+            )
         if attrs["link_type"] == "PULL_REQUEST":
             ref = attrs["github_ref_id"].removeprefix("#")
             if not ref.isascii() or not ref.isdecimal() or int(ref) < 1:

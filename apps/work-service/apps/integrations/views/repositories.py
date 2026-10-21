@@ -2,6 +2,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.generics import GenericAPIView
 
 from apps.integrations.serializers.repositories import (
+    DisconnectRepositorySerializer,
     RepositoryInputSerializer,
     RepositorySerializer,
 )
@@ -30,7 +31,7 @@ class RepositoryView(GenericAPIView):
     @extend_schema(
         request=RepositoryInputSerializer,
         parameters=[KEY],
-        responses={200: REPOSITORY, 202: REPOSITORY, **ERRORS},
+        responses={202: REPOSITORY, **ERRORS, 410: ERRORS[400], 429: ERRORS[400]},
     )
     def post(self, request, project_id):
         visible_project(request.user, project_id, for_write=True)
@@ -48,4 +49,30 @@ class RepositoryView(GenericAPIView):
             payload,
             receipt_scope(request, key),
             request.headers.get("Authorization", ""),
+        )
+
+    @extend_schema(
+        request=DisconnectRepositorySerializer,
+        parameters=[KEY],
+        responses={202: REPOSITORY, **ERRORS, 410: ERRORS[400], 429: ERRORS[400]},
+    )
+    def delete(self, request, project_id):
+        from apps.integrations.services.operations import start_operation
+
+        visible_project(request.user, project_id, for_write=True)
+        serializer = DisconnectRepositorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        key = (
+            require_key(request)
+            if request.headers.get("Idempotency-Key")
+            else payload["operation_id"]
+        )
+        return start_operation(
+            request.user,
+            project_id,
+            payload,
+            receipt_scope(request, key),
+            request.headers.get("Authorization", ""),
+            action="DISCONNECT",
         )

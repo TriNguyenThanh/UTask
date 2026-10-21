@@ -106,7 +106,8 @@ trước mã nguồn. Kết quả chạy thật nằm tại trang nghiệm thu b
 Consumer tại [classroom_consumer.py](../../apps/work-service/apps/messaging/classroom_consumer.py)
 giữ receipt theo từng dự án. Nhận lại sự kiện tiếp tục các dự án chưa xử lý;
 chỉ commit offset sau lưu thành công hoặc DLQ được Kafka xác nhận. Consumer
-chạy bằng `python manage.py consume_classroom`.
+chạy bằng `python manage.py consume_classroom`; Compose dùng `consume_work`
+để chạy command này cùng các nguồn khác trong một container `work-consumer`.
 
 API được sinh tại [OpenAPI Work](../../contracts/api/work-service.yaml).
 [Schema project.created](../../contracts/events/work.project.created.v1.json)
