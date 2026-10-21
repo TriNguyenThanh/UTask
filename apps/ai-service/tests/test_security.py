@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
+from conftest import identity_transport
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
@@ -30,7 +31,8 @@ async def test_jwt_signature_identity_expiry_and_claims(keypair, invalid):
     private, public = keypair
     now = datetime.now(UTC)
     claims = {
-        "sub": "owner",
+        "sub": "00000000-0000-4000-8000-000000000001",
+        "token_type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=5),
         "iss": "utask",
@@ -50,21 +52,33 @@ async def test_jwt_signature_identity_expiry_and_claims(keypair, invalid):
         else rsa.generate_private_key(public_exponent=65537, key_size=2048)
     )
     token = jwt.encode(claims, signer, algorithm="RS256")
-    auth = JwtAuthenticator(Settings(jwt_public_key=public, jwt_issuer="utask", jwt_audience="ai"))
+    auth = JwtAuthenticator(
+        Settings(
+            jwt_issuer="utask",
+            jwt_audience="ai",
+            identity_service_key="test-key",
+        ),
+        transport=identity_transport(
+            {"keys": [jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key(), as_dict=True)]}
+        ),
+    )
     if invalid:
         with pytest.raises(ServiceError) as error:
             await auth.authenticate(token)
         assert error.value.code == "AUTHENTICATION_REQUIRED"
     else:
         principal = await auth.authenticate(token)
-        assert principal.user_id == "owner" and principal.bearer == token
+        assert principal.user_id == claims["sub"] and principal.bearer == token
         assert token not in repr(principal)
 
 
 @pytest.mark.asyncio
-async def test_auth_without_configuration_fails_closed():
+async def test_auth_without_configuration_fails_closed(keypair):
     with pytest.raises(ServiceError) as error:
-        await JwtAuthenticator(Settings()).authenticate("anything")
+        await JwtAuthenticator(
+            Settings(jwt_issuer=""),
+            transport=identity_transport({"keys": []}),
+        ).authenticate("anything")
     assert error.value.code == "AUTH_UNAVAILABLE"
 
 
@@ -83,7 +97,9 @@ def test_vault_encrypts_and_rejects_tampering(vault):
     "kwargs",
     [
         {"jwt_algorithm": "HS256"},
-        {"jwt_public_key": "key", "jwt_jwks_url": "https://identity/jwks"},
+        {"jwt_algorithm": "ES256"},
+        {"identity_base_url": "https://identity/{target_id}"},
+        {"identity_base_url": "file:///etc/passwd"},
         {"sync_timeout_seconds": 11},
         {"workflow_timeout_seconds": 31},
     ],

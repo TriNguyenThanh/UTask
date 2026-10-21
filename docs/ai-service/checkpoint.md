@@ -4,6 +4,16 @@
 Tài liệu kiến trúc chuẩn vẫn là [architecture](architecture.md), hợp đồng
 hành vi là [API v1](api.md), vị trí mã nguồn là [code map](code-map.md).
 
+## Quyết định bổ sung — 22/10/2026
+
+**Sẽ làm:** gỡ cơ chế mã hóa Fernet của token giữa API và worker để đơn giản
+hóa luồng xử lý, theo yêu cầu người dùng. Khi thực hiện, bỏ
+`FernetCredentialVault` và yêu cầu `AI_CREDENTIAL_KEY`, cập nhật cấu hình,
+kiểm thử và cách xử lý job cũ đang chứa token mã hóa.
+
+Checkpoint này chỉ ghi nhận việc cần làm; runtime vẫn dùng Fernet hiện tại.
+Việc gỡ Fernet không đồng nghĩa bỏ xác thực JWT/session hoặc quyền người dùng.
+
 ## Kết luận tại checkpoint
 
 **Trạng thái tổng thể: Một phần; chưa sẵn sàng phát hành production.** Phần

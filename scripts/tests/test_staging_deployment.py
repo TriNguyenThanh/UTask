@@ -37,57 +37,75 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 
 class StagingDeploymentTests(unittest.TestCase):
-    def test_ai_live_gate_is_required_and_propagates_failure_without_credentials_in_arguments(
-        self,
-    ):
-        for selected, settings, failure, expected in (
-            ("identity-service", "", "", 0),
-            ("identity-service ai-service", "", "", 1),
-            ("identity-service ai-service", None, "", 0),
-            ("identity-service ai-service", None, "ai-evaluation", 79),
-        ):
-            with (
-                self.subTest(selected=selected, settings=settings, failure=failure),
-                deployment_runtime(
-                    services=selected, fail_on=failure, fail_code=79
-                ) as (root, env, calls),
-            ):
-                if settings is not None:
-                    env["COMPOSE_TEST_ENVIRONMENT"] = settings
-                result = run_staging_deploy(root, env)
-                self.assertEqual(result.returncode, expected, result.stderr)
-                commands = docker_calls(calls)
-                evaluations = [
-                    command for command in commands if "evaluation" in command
-                ]
-                self.assertEqual(
-                    len(evaluations), int("ai-service" in selected and settings is None)
-                )
-                self.assertNotIn(
-                    "fixture-eval-bearer",
-                    result.stdout + result.stderr + calls.read_text(),
-                )
-                if evaluations:
-                    command = evaluations[0]
-                    self.assertIn("EVAL_AI_BEARER", command)
-                    self.assertIn("EVAL_AI_CASE_EXPECTATIONS", command)
-                    self.assertIn("EVAL_EXPECTED_MODEL", command)
-                    self.assertIn("EVAL_AI_CASE_TARGETS", command)
-                    self.assertIn("live", command)
-                    self.assertIn(
-                        f"{root}/ai-evaluation-reports/sha-test:/app/evaluation-reports",
-                        command,
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI required")
+    def test_identity_only_compose_does_not_require_ai_runtime_secrets(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "COMPOSE_", "UTASK_"))
+        }
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="test",
+            AI_CREDENTIAL_KEY="",
+            AI_IDENTITY_SERVICE_KEY="",
+        )
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "--env-file",
+                ".env.example",
+                "-f",
+                "docker-compose.staging.yml",
+                "--profile",
+                "identity-service",
+                "config",
+                "--format",
+                "json",
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        services = json.loads(result.stdout)["services"]
+        self.assertIn("identity-service", services)
+        self.assertFalse(
+            {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"} & services.keys()
+        )
+
+    def test_deploy_skips_ai_live_evaluation_with_or_without_evaluation_settings(self):
+        for selected in ("identity-service", "identity-service ai-service"):
+            for settings in ("", None):
+                with (
+                    self.subTest(selected=selected, settings=settings),
+                    deployment_runtime(
+                        services=selected, fail_on="ai-evaluation", fail_code=79
+                    ) as (root, env, calls),
+                ):
+                    if settings is not None:
+                        env["COMPOSE_TEST_ENVIRONMENT"] = settings
+                    result = run_staging_deploy(root, env)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    commands = docker_calls(calls)
+                    self.assertFalse(
+                        any("evaluation" in command for command in commands)
                     )
-                    self.assertGreater(
-                        commands.index(command),
-                        max(
-                            i
-                            for i, c in enumerate(commands)
-                            if "nginx" in c and "-s" in c
-                        ),
+                    self.assertTrue(any("ps" in command for command in commands))
+                    self.assertTrue(
+                        any(
+                            "nginx" in command and "-s" in command
+                            for command in commands
+                        )
                     )
-                if expected:
-                    self.assertFalse(any("ps" in command for command in commands))
+                    self.assertNotIn("Missing AI live evaluation", result.stderr)
+                    self.assertNotIn(
+                        "fixture-eval-bearer",
+                        result.stdout + result.stderr + calls.read_text(),
+                    )
 
     def test_deterministic_evaluation_is_an_ai_only_ci_gate_with_reports(self):
         workflow = yaml.safe_load(
@@ -113,25 +131,11 @@ class StagingDeploymentTests(unittest.TestCase):
         self.assertIn("always()", reports["if"])
         self.assertEqual(reports["with"]["if-no-files-found"], "error")
 
-    def test_live_reports_are_retained_even_when_gate_fails(self):
+    def test_release_does_not_fetch_or_upload_ai_live_evaluation_reports(self):
         steps = RELEASE["jobs"]["deploy-staging"]["steps"]
-        retrieve = next(
-            step
-            for step in steps
-            if step.get("name") == "Retrieve AI live evaluation reports"
-        )
-        upload = next(
-            step
-            for step in steps
-            if step.get("name") == "Upload AI live evaluation reports"
-        )
-        for step in (retrieve, upload):
-            self.assertIn("always()", step["if"])
-            self.assertIn("ai-service", step["if"])
-        self.assertIn("evaluation.junit.xml", retrieve["run"])
-        self.assertIn("evaluation.json", retrieve["run"])
-        self.assertNotIn("EVAL_AI_BEARER", retrieve["run"])
-        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        names = {step.get("name") for step in steps}
+        self.assertNotIn("Retrieve AI live evaluation reports", names)
+        self.assertNotIn("Upload AI live evaluation reports", names)
 
     def test_discovery_gateway_json_is_decoded_before_remote_compose_commands(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())

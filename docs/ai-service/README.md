@@ -1,11 +1,15 @@
 # AI Service
 
 **Trạng thái: Một phần.** Pipeline API/PostgreSQL/dispatcher/Redis/Celery/ADK
-đã triển khai trong `apps/ai-service/`, có JWT và domain tools qua REST adapter.
-Integration Identity/Work/Integration và LLM production **Chưa xác minh**;
+đã triển khai trong `apps/ai-service/`; xác minh chữ ký JWT và kiểm tra session
+qua Identity có source/test local. Identity/Work/Integration và LLM production
+**Chưa xác minh**;
 Retention terminal đã có source, migration và lịch Celery beat; Kafka và
 specialist **Chưa triển khai**. Điều kiện phát hành và phần chưa xác minh nằm
 tại [mức sẵn sàng production](production-readiness.md).
+CI chạy deterministic evaluation; live evaluation là lệnh thủ công tùy chọn,
+không phải điều kiện deploy staging. Hướng dẫn và các biến `EVAL_AI_*` nằm tại
+[phần evaluation](production-readiness.md#evaluation-và-gate-phát-hành).
 
 Đây là trang điều hướng cho tài liệu AI Service. Không coi các phần thiết kế
 API, event, provider hoặc agent là deployment production đã hoàn chỉnh chỉ
@@ -29,15 +33,17 @@ PostgreSQL vẫn lưu request/result và metadata, Redis vẫn là broker. Agent
 phải đọc [chính sách context hiện tại và mở rộng](architecture.md#chính-sách-context-hiện-tại-và-mở-rộng)
 trước khi thêm cache, snapshot hoặc projection.
 
-Pipeline đã chốt là API kiểm tra quyền qua REST, lưu request và ý định giao
-job bền vững, dispatcher giao task qua Redis, Celery worker chạy workflow và
+Pipeline đã chốt theo contract là AI gửi yêu cầu authorize target qua REST,
+lưu request và ý định giao job bền vững, dispatcher giao task qua Redis,
+Celery worker chạy workflow và
 bàn giao kết quả vào PostgreSQL của AI, phát `NOTIFY` trong cùng transaction.
 Listener trong API tiếp nhận và cập nhật trạng thái/kết quả cuối, phục hồi
 inbox khi bỏ lỡ tín hiệu. API đọc cùng persistence để client polling;
 Kafka phục vụ sự kiện giữa service. Nguồn chi tiết là
 [pipeline trong kiến trúc AI](architecture.md) và quyết định tại
 [ADR-002](../adr/002-ai-request-pipeline.md). Pipeline source đã được kiểm thử
-với PostgreSQL, Redis và ADK fake model; giới hạn tích hợp nằm trong
+với PostgreSQL, Redis và ADK fake model. Work AI contract còn `planned`, provider
+chưa có source nên quyền/role Work runtime chưa xác minh; giới hạn tích hợp nằm trong
 [code map](code-map.md).
 
 Baseline nêu roadmap AI rộng hơn contract v1. Không coi ba intent dưới đây là
@@ -73,11 +79,14 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
 | `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
 | `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
-| `AI_WORK_SERVICE_KEY`, `AI_INTEGRATION_SERVICE_KEY` | Secret riêng cho AI → Work và AI → Integration; inject qua environment, không đặt trong env_file thường |
+| `AI_WORK_SERVICE_AUTH_ENABLED` | Mặc định `false`; tạm thời bỏ riêng header `X-Service-Key` khi AI gọi Work. Bearer actor và yêu cầu authorize theo target/intent vẫn được gửi |
+| `AI_WORK_SERVICE_KEY` | Chỉ bắt buộc và chỉ gửi khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; secret AI → Work, inject qua environment |
+| `AI_INTEGRATION_SERVICE_KEY` | Secret AI → Integration; không bị ảnh hưởng bởi cờ Work |
 | `AI_GITHUB_CONTEXT_ENABLED` | Mặc định false; chỉ cấp development tool cho risk Project khi focus cho phép |
 | `AI_TERMINAL_RETENTION_DAYS`, `AI_RETENTION_BATCH_SIZE`, `AI_RETENTION_INTERVAL_SECONDS` | Mặc định 30 ngày, tối đa 500 request/lần, một lần mỗi 3600 giây |
-| `AI_JWT_PUBLIC_KEY` hoặc `AI_JWT_JWKS_URL` | Public key PEM hoặc JWKS của Identity; chỉ chọn một |
-| `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
+| `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience dùng để xác minh JWT; mặc định theo Identity |
+| `AI_IDENTITY_BASE_URL` | Base URL nội bộ Identity; mặc định `http://identity-service:8000` |
+| `AI_IDENTITY_SERVICE_KEY` | Secret caller AI gửi qua `X-Service-Key` khi gọi session-status; phải khớp mục `ai` trong `IDENTITY_SERVICE_KEYS` của Identity |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
 | `AI_CONTEXT_URLS` | JSON map `target_type:domain` → URL lấy context |
 | `AI_LLM_PROVIDER` | Chọn adapter `litellm` |
@@ -89,11 +98,15 @@ URL template chỉ dùng `{target_type}` và `{target_id}` từ request đã val
 Các target là `project`, `task`, `sprint`; domain là `project`, `task`, `team`,
 `progress`, `github_activity`. Work boundary đã chốt tại
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
-[Work contract](../../contracts/api/work-service.yaml) tham chiếu; provider Work
-**Chưa triển khai**. Adapter POST body `action: ai.analyze` và `intent`, kiểm
-tra envelope `success/data` cùng target/action/allowed; GET context nhận
-`ContextDocument` trực tiếp, tối đa 65536 byte. Bearer actor và service key
-khác nhau theo đích. GitHub đi Integration; Integration tự hỏi Work quyền
+[Work contract](../../contracts/api/work-service.yaml) tham chiếu và còn ở trạng thái
+`planned`; provider Work **Chưa triển khai**. AI-side adapter POST body
+`action: ai.analyze` và `intent`, kiểm tra envelope `success/data` cùng
+target/action/allowed; GET context nhận `ContextDocument` trực tiếp, tối đa
+65536 byte. Bearer actor luôn được gửi. Header Work `X-Service-Key` chỉ được
+gửi khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; mặc định `false` chỉ bỏ header đó,
+không bỏ yêu cầu authorize theo target/intent. Vì provider Work chưa có source,
+không thể kết luận role/target authorization đã chạy runtime. GitHub đi Integration;
+Integration tự hỏi Work quyền
 `github.read`, AI không gọi thêm Work cho lần đọc GitHub. Xem
 [boundary và cấu hình staging](production-readiness.md#boundary-domain-và-quyền).
 Thiếu cấu hình hoặc quyền/context lỗi thì từ chối; không fallback fixture.
@@ -142,11 +155,21 @@ dispatcher → Redis/Celery → ADK → completion → API:
 | risk_analysis | succeeded, 1 risk, context progress/team/project/github_activity | 4,9 giây |
 
 Đây là smoke với fixture local, không là benchmark chất lượng hay cam kết
-latency. JWT local đã được refresh; token owner/outsider giữ tại `.env.mock/`.
+latency. Không phải bằng chứng cho kiểm tra session Identity hoặc production.
 
-Secret `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY` nằm trong
-`.env` root. Chỉ `AI_CREDENTIAL_KEY` là khóa Fernet bí mật; public key là
-credential xác minh JWT, lưu cùng bộ credential để không commit key local.
+Secret `AI_CREDENTIAL_KEY`, `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY` nằm
+trong `.env` root. AI tải JWKS trực tiếp từ
+`{AI_IDENTITY_BASE_URL}/.well-known/jwks.json` mỗi lần xác thực; không dùng PEM,
+URL JWKS riêng hoặc cache khóa. AI chỉ chọn khóa có `kty=RSA`, `use` (mặc định
+`sig`) và `alg` (mặc định `RS256`) phù hợp; JWT có `kid` thì lọc theo `kid`,
+sau cùng phải còn đúng một khóa.
+AI yêu cầu claim `exp`, `iss`, `aud`, `sub`, `token_type`; `sub` phải là UUID,
+`token_type=access`, còn `iat` là tùy chọn. AI gọi Identity để xác minh session
+trước khi cấp quyền. Phiên bị thu
+hồi trả `401`; lỗi kiểm tra Identity được ghi nhận là `AUTH_UNAVAILABLE` và
+trả trạng thái `503` nội bộ, rồi ánh xạ theo error envelope v1 thành
+`500 INTERNAL_ERROR` với
+`details.reason=AUTH_UNAVAILABLE`.
 Điền model/base URL và API key vào `.env` root; `infra/env/ai-service.env` chỉ
 ánh xạ các biến đó vào container.
 Sinh Fernet key rồi điền vào `.env` root:
@@ -159,10 +182,16 @@ Không commit `.env`, JWT private key hoặc API key.
 
 ## Mock quyền/context để chạy local
 
-MOCK_TEST chọn fixture tại adapter cho quyền/context của Work/Integration;
-luồng API, job và LLM giữ nguyên. Xem [hướng dẫn mock data](mock-data.md) để
-chạy cùng Compose và gửi request mẫu. Không cần server mock hoặc launcher;
+MOCK_TEST chỉ chọn fixture tại adapter cho quyền/context của Work/Integration;
+không bỏ qua xác minh JWT hoặc session Identity. Xem [hướng dẫn mock data](mock-data.md)
+để chạy cùng Compose. Cần access token thật từ Identity cho phiên runtime;
 fixture không xác nhận contract domain production.
+
+Compose AI độc lập và Compose root local/staging truyền
+`AI_IDENTITY_SERVICE_KEY` vào process AI. Compose cũng truyền
+`AI_WORK_SERVICE_AUTH_ENABLED`; mặc định `false` nên không cần
+`AI_WORK_SERVICE_KEY`. Nếu bật cờ, cấp key cho toàn bộ process AI. Việc cấu
+hình không xác nhận Work provider/runtime đã hoạt động.
 
 ## Chạy từ Compose root
 
@@ -241,11 +270,12 @@ PYTHONPATH=src uv run celery -A jobs.celery_app:celery_app beat --loglevel=INFO 
 ```
 
 Settings tự đọc hai file dù cwd khác. URL DB/broker host phải cấu hình phù
-hợp. Mock đọc fixture trong package và không cần microservice/server khác.
+hợp. Mock đọc fixture trong package; xác minh JWT vẫn cần JWKS và session-status
+Identity. Mock không bỏ qua kiểm tra xác thực.
 Chạy migration tới `head` (gồm `0004`, terminal timestamp/index retention) trước khi
 nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
 POST trả `202`, request chỉ được xử lý khi pipeline hoạt động. JWT phải ký
-hợp lệ; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu
+hợp lệ và phiên phải còn active tại Identity; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu
 hình sẽ từ chối request có target. `/healthz` kiểm tra process, không thay
 thế kiểm tra DB/broker/domain readiness.
 
@@ -307,3 +337,13 @@ buộc và phần liên quan trong cột tùy chọn.
 Instruction mặc định khi làm việc trong source nằm tại
 [`apps/ai-service/AGENTS.md`](../../apps/ai-service/AGENTS.md). Plan cho thay đổi
 lớn nằm tại [`apps/ai-service/.agent/PLANS.md`](../../apps/ai-service/.agent/PLANS.md).
+
+### Xác thực staging
+
+Compose staging truyền Identity service key và Fernet key cho toàn bộ process
+AI. Issuer/audience mặc định theo Identity; token mock local không dùng trong
+staging. Mỗi xác thực tải JWKS từ Identity, lọc khóa RSA phù hợp và không cache
+kết quả. `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định nên Work key không bắt
+buộc; khi bật cờ, Compose phải cấp `AI_WORK_SERVICE_KEY` cho các process AI.
+Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực
+hoặc Fernet key không hợp lệ. Xem [cấu hình staging](../infrastructure/environment.md#cấu-hình-ai-trong-compose-root).

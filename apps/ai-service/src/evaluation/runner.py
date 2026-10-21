@@ -268,6 +268,7 @@ async def deterministic_case(case: dict) -> tuple[dict, list, bool]:
         environment="test",
         mock_test=False,
         work_service_key=AUTH_KEY,
+        work_service_auth_enabled=True,
         integration_service_key=GITHUB_KEY,
         github_context_enabled=case["scenario"] != "github_disabled",
         authorization_urls={
