@@ -9,7 +9,6 @@ from accounts.serializers.commands import (
     StatusChangeSerializer,
 )
 from authentication.adapters.password_validation import PasswordCompositionValidator
-from common.errors import IdentityAPIError
 
 pytestmark = pytest.mark.unit
 
@@ -39,14 +38,14 @@ def test_profile_patch_rejects_invalid_or_protected_fields(data, field):
     assert field in serializer.errors
 
 
-def test_profile_patch_cannot_assign_student_identity():
-    serializer = ProfilePatchSerializer(data={"student_id": "S-001"}, partial=True)
+def test_profile_patch_normalizes_student_id_and_accepts_clear():
+    serializer = ProfilePatchSerializer(data={"student_id": " s-001 "}, partial=True)
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["student_id"] == "S-001"
 
-    with pytest.raises(IdentityAPIError) as error:
-        serializer.is_valid(raise_exception=True)
-
-    assert error.value.public_code == "STUDENT_ID_IMMUTABLE"
-    assert error.value.status_code == 403
+    clear = ProfilePatchSerializer(data={"student_id": " "}, partial=True)
+    assert clear.is_valid(), clear.errors
+    assert clear.validated_data["student_id"] is None
 
 
 @pytest.mark.parametrize(

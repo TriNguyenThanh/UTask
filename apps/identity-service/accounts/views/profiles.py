@@ -17,6 +17,7 @@ from accounts.services.profiles import public_users, update_profile
             "ProfilePatchData",
             fields={
                 "display_name": serializers.CharField(),
+                "student_id": serializers.CharField(allow_null=True),
                 "phone_number": serializers.CharField(allow_null=True),
                 "bio": serializers.CharField(allow_null=True),
                 "preferences": serializers.DictField(),
@@ -38,6 +39,7 @@ class CurrentUserView(UserDetailsView):
         return Response(
             {
                 "display_name": profile.display_name,
+                "student_id": profile.user.student_id,
                 "phone_number": profile.phone_number,
                 "bio": profile.bio,
                 "preferences": profile.preferences,
