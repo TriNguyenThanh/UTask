@@ -310,6 +310,7 @@ class PostgresRequestRepository:
                         self._fail(session, row, "OUTPUT_VALIDATION_FAILED", completion.created_at)
                     else:
                         row.status = response.status
+                        row.terminal_at = completion.created_at
                         row.response = response.model_dump(mode="json")
                         row.credential = ""
                         row.execution_token = None
@@ -323,6 +324,29 @@ class PostgresRequestRepository:
                             )
                 session.delete(completion)
             return len(rows)
+
+    def cleanup_terminal(self, now: datetime, *, retention_days: int = 30, limit: int = 500) -> int:
+        """Xóa một batch terminal; khóa cha và cascade con trong transaction ngắn."""
+        if retention_days < 1 or not 1 <= limit <= 500:
+            raise ValueError("Retention phải dương và batch nằm trong 1..500")
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("Thời điểm retention phải có múi giờ")
+        cutoff = now - timedelta(days=retention_days)
+        with self.sessions.begin() as session:
+            ids = session.scalars(
+                select(RequestRow.id)
+                .where(
+                    RequestRow.status.in_(("succeeded", "failed")),
+                    RequestRow.terminal_at < cutoff,
+                )
+                .order_by(RequestRow.terminal_at, RequestRow.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            ).all()
+            if not ids:
+                return 0
+            session.execute(delete(RequestRow).where(RequestRow.id.in_(ids)))
+            return len(ids)
 
     def deliveries(self, now: datetime, limit: int = 100) -> list[Delivery]:
         with self.sessions.begin() as session:
@@ -412,11 +436,14 @@ class PostgresRequestRepository:
             return expired
 
     def _fail(self, session, row: RequestRow, code: str, now: datetime) -> None:
+        if row.status in {"succeeded", "failed"}:
+            return
         response = failed_response(
             REQUEST_ADAPTER.validate_python(row.payload), row.id, row.created_at, now, failure(code)
         )
         row.response = response.model_dump(mode="json")
         row.status = "failed"
+        row.terminal_at = now
         row.credential = ""
         row.execution_token = None
         session.execute(delete(DeliveryRow).where(DeliveryRow.request_id == row.id))

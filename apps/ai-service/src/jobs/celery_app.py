@@ -26,4 +26,11 @@ celery_app.conf.update(
     task_time_limit=40,
     task_default_queue="utask_ai",
     task_publish_retry=False,
+    beat_schedule={
+        "ai-terminal-retention": {
+            "task": "utask_ai.cleanup_terminal",
+            "schedule": settings.retention_interval_seconds,
+            "options": {"queue": "utask_ai", "expires": settings.retention_interval_seconds},
+        }
+    },
 )
