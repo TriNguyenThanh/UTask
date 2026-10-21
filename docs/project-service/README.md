@@ -29,9 +29,19 @@ Work giữ `class_id`/`group_id` làm tham chiếu logic, gọi Classroom API kh
 xác minh; không đọc database hoặc tạo foreign key xuyên service.
 Project độc lập không gắn lớp/nhóm cần quyết định sản phẩm.
 
-Work công bố internal API lấy Project/Task context để AI dùng theo baseline.
-Endpoint, auth service-to-service, quyền theo user/target, giới hạn dữ liệu và
-SLA chưa được chốt; không coi tên tool AI là URL API đã có.
+Work boundary cho AI đã chốt trong
+[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
+[Work contract](../../contracts/api/work-service.yaml) tham chiếu. Các endpoint
+được đánh dấu `planned`: **Chưa triển khai provider Work**, không suy ra đã có
+API từ hợp đồng. Boundary gồm POST authorize `ai.analyze` theo intent/target,
+GET project/task/team/progress context và POST authorize `github.read` chỉ
+dành cho caller Integration. Bearer actor và service key cùng bắt buộc;
+context tối đa 65536 byte, theo shape allowlist và không chứa PII. Work tự
+resolve Project từ target, tính tiến độ bằng quy tắc và kiểm quyền mỗi lần đọc.
+Đội Work triển khai theo
+[hướng dẫn cung cấp context cho AI](ai-service-integration-guide.md): thứ tự
+công việc, ba API, mapping dữ liệu, cấu hình key và tiêu chí nghiệm thu.
+Xem [điều kiện tích hợp AI](../ai-service/production-readiness.md).
 
 Thay đổi nghiệp vụ được lưu cùng outbox, publisher Celery gửi event Kafka
 sau commit. Job nội bộ như deadline scan dùng Celery + Redis thuộc Work.

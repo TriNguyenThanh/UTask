@@ -1,9 +1,9 @@
 # Tích hợp GitHub context từ AI Service
 
-**Trạng thái: Thiết kế mục tiêu phía AI; provider Integration đã triển khai.** Adapter AI đã có domain
-`github_activity` và bộ lọc trường ở mức nền; việc gọi endpoint GitHub context
-của Integration bằng service key và hợp đồng response dưới đây chưa được xác
-minh. Contract chuẩn là
+**Trạng thái: Một phần.** Provider Integration và adapter AI đã có source/test
+cho `github_activity`, Bearer actor, service key riêng và typed response.
+E2E AI → Integration → Work/GitHub với credential staging **Chưa xác minh**;
+provider authorize Work còn **Chưa triển khai**. Contract chuẩn là
 [Integration Service v1](../../contracts/api/integration-service-v1.yaml).
 
 ## Phạm vi và luồng
@@ -36,22 +36,28 @@ Response là `ContextDocument` với `domain: "github_activity"`, `as_of`,
 `DISCONNECTED` hoặc `REAUTH_REQUIRED`; AI không tự suy ra trạng thái mapping
 từ mảng rỗng. Mỗi item hiện theo schema `GitHubActivityItem` trong contract.
 
-## Cấu hình và thay đổi adapter
+## Cấu hình adapter hiện tại
 
-Thêm secret `AI_INTEGRATION_SERVICE_KEY` vào cấu hình secret hiện có; cung cấp
-nó cho API và worker cùng nơi cấu hình `AI_CONTEXT_URLS`. Đây là tên biến mục
-tiêu cần được phản ánh vào settings/config khi triển khai. Không ghi key vào
+Đặt secret `AI_INTEGRATION_SERVICE_KEY` trong `.env` root/server; Compose inject
+environment cho API/worker/dispatcher/beat, cùng image và cấu hình. Không ghi key vào
 `infra/env/ai-service.env`, log, lỗi trả client hoặc nội dung gửi model. Thêm
 `project:github_activity` vào `AI_CONTEXT_URLS` với URL nội bộ dạng
 `https://integration-service/api/v1/internal/projects/{target_id}/github/context`;
 adapter hiện thay `{target_id}` từ project đã validate. Không dùng placeholder
 `{project_id}` vì adapter chưa hỗ trợ tên đó, và không hard-code host trong
-agent. Giữ TLS ngoài môi trường
-local development/test theo quy tắc cấu hình AI hiện hành.
+agent. URL domain nội bộ chấp nhận HTTP/HTTPS với host tĩnh; lựa chọn TLS theo
+network triển khai, không nhầm quy tắc HTTPS của LLM provider với HTTP nội bộ.
+Bật `AI_GITHUB_CONTEXT_ENABLED=true` chỉ sau khi nghiệm thu quyền/context;
+mặc định false. Tool chỉ cấp cho risk Project khi focus rỗng hoặc có
+`github_activity`; risk Sprint không gọi Integration và runtime thêm limitation
+xác định, không dựa vào prompt model. Flag tắt cũng thêm limitation tương ứng.
 
-Trong `InternalContextAdapter`, chỉ gắn `X-Service-Key` cho request tới
-Integration; giữ Bearer actor và timeout hiện có. Bổ sung kiểm soát trạng thái
-cho `ContextDocument`: `available` dùng bình thường; `partial` được trả cho
+`InternalContextAdapter` gắn key Integration cho GET GitHub, key Work cho
+POST authorize/GET context Work; không dùng lẫn key. Adapter giữ Bearer actor,
+timeout, không redirect và đọc streaming tối đa 65536 byte. Nhánh fetch GitHub
+không gọi Work authorize từ AI lần nữa; Integration chịu trách nhiệm quyền
+`github.read`. Việc authorize request AI lúc tiếp nhận/worker vẫn giữ nguyên.
+Adapter kiểm soát `ContextDocument`: `available` dùng bình thường; `partial` trả cho
 workflow cùng warning để kết luận thận trọng; `stale` trả lỗi `CONTEXT_STALE`;
 `missing` phải được tool/workflow biểu diễn tường minh là không có context; không
 biến nó thành context `available` hoặc dữ liệu rỗng có vẻ đầy đủ.
@@ -63,7 +69,8 @@ dành `unavailable` cho context không có nguồn dùng được; adapter phả
 HTTP status. Lỗi HTTP 401/403 là lỗi xác thực/phân quyền; 429 và 503 là lỗi
 dịch vụ cần xử lý theo retry/deadline hiện có.
 HTTP 409 (`VERSION_CONFLICT` hoặc `GITHUB_REAUTH_REQUIRED`) không được dùng
-như context; thông báo cần đồng bộ/cấp quyền lại và không fallback fixture.
+như context: adapter trả `CONTEXT_UNAVAILABLE`, không retry và không fallback
+fixture. Chi tiết xử lý đồng bộ/cấp quyền lại thuộc Integration/client.
 `unavailable`, timeout, lỗi 5xx hoặc cấu hình thiếu phải báo context không sẵn
 sàng, có retry theo chính sách hiện hành nếu lỗi tạm thời. Payload sai schema,
 sai domain, quá lớn hoặc thời điểm không hợp lệ trả `CONTEXT_INVALID`.
@@ -87,10 +94,14 @@ Unit test adapter cần bao phủ tối thiểu:
 - Lỗi biên: key/config thiếu, 5xx, timeout, JSON/schema/domain sai và payload
   vượt giới hạn được ánh xạ đúng; response/log không chứa service key hay token.
 
-Triển khai theo thứ tự: đối chiếu schema response với contract hiện hành; cập
-nhật adapter cùng unit test; cấu hình secret và URL cho API/worker ở staging; xác
+Rollout theo thứ tự: đối chiếu schema response với contract hiện hành;
+cấu hình secret và URL cho các process AI ở staging; xác
 minh quyền allow/deny, partial, stale và missing với Integration thật; sau đó
-mới bật cho workflow cần `github_activity`. Không coi fixture `MOCK_TEST` là
+mới bật cho workflow cần `github_activity`. Source/test adapter đã có trong
+`test_context.py` và `test_context_contract.py`; test transport fake không
+chứng minh request production. Gate live và fixture staging xem
+[điều kiện phát hành AI](../ai-service/production-readiness.md).
+Không coi fixture `MOCK_TEST` là
 bằng chứng Integration hoặc GitHub thật hoạt động.
 
 ## Tham chiếu

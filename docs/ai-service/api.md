@@ -73,8 +73,8 @@ Nginx hiện có route `/api/ai/`. Prefix đã được contract v1 đặc tả 
 /api/ai/v1
 ```
 
-Source dùng route canonical trên và xác minh JWT. Integration gateway root
-chưa xác minh; Nginx hiện rewrite prefix khác route app, cần cấu hình deployment.
+Source dùng route canonical trên và xác minh JWT. Nginx giữ nguyên URI AI;
+test hạ tầng kiểm tra routing, tích hợp domain qua gateway thật còn cần nghiệm thu.
 
 Quy ước dữ liệu:
 
@@ -89,6 +89,11 @@ Quy ước dữ liệu:
   Request lặp hợp lệ dùng lại request ID và trạng thái/kết quả đã lưu, không
   tạo job mới. Cần bảo vệ request đồng thời bằng persistence và chống xử lý
   trùng ở worker khi task được giao lại.
+
+Request/result terminal được lưu 30 ngày tính từ `terminal_at`, sau đó cleanup
+xóa theo batch, gồm các bản ghi con. GET request đã xóa trả `404`; cùng
+`user_id + Idempotency-Key` được phép tạo request mới sau purge. Request
+queued/running không bị retention xóa. Xem [vận hành retention](production-readiness.md).
 
 ### Giới hạn chống spam
 

@@ -10,6 +10,11 @@ minh kết nối giữa hai service hay GitHub thật. Xem
 [ADR-003](../adr/003-integration-auth-and-contracts.md) và
 [contract Integration](../../contracts/api/integration-service-v1.yaml).
 
+Phần Work cung cấp context cho AI và kiểm quyền `github.read` cho Integration
+được bàn giao riêng tại
+[hướng dẫn Work–AI](../project-service/ai-service-integration-guide.md).
+Ba API đó không thay thế luồng kết nối repository trong tài liệu này.
+
 ## Ranh giới và xác thực
 
 Integration sở hữu credential GitHub và là service duy nhất gọi GitHub API.

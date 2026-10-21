@@ -3,14 +3,17 @@
 **Trạng thái: Một phần.** Pipeline API/PostgreSQL/dispatcher/Redis/Celery/ADK
 đã triển khai trong `apps/ai-service/`, có JWT và domain tools qua REST adapter.
 Integration Identity/Work/Integration và LLM production **Chưa xác minh**;
-Kafka, specialist và retention tự động **Chưa triển khai**.
+Retention terminal đã có source, migration và lịch Celery beat; Kafka và
+specialist **Chưa triển khai**. Điều kiện phát hành và phần chưa xác minh nằm
+tại [mức sẵn sàng production](production-readiness.md).
 
 Đây là trang điều hướng cho tài liệu AI Service. Không coi các phần thiết kế
 API, event, provider hoặc agent là deployment production đã hoàn chỉnh chỉ
 từ thiết kế. [Code map](code-map.md) giữ bằng chứng implementation và kiểm thử.
 
-[Checkpoint 15/10/2026](checkpoint.md) tổng hợp phần đã chạy, inference LLM
-thật, kiểm thử và việc còn lại để tiếp tục triển khai.
+[Checkpoint 21/10/2026](checkpoint.md) tổng hợp tiến độ M1–M4, blocker local,
+bằng chứng kiểm thử và việc tiếp theo theo đội; giữ lịch sử smoke LLM thật
+ngày 15/10 riêng để không nhầm với nghiệm thu domain/staging.
 
 ## Baseline và phạm vi
 
@@ -18,7 +21,7 @@ Thiết kế mục tiêu theo [baseline](../architecture/README.md), mục 4.6, 
 và 18. Các quyết định chuyển đổi nằm trong
 [ADR-001](../adr/001-adopt-architecture-baseline.md). Baseline chọn Celery +
 Redis cho job nội bộ; Kafka cho event giữa service; AI lấy context qua internal
-API sau domain tool/Context Layer. API, dispatcher và worker thuộc cùng service,
+API sau domain tool/Context Layer. API, dispatcher, worker và beat thuộc cùng service,
 scale độc lập và dùng chung PostgreSQL của AI.
 
 MVP lấy context qua REST khi thực thi và giữ nội dung trong bộ nhớ worker;
@@ -70,6 +73,9 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
 | `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
 | `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
+| `AI_WORK_SERVICE_KEY`, `AI_INTEGRATION_SERVICE_KEY` | Secret riêng cho AI → Work và AI → Integration; inject qua environment, không đặt trong env_file thường |
+| `AI_GITHUB_CONTEXT_ENABLED` | Mặc định false; chỉ cấp development tool cho risk Project khi focus cho phép |
+| `AI_TERMINAL_RETENTION_DAYS`, `AI_RETENTION_BATCH_SIZE`, `AI_RETENTION_INTERVAL_SECONDS` | Mặc định 30 ngày, tối đa 500 request/lần, một lần mỗi 3600 giây |
 | `AI_JWT_PUBLIC_KEY` hoặc `AI_JWT_JWKS_URL` | Public key PEM hoặc JWKS của Identity; chỉ chọn một |
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience bắt buộc khi xác minh JWT |
 | `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
@@ -81,11 +87,16 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 
 URL template chỉ dùng `{target_type}` và `{target_id}` từ request đã validate.
 Các target là `project`, `task`, `sprint`; domain là `project`, `task`, `team`,
-`progress`, `github_activity`. Không điền endpoint suy đoán: cần URL và mapping
-do Work/Integration công bố. Adapter hiện nhận quyết định quyền `{allowed:
-true}` và [ContextDocument](../../apps/ai-service/src/models/context.py);
-đây là hợp đồng nội bộ adapter, không khẳng định domain đã cung cấp schema đó.
-Thiếu cấu hình hoặc quyền/context lỗi thì từ chối.
+`progress`, `github_activity`. Work boundary đã chốt tại
+[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
+[Work contract](../../contracts/api/work-service.yaml) tham chiếu; provider Work
+**Chưa triển khai**. Adapter POST body `action: ai.analyze` và `intent`, kiểm
+tra envelope `success/data` cùng target/action/allowed; GET context nhận
+`ContextDocument` trực tiếp, tối đa 65536 byte. Bearer actor và service key
+khác nhau theo đích. GitHub đi Integration; Integration tự hỏi Work quyền
+`github.read`, AI không gọi thêm Work cho lần đọc GitHub. Xem
+[boundary và cấu hình staging](production-readiness.md#boundary-domain-và-quyền).
+Thiếu cấu hình hoặc quyền/context lỗi thì từ chối; không fallback fixture.
 
 ADK dùng `LiteLlm` để gọi custom endpoint tương thích OpenAI. Model có thể là
 ID gốc của proxy (ví dụ `gemini-3.8-flash-high`) hoặc route `openai/<model-id>`,
@@ -156,12 +167,13 @@ fixture không xác nhận contract domain production.
 ## Chạy từ Compose root
 
 Compose root local/staging giữ tên `ai-service` cho API và tách `ai-worker`,
-`ai-dispatcher`, dùng chung image/tag. Các process AI dùng cùng
+`ai-dispatcher`, `ai-beat`, dùng chung image/tag. Các process AI dùng cùng
 container PostgreSQL 16 (`postgres`) với Django, nhưng lưu trong database riêng
 `${AI_DB_NAME:-ai_context_db}`, dùng chung `POSTGRES_USER`/`POSTGRES_PASSWORD`.
 AI dùng Redis chung DB1 làm broker. Root Compose không cần `AI_DB_PASSWORD`.
 Entrypoint API chạy `alembic upgrade head` trước Uvicorn; migration lỗi thì API
-dừng. Worker/dispatcher chờ API healthy và broker healthy; worker còn có Celery ping.
+dừng. Worker/dispatcher/beat chờ API healthy và broker healthy; worker có
+Celery ping, beat có probe PID. Beat chỉ lập lịch retention, không chạy model.
 Không còn service `ai-migrate` riêng trong Compose root.
 Root Compose mặc định tạo URL `postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<AI_DB_NAME>`.
 Nếu credential chứa ký tự đặc biệt trong URL, đặt `AI_DATABASE_URL` với credential
@@ -187,9 +199,9 @@ curl http://localhost:8000/healthz
 ```
 
 [`compose.yaml`](../../apps/ai-service/compose.yaml) chạy PostgreSQL 17 riêng,
-Redis, API, dispatcher và Celery worker. API chờ DB/broker healthy rồi entrypoint
+Redis, API, dispatcher, Celery worker và beat. API chờ DB/broker healthy rồi entrypoint
 chạy `alembic upgrade head` trước Uvicorn. Migration lỗi thì API không khởi động;
-worker/dispatcher chờ API và broker healthy. Không còn service `migrate` riêng;
+worker/dispatcher/beat chờ API và broker healthy. Không còn service `migrate` riêng;
 DB/broker không mở cổng ra host.
 Điền `AI_DB_PASSWORD` bằng password local có thể dùng trong URL; Compose tự
 đặt URL DB/broker theo tên container. Worker local dùng concurrency 2, có thể
@@ -205,7 +217,7 @@ server mock, launcher riêng hoặc Compose override cho mock.
 Entrypoint nhận `uvicorn` hoặc đường dẫn kết thúc bằng `/uvicorn` sẽ chạy
 Alembic từ cùng thư mục executable rồi `exec` nguyên lệnh API. Mỗi lần khởi
 động API đều upgrade tới `head`; Alembic không áp dụng lại revision đã có.
-Lệnh worker, dispatcher và lệnh quản trị như `alembic upgrade head` được thực
+Lệnh worker, dispatcher, beat và lệnh quản trị như `alembic upgrade head` được thực
 thi trực tiếp, giữ nguyên tham số và mã thoát. Application lifespan không tự
 tạo schema. Với nhiều API replica, khởi động một API để migration xong trước
 khi scale; entrypoint không có khóa điều phối migration giữa replica.
@@ -220,16 +232,17 @@ uv run alembic upgrade head
 uv run uvicorn main:app --app-dir src --reload
 ```
 
-Trong hai terminal khác, từ cùng service root:
+Trong ba terminal khác, từ cùng service root:
 
 ```sh
 PYTHONPATH=src uv run celery -A jobs.celery_app:celery_app worker --loglevel=INFO --concurrency=2
 PYTHONPATH=src uv run python -m jobs.dispatcher
+PYTHONPATH=src uv run celery -A jobs.celery_app:celery_app beat --loglevel=INFO --schedule=/tmp/ai-beat-schedule --pidfile=/tmp/ai-beat.pid
 ```
 
 Settings tự đọc hai file dù cwd khác. URL DB/broker host phải cấu hình phù
 hợp. Mock đọc fixture trong package và không cần microservice/server khác.
-Chạy migration tới `head` (hiện gồm `0003`, hai index chống spam) trước khi
+Chạy migration tới `head` (gồm `0004`, terminal timestamp/index retention) trước khi
 nhận request. API không chạy workflow; nếu dispatcher/worker chưa chạy thì
 POST trả `202`, request chỉ được xử lý khi pipeline hoạt động. JWT phải ký
 hợp lệ; header identity bootstrap đã bỏ. Endpoint quyền/context thiếu cấu

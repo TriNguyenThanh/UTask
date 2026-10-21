@@ -1,8 +1,10 @@
 # AI Service Code Map
 
 **Trạng thái: Một phần.** Runtime request/dispatcher/worker/ADK và PostgreSQL
-đã triển khai; kiểm tra ngày 2026-10-08. Integration domain/LLM production và
-gateway chưa xác minh. Nguồn pipeline chuẩn: [architecture](architecture.md).
+đã triển khai, thêm boundary context/retention và wiring gate phát hành M3.
+Provider Work **Chưa triển khai**; domain/LLM production và E2E gateway
+staging **Chưa xác minh**. Xem [production readiness](production-readiness.md).
+Nguồn pipeline chuẩn: [architecture](architecture.md).
 
 ## Service root
 
@@ -18,6 +20,7 @@ src/
 ├── context/           # domain tools gắn với request target
 ├── infrastructure/    # PostgreSQL, JWT, HTTP, ADK runtime/provider
 ├── jobs/              # Celery task và dispatcher process
+├── evaluation/        # golden cases, CLI deterministic/live và report JSON/JUnit
 └── models/
 ```
 
@@ -53,13 +56,20 @@ src/
 
 ## Tools và prompts
 
-- `context/tools.py`: năm domain tools, scope target cố định, metadata/fingerprint.
+- `context/tools.py`: domain tools, scope target cố định, metadata/fingerprint;
+  GitHub chỉ cấp cho risk Project khi flag/focus cho phép. Sprint/flag tắt
+  được runtime thêm limitation xác định, không phụ thuộc prompt model.
 - Context thiết yếu được workflow kiểm tra trước khi chấp nhận proposal:
   backlog có target cần project, phân rã cần task, risk cần progress. Agent
   vẫn chọn thứ tự và context bổ sung; không có chuỗi fetch cứng mọi domain.
 - `workflow/ports.py`: context gateway protocol; tools không thấy HTTP/SQL/Kafka.
-- `infrastructure/context_http.py`: URL cấu hình, quyền, timeout, size/freshness,
-  allowlist fields, không redirect. Contract domain thật **Chưa xác minh**.
+- `infrastructure/context_http.py`: POST Work authorize với envelope đúng
+  target/action; GET raw context, Bearer actor và service key theo đích;
+  timeout, stream giới hạn 65536 byte/freshness, không redirect. GitHub giao
+  Integration authorize Work, không gọi Work lần nữa trong nhánh fetch đó.
+- `models/context.py`: shape project/task/team/progress/GitHub, kiểu và giới
+  hạn lồng nhau; lọc trường ngoài allowlist Work, strict GitHub theo contract.
+  Work boundary có hợp đồng, provider **Chưa triển khai**.
 - `workflow/instructions.py`: instruction riêng theo intent và JSON schema;
   input/context được đánh dấu untrusted. Provider adapter chỉ lắp ghép SDK.
 
@@ -70,6 +80,8 @@ src/
   prefetch 1, không result backend, không task autoretry model.
 - `jobs/tasks.py`: `utask_ai.execute_request(request_id)` gọi application.
 - `jobs/dispatcher.py`: process giao delivery bằng Celery publisher.
+- `jobs/celery_app.py`, `jobs/tasks.py`: beat schedule và task retention terminal;
+  mỗi giờ tối đa 500 request cũ hơn 30 ngày, retry lỗi DB có giới hạn.
 - Execution token + terminal state chống chạy trùng/ghi đè; worker chết trước
   bàn giao được dispatcher kết thúc failed khi deadline hết. Completion đã
   commit được giữ cho API, không timeout vì listener tạm dừng. Không tiếp tục
@@ -102,6 +114,9 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
   migration bắt buộc trước API/worker dùng bàn giao kết quả.
 - `migrations/versions/0003_request_admission.py`: hai index đếm request theo
   user/thời gian và user/trạng thái active; không thêm bảng hay broker.
+- `migrations/versions/0004_terminal_retention.py`: terminal_at/backfill/check
+  và partial index; index thông thường cần maintenance window khi bảng lớn.
+  `repositories.cleanup_terminal` khóa batch terminal, cascade con trong AI DB.
 - `infrastructure/security.py`: JWT và Fernet credential vault; xóa ciphertext
   khi bàn giao completion hoặc terminal. `infrastructure/bootstrap.py`: SQLAlchemy connection pool.
 
@@ -127,6 +142,14 @@ cung cấp cụ thể hoặc chạy evaluation production.
 
 ## Tests và tooling
 
+- `evaluation/cases.json`: 30 golden case, phiên bản dataset/rubric; mỗi intent
+  ít nhất 10 case. `evaluation/runner.py`: adapter/ADK với model/HTTP fake ở
+  deterministic; live POST/GET qua gateway, model pin và target fixture staging.
+  `evaluation/__main__.py`: CLI và exit code gate; JSON/JUnit chỉ lưu checks,
+  timing và metadata/hash, không raw output/context/credential.
+- `tests/test_evaluation.py`: dataset/rule, ngưỡng gate và hai chế độ runner;
+  kiểm tra fake transport không là bằng chứng evaluation live production.
+
 - `test_admission.py`: quyết định giới hạn, cấu hình, replay/conflict, cửa sổ
   60 giây, queued/running/completion, giải phóng slot và POST đồng thời qua
   nhiều connection PostgreSQL.
@@ -140,6 +163,11 @@ cung cấp cụ thể hoặc chạy evaluation production.
 - `test_models.py`, `test_contract.py`: request/version/range và wire schema v1.
 - `test_security.py`: JWT ký thật, issuer/audience/expiry, vault và config.
 - `test_context.py`: quyền, thiếu/cũ context, HTTP lỗi/redirect/size, filter/tool budget.
+- `test_context_contract.py`: Work POST/envelope/key theo đích, typed shape,
+  PII allowlist, GitHub không double authorize, tool scope/flag và limitation.
+- `test_retention_unit.py`, `test_retention_postgres.py`,
+  `test_retention_migration.py`: cleanup/task wiring, cascade/concurrency,
+  legacy backfill, dữ liệu thời gian sai và index/schema drift.
 - `test_workflow.py`: Runner/ADK thật với BaseLlm fake; success, tools, schema
   sai, retry provider, budget và timeout.
 - `test_repository.py`: PostgreSQL thật, enqueue đồng thời, rollback, claim,
@@ -182,15 +210,15 @@ mock-domain hoặc Compose override; luồng request/polling giữ nguyên.
 
 ## Hạ tầng liên quan (read-only)
 
-Compose root local/staging có API, dispatcher và worker AI dùng chung image;
+Compose root local/staging có API, dispatcher, worker và beat AI dùng chung image;
 entrypoint API chạy Alembic trước Uvicorn. Hướng dẫn cấu hình và vận hành nằm
 trong [README](README.md#chạy-từ-compose-root). Cấu hình Compose không chứng
 minh gateway/domain hoặc production đã tích hợp; xem [architecture](architecture.md)
 để biết requirement còn lại.
 
 [`compose.yaml`](../../apps/ai-service/compose.yaml) của riêng AI lắp API,
-dispatcher, worker, PostgreSQL và Redis; API entrypoint chạy Alembic trước
-Uvicorn, worker/dispatcher chờ API và broker healthy. Không còn service migrate
+dispatcher, worker, beat, PostgreSQL và Redis; API entrypoint chạy Alembic trước
+Uvicorn, worker/dispatcher/beat chờ API và broker healthy. Không còn service migrate
 riêng; cấu hình mẫu ở
 [cấu hình AI](../../infra/env/ai-service.env) và [mẫu secret root](../../.env.example). Đây là stack local,
 không là integration test Identity/Work/Integration hoặc gateway root.
