@@ -341,6 +341,15 @@ Mức độ: **Cao** = chặn hoặc làm sai luồng chính, hoặc vi phạm W
 màn hình dùng nhiều; **Trung bình** = gây khó dùng, có cách vòng; **Thấp** =
 chưa nhất quán hoặc trau chuốt.
 
+**Trạng thái xử lý UX-01..UX-09** (`Đã triển khai`, có unit test; `Chưa xác minh`
+trên trình duyệt thật): UX-01/02 panel issue mở tại chỗ ở Backlog, đóng bằng
+`navigate(-1)` hoặc replace; UX-03 đăng xuất không giữ `returnTo`; UX-04
+`errorElement` giữ shell, `/info` Demo chuyển về Board; UX-05 cột Board
+`min-w-64 flex-1`; UX-06 `DisabledAction` cho 15 nút chính; UX-07 bỏ form đề tài
+(Classroom chưa có API đăng ký/sửa đề tài); UX-08 xác nhận trước khi bỏ dữ liệu
+đang nhập; UX-09 đổi màu theo quy tắc amber/rose đậm hơn. Chưa chạy axe trên
+trình duyệt để xác nhận hết lỗi tương phản.
+
 ### 6.1 Điều hướng và luồng
 
 | ID | Mức | Màn hình | Bằng chứng | Vấn đề | Đề xuất |

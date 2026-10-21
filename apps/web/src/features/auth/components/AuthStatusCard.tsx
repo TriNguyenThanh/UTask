@@ -21,7 +21,7 @@ export function AuthStatusCard({
       <h1 id="auth-status-title" className="mb-2 text-2xl font-semibold tracking-tight">
         {title}
       </h1>
-      <div className="mb-6 text-sm leading-relaxed text-[#787586]" role="status">
+      <div className="mb-6 text-sm leading-relaxed text-muted-foreground" role="status">
         {children}
       </div>
       {actions ? <div className="flex flex-wrap gap-3 text-sm font-medium">{actions}</div> : null}

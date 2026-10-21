@@ -21,6 +21,7 @@ export function RealIssueEditor({
   textOnly,
   isLeader,
   onGone,
+  onDirtyChange,
 }: Readonly<{
   projectId: string;
   issueId: string;
@@ -33,6 +34,8 @@ export function RealIssueEditor({
   isLeader: boolean;
   /** Gọi sau khi issue bị lưu trữ hoặc xóa (đóng panel). */
   onGone: () => void;
+  /** Báo khối sửa có thay đổi chưa lưu. */
+  onDirtyChange?: (dirty: boolean) => void;
 }>) {
   const query = useTaskReal(issueId);
   if (!query.data) return null;
@@ -40,7 +43,7 @@ export function RealIssueEditor({
     <details className="rounded-lg border border-outline-subtle p-3">
       <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider">Chỉnh sửa issue</summary>
       <div className="pt-3">
-        <IssueEditForm task={query.data} epics={epics} assignees={assignees} textOnly={textOnly} />
+        <IssueEditForm task={query.data} epics={epics} assignees={assignees} textOnly={textOnly} onDirtyChange={onDirtyChange} />
         <div className="mt-4 space-y-4 border-t border-outline-subtle pt-4">
           <TaskLabelsEditor projectId={projectId} task={query.data} />
           <TaskRelationsEditor task={query.data} candidates={issues} />

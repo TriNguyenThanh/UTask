@@ -129,7 +129,7 @@ export function ActivateAccountForm({ activationKey }: { activationKey: string }
 
       {!linkBroken ? (
         <form className="space-y-4" onSubmit={submit}>
-          <p className="text-sm text-[#787586]">Nhấn nút bên dưới để hoàn tất kích hoạt tài khoản.</p>
+          <p className="text-sm text-muted-foreground">Nhấn nút bên dưới để hoàn tất kích hoạt tài khoản.</p>
           <details className="rounded-lg border p-3 text-sm">
             <summary className="cursor-pointer font-medium">Tài khoản do giảng viên tạo? Đặt mật khẩu</summary>
             <div className="mt-3 space-y-3">

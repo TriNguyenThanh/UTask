@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
+import { DiscardChangesConfirm } from "@/components/feedback/DiscardChangesConfirm";
 import { classErrorMessage } from "@/features/teacher/lib/classErrors";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
 import {
@@ -76,7 +77,7 @@ function VerdictView({ verdict }: Readonly<{ verdict: Verdict }>) {
   );
 }
 
-function Body({ onDone }: Readonly<{ onDone: () => void }>) {
+function Body({ onDone, onDirtyChange }: Readonly<{ onDone: () => void; onDirtyChange: (dirty: boolean) => void }>) {
   const course = useTeacherCourseContext();
   const students = useTeacherStudents(course.courseId);
   const teams = useTeacherTeams(course.courseId);
@@ -98,6 +99,12 @@ function Body({ onDone }: Readonly<{ onDone: () => void }>) {
   const reasonValid = reason.trim().length >= 3 && reason.trim().length <= 500;
   // Creating a team carries no reason: the backend does not take one.
   const reasonRequired = mode !== "create";
+
+  const dirty =
+    [studentId, toTeamId, replacementId, leaderTeamId, newLeaderId, founderId].some((v) => v !== NONE) ||
+    teamName.trim() !== "" ||
+    reason.trim() !== "";
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   if (students.isPending || teams.isPending) {
     return <output className="text-sm text-muted-foreground">Đang tải dữ liệu lớp…</output>;
@@ -367,26 +374,55 @@ function Body({ onDone }: Readonly<{ onDone: () => void }>) {
  */
 export function TeamAdjustDialog() {
   const [open, setOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const course = useTeacherCourseContext();
   const real = course.classroom !== undefined;
+
+  function close() {
+    setOpen(false);
+    setDirty(false);
+  }
+
+  // Esc và nhấp ra ngoài dễ bấm nhầm nên hỏi lại khi đã nhập dở; "Hủy" đóng ngay.
+  function askBeforeDiscard(event: Event) {
+    if (!dirty) return;
+    event.preventDefault();
+    setConfirmDiscard(true);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline">
-          Điều chỉnh nhóm
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Điều chỉnh nhóm</DialogTitle>
-          <DialogDescription>
-            {real
-              ? "Chọn thay đổi, xem điều kiện và hệ quả, nhập lý do rồi xác nhận. Lý do được ghi vào lịch sử nhóm."
-              : "Chọn thay đổi để xem trước điều kiện và hệ quả. Với dữ liệu mẫu, thay đổi không được áp dụng."}
-          </DialogDescription>
-        </DialogHeader>
-        {open ? <Body onDone={() => setOpen(false)} /> : null}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline">
+            Điều chỉnh nhóm
+          </Button>
+        </DialogTrigger>
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto"
+          onInteractOutside={askBeforeDiscard}
+          onEscapeKeyDown={askBeforeDiscard}
+        >
+          <DialogHeader>
+            <DialogTitle>Điều chỉnh nhóm</DialogTitle>
+            <DialogDescription>
+              {real
+                ? "Chọn thay đổi, xem điều kiện và hệ quả, nhập lý do rồi xác nhận. Lý do được ghi vào lịch sử nhóm."
+                : "Chọn thay đổi để xem trước điều kiện và hệ quả. Với dữ liệu mẫu, thay đổi không được áp dụng."}
+            </DialogDescription>
+          </DialogHeader>
+          {open ? <Body onDone={close} onDirtyChange={setDirty} /> : null}
+        </DialogContent>
+      </Dialog>
+      <DiscardChangesConfirm
+        open={confirmDiscard}
+        onDiscard={() => {
+          setConfirmDiscard(false);
+          close();
+        }}
+        onKeepEditing={() => setConfirmDiscard(false)}
+      />
+    </>
   );
 }

@@ -205,6 +205,8 @@ describe("github integration states", () => {
     });
 
     expect((await screen.findAllByText(/Kết nối GitHub/i)).length).toBeGreaterThan(0);
-    expect(screen.getByTitle(/OAuth sẽ khả dụng khi backend hỗ trợ/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kết nối GitHub" })).toHaveAccessibleDescription(
+      /OAuth sẽ khả dụng khi backend hỗ trợ/i,
+    );
   });
 });

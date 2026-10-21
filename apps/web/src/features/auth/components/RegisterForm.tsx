@@ -88,7 +88,7 @@ export function RegisterForm() {
       <h1 id="register-title" className="mb-2 text-2xl font-semibold tracking-tight">
         Đăng ký tài khoản
       </h1>
-      <p className="mb-6 text-sm text-[#787586]">Tạo tài khoản sinh viên UTask bằng email trường.</p>
+      <p className="mb-6 text-sm text-muted-foreground">Tạo tài khoản sinh viên UTask bằng email trường.</p>
 
       {submitError ? (
         <Alert className="mb-4 border-destructive/30 bg-white" variant="destructive">
@@ -127,7 +127,7 @@ export function RegisterForm() {
         </form>
       </Form>
 
-      <p className="mt-6 text-center text-[13px] text-[#787586]">
+      <p className="mt-6 text-center text-[13px] text-muted-foreground">
         Đã có tài khoản?{" "}
         <Link className="font-medium text-primary hover:underline" to="/login">Đăng nhập</Link>
       </p>

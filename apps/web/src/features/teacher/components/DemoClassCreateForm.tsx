@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { FormBody, FormFooter, FormSection } from "@/features/teacher/components/ClassFormLayout";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import {
   COURSE_CREATE_UNAVAILABLE,
   courseFormSchema,

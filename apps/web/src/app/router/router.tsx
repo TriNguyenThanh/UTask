@@ -41,7 +41,7 @@ export const appRoutes: RouteObject[] = [
       </RequireAuth>
     ),
     errorElement: <RouteError />,
-    children: [
+    children: [{ errorElement: <RouteError inShell />, children: [
       { path: "/", element: <HomeRedirect /> },
       {
         path: "/my-work",
@@ -174,7 +174,7 @@ export const appRoutes: RouteObject[] = [
         lazy: () => import("@/features/notifications/routes/SettingsSecurityRoute"),
       },
       { path: "*", lazy: () => import("@/app/router/NotFoundRoute") },
-    ],
+    ] }],
   },
 ];
 

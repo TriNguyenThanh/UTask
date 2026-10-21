@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { StudentImportResults } from "@/features/teacher/components/StudentImportResults";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
 import { MAX_STUDENTS_PER_REQUEST } from "@/lib/api/classroom/endpoints";

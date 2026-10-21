@@ -92,7 +92,7 @@ describe("multi-membership access (SV01, one session)", () => {
       await screen.findByRole("heading", { name: "Backlog & Sprint Planning" }),
     ).toBeInTheDocument();
     // SV01 leads NEXUS: leader-only workspace actions are present.
-    expect(screen.getByText(/Tạo Epic/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tạo Epic/i })).toBeInTheDocument();
     expect(screen.getByText(/AI ước lượng/i)).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe("multi-membership access (SV01, one session)", () => {
     // Member in CS402: leader-only actions stay hidden in this workspace.
     expect(screen.queryByText(/Hoàn thành Sprint/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/AI ước lượng/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Tạo Epic/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tạo Epic/i })).not.toBeInTheDocument();
   });
 
   it("flips between leader and member UI within one session via the sidebar", async () => {
@@ -133,13 +133,13 @@ describe("multi-membership access (SV01, one session)", () => {
     expect(
       await screen.findByRole("heading", { name: "Backlog & Sprint Planning" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Tạo Epic/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tạo Epic/i })).toBeInTheDocument();
 
     // Sidebar → CS402 (member workspace): leader-only actions disappear.
     await user.click(screen.getByRole("link", { name: /CS402/i }));
     await screen.findByRole("heading", { name: "Backlog & Sprint Planning" });
     await waitFor(() => {
-      expect(screen.queryByText(/Tạo Epic/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Tạo Epic/i })).not.toBeInTheDocument();
     });
     expect(screen.getByText(/DELI-02/)).toBeInTheDocument();
 
@@ -147,7 +147,7 @@ describe("multi-membership access (SV01, one session)", () => {
     await user.click(screen.getByRole("link", { name: /SE330/i }));
     await screen.findByRole("heading", { name: "Backlog & Sprint Planning" });
     await waitFor(() => {
-      expect(screen.getByText(/Tạo Epic/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Tạo Epic/i })).toBeInTheDocument();
     });
   });
 

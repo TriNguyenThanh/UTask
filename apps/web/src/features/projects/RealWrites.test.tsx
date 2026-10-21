@@ -292,4 +292,33 @@ describe("Issue panel edits", () => {
       body: { expected_version: 1, target_state_id: "state-done", previous_task_id: null, next_task_id: null },
     });
   });
+
+  it("asks before Esc discards an unsaved edit, keeps the typed value on Hủy, and closes after Bỏ thay đổi", async () => {
+    const user = userEvent.setup();
+    const view = setup("/projects/project-1/board?issue=NEXUS-1", { tasks: freshTasks() });
+    await user.click(await screen.findByText("Chỉnh sửa issue", {}, { timeout: 5000 }));
+    const title = await screen.findByLabelText("Tiêu đề");
+    await user.clear(title);
+    await user.type(title, "Chưa lưu");
+
+    await user.keyboard("{Escape}");
+    const confirm = await screen.findByRole("dialog", { name: "Bỏ thông tin đã nhập?" });
+    await user.click(within(confirm).getByRole("button", { name: "Hủy" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Bỏ thông tin đã nhập?" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Tiêu đề")).toHaveValue("Chưa lưu");
+
+    await user.keyboard("{Escape}");
+    await user.click(await screen.findByRole("button", { name: "Bỏ thay đổi" }));
+    await waitFor(() => expect(view.router.state.location.search).not.toContain("issue="));
+  });
+
+  it("closes at once on Esc when nothing was edited", async () => {
+    const user = userEvent.setup();
+    const view = setup("/projects/project-1/board?issue=NEXUS-1", { tasks: freshTasks() });
+    await user.click(await screen.findByText("Chỉnh sửa issue", {}, { timeout: 5000 }));
+    await screen.findByLabelText("Tiêu đề");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(view.router.state.location.search).not.toContain("issue="));
+    expect(screen.queryByRole("dialog", { name: "Bỏ thông tin đã nhập?" })).not.toBeInTheDocument();
+  });
 });
