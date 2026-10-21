@@ -15,7 +15,14 @@ import {
   Zap,
 } from "lucide-react";
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+
+import { DisabledAction } from "@/components/feedback/DisabledAction";
+import { useRealProjectContext } from "@/features/projects/components/RealProjectLayout";
+import { useRealIssueDetail, type IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
+import { useIssueParam } from "@/features/projects/hooks/useIssueParam";
+import { useRealIssueTools } from "@/features/projects/hooks/useRealIssueTools";
+import { IssuePanelHost } from "@/features/projects/components/IssuePanelHost";
 
 import { useAuth } from "@/features/auth/AuthProvider";
 
@@ -34,7 +41,6 @@ import { AiBacklogButton } from "@/features/projects/components/ai/AiBacklogDial
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { CreateSprintButton, SprintHeaderActions, SprintInsights } from "@/features/projects/components/RealSprintTools";
 import type { IssueWrites } from "@/features/projects/lib/issueWrites";
-import { useRealIssueWrites } from "@/lib/query/workWriteHooks";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
 import { PressableText } from "@/features/projects/components/PressableText";
@@ -62,7 +68,7 @@ import {
   type ProjectPermissionContext,
 } from "@/lib/permissions";
 import type { TaskScopeDto } from "@/lib/api/work/dto";
-import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
+import { useIssueDetail, useProjectAiSettings } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -353,16 +359,10 @@ function SprintSection({
           {actions !== undefined ? (
             actions
           ) : canComplete && isActive ? (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled
-              title="Chưa có API hoàn thành Sprint"
-              className="text-xs"
-            >
+            <DisabledAction size="xs" reason="Chưa có API hoàn thành Sprint" className="text-xs">
               <CheckCircle2 className="size-3.5" aria-hidden />
               Hoàn thành Sprint
-            </Button>
+            </DisabledAction>
           ) : null}
         </div>
       </div>
@@ -454,8 +454,15 @@ function BacklogSkeleton() {
 }
 
 /** `real`: dữ liệu Work thật; `writes` là cách ghi thật cho menu/kéo-thả. AI chưa tích hợp nên ẩn thanh AI. */
-function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueWrites }>) {
-  const navigate = useNavigate();
+function BacklogView({
+  detail,
+  real,
+  realTools,
+}: Readonly<{
+  detail: IssueDetailState;
+  real: boolean;
+  realTools?: { writes: IssueWrites; toggleSubtask: (subtaskId: string, done: boolean) => void };
+}>) {
   const { projectId, workspace: data, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
   const { user } = useAuth();
   const [scope, setScope] = useState<TaskScopeDto>("active");
@@ -469,9 +476,8 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
   const epicFilter = filters.epic;
   const setEpicFilter = (epic: string | null) => setFilters({ ...filters, epic });
 
-  const openIssue = (pid: string, key: string) => {
-    navigate(`/projects/${pid}/board?issue=${key}`);
-  };
+  const { openIssue: openIssueKey } = useIssueParam();
+  const openIssue = (_projectId: string, key: string) => openIssueKey(key);
 
   const filtersActive = hasActiveFilters(filters);
 
@@ -496,7 +502,7 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
     workspace,
     role: viewerRole(viewer),
     canWrite: real ? realCanWrite : undefined,
-    writes,
+    writes: realTools?.writes,
   });
   const backlogSectionRef = useRef<HTMLElement | null>(null);
   const backlogOver = useSectionDropTarget(
@@ -547,17 +553,15 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
       );
     }
     return (
-      <Button
+      <DisabledAction
         key={label}
-        variant="outline"
         size="sm"
-        disabled
-        title="Chưa có API cho tính năng AI này"
+        reason="Chưa có API cho tính năng AI này"
         className="h-7 gap-1 border-indigo-200 bg-indigo-50/60 px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
       >
         <Icon className="size-3.5" aria-hidden />
         {label}
-      </Button>
+      </DisabledAction>
     );
   };
 
@@ -581,6 +585,14 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
   return (
     <div className="flex min-h-0 flex-col">
       {mover.dialog}
+      <IssuePanelHost
+        detail={detail}
+        real={real}
+        mover={mover}
+        permissionCtx={permCtx}
+        toggleSubtask={realTools?.toggleSubtask}
+        backLabel="Quay lại Backlog"
+      />
       {/* 2-column workspace */}
       <div className="flex flex-1 min-h-0 flex-col md:flex-row">
 
@@ -594,16 +606,15 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
               real ? (
                 <CreateEpicButton projectId={projectId} assignees={assignees} />
               ) : (
-                <Button
+                <DisabledAction
                   variant="link"
                   size="xs"
-                  disabled
-                  title="Chưa có API tạo Epic"
+                  reason="Chưa có API tạo Epic"
                   className="h-auto p-0 text-xs"
                 >
                   <Plus className="size-3.5" aria-hidden />
                   Tạo Epic
-                </Button>
+                </DisabledAction>
               )
             ) : null}
           </div>
@@ -810,7 +821,9 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
 }
 
 export default function ProjectBacklogRoute() {
-  return <BacklogView real={false} />;
+  const { projectId } = useProjectWorkspaceContext();
+  const detail = useIssueDetail(projectId, useIssueParam().issueKey);
+  return <BacklogView detail={detail} real={false} />;
 }
 
 function RealBacklog() {
@@ -822,9 +835,11 @@ function RealBacklog() {
 }
 
 function RealBacklogContent() {
-  const { projectId } = useProjectWorkspaceContext();
-  const writes = useRealIssueWrites(projectId);
-  return <BacklogView real writes={writes} />;
+  const { projectId, workspace } = useProjectWorkspaceContext();
+  const { shell } = useRealProjectContext();
+  const detail = useRealIssueDetail(workspace, shell, useIssueParam().issueKey);
+  const realTools = useRealIssueTools(projectId, workspace.states);
+  return <BacklogView detail={detail} real realTools={realTools} />;
 }
 
 export function Component() {

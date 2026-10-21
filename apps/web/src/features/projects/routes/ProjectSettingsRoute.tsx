@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { ForbiddenPage } from "@/components/feedback/ForbiddenPage";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -268,12 +269,12 @@ export default function ProjectSettingsRoute() {
                   {providerLabel(ai.provider)}
                 </strong>
               </span>
-              <Button variant="outline" size="sm" disabled title="API kiểm tra kết nối sẽ khả dụng khi backend hỗ trợ">
+              <DisabledAction variant="outline" size="sm" reason="API kiểm tra kết nối sẽ khả dụng khi backend hỗ trợ">
                 Kiểm tra kết nối
-              </Button>
-              <Button variant="outline" size="sm" disabled title="API xóa key chưa được backend hỗ trợ">
+              </DisabledAction>
+              <DisabledAction variant="outline" size="sm" reason="API xóa key chưa được backend hỗ trợ">
                 Xóa key
-              </Button>
+              </DisabledAction>
             </div>
           ) : null}
 

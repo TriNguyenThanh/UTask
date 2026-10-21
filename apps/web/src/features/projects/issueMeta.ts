@@ -44,7 +44,7 @@ export const PRIORITY_LABELS: Record<Issue["priority"], string> = {
 };
 
 export const PRIORITY_STYLES: Record<Issue["priority"], string> = {
-  high: "text-rose-600 bg-rose-50 border-rose-200",
+  high: "text-rose-700 bg-rose-50 border-rose-200",
   medium: "text-amber-700 bg-amber-50 border-amber-200",
   low: "text-slate-600 bg-slate-100 border-slate-200",
 };

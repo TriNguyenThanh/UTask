@@ -10,6 +10,7 @@ import {
   Webhook,
 } from "lucide-react";
 
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { Badge } from "@/components/ui/badge";
@@ -221,10 +222,10 @@ export function SettingsIntegrationsPage() {
               title="Chưa kết nối GitHub"
               description="Liên kết tài khoản GitHub để tự động ghi nhận commit, Pull Request và điểm đóng góp đồ án."
               action={
-                <Button disabled title="OAuth sẽ khả dụng khi backend hỗ trợ">
+                <DisabledAction variant="default" reason="OAuth sẽ khả dụng khi backend hỗ trợ">
                   <GitFork className="size-4" aria-hidden />
                   Kết nối GitHub
-                </Button>
+                </DisabledAction>
               }
             />
           )}

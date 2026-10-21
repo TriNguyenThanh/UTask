@@ -29,11 +29,14 @@ export function IssueEditForm({
   epics,
   assignees,
   textOnly,
+  onDirtyChange,
 }: Readonly<{
   task: TaskDto;
   epics: readonly Epic[];
   assignees: readonly { userId: string; name: string }[];
   textOnly: boolean;
+  /** Báo form có thay đổi chưa lưu, để nơi chứa hỏi lại trước khi đóng. */
+  onDirtyChange?: (dirty: boolean) => void;
 }>) {
   const patch = usePatchTask(task.id);
   const [values, setValues] = useState<IssueFormValues>(() => formValuesOfTask(task));
@@ -50,6 +53,11 @@ export function IssueEditForm({
 
   const initial = formValuesOfTask(task);
   const changed = toPatchInput(initial, values, task.version, textOnly ? "text" : "all") !== null;
+
+  useEffect(() => {
+    onDirtyChange?.(changed);
+  }, [changed, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

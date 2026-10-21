@@ -8,9 +8,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
+import { DiscardChangesConfirm } from "@/components/feedback/DiscardChangesConfirm";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Epic, IssueDetail, ProjectState, Sprint } from "@/features/projects/types";
@@ -29,7 +31,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
-  high: "text-rose-600 bg-rose-50 border-rose-200",
+  high: "text-rose-700 bg-rose-50 border-rose-200",
   medium: "text-amber-700 bg-amber-50 border-amber-200",
   low: "text-slate-600 bg-slate-100 border-slate-200",
 };
@@ -193,8 +195,13 @@ function trapTab(event: globalThis.KeyboardEvent, panel: HTMLElement) {
 }
 
 /** Escape closes; Tab is trapped inside the panel. */
-function useEscapeAndTabTrap(panelRef: RefObject<HTMLDivElement | null>, onClose: () => void) {
+function useEscapeAndTabTrap(
+  panelRef: RefObject<HTMLDivElement | null>,
+  onClose: () => void,
+  enabled: boolean,
+) {
   useEffect(() => {
+    if (!enabled) return;
     function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -205,7 +212,7 @@ function useEscapeAndTabTrap(panelRef: RefObject<HTMLDivElement | null>, onClose
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, panelRef]);
+  }, [enabled, onClose, panelRef]);
 }
 
 function AiSubtaskAction({
@@ -215,10 +222,10 @@ function AiSubtaskAction({
 }: Readonly<{ canBreakdownWithAI: boolean; aiKeyMissing: boolean; projectId: string }>) {
   if (canBreakdownWithAI) {
     return (
-      <Button variant="outline" size="xs" disabled title="Chưa có API sinh sub-tasks bằng AI">
+      <DisabledAction size="xs" reason="Chưa có API sinh sub-tasks bằng AI">
         <Sparkles aria-hidden />
         AI Tự động sinh Sub-tasks
-      </Button>
+      </DisabledAction>
     );
   }
   if (aiKeyMissing) {
@@ -432,7 +439,7 @@ function HistorySection({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void }>) {
+function IssueMeta({ issue, detail, epic, sprint, onClose, backLabel }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void; backLabel: string }>) {
   return (
     <div className="space-y-5 border-outline-subtle lg:col-span-4 lg:border-l lg:pl-6">
       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -475,14 +482,13 @@ function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: I
           <dt className="shrink-0 text-muted-foreground">Epic</dt>
           <dd className="min-w-0 truncate">
             {epic ? (
-              <span
-                className="rounded border px-2 py-0.5 text-[11px] font-semibold"
+              <span className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold text-foreground"
                 style={{
                   backgroundColor: `${epic.color}1a`,
                   borderColor: `${epic.color}55`,
-                  color: epic.color,
                 }}
               >
+                <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: epic.color }} />
                 {epic.name}
               </span>
             ) : (
@@ -523,7 +529,7 @@ function IssueMeta({ issue, detail, epic, sprint, onClose }: Readonly<{ issue: I
       </section>
 
       <Button variant="outline" size="sm" className="w-full" onClick={onClose}>
-        Quay lại Bảng công việc Sprint
+        {backLabel}
       </Button>
     </div>
   );
@@ -551,6 +557,7 @@ function IssueDetailBody({
   attachmentsSlot,
   onChangeStatus,
   onClose,
+  backLabel,
 }: Readonly<{
   detail: IssueDetail;
   issue: IssueDetail["issue"];
@@ -575,6 +582,7 @@ function IssueDetailBody({
   attachmentsSlot?: ReactNode;
   onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
+  backLabel: string;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -600,7 +608,7 @@ function IssueDetailBody({
           {historySlot ?? <HistorySection detail={detail} />}
         </div>
 
-        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} />
+        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} backLabel={backLabel} />
       </div>
     </div>
   );
@@ -633,6 +641,8 @@ export function IssuePanel({
   onToggleSubtaskRemote,
   onChangeStatus,
   onClose,
+  backLabel,
+  hasUnsavedChanges = false,
 }: Readonly<{
   projectId: string;
   projectName: string;
@@ -667,14 +677,24 @@ export function IssuePanel({
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
   onChangeStatus?: (state: ProjectState) => void;
   onClose: () => void;
+  /** Chữ của nút quay lại, theo trang đang chứa panel (Board hoặc Backlog). */
+  backLabel: string;
+  /** Khối sửa đang có thay đổi chưa lưu: Esc và nhấp ra ngoài hỏi lại trước khi đóng. */
+  hasUnsavedChanges?: boolean;
 }>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   /** Local-only subtask overrides keyed by subtask id. */
   const [localDone, setLocalDone] = useState<Record<string, boolean>>({});
 
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestClose = useCallback(
+    () => (hasUnsavedChanges ? setConfirmDiscard(true) : onClose()),
+    [hasUnsavedChanges, onClose],
+  );
+
   useRestoreFocus(closeButtonRef);
-  useEscapeAndTabTrap(panelRef, onClose);
+  useEscapeAndTabTrap(panelRef, requestClose, !confirmDiscard);
 
   /* Reset local checkbox state when a different issue is opened. */
   useEffect(() => {
@@ -706,9 +726,10 @@ export function IssuePanel({
   const isNotFound = error instanceof ApiError && error.status === 404;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6 md:p-8"
-      onClick={onClose}
+      onClick={requestClose}
       data-testid="issue-panel-overlay"
     >
       <div
@@ -785,9 +806,19 @@ export function IssuePanel({
             attachmentsSlot={attachmentsSlot}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
+            backLabel={backLabel}
           />
         ) : null}
       </div>
     </div>
+    <DiscardChangesConfirm
+      open={confirmDiscard}
+      onDiscard={() => {
+        setConfirmDiscard(false);
+        onClose();
+      }}
+      onKeepEditing={() => setConfirmDiscard(false)}
+    />
+    </>
   );
 }

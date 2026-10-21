@@ -94,9 +94,9 @@ export function ForgotPasswordForm() {
                       {...field}
                     />
                   </FormControl>
-                  <School className="pointer-events-none absolute right-3.5 top-1/2 size-[18px] -translate-y-1/2 text-[#787586]" aria-hidden="true" />
+                  <School className="pointer-events-none absolute right-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 </div>
-                <p className="flex items-start gap-1 text-[11.5px] leading-relaxed text-[#787586]">
+                <p className="flex items-start gap-1 text-[11.5px] leading-relaxed text-muted-foreground">
                   <BadgeCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
                   Dùng email trường đã liên kết với tài khoản UTask.
                 </p>

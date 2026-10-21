@@ -4,9 +4,9 @@ import { useRealProjectContext } from "@/features/projects/components/RealProjec
 import { useRealIssueDetail, type IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
 import { Plus, Zap } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Button } from "@/components/ui/button";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
@@ -19,14 +19,10 @@ import {
 } from "@/features/projects/dnd/boardDnd";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { CreateIssueDialog } from "@/features/projects/components/CreateIssueDialog";
-import { IssuePanel } from "@/features/projects/components/IssuePanel";
-import { AiDecomposeButton } from "@/features/projects/components/ai/AiDecomposeDialog";
-import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/components/RealIssueSlots";
-import { collabSlots } from "@/features/projects/components/RealCollab";
-import { useAuth } from "@/features/auth/AuthProvider";
+import { IssuePanelHost } from "@/features/projects/components/IssuePanelHost";
+import { useIssueParam } from "@/features/projects/hooks/useIssueParam";
+import { useRealIssueTools } from "@/features/projects/hooks/useRealIssueTools";
 import type { IssueWrites } from "@/features/projects/lib/issueWrites";
-import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
-import { useRealIssueWrites, useToggleSubtask } from "@/lib/query/workWriteHooks";
 import { daysLeft, formatShortDate, statusForGroup } from "@/features/projects/issueMeta";
 import {
   matchesFilters,
@@ -37,10 +33,7 @@ import {
 import type { Issue, ProjectState, Sprint } from "@/features/projects/types";
 import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import {
-  aiRequiresKey,
-  canBreakdownTaskWithAI,
   canCreateTask,
-  canUpdateTask,
   projectPermissionContext,
   viewerRole,
   type ProjectPermissionContext,
@@ -77,7 +70,7 @@ function BoardColumn({
     <section
       ref={columnRef}
       className={cn(
-        "flex max-h-full w-72 min-w-[18rem] flex-1 flex-col rounded-lg border border-outline-subtle/60 bg-muted/50 p-3 transition-colors",
+        "flex max-h-full min-w-64 flex-1 basis-0 flex-col rounded-lg border border-outline-subtle/60 bg-muted/50 p-3 transition-colors",
         isOver && "border-primary/50 bg-primary/10",
       )}
       aria-label={state.name}
@@ -184,15 +177,17 @@ function BoardToolbar({
       </div>
 
       {canCreate ? (
-        <Button
-          size="sm"
-          disabled={!onCreate}
-          onClick={onCreate}
-          {...(onCreate ? {} : { title: "Chưa có API tạo issue", "aria-label": "Tạo issue (chưa khả dụng)" })}
-        >
-          <Plus aria-hidden />
-          Tạo Issue
-        </Button>
+        onCreate ? (
+          <Button size="sm" onClick={onCreate}>
+            <Plus aria-hidden />
+            Tạo Issue
+          </Button>
+        ) : (
+          <DisabledAction size="sm" variant="default" reason="Chưa có API tạo issue">
+            <Plus aria-hidden />
+            Tạo Issue
+          </DisabledAction>
+        )
       ) : null}
     </section>
   );
@@ -218,27 +213,13 @@ function BoardView({
 }>) {
   const { projectId, workspace, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
   const [createOpen, setCreateOpen] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { openIssue } = useIssueParam();
   const { filters, setFilters, toggleFlag, clear } = useIssueFilters();
-
-  const issueKey = searchParams.get("issue");
   // Only the leader can read project settings; nobody else asks for them.
   const aiSettingsQuery = useProjectAiSettings(
     projectId,
     !real && viewer.kind === "team-member" && viewer.role === "leader",
   );
-
-  function openIssue(key: string) {
-    const next = new URLSearchParams(searchParams);
-    next.set("issue", key);
-    setSearchParams(next, { preventScrollReset: true });
-  }
-
-  function closeIssue() {
-    const next = new URLSearchParams(searchParams);
-    next.delete("issue");
-    setSearchParams(next, { preventScrollReset: true });
-  }
 
   const aiEnabled = aiSettingsQuery.data?.ai.keyConfigured ?? false;
   const permissionCtx: ProjectPermissionContext = projectPermissionContext(viewer, aiEnabled);
@@ -265,21 +246,6 @@ function BoardView({
     canWrite: real ? !archived && !readOnly : undefined,
     writes: realTools?.writes,
   });
-
-  // Work thật: Leader sửa mọi issue, thành viên chỉ issue của mình; dự án lưu trữ và giảng viên chỉ đọc.
-  const canEditRealIssue =
-    real && !archived && !readOnly && detail.data !== undefined && (mover.role === "leader" || detail.data.issue.isMine);
-
-  // Work thật: bình luận/lịch sử/tệp lấy từ server. Giảng viên (readOnly) vẫn bình luận được, dự án lưu trữ thì không.
-  const { user } = useAuth();
-  const collab =
-    real && detail.data && user
-      ? collabSlots(
-          detail.data.issue.id,
-          { userId: user.id, isLeader: mover.role === "leader", canComment: !archived, canUpload: !archived && !readOnly },
-          assignees,
-        )
-      : undefined;
 
   const [boardElement, setBoardElement] = useState<HTMLDivElement | null>(null);
 
@@ -393,91 +359,30 @@ function BoardView({
         />
       ) : null}
 
-      {/* Panel is a sibling overlay: the board above never remounts, so
-          filter and scroll state survive panel open/close. */}
-      {issueKey !== null ? (
-        <IssuePanel
-          projectId={projectId}
-          projectName={workspace.name}
-          issueKey={issueKey}
-          epics={workspace.epics}
-          sprints={workspace.sprints}
-          detail={detail.data}
-          isLoading={detail.isPending}
-          error={detail.error}
-          canBreakdownWithAI={
-            permissionCtx !== null && canBreakdownTaskWithAI(permissionCtx)
-          }
-          aiKeyMissing={
-            !real && permissionCtx !== null && aiRequiresKey(permissionCtx)
-          }
-          readOnly={readOnly}
-          states={workspace.states}
-          subtasksEditable={!real || canEditRealIssue}
-          editSlot={
-            real && canEditRealIssue && detail.data ? (
-              <RealIssueEditor
-                projectId={projectId}
-                issueId={detail.data.issue.id}
-                epics={workspace.epics}
-                assignees={assignees}
-                issues={workspace.issues}
-                textOnly={mover.role !== "leader"}
-                isLeader={mover.role === "leader"}
-                onGone={closeIssue}
-              />
-            ) : undefined
-          }
-          subtaskCreateSlot={
-            real && canEditRealIssue && detail.data ? <SubtaskCreateForm parentId={detail.data.issue.id} /> : undefined
-          }
-          aiSlot={
-            real && canEditRealIssue && detail.data ? (
-              <AiDecomposeButton
-                taskId={detail.data.issue.id}
-                description={detail.data.description}
-                acceptanceCriteria={detail.data.acceptanceCriteria}
-                isLeader={mover.role === "leader"}
-              />
-            ) : undefined
-          }
-          {...collab}
-          onToggleSubtaskRemote={real ? realTools?.toggleSubtask : undefined}
-          onChangeStatus={
-            detail.data && mover.enabled && canUpdateTask(permissionCtx, detail.data.issue.isMine)
-              ? (state) =>
-                  mover.requestMove({
-                    issue: detail.data!.issue,
-                    toStatus: statusForGroup(state.group),
-                    toStateId: state.id,
-                    destination: [],
-                  })
-              : undefined
-          }
-          onClose={closeIssue}
-        />
-      ) : null}
+      <IssuePanelHost
+        detail={detail}
+        real={real}
+        mover={mover}
+        permissionCtx={permissionCtx}
+        toggleSubtask={realTools?.toggleSubtask}
+        backLabel="Quay lại Bảng công việc Sprint"
+      />
     </div>
   );
 }
 
 function DemoBoard() {
   const { projectId } = useProjectWorkspaceContext();
-  const [searchParams] = useSearchParams();
-  const detail = useIssueDetail(projectId, searchParams.get("issue"));
+  const detail = useIssueDetail(projectId, useIssueParam().issueKey);
   return <BoardView detail={detail} real={false} />;
 }
 
 function RealBoardContent() {
   const { projectId, workspace } = useProjectWorkspaceContext();
   const { shell } = useRealProjectContext();
-  const [searchParams] = useSearchParams();
-  const detail = useRealIssueDetail(workspace, shell, searchParams.get("issue"));
-  const writes = useRealIssueWrites(projectId);
-  const toggle = useToggleSubtask(projectId, workspace.states);
-  const toggleSubtask = (subtaskId: string, done: boolean) =>
-    toggle.mutate({ subtaskId, done }, { onError: (error) => toast.error(issueWriteErrorMessage(error)) });
-  return <BoardView detail={detail} real realTools={{ writes, toggleSubtask }} />;
+  const detail = useRealIssueDetail(workspace, shell, useIssueParam().issueKey);
+  const realTools = useRealIssueTools(projectId, workspace.states);
+  return <BoardView detail={detail} real realTools={realTools} />;
 }
 
 function RealBoard() {

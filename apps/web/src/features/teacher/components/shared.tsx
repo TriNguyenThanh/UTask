@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, FolderGit2, GitBranch, Users } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
@@ -258,41 +258,6 @@ export function SignalList({
 /** Metric with no source yet: stated plainly instead of a made-up zero. */
 export function NoData() {
   return <span className="text-base font-semibold text-muted-foreground">Chưa có dữ liệu</span>;
-}
-
-/**
- * A control for a later phase: really disabled, with the reason both as a
- * tooltip and as text a screen reader announces.
- */
-export function DisabledAction({
-  children,
-  reason,
-  variant = "outline",
-  className,
-}: Readonly<{
-  children: ReactNode;
-  reason: string;
-  variant?: "default" | "outline";
-  className?: string;
-}>) {
-  const reasonId = useId();
-  return (
-    <>
-      <Button
-        type="button"
-        variant={variant}
-        disabled
-        title={reason}
-        aria-describedby={reasonId}
-        className={className}
-      >
-        {children}
-      </Button>
-      <span id={reasonId} className="sr-only">
-        {reason}
-      </span>
-    </>
-  );
 }
 
 function CourseSignalSummary({ course }: Readonly<{ course: TeacherCourseSummary }>) {

@@ -15,6 +15,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/app/layouts/PageTitleContext";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -175,14 +176,12 @@ function OpenTeamsSection({ openTeams }: Readonly<{ openTeams: OpenTeamSlot[] }>
                     </div>
                   </td>
                   <td className="px-2 py-3 text-right">
-                    <Button
+                    <DisabledAction
                       size="xs"
-                      variant="outline"
-                      disabled
-                      title="Yêu cầu gia nhập sẽ khả dụng khi backend hỗ trợ"
+                      reason="Yêu cầu gia nhập sẽ khả dụng khi backend hỗ trợ"
                     >
                       Xin gia nhập
-                    </Button>
+                    </DisabledAction>
                   </td>
                 </tr>
               ))}
@@ -551,15 +550,13 @@ function PendingJoinRequestView({ course }: Readonly<{ course: CourseDetail }>) 
         <p className="mt-5 text-xs text-muted-foreground">
           Board, backlog và repository của nhóm sẽ mở sau khi Trưởng nhóm duyệt yêu cầu của bạn.
         </p>
-        <Button
+        <DisabledAction
           className="mt-4"
-          variant="outline"
           size="sm"
-          disabled
-          title="Chức năng hủy yêu cầu sẽ khả dụng khi backend hỗ trợ"
+          reason="Chức năng hủy yêu cầu sẽ khả dụng khi backend hỗ trợ"
         >
           Hủy yêu cầu
-        </Button>
+        </DisabledAction>
       </section>
     </div>
   );
@@ -586,56 +583,6 @@ const TOPIC_STATUS: Record<
   },
   rejected: { label: "BỊ TỪ CHỐI", className: "border-red-200 bg-red-50 text-red-800" },
 };
-
-function TopicDraftForm({ course }: Readonly<{ course: CourseDetail }>) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [objectives, setObjectives] = useState("");
-  return (
-    <form
-      className="max-w-3xl space-y-4"
-      onSubmit={(event) => event.preventDefault()}
-    >
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-title">Tên đề tài</Label>
-        <Input
-          id="topic-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="VD: Hệ thống Quản lý Chuỗi cung ứng Thông minh"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-description">Mô tả đề tài</Label>
-        <Textarea
-          id="topic-description"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          placeholder="Mô tả phạm vi, công nghệ và ý tưởng chính của đồ án..."
-          rows={4}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="topic-objectives">Mục tiêu (mỗi dòng một mục tiêu)</Label>
-        <Textarea
-          id="topic-objectives"
-          value={objectives}
-          onChange={(event) => setObjectives(event.target.value)}
-          placeholder={"Kiến trúc Microservices gRPC.\nTích hợp IoT giám sát real-time."}
-          rows={4}
-        />
-      </div>
-      <Button
-        type="submit"
-        disabled
-        title="Nộp đề tài sẽ khả dụng khi backend hỗ trợ API đăng ký đề tài"
-      >
-        <FileText className="size-4" aria-hidden />
-        Soạn đề tài
-      </Button>
-    </form>
-  );
-}
 
 function TopicTitle({
   topic,
@@ -751,15 +698,17 @@ function TopicSection({
 
         <div className="flex shrink-0 flex-col items-start gap-2 pt-1 lg:items-end">
           {editableByLeader && isDraft ? (
-            <TopicDraftForm course={course} />
+            <p className="max-w-xs text-sm text-muted-foreground">
+              Chưa soạn đề tài trên UTask được: hệ thống chưa có chức năng đăng ký đề tài.
+            </p>
           ) : null}
           {editableByLeader && topic.status === "revision_required" ? (
-            <Button
-              disabled
-              title="Chỉnh sửa lại đề tài sẽ khả dụng khi backend hỗ trợ API cập nhật đề tài"
+            <DisabledAction
+              variant="default"
+              reason="Chỉnh sửa lại đề tài sẽ khả dụng khi backend hỗ trợ API cập nhật đề tài"
             >
               Chỉnh sửa lại
-            </Button>
+            </DisabledAction>
           ) : null}
           {topic.status === "approved" ? (
             <ApprovedTopicAction projectId={team.projectId} />

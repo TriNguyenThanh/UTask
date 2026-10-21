@@ -35,6 +35,7 @@ export interface LoginPayload {
   email: string;
   password: string;
 }
+type SessionEndReason = "signed-out" | "expired";
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -53,6 +54,8 @@ interface AuthContextValue {
   /** Cập nhật hồ sơ đang hiển thị (sau khi sửa hồ sơ) mà không đổi phiên. */
   setUser(user: AuthUser): void;
   handleUnauthorized(): void;
+  /** true khi phiên kết thúc do người dùng tự đăng xuất. */
+  signedOut: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -69,6 +72,7 @@ export function AuthProvider({
   const queryClient = useQueryClient();
   const [session, setSession] = useState<AuthSession | null>(initialSession ?? null);
   const [status, setStatus] = useState<AuthStatus>(initialSession ? "authenticated" : "restoring");
+  const [signedOut, setSignedOut] = useState(false);
   const sessionRef = useRef(session);
   const refreshInFlight = useRef<Promise<string | null> | null>(null);
 
@@ -88,9 +92,10 @@ export function AuthProvider({
     onUnauthorized: () => undefined,
   }), [baseUrl]);
 
-  const clearSession = useCallback(() => {
+  const clearSession = useCallback((reason: SessionEndReason) => {
     setSession(null);
     setStatus("anonymous");
+    setSignedOut(reason === "signed-out");
     queryClient.clear();
     publishSession(null);
   }, [queryClient]);
@@ -177,7 +182,7 @@ export function AuthProvider({
       refreshAccessToken().then(
         (fresh) => {
           if (fresh === null) {
-            clearSession();
+            clearSession("expired");
           }
         },
         // Lỗi tạm thời: giữ phiên, request kế tiếp sẽ thử lại qua 401.
@@ -195,6 +200,7 @@ export function AuthProvider({
     // A new sign-in starts from an empty cache so nothing fetched for a
     // previous account (or while anonymous) can be shown to this one.
     queryClient.clear();
+    setSignedOut(false);
     setSession({ accessToken, user });
     setStatus("authenticated");
     publishSession({ accessToken, user });
@@ -216,7 +222,7 @@ export function AuthProvider({
     } finally {
       // An explicit sign-out also forgets unsent drafts; an expired session does not.
       clearAllDrafts();
-      clearSession();
+      clearSession("signed-out");
     }
     return { revoked };
   }, [clearSession, sessionClient]);
@@ -227,7 +233,7 @@ export function AuthProvider({
       return await logoutAllRequest(sessionClient, csrfToken);
     } finally {
       clearAllDrafts();
-      clearSession();
+      clearSession("signed-out");
     }
   }, [baseUrl, clearSession, sessionClient]);
 
@@ -242,6 +248,8 @@ export function AuthProvider({
     publishSession(next);
   }, []);
 
+  const handleUnauthorized = useCallback(() => clearSession("expired"), [clearSession]);
+
   const value = useMemo<AuthContextValue>(() => ({
     status,
     user: session?.user ?? null,
@@ -251,8 +259,9 @@ export function AuthProvider({
     logoutAll,
     refreshAccessToken,
     setUser,
-    handleUnauthorized: clearSession,
-  }), [clearSession, login, logout, logoutAll, refreshAccessToken, session, setUser, status]);
+    handleUnauthorized,
+    signedOut,
+  }), [handleUnauthorized, login, logout, logoutAll, refreshAccessToken, session, setUser, signedOut, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

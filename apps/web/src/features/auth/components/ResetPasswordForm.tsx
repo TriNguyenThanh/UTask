@@ -100,10 +100,10 @@ export function ResetPasswordForm({ uid, token }: { uid: string; token: string }
         <h1 id="reset-password-title" className="mb-2 text-2xl font-semibold leading-tight tracking-tight">
           Thiết lập mật khẩu mới
         </h1>
-        <p className="text-sm leading-relaxed text-[#787586]">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           Nhập mật khẩu mới tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.
         </p>
-        <div className="mt-3.5 flex items-center gap-2 rounded-md border border-[#e7e5e0] bg-white px-3 py-1.5 text-xs text-[#787586]">
+        <div className="mt-3.5 flex items-center gap-2 rounded-md border border-[#e7e5e0] bg-white px-3 py-1.5 text-xs text-muted-foreground">
           <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
           <span>Tài khoản yêu cầu:</span>
           <span className="min-w-0 truncate font-medium text-[#1a1c1c]">{accountLabel}</span>
@@ -143,7 +143,7 @@ export function ResetPasswordForm({ uid, token }: { uid: string; token: string }
                     />
                   </FormControl>
                   <Button
-                    className="absolute right-1 top-1 size-9 text-[#787586] hover:bg-transparent hover:text-[#1a1c1c]"
+                    className="absolute right-1 top-1 size-9 text-muted-foreground hover:bg-transparent hover:text-foreground"
                     type="button"
                     variant="ghost"
                     size="icon"
@@ -170,7 +170,7 @@ export function ResetPasswordForm({ uid, token }: { uid: string; token: string }
                     ))}
                   </div>
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className={cn("flex items-center gap-1 font-medium", strengthScore === 4 ? "text-emerald-600" : "text-[#787586]") }>
+                    <span className={cn("flex items-center gap-1 font-medium", strengthScore === 4 ? "text-emerald-600" : "text-muted-foreground") }>
                       {strengthScore === 4 ? <CheckCircle2 className="size-3.5" aria-hidden="true" /> : null}
                       Độ mạnh: {strengthLabel}
                     </span>
@@ -199,7 +199,7 @@ export function ResetPasswordForm({ uid, token }: { uid: string; token: string }
                     />
                   </FormControl>
                   <Button
-                    className="absolute right-1 top-1 size-9 text-[#787586] hover:bg-transparent hover:text-[#1a1c1c]"
+                    className="absolute right-1 top-1 size-9 text-muted-foreground hover:bg-transparent hover:text-foreground"
                     type="button"
                     variant="ghost"
                     size="icon"
@@ -229,13 +229,13 @@ export function ResetPasswordForm({ uid, token }: { uid: string; token: string }
         </form>
       </Form>
 
-      <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-[#e7e5e0] bg-white p-3.5 text-xs leading-relaxed text-[#787586]">
+      <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-[#e7e5e0] bg-white p-3.5 text-xs leading-relaxed text-muted-foreground">
         <Info className="mt-0.5 size-[18px] shrink-0 text-primary" aria-hidden="true" />
         Liên kết khôi phục chỉ dùng được một lần và có thời hạn. Sau khi đặt lại, hãy đăng nhập bằng mật khẩu mới.
       </div>
 
       <div id="academic-support" className="mt-8 text-center">
-        <p className="text-xs text-[#787586]">
+        <p className="text-xs text-muted-foreground">
           Cần hỗ trợ kỹ thuật? Liên hệ
           <strong className="font-medium text-[#1a1c1c]"> Quản trị viên khoa </strong>
           hoặc

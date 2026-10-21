@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { classErrorMessage } from "@/features/teacher/lib/classErrors";
 import { isValidEmail } from "@/features/teacher/lib/csvImport";
 import { describeResult, toStudentRow } from "@/features/teacher/lib/importRun";

@@ -6,7 +6,8 @@ import type { ClassroomCourseDetail } from "@/lib/api/teacherFlow";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyJoinCodeButton } from "@/features/teacher/components/JoinCode";
-import { DisabledAction, courseLabel } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
+import { courseLabel } from "@/features/teacher/components/shared";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
 
 const CODE_CHANGE_UNAVAILABLE =

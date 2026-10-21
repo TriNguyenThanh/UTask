@@ -334,3 +334,41 @@ describe("AuthProvider.logoutAll", () => {
     expect(result.current.status).toBe("anonymous");
   });
 });
+
+describe("AuthProvider.signedOut", () => {
+  it("is true after the user signs out, and false again after the next login", async () => {
+    server.use(http.get("/api/auth/sessions", () => envelope(sessionsFixture)), http.delete("/api/auth/sessions/:id", () => envelope(null)));
+    const { result } = setup(leaderTestSession);
+    expect(result.current.signedOut).toBe(false);
+
+    await act(async () => {
+      await result.current.logout();
+    });
+    expect(result.current.signedOut).toBe(true);
+
+    await act(async () => {
+      await result.current.login({ email: "leader@utask.test", password: "demo1234" });
+    });
+    expect(result.current.status).toBe("authenticated");
+    expect(result.current.signedOut).toBe(false);
+  });
+
+  it("is also true after signing out of every device", async () => {
+    server.use(http.post("/api/auth/logout-all", () => envelope({ revoked_sessions_count: 1 })));
+    const { result } = setup(leaderTestSession);
+
+    await act(async () => {
+      await result.current.logoutAll();
+    });
+    expect(result.current.signedOut).toBe(true);
+  });
+
+  it("stays false when the session ends by itself (expired), so the page can be restored after login", async () => {
+    const { result } = setup(leaderTestSession);
+
+    act(() => result.current.handleUnauthorized());
+
+    expect(result.current.status).toBe("anonymous");
+    expect(result.current.signedOut).toBe(false);
+  });
+});

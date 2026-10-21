@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
@@ -16,9 +17,12 @@ function NoCoursesHome() {
         title="Bạn chưa có môn học trong học kỳ hiện tại."
         description="Khi được đăng ký môn học, danh sách môn và nhiệm vụ đồ án sẽ xuất hiện tại đây. Liên hệ giảng viên hoặc phòng đào tạo nếu bạn cho rằng đây là nhầm lẫn."
         action={
-          <Button disabled title="Tham gia môn học sẽ khả dụng sau khi dữ liệu học kỳ sẵn sàng">
+          <DisabledAction
+            variant="default"
+            reason="Tham gia môn học sẽ khả dụng sau khi dữ liệu học kỳ sẵn sàng"
+          >
             Xem danh sách môn học
-          </Button>
+          </DisabledAction>
         }
       />
     </div>

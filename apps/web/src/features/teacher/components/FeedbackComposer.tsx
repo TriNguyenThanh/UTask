@@ -3,7 +3,7 @@ import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { draftKey, useDraft } from "@/features/teacher/lib/drafts";
 
 /** Interface limit only; the backend will own the real one. */

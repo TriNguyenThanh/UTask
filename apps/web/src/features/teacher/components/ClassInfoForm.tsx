@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { UnsavedChangesGuard } from "@/components/feedback/UnsavedChangesGuard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -85,6 +86,7 @@ export function ClassInfoForm({
 
   return (
     <Card>
+      <UnsavedChangesGuard dirty={form.formState.isDirty && !patch.isPending} />
       <CardHeader>
         <CardTitle className="text-base">Thông tin lớp</CardTitle>
       </CardHeader>

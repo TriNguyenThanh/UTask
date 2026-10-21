@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
+import { isRealService } from "@/lib/config/services";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -383,7 +385,7 @@ function MembersTable({
 /* Route component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function Component() {
+function RealProjectInfo() {
   const { projectId, shell } = useRealProjectContext();
   const { project, members, myRole, canEdit } = shell;
   const isArchived = project.archived_at !== null;
@@ -478,6 +480,10 @@ export function Component() {
       />
     </div>
   );
+}
+
+export function Component() {
+  return isRealService("work") ? <RealProjectInfo /> : <Navigate to="../board" relative="path" replace />;
 }
 
 export default Component;

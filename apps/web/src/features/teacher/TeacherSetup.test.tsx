@@ -75,7 +75,7 @@ describe("Create class dialog (T03, demo mode)", () => {
     const { dialog } = await openDialog();
     expect(await dialog.findByText("Chưa thể tạo lớp")).toBeInTheDocument();
     const create = dialog.getByRole("button", { name: "Tạo lớp" });
-    expect(create).toBeDisabled();
+    expect(create).toHaveAttribute("aria-disabled", "true");
     expect(create).toHaveAccessibleDescription(/chưa có hợp đồng API tạo lớp/);
   });
 
@@ -115,17 +115,22 @@ describe("Create class dialog (T03, demo mode)", () => {
     expect(pathname(view.router)).toBe("/teacher/courses");
   });
 
-  it("does not close on an outside click once something was typed, but does when untouched", async () => {
+  it("asks before discarding on Esc or an outside click once something was typed; closes at once when untouched", async () => {
     const { user, dialog } = await openDialog();
     await user.type(await dialog.findByLabelText("Tên lớp"), "Đang nhập dở");
     fireEvent.pointerDown(document.body);
-    expect(screen.getByRole("dialog", { name: "Tạo lớp" })).toBeInTheDocument();
-    await user.click(dialog.getByRole("button", { name: "Hủy" }));
+    const confirm = await screen.findByRole("dialog", { name: "Bỏ thông tin đã nhập?" });
+    await user.click(within(confirm).getByRole("button", { name: "Hủy" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Bỏ thông tin đã nhập?" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Tên lớp")).toHaveValue("Đang nhập dở");
+
+    await user.keyboard("{Escape}");
+    await user.click(await screen.findByRole("button", { name: "Bỏ thay đổi" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     await user.click(await screen.findByRole("button", { name: "Tạo lớp" }));
     await screen.findByRole("dialog", { name: "Tạo lớp" });
-    fireEvent.pointerDown(document.body);
+    await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
@@ -146,7 +151,7 @@ describe("Class settings (T10)", () => {
     const main = await page();
     const change = await main.findByRole("button", { name: "Đổi mã" });
     const disable = main.getByRole("button", { name: "Vô hiệu mã" });
-    for (const button of [change, disable]) expect(button).toBeDisabled();
+    for (const button of [change, disable]) expect(button).toHaveAttribute("aria-disabled", "true");
     expect(change).toHaveAccessibleDescription(/chưa có hợp đồng API đổi mã.*cần xác nhận/);
     expect(disable).toHaveAccessibleDescription(/chưa có hợp đồng API.*cần xác nhận/);
   });
@@ -202,7 +207,7 @@ describe("Add one student (dialog)", () => {
     const { user, dialog } = await openDialog();
     await user.type(within(dialog).getByLabelText("Email"), "sv@truong.edu.vn");
     const submit = within(dialog).getByRole("button", { name: "Thêm vào lớp" });
-    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-disabled", "true");
     expect(submit).toHaveAccessibleDescription(/không có tài khoản nào được tạo/);
     expect(within(dialog).queryByLabelText(/mật khẩu/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/nhóm/i)).not.toBeInTheDocument();
@@ -266,7 +271,7 @@ describe("Import preview (T06)", () => {
   it("keeps 'Xác nhận nhập' disabled with the reason, and shows no outcome", async () => {
     const { main } = await choose(csv("email\na@x.vn\n"));
     const confirm = await main.findByRole("button", { name: "Xác nhận nhập" });
-    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
     expect(confirm).toHaveAccessibleDescription(/chưa có hợp đồng API nhập danh sách.*multipart/);
     expect(main.getByText(/Chưa có kết quả nào: file chưa được gửi/)).toBeInTheDocument();
     expect(main.queryByText(/nhập thành công|nhập xong/i)).not.toBeInTheDocument();
@@ -357,7 +362,7 @@ describe("Team adjustment preview (T07)", () => {
     const tracker = trackRequests();
     const { user, dialog } = await open();
     const confirm = await within(dialog).findByRole("button", { name: "Xác nhận thay đổi" });
-    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAttribute("aria-disabled", "true");
     expect(confirm).toHaveAccessibleDescription(/dữ liệu mẫu/);
     await user.selectOptions(within(dialog).getByLabelText("Sinh viên"), within(dialog).getAllByRole("option")[1]);
     tracker.stop();
@@ -432,7 +437,7 @@ describe("Feedback drafts", () => {
     await user.paste("x".repeat(FEEDBACK_MAX_LENGTH + 1));
     expect(await main.findByRole("alert")).toHaveTextContent(`vượt giới hạn ${FEEDBACK_MAX_LENGTH}`);
     const send = main.getByRole("button", { name: "Gửi phản hồi" });
-    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute("aria-disabled", "true");
     expect(send).toHaveAccessibleDescription(/chưa nối API bình luận của Work.*chưa gửi cho ai.*không nhận được thông báo/);
     await user.click(main.getByRole("button", { name: "Xóa nháp" }));
     expect(box).toHaveValue("");

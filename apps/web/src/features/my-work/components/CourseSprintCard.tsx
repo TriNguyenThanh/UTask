@@ -56,7 +56,7 @@ export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: D
             <span
               className={cn(
                 "font-bold",
-                sprint.health === "on-track" ? "text-primary" : health.bar.replace("bg-", "text-"),
+                sprint.health === "on-track" ? "text-primary" : sprint.health === "at-risk" ? "text-amber-800" : "text-destructive",
               )}
             >
               {percent}% hoàn thành ({sprint.completedPoints}/{sprint.totalPoints} SP)
@@ -83,7 +83,7 @@ export function CourseSprintCard({ sprint, now }: { sprint: CourseSprint; now: D
               <Hourglass
                 className={cn(
                   "size-3.5",
-                  daysLeft <= 2 ? "text-red-500" : daysLeft <= 5 ? "text-amber-500" : "text-muted-foreground",
+                  daysLeft <= 2 ? "text-red-700" : daysLeft <= 5 ? "text-amber-800" : "text-muted-foreground",
                 )}
                 aria-hidden
               />
