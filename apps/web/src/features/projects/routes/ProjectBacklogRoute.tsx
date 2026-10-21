@@ -30,6 +30,7 @@ import {
   ScopedTaskList,
   TaskScopeTabs,
 } from "@/features/projects/components/RealBacklogTools";
+import { AiBacklogButton } from "@/features/projects/components/ai/AiBacklogDialog";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
 import { CreateSprintButton, SprintHeaderActions, SprintInsights } from "@/features/projects/components/RealSprintTools";
 import type { IssueWrites } from "@/features/projects/lib/issueWrites";
@@ -694,8 +695,9 @@ function BacklogView({ real, writes }: Readonly<{ real: boolean; writes?: IssueW
 
           {real ? <TaskScopeTabs scope={scope} onChange={setScope} /> : null}
           {real && realCanWrite && isLeader ? (
-            <div className="mb-3">
+            <div className="mb-3 flex flex-wrap gap-2">
               <CreateSprintButton projectId={projectId} />
+              <AiBacklogButton projectId={projectId} />
             </div>
           ) : null}
 
