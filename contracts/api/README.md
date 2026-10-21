@@ -22,8 +22,10 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
   Xem [code map](../../docs/ai-service/code-map.md).
 - [`work-ai-context-v1.yaml`](work-ai-context-v1.yaml): contract Work nội bộ
   được [`work-service.yaml`](work-service.yaml) tham chiếu; authorization và
-  project/task/team/progress context **Thiết kế mục tiêu**, Work provider chưa
-  triển khai. AI consumer đã có adapter và contract test bằng mock.
+  project/task/team/progress context **đã triển khai phía Work**, bắt buộc
+  Bearer actor và service key của đúng caller. AI consumer đã có adapter và
+  contract test; nghiệm thu runtime có phạm vi riêng trong
+  [hướng dẫn Work–AI](../../docs/project-service/ai-service-integration-guide.md).
 
 - [`work-service.yaml`](work-service.yaml): sinh từ URLconf/view/serializer Work
   bằng drf-spectacular; có POST/DELETE repository trả 202, con trỏ

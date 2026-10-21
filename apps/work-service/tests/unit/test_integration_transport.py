@@ -53,7 +53,7 @@ def test_prepare_maps_wire_headers_timeout_and_fact(transport):
         "Accept": "application/json",
         "Authorization": "Bearer actor-token",
     }
-    assert kwargs["json"] == body and kwargs["timeout"] == (2, 20)
+    assert kwargs["json"] == body and kwargs["timeout"] == (30, 30)
     assert kwargs["allow_redirects"] is False and kwargs["stream"] is True
 
 
