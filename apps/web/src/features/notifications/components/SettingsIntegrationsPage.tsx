@@ -56,6 +56,24 @@ const featureColumns = [
   },
 ];
 
+export function IntegrationFeatureColumns() {
+  return (
+    <div className="grid grid-cols-1 gap-6 pb-2 md:grid-cols-3">
+      {featureColumns.map((column) => (
+        <div key={column.title} className="flex flex-col justify-between space-y-3 border-l-2 pl-4">
+          <div className="space-y-1.5">
+            <div className="flex size-8 items-center justify-center rounded bg-secondary text-primary">
+              <GitCommitHorizontal className="size-4" aria-hidden />
+            </div>
+            <h3 className="text-sm font-bold">{column.title}</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">{column.description}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ConnectedBanner({
   github,
   now,
@@ -230,24 +248,7 @@ export function SettingsIntegrationsPage() {
             />
           )}
 
-          <div className="grid grid-cols-1 gap-6 pb-2 md:grid-cols-3">
-            {featureColumns.map((column) => (
-              <div
-                key={column.title}
-                className="flex flex-col justify-between space-y-3 border-l-2 pl-4"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex size-8 items-center justify-center rounded bg-secondary text-primary">
-                    <GitCommitHorizontal className="size-4" aria-hidden />
-                  </div>
-                  <h3 className="text-sm font-bold">{column.title}</h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {column.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <IntegrationFeatureColumns />
 
           <div className="flex items-start gap-2.5 border-t py-3 text-sm text-muted-foreground">
             <Webhook className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />

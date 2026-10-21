@@ -169,6 +169,11 @@ export const appRoutes: RouteObject[] = [
         lazy: () => import("@/features/notifications/routes/SettingsIntegrationsRoute"),
       },
       {
+        path: "/settings/integrations/github/callback",
+        handle: { title: "Liên kết GitHub" },
+        lazy: () => import("@/features/notifications/routes/GitHubAuthorizationCallbackRoute"),
+      },
+      {
         path: "/settings/security",
         handle: { title: "Cài đặt Cá nhân & Tích hợp" },
         lazy: () => import("@/features/notifications/routes/SettingsSecurityRoute"),
