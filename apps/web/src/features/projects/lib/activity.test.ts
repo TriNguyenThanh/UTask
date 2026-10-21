@@ -36,6 +36,22 @@ describe("describeActivity", () => {
     );
   });
 
+  it("resolves ids to names per field and keeps unknown ids", () => {
+    const lookup = {
+      state_id: (id: string) => ({ s1: "Todo", s2: "Done" })[id],
+      assignee_ids: (id: string) => ({ u1: "An" })[id],
+    };
+    expect(describeActivity({ verb: "updated", field: "state_id", old_value: "s1", new_value: "s2" }, lookup)).toBe(
+      "đã đổi trạng thái: Todo → Done",
+    );
+    expect(describeActivity({ verb: "updated", field: "state_id", old_value: '"s1"', new_value: "zzz" }, lookup)).toBe(
+      "đã đổi trạng thái: Todo → zzz",
+    );
+    expect(describeActivity({ verb: "updated", field: "assignee_ids", old_value: "[]", new_value: '["u1","u9"]' }, lookup)).toBe(
+      "đã đổi người thực hiện: (trống) → An, u9",
+    );
+  });
+
   it("keeps an unknown field name and falls back when nothing changed", () => {
     expect(describeActivity({ verb: "updated", field: "custom", old_value: "1", new_value: "2" })).toBe("đã đổi custom: 1 → 2");
     expect(describeActivity({ verb: "updated", field: null, old_value: null, new_value: null })).toBe("đã cập nhật dữ liệu");

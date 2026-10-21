@@ -8,6 +8,7 @@ import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/componen
 import type { IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
 import type { IssueMover } from "@/features/projects/hooks/useIssueMover";
 import { useIssueParam } from "@/features/projects/hooks/useIssueParam";
+import type { ActivityLookup } from "@/features/projects/lib/activity";
 import { statusForGroup } from "@/features/projects/issueMeta";
 import { useProjectWorkspaceContext } from "@/features/projects/routes/ProjectWorkspaceLayout";
 import {
@@ -45,6 +46,14 @@ export function IssuePanelHost({
 
   if (issueKey === null) return null;
 
+  const labelNames = new Map(workspace.issues.flatMap((issue) => (issue.labels ?? []).map((label) => [label.id, label.name] as const)));
+  const activityLookup: ActivityLookup = {
+    state_id: (id) => workspace.states.find((state) => state.id === id)?.name,
+    epic_id: (id) => workspace.epics.find((epic) => epic.id === id)?.name,
+    assignee_ids: (id) => assignees.find((person) => person.userId === id)?.name,
+    label_ids: (id) => labelNames.get(id),
+  };
+
   // Work thật: Leader sửa mọi issue, thành viên chỉ issue của mình; dự án lưu trữ và giảng viên chỉ đọc.
   const canEditRealIssue =
     real && !archived && !readOnly && detail.data !== undefined && (mover.role === "leader" || detail.data.issue.isMine);
@@ -56,6 +65,7 @@ export function IssuePanelHost({
           detail.data.issue.id,
           { userId: user.id, isLeader: mover.role === "leader", canComment: !archived, canUpload: !archived && !readOnly },
           assignees,
+          activityLookup,
         )
       : undefined;
 

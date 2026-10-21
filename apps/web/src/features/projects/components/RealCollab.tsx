@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { describeActivity } from "@/features/projects/lib/activity";
+import { describeActivity, type ActivityLookup } from "@/features/projects/lib/activity";
 import { formatBytes, validateAttachmentFile } from "@/features/projects/lib/attachmentRules";
 import { formatDateTime, initialsOf, personName, validateCommentText } from "@/features/projects/lib/comments";
 import { collabWriteErrorMessage } from "@/features/projects/lib/moveErrors";
@@ -313,7 +313,11 @@ export function RealComments({
 /* Lịch sử                                                             */
 /* ------------------------------------------------------------------ */
 
-export function RealActivity({ taskId, people }: Readonly<{ taskId: string; people: readonly Person[] }>) {
+export function RealActivity({
+  taskId,
+  people,
+  lookup,
+}: Readonly<{ taskId: string; people: readonly Person[]; lookup?: ActivityLookup }>) {
   const query = useTaskActivities(taskId);
   const rows = [...(query.data ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
@@ -332,7 +336,7 @@ export function RealActivity({ taskId, people }: Readonly<{ taskId: string; peop
             <li key={entry.id} className="flex items-start justify-between gap-3 rounded-md border border-outline-subtle bg-card px-3 py-2">
               <span className="text-xs">
                 <span className="font-semibold">{personName(entry.actor_user_id, people)}</span>{" "}
-                <span className="text-muted-foreground">{describeActivity(entry)}</span>
+                <span className="text-muted-foreground">{describeActivity(entry, lookup)}</span>
               </span>
               <time dateTime={entry.created_at} className="shrink-0 text-[11px] text-muted-foreground">
                 {formatDateTime(entry.created_at)}
@@ -458,10 +462,10 @@ export function RealAttachments({ taskId, actor }: Readonly<{ taskId: string; ac
 }
 
 /** Ba khối cộng tác của một task thật, theo đúng thứ tự `IssuePanel` đặt chúng. `key` theo task để không giữ bản nháp sang issue khác. */
-export function collabSlots(taskId: string, actor: CollabActor, people: readonly Person[]) {
+export function collabSlots(taskId: string, actor: CollabActor, people: readonly Person[], lookup?: ActivityLookup) {
   return {
     commentsSlot: <RealComments key={taskId} target={{ taskId }} actor={actor} people={people} />,
     attachmentsSlot: <RealAttachments key={taskId} taskId={taskId} actor={actor} />,
-    historySlot: <RealActivity key={taskId} taskId={taskId} people={people} />,
+    historySlot: <RealActivity key={taskId} taskId={taskId} people={people} lookup={lookup} />,
   };
 }
