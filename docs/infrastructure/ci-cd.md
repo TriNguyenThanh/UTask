@@ -12,7 +12,7 @@ branch protection trên GitHub chưa được xác minh. Thiết kế vận hàn
 
 UTask dùng một workflow điều phối và hai workflow dùng lại trong GitHub Actions:
 
-1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Pytest của AI cần bao gồm regression evaluation khi bộ evaluation được triển khai; bootstrap hiện chỉ có unit/API/workflow test. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` chỉ gọi phát hành sau khi mọi kiểm tra liên quan thành công.
+1. `ci.yml` chạy khi có pull request vào `main` hoặc khi đẩy mã lên `main`. Workflow lọc theo đường dẫn, kiểm tra đúng service bị ảnh hưởng và kiểm tra Compose. Với AI, ngoài pytest CI chạy deterministic evaluation và lưu báo cáo; live evaluation không phải điều kiện deploy. Pull Request dựng image để kiểm tra Dockerfile; lần đẩy lên `main` chỉ gọi phát hành sau khi mọi kiểm tra liên quan thành công.
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` build các service đang bật từ commit đã qua CI, chuyển digest (mã xác định nội dung image) giữa các job bằng artifact của GitHub Actions. VPS dùng `docker-compose.staging.yml` cùng file ghi đè `staging-images.json` để chạy đúng image, migration rồi cập nhật container qua SSH.
 
@@ -481,7 +481,7 @@ Redis/Kafka bên ngoài và secrets của nền tảng production. Compose local
 
 ## Pipeline AI trong CI/CD
 
-**Một phần (cấu hình và regression test có trong repository; staging thực tế chưa xác minh):** CI vẫn build/publish một image
+**Một phần (cấu hình CI và deterministic evaluation có trong repository; staging thực tế chưa xác minh):** CI build/publish một image
 `ai-service`; staging dùng cùng tag SHA cho `ai-service`, `ai-worker`,
 `ai-dispatcher`. Ba process cùng profile
 `ai-service`. Nhận diện app dựa trên thư mục source; các process phụ không tạo
@@ -529,7 +529,9 @@ bearer và kiểm tra quyền domain. Provider quyền/context AI phía Work
 `--wait` kiểm tra health của API, Celery ping của worker và process liveness của
 dispatcher; kiểm tra liveness chưa chứng minh dispatcher đã phát job. Probe gateway
 cuối workflow kiểm tra các path health của service đang bật; AI nội bộ không có path
-gateway để probe. CI test
-pipeline dùng model giả, không xác nhận LLM thật hoặc domain production. Triển
+gateway để probe. CI chạy deterministic evaluation bằng doubles/fake; live evaluation
+có thể chạy thủ công theo [hướng dẫn AI](../ai-service/production-readiness.md#evaluation-và-gate-phát-hành),
+không phải bước phát hành và không cần `EVAL_AI_*` trên VPS. CI không xác nhận LLM
+thật hoặc domain production. Triển
 khai trên GitHub/VPS **Chưa xác minh**; thay đổi này không bảo đảm zero downtime
 hoặc rollback database tự động.
