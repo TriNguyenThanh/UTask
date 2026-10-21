@@ -35,6 +35,9 @@ Kết nối dùng cùng nhóm `KAFKA_*` của producer, không tạo broker riê
 
 Command `python manage.py consume_identity` dùng group `work-profile-v1`; tắt auto
 commit và auto offset store. Tạo topic, quyền consumer/DLQ trên broker trước khi chạy.
+Trong Compose, command này được `consume_work` chạy bên trong container duy nhất
+`work-consumer` khi `WORK_IDENTITY_KAFKA_TOPIC` có giá trị. Không tạo container
+hồ sơ riêng; các nguồn Classroom/Integration giữ tiến trình và offset riêng.
 Thay env phải tạo lại container; chỉ restart không nạp giá trị Compose mới.
 
 ## Bằng chứng và giới hạn

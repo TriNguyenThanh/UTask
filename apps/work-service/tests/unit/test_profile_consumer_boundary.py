@@ -123,7 +123,11 @@ def test_consumer_cli_polls_and_closes_with_real_poison_path_or_broker_error(
 
     class Record:
         def error(self):
-            return "broker-error" if mode == "broker-error" else None
+            if mode == "broker-error":
+                from confluent_kafka import KafkaError
+
+                return KafkaError(KafkaError.UNKNOWN_TOPIC_OR_PART)
+            return None
 
         def value(self):
             return b"{}"
