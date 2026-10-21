@@ -431,6 +431,7 @@ services:
     init: true
     restart: unless-stopped
     env_file:
+      - ./infra/env/database.env
       - ./infra/env/django.env
       - ./infra/env/notification-service.env
     volumes: *integration_kafka_certificates
