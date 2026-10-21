@@ -37,6 +37,14 @@ def lock_subject(task_id):
 
 
 def require_connection(project, fact=None):
+    from apps.integrations.services.operations import pending_operation
+
+    if pending_operation(project):
+        raise WorkError(
+            "VERSION_CONFLICT",
+            "Kết nối kho mã nguồn đang được cập nhật. Vui lòng chờ hoàn tất.",
+            409,
+        )
     if project.github_connection_status != "CONNECTED" or not project.github_repo_id:
         raise WorkError(
             "INVALID_OPERATION", "Dự án chưa được kết nối với kho lưu trữ mã nguồn nào."

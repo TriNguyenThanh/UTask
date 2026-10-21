@@ -146,6 +146,9 @@ CELERY_TASK_ROUTES.update(
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
 )
+WORK_GITHUB_CONNECTION_ENABLED = (
+    os.environ.get("WORK_GITHUB_CONNECTION_ENABLED", "false").lower() == "true"
+)
 WORK_INTEGRATION_BASE_URL = os.environ.get(
     "WORK_INTEGRATION_BASE_URL", "http://integration-service:8000"
 )
@@ -156,6 +159,11 @@ try:
     )
 except (ValueError, TypeError):
     INTEGRATION_WORK_SERVICE_KEYS = None
+CELERY_TASK_ROUTES["apps.integrations.tasks.recover_connections"] = {"queue": "work-publisher"}
+CELERY_BEAT_SCHEDULE["github-connections"] = {
+    "task": "apps.integrations.tasks.recover_connections",
+    "schedule": 10.0,
+}
 SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "WorkTaskTypeEnum": "apps.tasks.models.Task.Type",
     "BacklogTaskTypeEnum": ["TASK", "BUG", "STORY"],
