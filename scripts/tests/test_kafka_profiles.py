@@ -49,6 +49,36 @@ class OptionalDependencyDiscoveryTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name != "nt" and shutil.which("bash"), "Requires POSIX Bash")
 class KafkaProfileDeploymentTests(unittest.TestCase):
+    def test_work_consumer_is_deployed_without_an_additional_profile(self):
+        for selected in (
+            "",
+            "kafka",
+        ):
+            with (
+                self.subTest(selected=selected),
+                deployment_runtime(
+                    services="work-service",
+                    migrations="work-service",
+                    paths="/api/work/healthz",
+                ) as (root, env, calls),
+            ):
+                env["COMPOSE_TEST_ENVIRONMENT"] = f"COMPOSE_PROFILES={selected}\n"
+                env["EXPECTED_SERVICE_NAMES"] = "work-service work-consumer"
+                result = run_staging_deploy(root, env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                commands = docker_calls(calls)
+                for command in commands:
+                    if "pull" in command or "up" in command:
+                        self.assertEqual(
+                            any(
+                                command[i : i + 2] == ["--profile", "work-consumer"]
+                                for i in range(len(command) - 1)
+                            ),
+                            False,
+                        )
+                runtime_up = next(c for c in commands if "up" in c and "--no-deps" in c)
+                self.assertIn("work-consumer", runtime_up)
+
     def test_server_kafka_profile_controls_broker_start_and_wait(self):
         for selected in ("", "kafka", "kafka,work-service"):
             with (
@@ -110,8 +140,7 @@ class NativeKafkaComposeTests(unittest.TestCase):
             "work-service",
             "work-publisher",
             "work-beat",
-            "work-profile-consumer",
-            "work-group-consumer",
+            "work-consumer",
             "classroom-service",
             "classroom-publisher",
             "classroom-beat",
@@ -224,8 +253,6 @@ class NativeKafkaComposeTests(unittest.TestCase):
                             "work-service",
                             "--profile",
                             "classroom-service",
-                            "--profile",
-                            "work-profile-consumer",
                         ]
                         if enabled:
                             args += ["--profile", "kafka"]

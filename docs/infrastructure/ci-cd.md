@@ -463,7 +463,12 @@ response không có mã định danh backend nên probe chưa chứng minh danh 
 ở đầu kia; route vẫn phải được đối chiếu với Nginx. Work publisher dùng Celery ping
 tới đúng node; beat kiểm tra PID còn sống và kết nối broker. Các phép kiểm tra này
 chưa chứng minh scheduler tiến triển, task được thực thi hay event tới Kafka.
-`work-profile-consumer` dùng profile riêng và không được workflow này tự bật.
+Work dùng duy nhất `work-consumer`, cùng profile/image pin của Work API.
+Command `consume_work` chạy các consumer Identity/Classroom/Integration trong
+cùng container, giữ group/offset/retry/DLQ riêng; không cần profile consumer.
+Integration chỉ chạy khi chọn adapter thật, vẫn chạy khi tắt nhận command mới.
+Chi tiết chuyển từ container cũ và kiểm chứng tại
+[Work GitHub](../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của
 service nằm ngoài phạm vi. Nếu thu hẹp danh sách, các container đã chạy trước đó phải

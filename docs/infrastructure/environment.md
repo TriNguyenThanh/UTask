@@ -108,7 +108,8 @@ Nếu cần chạy app có profile khi thao tác staging thủ công, thêm
 Khi truyền `--profile` trên lệnh, Docker Compose ưu tiên danh sách đó thay cho
 `COMPOSE_PROFILES`; nếu vẫn dùng broker Docker, thêm cả `--profile kafka`.
 Deploy staging tự bật profile các app được phát hành và giữ lựa chọn profile
-`kafka` của máy chủ. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
+`kafka` nếu máy chủ đã chọn. `work-consumer` chạy cùng Work, không có profile
+riêng; nguồn Integration chỉ chạy khi chọn adapter thật. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
 (giữ các profile khác nếu có) rồi điền địa chỉ broker.
 Không cần file Compose riêng hay script khởi động bổ sung.
 Worker chỉ chờ broker Docker khi profile `kafka` được bật; khi tắt, dependency
