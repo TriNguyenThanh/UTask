@@ -439,7 +439,7 @@ function HistorySection({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function IssueMeta({ issue, detail, epic, sprint, onClose, backLabel }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; onClose: () => void; backLabel: string }>) {
+function IssueMeta({ issue, detail, epic, sprint, githubSlot, onClose, backLabel }: Readonly<{ issue: IssueDetail["issue"]; detail: IssueDetail; epic: Epic | null; sprint: Sprint | null; githubSlot?: ReactNode; onClose: () => void; backLabel: string }>) {
   return (
     <div className="space-y-5 border-outline-subtle lg:col-span-4 lg:border-l lg:pl-6">
       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -517,7 +517,7 @@ function IssueMeta({ issue, detail, epic, sprint, onClose, backLabel }: Readonly
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
           GitHub Development
         </h3>
-        {detail.gitLinks.length === 0 ? (
+        {githubSlot ? githubSlot : detail.gitLinks.length === 0 ? (
           <p className="text-xs text-muted-foreground">Chưa có liên kết mã nguồn.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -555,6 +555,7 @@ function IssueDetailBody({
   commentsSlot,
   historySlot,
   attachmentsSlot,
+  githubSlot,
   onChangeStatus,
   onClose,
   backLabel,
@@ -574,6 +575,7 @@ function IssueDetailBody({
   subtasksEditable: boolean;
   editSlot?: ReactNode;
   subtaskCreateSlot?: ReactNode;
+  githubSlot?: ReactNode;
   /** Work thật: thay nút AI demo bằng nút AI gọi AI Service. */
   aiSlot?: ReactNode;
   /** Work thật: thay khối bình luận, lịch sử và đính kèm bằng dữ liệu server. */
@@ -608,7 +610,7 @@ function IssueDetailBody({
           {historySlot ?? <HistorySection detail={detail} />}
         </div>
 
-        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} onClose={onClose} backLabel={backLabel} />
+        <IssueMeta issue={issue} detail={detail} epic={epic} sprint={sprint} githubSlot={githubSlot} onClose={onClose} backLabel={backLabel} />
       </div>
     </div>
   );
@@ -638,6 +640,7 @@ export function IssuePanel({
   commentsSlot,
   historySlot,
   attachmentsSlot,
+  githubSlot,
   onToggleSubtaskRemote,
   onChangeStatus,
   onClose,
@@ -672,6 +675,8 @@ export function IssuePanel({
   commentsSlot?: ReactNode;
   historySlot?: ReactNode;
   attachmentsSlot?: ReactNode;
+  /** Work thật: thay khối "GitHub Development" demo bằng liên kết GitHub từ server. */
+  githubSlot?: ReactNode;
   /** Work thật: tick nhiệm vụ con ghi lên server thay vì chỉ đổi cục bộ. `done` là trạng thái muốn đặt. */
   onToggleSubtaskRemote?: (subtaskId: string, done: boolean) => void;
   /** Set when the viewer may change this issue's status; omitted, the status field is read-only. */
@@ -804,6 +809,7 @@ export function IssuePanel({
             commentsSlot={commentsSlot}
             historySlot={historySlot}
             attachmentsSlot={attachmentsSlot}
+            githubSlot={githubSlot}
             onChangeStatus={onChangeStatus}
             onClose={onClose}
             backLabel={backLabel}

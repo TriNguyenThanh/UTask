@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/lib/api/client";
-import type { GitHubMemberMappingDto, GitHubVerificationRequestDto, ProjectRepositoryDto } from "@/lib/api/work/dto";
+import type { GitHubLinkTypeDto, GitHubMemberMappingDto, GitHubVerificationRequestDto, ProjectRepositoryDto, TaskGitHubLinkDto } from "@/lib/api/work/dto";
 import { ROOT } from "@/lib/api/work/endpoints.shared";
 
 const member = (projectId: string, userId: string) =>
@@ -99,4 +99,46 @@ export async function selectProjectRepositoryAndWait(
   }
   if (current.status !== "PENDING" || current.operation_id !== input.operationId) return current;
   throw new RepositoryPendingTimeoutError();
+}
+
+const links = (taskId: string) => `${ROOT}/tasks/${encodeURIComponent(taskId)}/github-links/`;
+
+/** Danh sách không phân trang. Gồm cả link đã xóa mềm (`deleted_at`); UI lọc bỏ. */
+export async function listTaskGitHubLinks(client: ApiClient, taskId: string) {
+  const { data } = await client.requestEnvelope<TaskGitHubLinkDto[]>(links(taskId));
+  return data;
+}
+
+/**
+ * `github_ref_id` gửi nguyên văn: server tự bỏ `#` đầu và chuẩn hóa số của Pull Request.
+ * `Idempotency-Key` là tùy chọn ở backend nhưng luôn gửi để thử lại không tạo trùng.
+ */
+export async function createTaskGitHubLink(
+  client: ApiClient,
+  taskId: string,
+  input: { linkType: GitHubLinkTypeDto; githubRefId: string },
+  idempotencyKey: string,
+) {
+  const { data } = await client.requestEnvelope<TaskGitHubLinkDto>(links(taskId), {
+    method: "POST",
+    idempotencyKey,
+    body: { link_type: input.linkType, github_ref_id: input.githubRefId },
+  });
+  return data;
+}
+
+/** Không body; `Idempotency-Key` bắt buộc. Server từ chối khi `is_verified === false`. */
+export async function confirmTaskGitHubLink(client: ApiClient, taskId: string, linkId: string, idempotencyKey: string) {
+  const { data } = await client.requestEnvelope<TaskGitHubLinkDto>(`${links(taskId)}${encodeURIComponent(linkId)}/confirm/`, {
+    method: "POST",
+    idempotencyKey,
+  });
+  return data;
+}
+
+export async function deleteTaskGitHubLink(client: ApiClient, taskId: string, linkId: string) {
+  const { data } = await client.requestEnvelope<{ unlinked_id: string }>(`${links(taskId)}${encodeURIComponent(linkId)}/`, {
+    method: "DELETE",
+  });
+  return data;
 }

@@ -4,15 +4,19 @@ import { describe, expect, it } from "vitest";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import {
+  confirmTaskGitHubLink,
+  createTaskGitHubLink,
   declareGitHubUsername,
+  deleteTaskGitHubLink,
   getProjectRepository,
+  listTaskGitHubLinks,
   RepositoryPendingTimeoutError,
   requestGitHubVerification,
   selectProjectRepository,
   selectProjectRepositoryAndWait,
 } from "@/lib/api/work/endpoints.github";
 import { server } from "@/mocks/server";
-import { buildProject, buildProjectMember, buildProjectRepository, workHandlers, type WorkCall, type WorkFixture } from "@/test/workHandlers";
+import { buildProject, buildProjectMember, buildProjectRepository, buildTaskGitHubLink, workHandlers, type WorkCall, type WorkFixture } from "@/test/workHandlers";
 
 const client = createApiClient({ baseUrl: "http://localhost", getAccessToken: () => "token", onUnauthorized: () => undefined });
 
@@ -201,5 +205,77 @@ describe("selectProjectRepositoryAndWait", () => {
       RepositoryPendingTimeoutError,
     );
     expect(calls.filter((c) => c.method === "GET")).toHaveLength(3);
+  });
+});
+
+describe("task GitHub links", () => {
+  it("lists every link of the task, including soft-deleted ones", async () => {
+    use({
+      githubLinks: [
+        buildTaskGitHubLink({ id: "a", task_id: "t1" }),
+        buildTaskGitHubLink({ id: "b", task_id: "t1", deleted_at: "2026-10-01T00:00:00Z" }),
+        buildTaskGitHubLink({ id: "c", task_id: "other" }),
+      ],
+    });
+    const result = await listTaskGitHubLinks(client, "t1");
+    expect(result.map((link) => link.id)).toEqual(["a", "b"]);
+  });
+
+  it("creates with the contract body and forwards the Idempotency-Key", async () => {
+    const calls = use();
+
+    const link = await createTaskGitHubLink(client, "t1", { linkType: "BRANCH", githubRefId: "feature/x" }, "key-1");
+
+    expect(link).toMatchObject({ task_id: "t1", link_type: "BRANCH", github_ref_id: "feature/x", confirmation_status: "PENDING" });
+    expect(calls[0]).toMatchObject({
+      method: "POST",
+      path: "/tasks/t1/github-links/",
+      idempotencyKey: "key-1",
+      body: { link_type: "BRANCH", github_ref_id: "feature/x" },
+    });
+  });
+
+  it("sends a PR ref verbatim and lets the server normalise it", async () => {
+    const calls = use();
+
+    const link = await createTaskGitHubLink(client, "t1", { linkType: "PULL_REQUEST", githubRefId: "#012" }, "key-1");
+
+    expect(calls[0]?.body).toEqual({ link_type: "PULL_REQUEST", github_ref_id: "#012" });
+    expect(link.github_ref_id).toBe("12");
+  });
+
+  it("surfaces a 400 for an invalid PR number", async () => {
+    use();
+    await expect(createTaskGitHubLink(client, "t1", { linkType: "PULL_REQUEST", githubRefId: "abc" }, "k")).rejects.toMatchObject({
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("confirms with a required Idempotency-Key and no body", async () => {
+    const calls = use({ githubLinks: [buildTaskGitHubLink({ id: "l/1", task_id: "t1", is_verified: true })] });
+
+    const link = await confirmTaskGitHubLink(client, "t1", "l/1", "key-2");
+
+    expect(link.confirmation_status).toBe("CONFIRMED");
+    expect(calls[0]).toMatchObject({ method: "POST", path: "/tasks/t1/github-links/l/1/confirm/", body: null, idempotencyKey: "key-2" });
+  });
+
+  it("propagates a refusal to confirm an unverified link", async () => {
+    use({ githubLinks: [buildTaskGitHubLink({ id: "l1", task_id: "t1", is_verified: false })] });
+    await expect(confirmTaskGitHubLink(client, "t1", "l1", "k")).rejects.toMatchObject({ status: 400, code: "INVALID_OPERATION" });
+  });
+
+  it("deletes a link and returns its id; unknown link is 404", async () => {
+    const calls = use({ githubLinks: [buildTaskGitHubLink({ id: "l1", task_id: "t1" })] });
+
+    await expect(deleteTaskGitHubLink(client, "t1", "l1")).resolves.toEqual({ unlinked_id: "l1" });
+    expect(calls[0]).toMatchObject({ method: "DELETE", path: "/tasks/t1/github-links/l1/", idempotencyKey: null });
+    await expect(deleteTaskGitHubLink(client, "t1", "l1")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("propagates 503 INTEGRATION_UNAVAILABLE", async () => {
+    use({ githubLinksError: { status: 503, code: "INTEGRATION_UNAVAILABLE", message: "x" } });
+    await expect(listTaskGitHubLinks(client, "t1")).rejects.toMatchObject({ status: 503, code: "INTEGRATION_UNAVAILABLE" });
   });
 });

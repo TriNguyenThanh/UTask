@@ -343,3 +343,26 @@ export interface ProjectRepositoryDto {
   source_version: number | null;
   synced_at: string | null;
 }
+
+export type GitHubLinkTypeDto = "BRANCH" | "COMMIT" | "PULL_REQUEST";
+
+/** Một liên kết GitHub của task (`GitHubLinkSerializer`). Link đã xóa mềm có `deleted_at`. */
+export interface TaskGitHubLinkDto {
+  id: string;
+  task_id: string;
+  github_repo_id: string | null;
+  connection_generation: number | null;
+  source_version: number | null;
+  confirmation_status: "PENDING" | "CONFIRMED";
+  confirmed_by_user_id: string | null;
+  confirmed_at: string | null;
+  deleted_at: string | null;
+  link_type: GitHubLinkTypeDto;
+  github_ref_id: string;
+  github_title: string | null;
+  github_status: string | null;
+  github_url: string | null;
+  is_verified: boolean;
+  created_by_user_id: string | null;
+  synced_at: string | null;
+}

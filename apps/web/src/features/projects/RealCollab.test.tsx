@@ -18,6 +18,7 @@ import {
   buildProjectMember,
   buildSprint,
   buildTask,
+  buildTaskGitHubLink,
   STORAGE_ORIGIN,
   workHandlers,
   type WorkCall,
@@ -279,6 +280,22 @@ describe("Issue panel on the real Board", () => {
     await user.type(screen.getByLabelText("Viết bình luận"), "Cảm ơn");
     await user.click(screen.getByRole("button", { name: "Gửi bình luận" }));
     await waitFor(() => expect(writes(calls).some((call) => call.path === "/comments/" && call.body?.task_id === "t1")).toBe(true));
+  }, 30000);
+
+  it("replaces the demo GitHub block with the task's server links", async () => {
+    serve({
+      members: { "project-1": [buildProjectMember({ user_id: LEADER_ID, role: "LEADER", display_name: "Nguyễn Hoàng Nam" })] },
+      userNames: { [LEADER_ID]: "Nguyễn Hoàng Nam" },
+      epics: [],
+      sprints: [buildSprint({ id: "s1", name: "Sprint 1" })],
+      sprintTasks: { s1: ["t1"] },
+      tasks: [buildTask({ id: "t1", code: "NEXUS-1", title: "Thiết kế đăng nhập", state_id: "state-todo" })],
+      githubLinks: [buildTaskGitHubLink({ id: "l1", task_id: "t1", github_ref_id: "feature/login" })],
+    });
+    renderAppRoutes("/projects/project-1/board?issue=NEXUS-1", leaderTestSession);
+
+    expect(await screen.findByText("feature/login", undefined, { timeout: 15000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Thêm liên kết" })).toBeInTheDocument();
   }, 30000);
 });
 

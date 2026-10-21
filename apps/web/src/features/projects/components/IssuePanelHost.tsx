@@ -5,6 +5,7 @@ import { AiDecomposeButton } from "@/features/projects/components/ai/AiDecompose
 import { IssuePanel } from "@/features/projects/components/IssuePanel";
 import { collabSlots } from "@/features/projects/components/RealCollab";
 import { RealIssueEditor, SubtaskCreateForm } from "@/features/projects/components/RealIssueSlots";
+import { RealGitHubLinks } from "@/features/projects/components/RealGitHubLinks";
 import type { IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
 import type { IssueMover } from "@/features/projects/hooks/useIssueMover";
 import { useIssueParam } from "@/features/projects/hooks/useIssueParam";
@@ -110,6 +111,11 @@ export function IssuePanelHost({
             acceptanceCriteria={detail.data.acceptanceCriteria}
             isLeader={mover.role === "leader"}
           />
+        ) : undefined
+      }
+      githubSlot={
+        real && detail.data ? (
+          <RealGitHubLinks taskId={detail.data.issue.id} projectId={projectId} editable={canEditRealIssue} />
         ) : undefined
       }
       {...collab}

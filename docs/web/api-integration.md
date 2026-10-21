@@ -476,6 +476,13 @@ Test dùng `src/test/integrationHandlers.ts` (MSW): handler `start` trả 400 n�
 - Lỗi: 409 → "Kết nối repo đã thay đổi, đã tải lại."; 503 `INTEGRATION_UNAVAILABLE` → thông báo B34. Không có nút ngắt kết nối (B35). Staging: **Chưa xác minh** (B34 chặn); đã kiểm bằng MSW.
 - Smoke staging ngày 21/10/2026 (Leader `aunhathuy28`, dự án PRJ1): `GET .../github/repository/` thật trả bản ghi rỗng → tab hiện "Chưa kết nối" và nút "Chọn repository"; vì tài khoản chưa liên kết GitHub nên hộp thoại hiện "Cần liên kết GitHub trước." kèm link tới cài đặt. Chưa xác minh: `POST` chọn repo thật (cần tài khoản GitHub đã liên kết, B33, và B34).
 
+### Link GitHub của task trong IssuePanel (giai đoạn 6)
+
+- Khối "GitHub Development" của `IssuePanel` nhận prop `githubSlot`; `IssuePanelHost` truyền `RealGitHubLinks` khi chạy Work thật (nhánh demo vẫn render `detail.gitLinks`). Client: `listTaskGitHubLinks` (`GET tasks/{id}/github-links/`, bỏ link có `deleted_at`), `createTaskGitHubLink` (`POST`, body `{link_type, github_ref_id}`, luôn gửi `Idempotency-Key`), `confirmTaskGitHubLink` (`POST .../{lid}/confirm/`, không body, key bắt buộc), `deleteTaskGitHubLink` (`DELETE .../{lid}/`).
+- Mỗi link hiện loại (Nhánh/Commit/Pull Request), `github_title` hoặc `github_ref_id` (PR thêm `#`), `github_status`, link `github_url`, nhãn "Chờ xác nhận"/"Đã xác nhận". "Xác nhận" chỉ hiện khi `PENDING` và `is_verified`. Form thêm link và nút "Xóa" chỉ hiện khi `canEditRealIssue` (Leader hoặc người được giao, dự án chưa lưu trữ, không phải giảng viên).
+- Client chỉ kiểm PR phải là số nguyên dương (bỏ `#` đầu); `github_ref_id` gửi nguyên văn, server chuẩn hóa. `Idempotency-Key` giữ nguyên khi thử lại cùng input, sinh mới khi input đổi hoặc sau khi thành công.
+- Lỗi: 503 `INTEGRATION_UNAVAILABLE` → thông báo B34; `INVALID_OPERATION` (ví dụ dự án chưa nối repo, link chưa `is_verified`) → hiện message server kèm link tới tab Code. Staging: **Chưa xác minh** thao tác ghi (B34 chặn); đã kiểm bằng MSW.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |

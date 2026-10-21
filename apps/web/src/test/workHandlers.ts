@@ -1,11 +1,13 @@
 import type { HttpHandler } from "msw";
 
 import { collabHandlers, type CollabFixture } from "@/test/workHandlers.collab";
+import { linkHandlers, type LinkFixture } from "@/test/workHandlers.links";
 import { projectHandlers, type ProjectFixture } from "@/test/workHandlers.projects";
 import { metaHandlers } from "@/test/workHandlers.meta";
 import { sprintHandlers, type SprintFixtureExtras } from "@/test/workHandlers.sprints";
 import { taskHandlers, type TaskFixture } from "@/test/workHandlers.tasks";
 
+export { buildTaskGitHubLink } from "@/test/workHandlers.links";
 export { buildProject, buildProjectMember, buildProjectRepository } from "@/test/workHandlers.projects";
 export {
   buildDefaultStates,
@@ -20,7 +22,7 @@ export type { WorkCall, WorkError } from "@/test/workHandlers.shared";
 export { buildDashboard, buildProgress } from "@/test/workHandlers.sprints";
 export { buildActivity, buildAttachment, buildComment, STORAGE_ORIGIN } from "@/test/workHandlers.collab";
 
-export type WorkFixture = ProjectFixture & TaskFixture & SprintFixtureExtras & CollabFixture;
+export type WorkFixture = ProjectFixture & TaskFixture & SprintFixtureExtras & CollabFixture & LinkFixture;
 
 /** `projects` là bắt buộc (nhóm Project); các nhóm khác bỏ trống thì trả danh sách rỗng. */
 export function workHandlers(fixture: WorkFixture): HttpHandler[] {
@@ -30,5 +32,6 @@ export function workHandlers(fixture: WorkFixture): HttpHandler[] {
     ...metaHandlers(fixture),
     ...sprintHandlers(fixture),
     ...collabHandlers(fixture),
+    ...linkHandlers(fixture),
   ];
 }

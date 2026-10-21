@@ -2,11 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 
 import { useApiClient } from "@/lib/api/ApiClientProvider";
+import type { GitHubLinkTypeDto } from "@/lib/api/work/dto";
 import { ApiError } from "@/lib/api/errors";
 import { newIdempotencyKey } from "@/lib/api/idempotency";
 import {
+  confirmTaskGitHubLink,
+  createTaskGitHubLink,
   declareGitHubUsername,
+  deleteTaskGitHubLink,
   getProjectRepository,
+  listTaskGitHubLinks,
   requestGitHubVerification,
   selectProjectRepositoryAndWait,
 } from "@/lib/api/work/endpoints.github";
@@ -15,6 +20,7 @@ import { useRefetchingMutation } from "@/lib/query/workWriteHooks";
 
 /** Nằm dưới `["work", userId]` nên `invalidateQueries(workKeys.all)` sau lệnh ghi làm mới nó. */
 export const workGithubKeys = {
+  links: (userId: string, taskId: string) => ["work", userId, "task", taskId, "github-links"] as const,
   repository: (userId: string, projectId: string) => ["work", userId, "github-repository", projectId] as const,
 };
 
@@ -67,4 +73,35 @@ export function useSelectProjectRepository(projectId: string) {
       throw error;
     }
   });
+}
+
+export function useTaskGitHubLinks(taskId: string) {
+  const client = useApiClient();
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  return useQuery({
+    queryKey: workGithubKeys.links(userId, taskId),
+    queryFn: () => listTaskGitHubLinks(client, taskId),
+    enabled: userId !== "",
+  });
+}
+
+/** `idempotencyKey` do form sinh một lần cho mỗi ý định và giữ nguyên khi thử lại cùng input. */
+export function useCreateTaskGitHubLink(taskId: string) {
+  const client = useApiClient();
+  return useRefetchingMutation(
+    ({ linkType, githubRefId, idempotencyKey }: { linkType: GitHubLinkTypeDto; githubRefId: string; idempotencyKey: string }) =>
+      createTaskGitHubLink(client, taskId, { linkType, githubRefId }, idempotencyKey),
+  );
+}
+
+export function useConfirmTaskGitHubLink(taskId: string) {
+  const client = useApiClient();
+  return useRefetchingMutation(({ linkId, idempotencyKey }: { linkId: string; idempotencyKey: string }) =>
+    confirmTaskGitHubLink(client, taskId, linkId, idempotencyKey));
+}
+
+export function useDeleteTaskGitHubLink(taskId: string) {
+  const client = useApiClient();
+  return useRefetchingMutation(({ linkId }: { linkId: string }) => deleteTaskGitHubLink(client, taskId, linkId));
 }
