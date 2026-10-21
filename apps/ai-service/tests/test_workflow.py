@@ -25,7 +25,12 @@ async def run(payload, principal, responses, *, settings=None, charge=None):
 
     charge = charge or count
     pool = ContextToolPool(
-        FakeGateway(), principal, payload, charge, settings.max_context_tool_calls
+        FakeGateway(),
+        principal,
+        payload,
+        charge,
+        settings.max_context_tool_calls,
+        github_enabled=settings.github_context_enabled,
     )
     now = datetime.now(UTC)
     result = await AdkRuntime(settings, ScriptedModel(responses)).run(

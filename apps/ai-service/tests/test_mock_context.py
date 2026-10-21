@@ -74,6 +74,8 @@ async def test_real_adk_workflow_with_fixture_adapter(sample, tool, result):
 
 
 async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
+    from test_context import authorization_decision, task_data
+
     payload = TypeAdapter(CreateAiRequest).validate_json(
         (SAMPLES / "task-decomposition.json").read_text()
     )
@@ -81,6 +83,7 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         mock_test=False,
         authorization_urls={"task": "http://work/authorize"},
         context_urls={"task:task": "http://work/context"},
+        work_service_key="work-key",
     )
     paths = []
 
@@ -89,13 +92,15 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         assert request.headers["Authorization"] == "Bearer verified"
         return httpx.Response(
             200,
-            json={"allowed": True}
+            json=authorization_decision(payload)
             if request.url.path == "/authorize"
             else {
                 "domain": "task",
                 "as_of": datetime.now(UTC).isoformat(),
                 "status": "available",
-                "data": {"title": "Real source", "secret": "hidden"},
+                "source_version": None,
+                "warning": None,
+                "data": {**task_data(), "title": "Real source", "secret": "hidden"},
             },
         )
 
@@ -103,7 +108,7 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         adapter = build_context_adapter(settings, client)
         assert isinstance(adapter, InternalContextAdapter)
         doc = await adapter.fetch("task", Principal("owner", "verified"), payload)
-        assert doc.data == {"title": "Real source"}
+        assert doc.data["title"] == "Real source" and "secret" not in doc.data
     assert paths == ["/authorize", "/context"]
 
 

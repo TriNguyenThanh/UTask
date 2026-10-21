@@ -21,10 +21,16 @@ def test_mock_mode_rejects_non_local_environments(environment):
 
 
 def test_mock_false_keeps_real_urls_and_rejects_fixture_adapter():
+    from config import WORK_CONTEXT_PAIRS
+
     settings = Settings(
         environment="production",
         mock_test=False,
-        context_urls={"task:task": "http://work/context/{target_id}"},
+        context_urls={key: "http://work/context/{target_id}" for key in WORK_CONTEXT_PAIRS},
+        authorization_urls={
+            key: "http://work/authorize/{target_id}" for key in ("project", "task", "sprint")
+        },
+        work_service_key="test-work-key",
     )
     assert settings.context_urls["task:task"] == "http://work/context/{target_id}"
     with pytest.raises(ValueError):

@@ -6,6 +6,7 @@ from pydantic import TypeAdapter
 from test_contract import validate
 from test_workflow import run
 
+from config import Settings
 from errors import ServiceError
 from models import CreateAiRequest
 
@@ -47,4 +48,37 @@ async def test_each_intent_requires_relevant_context_and_matches_wire_contract(
         return
     response, calls = await run(payload, principal, [call, output])
     assert response.status == "succeeded" and calls["tool"] == 1
+    validate("SucceededAiResponse", response.model_dump(mode="json", exclude_none=True))
+
+
+@pytest.mark.parametrize(
+    "target,enabled,focus,expected",
+    [
+        ("sprint", True, ["github_activity"], "sprint"),
+        ("sprint", False, [], "sprint"),
+        ("project", False, ["github_activity"], "đang tắt"),
+        ("project", False, [], "đang tắt"),
+        ("project", True, ["github_activity"], None),
+        ("project", False, ["progress"], None),
+        ("sprint", False, ["progress"], None),
+    ],
+)
+async def test_runtime_appends_github_limitation_after_schema_validation(
+    principal, target, enabled, focus, expected
+):
+    from test_context_contract import risk_request
+
+    payload = risk_request(target, focus)
+    call = types.Part(function_call=types.FunctionCall(name="get_progress_context", args={}))
+    response, calls = await run(
+        payload,
+        principal,
+        [call, '{"overall_level":"unknown","risks":[],"limitations":["Model limitation"]}'],
+        settings=Settings(github_context_enabled=enabled),
+    )
+    assert response.result.limitations[0] == "Model limitation"
+    assert len(response.result.limitations) == (2 if expected else 1)
+    if expected:
+        assert expected in response.result.limitations[-1]
+    assert calls["model"] == 2
     validate("SucceededAiResponse", response.model_dump(mode="json", exclude_none=True))
