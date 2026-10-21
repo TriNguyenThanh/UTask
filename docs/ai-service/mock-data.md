@@ -19,9 +19,13 @@ AI_MODEL=gemini-3.8-flash-high
 AI_LLM_API_BASE=http://host.docker.internal:8317/v1
 ```
 
-Secret và credential xác minh JWT cũng giữ trong `.env` root theo
+Secret runtime giữ trong `.env` root theo
 [mẫu root](../../.env.example): AI_LLM_API_KEY, AI_CREDENTIAL_KEY,
-AI_JWT_PUBLIC_KEY. Compose root dùng `POSTGRES_USER`/`POSTGRES_PASSWORD`
+AI_IDENTITY_SERVICE_KEY. AI không nhận `AI_JWT_PUBLIC_KEY` hoặc URL JWKS riêng;
+nó tải khóa công khai trực tiếp từ Identity khi xác minh từng access token.
+Cấu hình thêm
+`AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`); service key
+phải trùng entry `ai` trong `IDENTITY_SERVICE_KEYS` của Identity. Compose root dùng `POSTGRES_USER`/`POSTGRES_PASSWORD`
 chung với Django và database AI riêng theo `AI_DB_NAME` (mặc định `ai_context_db`);
 `AI_DB_PASSWORD` chỉ dành cho Compose AI độc lập ở phần chạy bên dưới.
 Xem [cấu hình Compose root](README.md#chạy-từ-compose-root) cho override URL.
@@ -39,9 +43,14 @@ CLIProxyAPI Management → `api-keys`; model ID được LiteLLM bọc thành ro
 | staging/production + mock true | Báo lỗi khi nạp cấu hình |
 
 API và worker dùng cùng `build_context_adapter()`. Context Tool Pool không
-biết nguồn là fixture hay REST; cả hai trả ContextDocument. JWT vẫn được xác
-minh trước API/worker. Vì Work chưa có, quyền domain trong mock được kiểm tra
+biết nguồn là fixture hay REST; cả hai trả ContextDocument. Mỗi xác thực tải
+raw JWKS của Identity; JWT và session vẫn được xác minh trước API/worker.
+MOCK_TEST không bỏ qua xác thực.
+Vì Work chưa có, quyền domain trong mock được kiểm tra
 theo allowed_users của từng target, không dùng `allowed=true` cho mọi user.
+`AI_WORK_SERVICE_AUTH_ENABLED=false` chỉ bỏ header service key Work; Bearer và
+authorize theo target/intent vẫn giữ. Nếu bật cờ, cần `AI_WORK_SERVICE_KEY`;
+Identity và Integration service key không đổi.
 
 ## Chạy như AI Service bình thường
 
@@ -85,9 +94,9 @@ Không ghi fixture vào database hoặc biến fixture thành nguồn dữ liệ
 | risk_analysis | [risk-analysis.json](../../apps/ai-service/examples/requests/risk-analysis.json) |
 
 ```sh
-mock_token=$(cat ../../.env.mock/mock-owner.jwt)
+access_token='<access-token do Identity cấp cho user mock-owner>'
 curl -sS \
-  -H "Authorization: Bearer $mock_token" \
+  -H "Authorization: Bearer $access_token" \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: mock-task-$(date +%s)" \
   --data-binary @examples/requests/task-decomposition.json \
@@ -100,28 +109,38 @@ Idempotency key mới để chạy lại; cùng user/key/payload replay request 
 Owner mẫu được phép; outsider bị từ chối, target không có trong fixture cũng
 bị từ chối. Thiếu domain context trả lỗi thay vì dùng dữ liệu rỗng.
 
-## JWT local khi Identity chưa có
+## Danh tính mẫu và token runtime
 
-JWT cũ giữ nguyên trong `.env.mock/` root. Tiện ích
-[setup_mock.py](../../apps/ai-service/scripts/setup_mock.py) chỉ sinh credential
-và token local, không là một bước của pipeline hay cách khởi động service:
+`setup_mock.py` tạo danh tính UUID ổn định cho fixture: owner
+`00000000-0000-4000-8000-000000000001`, outsider
+`00000000-0000-4000-8000-000000000002`, cùng JWT RS256 có claim
+`token_type=access`. Public JWKS test được ghi vào `.env.mock/jwks.json`; script
+không ghi `AI_JWT_PUBLIC_KEY` vào `.env`. JWKS/token này chỉ phục vụ test dùng
+Identity HTTP giả; nó không được Identity runtime công nhận và AI không có
+bypass xác thực.
+
+Chạy từ `apps/ai-service/` để tạo dữ liệu test:
 
 ```sh
 PYTHONPATH=src uv run python -m scripts.setup_mock
-# Khi JWT đã có/hết hạn, thay JWT có chủ đích và giữ DB/Fernet/LLM key:
-PYTHONPATH=src uv run python -m scripts.setup_mock --refresh
 ```
 
-JWT có hạn 24 giờ; tùy chọn --token-hours nhận 1–24 giờ. Sau refresh, chạy lại
-Compose up để nạp public key mới. Script không lưu private key hoặc in secret.
-Root .env và token có quyền 0600; directory token 0700 và Git bỏ qua.
+Chạy `setup_mock` riêng không tạo phiên dùng được cho API đang chạy, kể cả khi
+`MOCK_TEST=true`. Test mock HTTP giả JWKS và session-status; xác thực runtime
+luôn gọi Identity thật, không dùng fixture auth. Để gọi runtime, đăng nhập Identity trong môi trường đang
+chạy, dùng access token thật do Identity cấp cho user có UUID tương ứng. Token
+phải còn hạn và session còn active. Kiểm tra `AI_IDENTITY_BASE_URL` và
+`AI_IDENTITY_SERVICE_KEY` đã khớp entry `ai` trong `IDENTITY_SERVICE_KEYS`;
+nếu Identity không sẵn sàng, yêu cầu bị từ chối. Không lưu token vào repo.
 
 ## Kiểm thử
 
 `test_mock_context.py` kiểm tra source selection, fixture/schema, permission,
-không gọi HTTP ở mode mock, REST ở mode thật và ADK với model fake.
+REST context và ADK với model fake. Test auth/mock pipeline dùng Identity HTTP
+giả để xác minh JWT và session-status mà không bỏ qua kiểm tra trong AI.
 `test_mock_pipeline.py` đi qua API/JWT/PostgreSQL/dispatcher/Redis/Celery/
-completion/polling thật cho ba intent; chỉ fake LLM bên ngoài.
+completion/polling với các dependency giả đã nêu; không phải bằng chứng cho
+Identity hoặc LLM production.
 
 ```sh
 uv run pytest

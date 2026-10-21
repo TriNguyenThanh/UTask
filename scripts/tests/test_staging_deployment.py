@@ -37,6 +37,46 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI required")
+    def test_identity_only_compose_does_not_require_ai_runtime_secrets(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "COMPOSE_", "UTASK_"))
+        }
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="test",
+            AI_CREDENTIAL_KEY="",
+            AI_IDENTITY_SERVICE_KEY="",
+        )
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "--env-file",
+                ".env.example",
+                "-f",
+                "docker-compose.staging.yml",
+                "--profile",
+                "identity-service",
+                "config",
+                "--format",
+                "json",
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        services = json.loads(result.stdout)["services"]
+        self.assertIn("identity-service", services)
+        self.assertFalse(
+            {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"} & services.keys()
+        )
+
     def test_ai_live_gate_is_required_and_propagates_failure_without_credentials_in_arguments(
         self,
     ):
