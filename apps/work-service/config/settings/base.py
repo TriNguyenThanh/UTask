@@ -76,6 +76,7 @@ SPECTACULAR_SETTINGS = {
     },
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.api_documentation.document_connection_receipt",
         "apps.projects.api_documentation.document_ai_context",
     ],
 }

@@ -1,4 +1,5 @@
 import pytest
+from rest_framework.test import APIClient
 
 from common.service_permissions import caller_keys
 from tests.fixtures.ai_context import AI_KEY, INTEGRATION_KEY, context_url
@@ -79,6 +80,21 @@ def test_invalid_key_configuration_fails_closed(settings, keys, legacy):
     assert not caller_keys("integration")
 
 
+def test_legacy_receipt_remains_key_only_and_uses_effective_integration_keys(settings, ai_keys):
+    settings.WORK_SERVICE_KEYS = {"ai": [AI_KEY]}
+    settings.INTEGRATION_WORK_SERVICE_KEYS = [INTEGRATION_KEY]
+    assert caller_keys("integration") == [INTEGRATION_KEY]
+    client = APIClient()
+    url = (
+        "/api/v1/internal/integration/projects/11111111-1111-4111-8111-111111111111"
+        "/github/operations/missing"
+    )
+    # A 404 proves the key-only boundary passed without an actor JWT.
+    assert client.get(url, HTTP_X_SERVICE_KEY=INTEGRATION_KEY).status_code == 404
+    settings.WORK_SERVICE_KEYS = {"integration": [INTEGRATION_KEY]}
+    assert client.get(url, HTTP_X_SERVICE_KEY=INTEGRATION_KEY).status_code == 404
+    settings.WORK_SERVICE_KEYS = {"integration": [AI_KEY]}
+    assert client.get(url, HTTP_X_SERVICE_KEY=INTEGRATION_KEY).status_code == 403
 
 
 def test_outbound_key_is_never_an_inbound_key(settings, ai_keys):

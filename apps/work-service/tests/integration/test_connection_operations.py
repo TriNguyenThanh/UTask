@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.integrations.models import GitHubConnectionOperation
 from apps.integrations.services.operations import (
@@ -104,6 +105,24 @@ def test_permission_loss_persists_abort_and_cursor(
 
 
 
+def test_receipt_key_and_immutability(created_project, client_for, actors, connection_provider):
+    request_connection(created_project, client_for, actors)
+    row = GitHubConnectionOperation.objects.get()
+    route = (
+        f"/api/v1/internal/integration/projects/{row.project_id}"
+        f"/github/operations/{row.operation_id}"
+    )
+    client = APIClient()
+    assert client.get(route).status_code == 403
+    assert client.get(route, HTTP_X_SERVICE_KEY="w" * 32).status_code == 403
+    response = client.get(route, HTTP_X_SERVICE_KEY="i" * 32)
+    assert response["Cache-Control"] == "no-store"
+    assert response.status_code == 200 and response.json()["data"] == operation_receipt(
+        row.project_id, row.operation_id
+    )
+    assert client.get(route + "?x=1", HTTP_X_SERVICE_KEY="i" * 32).status_code == 400
+    with pytest.raises(IntegrityError), transaction.atomic():
+        GitHubConnectionOperation.objects.filter(pk=row.pk).update(prepared={})
 
 
 def test_pending_blocks_second_operation_and_links(

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from common.serializers import StrictInputSerializer
@@ -49,3 +50,14 @@ class DisconnectRepositorySerializer(StrictInputSerializer):
     expected_connection_generation = serializers.IntegerField(
         min_value=0, max_value=9223372036854775806
     )
+
+
+@extend_schema_serializer(component_name="WorkGitHubOperationReceipt")
+class ConnectionReceiptSerializer(serializers.Serializer):
+    applied = serializers.BooleanField()
+    project_id = serializers.UUIDField()
+    operation_id = serializers.CharField()
+    generation = serializers.IntegerField(min_value=1)
+    status = serializers.ChoiceField(choices=["PENDING"])
+    repo_id = serializers.CharField(allow_null=True)
+    source_version = serializers.IntegerField(min_value=1)
