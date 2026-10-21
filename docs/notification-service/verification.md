@@ -1,6 +1,23 @@
 # Kiểm chứng Notification — 22/10/2026
 
-## Đã xác minh
+Các kết quả role riêng dưới đây là lịch sử lượt triển khai ban đầu. Sau yêu
+cầu đổi sang credential PostgreSQL chung, cấu hình hiện hành được ghi tại
+[operations](operations.md); không suy ra credential riêng vẫn còn được dùng.
+
+## Kiểm tra sau khi dùng credential chung
+
+- 61 test backend chạy qua trên PostgreSQL riêng cho kiểm thử, gồm cấu hình
+  `DATABASE_NAME`/`POSTGRES_*` và trường hợp biến credential Notification cũ
+  còn tồn tại nhưng không được dùng.
+- 182 test hạ tầng qua; Compose local/staging cấp cùng credential PostgreSQL
+  cho toàn bộ process Notification, vẫn chọn database Notification riêng.
+- Bootstrap đã chạy trên PostgreSQL thật với username legacy trùng tài khoản
+  chung; không còn lỗi khác username và không tạo role/ACL Notification.
+- Smoke runtime Kafka/PostgreSQL/Redis/Celery/API/SMTP STARTTLS đã chạy lại
+  thành công với credential chung; Identity/Work HTTP vẫn là stub. Image
+  `utask/notification-service:shared-credentials-check` build thành công.
+
+## Đã xác minh trong lượt triển khai ban đầu
 
 - Docker image build được; migration chạy thành công trong container bằng role
   Notification riêng trên PostgreSQL kiểm thử.

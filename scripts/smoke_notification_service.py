@@ -52,11 +52,11 @@ def main():
         DJANGO_SETTINGS_MODULE="config.settings.production",
         DJANGO_SECRET_KEY="ephemeral-smoke-only-signing-key-00000000",
         DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1",
-        NOTIFICATION_DB_NAME=database,
-        NOTIFICATION_DB_HOST=os.environ.get("NOTIFICATION_SMOKE_DB_HOST", "127.0.0.1"),
-        NOTIFICATION_DB_PORT=os.environ.get("NOTIFICATION_SMOKE_DB_PORT", "55447"),
-        NOTIFICATION_DB_USER=os.environ.get("NOTIFICATION_SMOKE_DB_USER", "utask_ci"),
-        NOTIFICATION_DB_PASSWORD=os.environ.get("NOTIFICATION_SMOKE_DB_PASSWORD", ""),
+        DATABASE_NAME=database,
+        POSTGRES_HOST=os.environ.get("NOTIFICATION_SMOKE_DB_HOST", "127.0.0.1"),
+        POSTGRES_PORT=os.environ.get("NOTIFICATION_SMOKE_DB_PORT", "55447"),
+        POSTGRES_USER=os.environ.get("NOTIFICATION_SMOKE_DB_USER", "utask_ci"),
+        POSTGRES_PASSWORD=os.environ.get("NOTIFICATION_SMOKE_DB_PASSWORD", ""),
         NOTIFICATION_REDIS_URL=os.environ.get(
             "NOTIFICATION_SMOKE_REDIS", "redis://127.0.0.1:56387/14"
         ),

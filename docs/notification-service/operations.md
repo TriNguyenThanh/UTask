@@ -3,11 +3,18 @@
 ## Cấu hình và khởi động
 
 Dùng các biến mẫu trong [`.env.example`](../../.env.example); không commit secret.
-Đặt `NOTIFICATION_DB_USER`, `NOTIFICATION_DB_PASSWORD`,
-`NOTIFICATION_DJANGO_SECRET_KEY`. PostgreSQL bootstrap tạo role không có quyền
-quản trị và chỉ sở hữu database/schema Notification. Bootstrap thu hồi quyền
-CONNECT/TEMP mặc định PUBLIC trên các database do repo quản lý; owner và grant
-riêng được giữ. Kiểm tra grant rõ ràng cho login tùy chỉnh trước rollout.
+Đặt `NOTIFICATION_DB_NAME` và `NOTIFICATION_DJANGO_SECRET_KEY`. Notification
+nhận `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+từ `infra/env/database.env`, giống Identity/Work/Classroom; tên database được
+mapping thành `DATABASE_NAME` trong container. Không dùng
+`NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD`; các dòng cũ trong `.env`
+có thể xóa vì không còn được đọc.
+
+Bootstrap chỉ tạo database còn thiếu, không tạo role riêng, đổi owner hoặc
+thu hồi quyền theo Notification. Không còn điều kiện bắt username Notification
+khác tài khoản PostgreSQL chung, kể cả khi các biến legacy vẫn tồn tại.
+Volume đã từng tạo role/ACL theo cấu hình trước được giữ nguyên; thay đổi này
+không xóa dữ liệu, role hoặc tự phục hồi grant. Không cần xóa volume để cập nhật.
 
 `NOTIFICATION_SERVICE_TOKEN` khớp giữa Notification, Work và Identity.
 `IDENTITY_NOTIFICATION_SERVICE_KEY` khớp giữa Notification và Identity, dùng
