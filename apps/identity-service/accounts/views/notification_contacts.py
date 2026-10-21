@@ -1,22 +1,34 @@
-from rest_framework import serializers
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
+from accounts.serializers.notification_contacts import (
+    ContactRequestSerializer,
+    NotificationContactsResponseSerializer,
+)
 from common.notification_permission import NotificationServicePermission
+from common.serializers import ResponseEnvelopeSerializer
 
 
-class ContactRequestSerializer(serializers.Serializer):
-    user_ids = serializers.ListField(
-        child=serializers.UUIDField(), max_length=100, allow_empty=False
-    )
-
-
+@extend_schema(
+    auth=[],
+    request=ContactRequestSerializer,
+    parameters=[OpenApiParameter("X-Service-Token", str, OpenApiParameter.HEADER, required=True)],
+    responses={
+        200: NotificationContactsResponseSerializer,
+        400: ResponseEnvelopeSerializer,
+        403: ResponseEnvelopeSerializer,
+    },
+)
 class NotificationContactsView(APIView):
     authentication_classes = []
     permission_classes = [NotificationServicePermission]
     renderer_classes = [JSONRenderer]
+    # Class annotation inherits this schema instead of wrapping the raw protocol.
+    schema = AutoSchema()
 
     def post(self, request):
         serializer = ContactRequestSerializer(data=request.data)
