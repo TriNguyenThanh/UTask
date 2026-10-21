@@ -15,6 +15,8 @@ import { ProjectDashboardSection } from "@/features/projects/components/ProjectD
 import { parseCapacity } from "@/features/projects/lib/capacity";
 import { issueWriteErrorMessage } from "@/features/projects/lib/moveErrors";
 import { usePatchProject, useSetProjectArchived } from "@/lib/query/workHooks";
+import { MemberGitHubCell } from "@/features/projects/components/MemberGitHubCell";
+import { useAuth } from "@/features/auth/AuthProvider";
 import { useSetMemberCapacity } from "@/lib/query/workSprintHooks";
 import { useUserNames } from "@/lib/query/teacherClassHooks";
 import type { ProjectDto, ProjectMemberDto } from "@/lib/api/work/dto";
@@ -327,11 +329,15 @@ function MembersTable({
   members,
   projectId,
   canEditCapacity,
+  canRequestVerification,
 }: {
   members: ProjectMemberDto[];
   projectId: string;
   canEditCapacity: boolean;
+  canRequestVerification: boolean;
 }) {
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
   const userIds = members.filter((m) => !m.display_name).map((m) => m.user_id);
   const namesQuery = useUserNames(userIds);
 
@@ -345,6 +351,7 @@ function MembersTable({
               <th className="px-4 py-2 text-left font-medium">Tên</th>
               <th className="px-4 py-2 text-left font-medium">Vai trò</th>
               <th className="px-4 py-2 text-left font-medium">Giờ/tuần</th>
+              <th className="px-4 py-2 text-left font-medium">GitHub</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -364,12 +371,20 @@ function MembersTable({
                   <td className="px-4 py-2">
                     {canEditCapacity ? <CapacityCell projectId={projectId} member={member} /> : member.weekly_capacity}
                   </td>
+                  <td className="px-4 py-2">
+                    <MemberGitHubCell
+                      projectId={projectId}
+                      member={member}
+                      isSelf={member.user_id === currentUserId}
+                      canRequestVerification={canRequestVerification}
+                    />
+                  </td>
                 </tr>
               );
             })}
             {members.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có thành viên
                 </td>
               </tr>
@@ -460,7 +475,12 @@ function RealProjectInfo() {
           <h2 className="font-semibold">Thành viên</h2>
         </div>
         <div className="p-4">
-          <MembersTable members={members} projectId={projectId} canEditCapacity={isLeader && !isArchived} />
+          <MembersTable
+            members={members}
+            projectId={projectId}
+            canEditCapacity={isLeader && !isArchived}
+            canRequestVerification={isLeader}
+          />
         </div>
       </section>
 

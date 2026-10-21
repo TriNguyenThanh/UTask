@@ -64,6 +64,8 @@ export interface ProjectFixture extends BaseWorkFixture {
   createError?: WorkError;
   patchError?: WorkError;
   archiveError?: WorkError;
+  /** Ép hai route GitHub của thành viên trả lỗi này. */
+  githubError?: WorkError;
 }
 
 const STATUS_FILTERS = ["active", "archived", "all"];
@@ -174,6 +176,32 @@ export function projectHandlers(fixture: ProjectFixture): HttpHandler[] {
       }
       member.weekly_capacity = body.weekly_capacity as number;
       return envelope(member);
+    }),
+    http.patch("/api/work/projects/:projectId/members/:userId/github/", async ({ request, params }) => {
+      const body = await record(request, fixture, `/projects/${String(params.projectId)}/members/${String(params.userId)}/github/`);
+      if (fixture.githubError) return failure(fixture.githubError);
+      const project = find(params.projectId);
+      if (!project) return notFound();
+      const member = fixture.members?.[String(params.projectId)]?.find((row) => row.user_id === params.userId);
+      if (!member || member.status !== "ACTIVE") {
+        return envelopeError(422, "MEMBER_NOT_ACTIVE", "Thành viên không còn hoạt động.");
+      }
+      if (project.archived_at !== null) return envelopeError(400, "INVALID_OPERATION", "Dự án đang ở chế độ chỉ đọc.");
+      const username = typeof body.github_username === "string" ? body.github_username : "";
+      if (username === "") {
+        return envelopeError(400, "VALIDATION_ERROR", "Vui lòng nhập tên tài khoản GitHub của bạn.");
+      }
+      if (member.is_github_verified && member.github_username !== username) {
+        return envelopeError(400, "INVALID_OPERATION", "Liên kết tài khoản đã xác thực chỉ có thể thay đổi thông qua cổng ủy quyền OAuth.");
+      }
+      member.github_username = username;
+      return envelope({ user_id: member.user_id, github_username: username, is_github_verified: member.is_github_verified });
+    }),
+    http.post("/api/work/projects/:projectId/members/:userId/github/request-verification/", async ({ request, params }) => {
+      await record(request, fixture, `/projects/${String(params.projectId)}/members/${String(params.userId)}/github/request-verification/`);
+      if (fixture.githubError) return failure(fixture.githubError);
+      if (!find(params.projectId)) return notFound();
+      return envelope({ project_id: String(params.projectId), user_id: String(params.userId), requested_by_user_id: "leader" });
     }),
   ];
 }

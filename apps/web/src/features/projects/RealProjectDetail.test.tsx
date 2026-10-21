@@ -237,3 +237,87 @@ describe("RealProjectDetail — /projects/:projectId/info", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("RealProjectDetail — GitHub column", () => {
+  it("lets a member declare their own username and shows it as unverified", async () => {
+    const calls: Parameters<typeof workHandlers>[0]["calls"] = [];
+    const user = userEvent.setup();
+    setup(
+      { projects: [buildProject({ id: "project-1" })], members: { "project-1": [leaderMember(), regularMember()] }, calls },
+      memberTestSession,
+    );
+
+    const input = await screen.findByLabelText("Username GitHub của bạn");
+    await user.type(input, "@octocat");
+    await user.click(screen.getByRole("button", { name: "Lưu" }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH" && c.path.endsWith(`/members/${MEMBER_ID}/github/`))).toBe(true),
+    );
+    expect(calls.find((c) => c.path.endsWith("/github/"))?.body).toEqual({ github_username: "octocat" });
+    await waitFor(() => expect(screen.getByLabelText("Username GitHub của bạn")).toHaveValue("octocat"));
+    expect(screen.getByText("Chưa xác minh")).toBeInTheDocument();
+  });
+
+  it("shows the server message when the declaration is rejected", async () => {
+    const user = userEvent.setup();
+    setup(
+      {
+        projects: [buildProject({ id: "project-1" })],
+        members: { "project-1": [leaderMember(), regularMember()] },
+        githubError: { status: 400, code: "INVALID_OPERATION", message: "Dự án đang ở chế độ chỉ đọc." },
+      },
+      memberTestSession,
+    );
+
+    await user.type(await screen.findByLabelText("Username GitHub của bạn"), "octocat");
+    await user.click(screen.getByRole("button", { name: "Lưu" }));
+
+    expect(await screen.findByText("Dự án đang ở chế độ chỉ đọc.")).toBeInTheDocument();
+  });
+
+  it("lets the leader request verification for an unverified member, once", async () => {
+    const calls: Parameters<typeof workHandlers>[0]["calls"] = [];
+    const user = userEvent.setup();
+    setup(
+      {
+        projects: [buildProject({ id: "project-1" })],
+        members: { "project-1": [leaderMember(), { ...regularMember(), github_username: "linh-dev" }] },
+        calls,
+      },
+      leaderTestSession,
+    );
+
+    expect(await screen.findByText("@linh-dev")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Yêu cầu xác minh" }));
+
+    expect(await screen.findByRole("button", { name: "Đã gửi yêu cầu" })).toBeDisabled();
+    expect(calls.filter((c) => c.path.endsWith("/request-verification/"))).toHaveLength(1);
+  });
+
+  it("hides the verification button from members and for verified usernames", async () => {
+    const view = setup(
+      {
+        projects: [buildProject({ id: "project-1" })],
+        members: { "project-1": [{ ...leaderMember(), github_username: "lead" }, regularMember()] },
+      },
+      memberTestSession,
+    );
+
+    expect(await screen.findByText("@lead")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Yêu cầu xác minh" })).not.toBeInTheDocument();
+    view.unmount();
+
+    setup(
+      {
+        projects: [buildProject({ id: "project-1" })],
+        members: { "project-1": [leaderMember(), { ...regularMember(), github_username: "linh", is_github_verified: true }] },
+      },
+      leaderTestSession,
+    );
+
+    expect(await screen.findByText("@linh")).toBeInTheDocument();
+    expect(screen.getByText("Đã xác minh")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Yêu cầu xác minh" })).not.toBeInTheDocument();
+  });
+});

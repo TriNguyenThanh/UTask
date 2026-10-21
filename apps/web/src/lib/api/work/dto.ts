@@ -313,3 +313,17 @@ export interface AttachmentDownloadDto {
   download_url: string;
   expires_in: number;
 }
+
+/** Kết quả `PATCH projects/{id}/members/{uid}/github/`. */
+export interface GitHubMemberMappingDto {
+  user_id: string;
+  github_username: string | null;
+  is_github_verified: boolean;
+}
+
+/** Kết quả `POST projects/{id}/members/{uid}/github/request-verification/`. */
+export interface GitHubVerificationRequestDto {
+  project_id: string;
+  user_id: string;
+  requested_by_user_id: string;
+}
