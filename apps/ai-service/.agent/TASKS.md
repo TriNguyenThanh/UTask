@@ -776,8 +776,9 @@ Chưa có.
 
 ## Sẽ làm
 
-- Xác minh issuer/public key hoặc JWKS của Identity production; quản lý và
-  rotation credential key dùng chung API/worker.
+- Gỡ Fernet/token vault và yêu cầu `AI_CREDENTIAL_KEY` để đơn giản hóa API →
+  worker, theo [checkpoint 22/10/2026](../../../docs/ai-service/checkpoint.md).
+- Xác minh issuer và JWKS của Identity production.
 - Nghiệm thu REST quyền/context với Work provider triển khai theo contract
   đã chốt và Integration thật; consumer/mock test không thay E2E.
 - Chạy evaluation LLM/model thật, quota/concurrency và cost budget production.
