@@ -77,6 +77,8 @@ def reference_payload(body):
         or any(ord(char) < 32 or ord(char) == 127 for char in body["ref_id"])
     ):
         raise ParseError("Reference không hợp lệ.")
+    if body["link_type"] == "COMMIT" and not re.fullmatch(r"[0-9a-fA-F]{7,40}", body["ref_id"]):
+        raise ParseError("Mã thay đổi GitHub phải gồm 7–40 ký tự 0–9, a–f hoặc A–F.")
     return body
 
 
