@@ -526,7 +526,7 @@ class StagingDeploymentTests(unittest.TestCase):
         compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
         services = compose["services"]
         api = services["ai-service"]
-        for name in ("ai-service", "ai-worker", "ai-dispatcher"):
+        for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat"):
             with self.subTest(name=name):
                 service = services[name]
                 self.assertEqual(service["profiles"], ["ai-service"])
@@ -595,7 +595,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         check=True,
                     )
                     compose = json.loads(result.stdout)
-                    for name in ("ai-service", "ai-worker", "ai-dispatcher"):
+                    for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat"):
                         runtime = compose["services"][name]["environment"]
                         self.assertEqual(json.loads(runtime["AI_CONTEXT_URLS"]), maps)
                         self.assertEqual(
@@ -726,6 +726,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         self.assertIn("--no-deps", runtime[0])
                         self.assertIn("ai-worker", runtime[0])
                         self.assertIn("ai-dispatcher", runtime[0])
+                        self.assertIn("ai-beat", runtime[0])
                         self.assertNotIn("ai-migrate", runtime[0])
                     self.assertEqual(
                         any("exec" in command for command in after), failure == 0
@@ -1077,7 +1078,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         "work-group-consumer",
                     }
                     if service == "work-service"
-                    else {"ai-service", "ai-worker", "ai-dispatcher"},
+                    else {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"},
                 )
                 self.assertTrue(
                     all(

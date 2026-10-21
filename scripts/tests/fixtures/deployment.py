@@ -86,7 +86,11 @@ def deployment_runtime(
             "registry_token": "test-token",
             "EXPECTED_REGISTRY_TOKEN": "test-token",
             "EXPECTED_SERVICE_NAMES": services
-            + (" ai-worker ai-dispatcher" if "ai-service" in services.split() else ""),
+            + (
+                " ai-worker ai-dispatcher ai-beat"
+                if "ai-service" in services.split()
+                else ""
+            ),
             "EXPECTED_GATEWAY_SERVICE": "nginx",
             "registry": "test.invalid",
             "registry_user": "test",
