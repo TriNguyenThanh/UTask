@@ -13,20 +13,20 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 def test_repository_replay_source_order_and_member_cannot_select(github, actors, client_for):
     gateway, leader, route, task = github
-    body = {"github_repo_id": "repo-1", "operation_id": "op-1", "expected_connection_generation": 0}
-    assert leader.post(route, body, format="json").status_code == 200
+    body = {"github_repo_id": "123", "operation_id": "op-1", "expected_connection_generation": 0}
+    assert leader.post(route, body, format="json").status_code == 202
     assert gateway.calls == gateway.effects == 1
     assert client_for(actors["member"]).post(route, body, format="json").status_code == 403
     current = gateway.operations["op-1"]
     assert not reconcile_connection(replace(current, source_version=0))
-    assert Project.objects.get(pk=task.project_id).github_connection_version == 1
+    assert Project.objects.get(pk=task.project_id).github_connection_version == 2
 
 
 def test_candidate_confirm_and_merge_never_complete_task(github, actors, client_for):
     gateway, _, _, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -92,7 +92,7 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
     gateway, leader, route, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -102,13 +102,13 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
         leader.post(
             route,
             {
-                "github_repo_id": "repo-2",
+                "github_repo_id": "456",
                 "operation_id": "op-2",
                 "expected_connection_generation": 1,
             },
             format="json",
         ).status_code
-        == 200
+        == 202
     )
     member = client_for(actors["member"])
     confirmation = member.post(

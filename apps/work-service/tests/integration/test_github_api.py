@@ -18,7 +18,11 @@ def test_repository_read_before_connection_needs_no_provider(
     route = f"/projects/{created_project['id']}/github/repository/"
     data = read(client_for(actors["leader"]), route, response_schema)["data"]
     assert data["project_id"] == created_project["id"]
-    assert all(value is None for field, value in data.items() if field != "project_id")
+    assert all(
+        value is None
+        for field, value in data.items()
+        if field not in {"project_id", "command_generation"}
+    )
 
 
 def test_repository_and_link_gets_follow_source_candidate_confirmation_and_unlink(
@@ -26,8 +30,9 @@ def test_repository_and_link_gets_follow_source_candidate_confirmation_and_unlin
 ):
     gateway, leader, repo_route, task = github
     selected = read(leader, repo_route, response_schema)["data"]
-    assert selected["github_repo_id"] == "repo-1"
-    assert selected["connection_generation"] == selected["source_version"] == 1
+    assert selected["github_repo_id"] == "123"
+    assert selected["connection_generation"] == 1
+    assert selected["source_version"] == 2
     assert selected["status"] == "CONNECTED" and selected["operation_id"] == "op-1"
     assert gateway.calls == gateway.effects == 1
     route = f"/tasks/{task.pk}/github-links/"
@@ -35,7 +40,7 @@ def test_repository_and_link_gets_follow_source_candidate_confirmation_and_unlin
     assert read(member, route, response_schema)["data"] == []
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -71,7 +76,7 @@ def test_repository_reconcile_is_visible_but_old_generation_cannot_overwrite(
     pending = replace(
         first,
         operation_id="op-2",
-        repo_id="repo-2",
+        repo_id="456",
         generation=2,
         source_version=2,
         status="PENDING",
@@ -82,7 +87,7 @@ def test_repository_reconcile_is_visible_but_old_generation_cannot_overwrite(
     assert reconcile_connection(connected)
     current = read(leader, route, response_schema)["data"]
     assert current["connection_generation"] == 2 and current["source_version"] == 3
-    assert current["github_repo_id"] == "repo-2" and current["status"] == "CONNECTED"
+    assert current["github_repo_id"] == "456" and current["status"] == "CONNECTED"
     assert not reconcile_connection(replace(first, source_version=99))
     assert read(leader, route, response_schema)["data"] == current
 
@@ -102,7 +107,7 @@ def test_repository_command_rechecks_scope_and_generation_after_provider_call(
             ).update(status="LEFT", left_at=timezone.now())
         else:
             reconcile_connection(
-                replace(first, operation_id="competitor", repo_id="repo-2", generation=2)
+                replace(first, operation_id="competitor", repo_id="456", generation=2)
             )
         after_external_change["counts"] = (
             Activity.objects.count(),
@@ -120,7 +125,7 @@ def test_repository_command_rechecks_scope_and_generation_after_provider_call(
     result = leader.post(
         route,
         {
-            "github_repo_id": "repo-3",
+            "github_repo_id": "789",
             "operation_id": "attempt",
             "expected_connection_generation": 1,
         },
@@ -136,4 +141,4 @@ def test_repository_command_rechecks_scope_and_generation_after_provider_call(
     )
     if change == "generation":
         data = read(leader, route, response_schema)["data"]
-        assert data["github_repo_id"] == "repo-2" and data["operation_id"] == "competitor"
+        assert data["github_repo_id"] == "456" and data["operation_id"] == "competitor"
