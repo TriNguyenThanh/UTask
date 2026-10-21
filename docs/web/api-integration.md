@@ -89,7 +89,8 @@ Khi `isRealService("auth")`, hai route chọn component thật; ngược lại g
 mock cũ (`routes/SettingsProfileRoute.tsx`, `SettingsSecurityRoute.tsx`).
 
 - **Hồ sơ** (`IdentityProfilePage`): đọc `GET /users/me`; chỉ đọc: email,
-  tên đăng nhập, MSSV. Sửa được: họ, tên, SĐT, khóa, khoa, giới thiệu, múi giờ.
+  tên đăng nhập. MSSV có thể cập nhật, được chuẩn hóa chữ hoa và phải chưa gán cho
+  tài khoản khác. Sửa được: họ, tên, SĐT, khóa, khoa, giới thiệu, múi giờ.
   `PATCH /users/me` chỉ gửi trường đã đổi (trường tùy chọn để trống gửi
   `null`), sau đó đọc lại `GET /users/me` vì backend chỉ trả một phần hồ sơ.
   `VALIDATION_ERROR` hiện theo từng trường. Không cập nhật lạc quan. Trường

@@ -176,7 +176,7 @@ Quy tắc đã có trong mã:
 ## 3. Hiện trạng frontend (phần xác thực)
 
 - **File liên quan**:
-  - API và trạng thái phiên: [auth.ts](../../apps/web/src/features/auth/api/auth.ts),
+  - API Identity: [endpoints.ts](../../apps/web/src/lib/api/identity/endpoints.ts),
     [AuthProvider.tsx](../../apps/web/src/features/auth/AuthProvider.tsx),
     [types.ts](../../apps/web/src/features/auth/types.ts),
     [utils.ts](../../apps/web/src/features/auth/utils.ts).
@@ -374,7 +374,7 @@ sửa file hạ tầng dùng chung.
    - Tải lại trang thì mất phiên; điều này được chấp nhận đến Đợt 3.
 2. **Điều kiện vào**: Đợt 0.
 3. **Việc frontend**:
-   - `features/auth/api/auth.ts` dùng adapter Identity: `POST /api/auth/login` với
+   - `lib/api/identity/endpoints.ts` gọi Identity: `POST /api/auth/login` với
      `{email, password, device_name}` (tên trình duyệt), rồi `GET /api/auth/users/me`.
    - `features/auth/types.ts`: thay `global_role`, `capabilities` bằng `roles` và các
      trường hồ sơ cần dùng. Cập nhật các file đọc `user`, gồm guard, sidebar,
