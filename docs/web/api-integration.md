@@ -352,7 +352,7 @@ Giới hạn:
 - Backlog vẫn chỉ đọc: thêm/bớt sprint thuộc Phase 13, thứ tự trong section Backlog chưa có ngữ nghĩa neighbor hợp lệ.
 - Chưa có nút chặn trong panel, dùng menu thẻ trên Board. Menu chặn ẩn với task COMPLETED/CANCELLED.
 - Tick nhiệm vụ con chuyển sang state COMPLETED đầu tiên; bỏ tick chuyển sang state UNSTARTED đầu tiên (đặt cuối cột).
-- Task tạo mới không thuộc sprint nên chỉ hiện ở Backlog, không hiện trên Board.
+- Tạo issue từ Board khi có Sprint đang chạy: mặc định có ô "Thêm vào Sprint đang chạy" kèm "Lý do thêm vào Sprint" (bắt buộc, vì backend đòi `scope_change_reason` với sprint `ACTIVE`). Backend không có lệnh "tạo trong sprint" nên đây là hai lệnh: `POST /projects/{id}/tasks/` rồi `POST /sprints/{id}/tasks/` (`action: ADD`, hook `useAddTaskToSprint`). Lệnh thêm lỗi thì issue vẫn đã tạo, nằm ở Product Backlog; web báo rõ và không gửi lại lệnh tạo. Bỏ chọn ô thì issue vào Product Backlog như trước. Sprint đang chạy nhưng chưa có issue: Board hiện "Sprint chưa có issue" kèm link "Mở Backlog", thay vì "Không có issue khớp bộ lọc". Đã smoke trên staging (Leader, sprint đang chạy, issue hiện ngay trên Board; đã dọn dẹp).
 - Kiểm tra trên: `tsc`, 70 file test cả khi có và không có `.env.local` (test đầu tiên của `RealWorkspace` có lần chậm khi cả bộ chạy song song), build. ESLint không chạy được (thiếu module).
 - Smoke trình duyệt (staging): Leader tạo issue, đổi cột bằng menu và tải lại, chặn/bỏ chặn, sửa tiêu đề trong panel, tạo nhiệm vụ con; Teacher không có nút tạo issue hay menu thao tác. Chưa smoke: kéo thả bằng chuột, thành viên không phải Leader, `VERSION_CONFLICT` trên staging, tick nhiệm vụ con.
 

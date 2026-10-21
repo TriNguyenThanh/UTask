@@ -288,6 +288,8 @@ function BoardView({
     [sprintIssues, filters],
   );
 
+  const canCreateIssue = permissionCtx !== null && canCreateTask(permissionCtx) && !archived;
+
   useBoardAutoScroll(boardElement, mover.enabled);
   useBoardDropMonitor({
     enabled: mover.enabled,
@@ -306,7 +308,7 @@ function BoardView({
         onFiltersChange={setFilters}
         onToggleFlag={toggleFlag}
         onClear={clear}
-        canCreate={permissionCtx !== null && canCreateTask(permissionCtx) && !archived}
+        canCreate={canCreateIssue}
         onCreate={real ? () => setCreateOpen(true) : undefined}
         showMine={!readOnly}
       />
@@ -329,6 +331,22 @@ function BoardView({
               description="Sprint hiện chưa được khởi tạo. Vui lòng liên hệ Trưởng nhóm để khởi tạo Sprint cho dự án."
             />
           )}
+        </div>
+      ) : sprintIssues.length === 0 ? (
+        <div className="p-6">
+          <EmptyState
+            title="Sprint chưa có issue"
+            description={
+              real && canCreateIssue
+                ? `${sprint.name} chưa có issue nào. Bấm "Tạo Issue" để tạo issue ngay trong Sprint, hoặc kéo issue từ Product Backlog vào Sprint.`
+                : `${sprint.name} chưa có issue nào. Thêm issue vào Sprint từ trang Backlog.`
+            }
+            action={
+              <Button asChild size="sm" variant="outline">
+                <Link to={`/projects/${projectId}/backlog`}>Mở Backlog</Link>
+              </Button>
+            }
+          />
         </div>
       ) : visibleIssues.length === 0 ? (
         <div className="p-6">
@@ -371,6 +389,7 @@ function BoardView({
           onOpenChange={setCreateOpen}
           epics={workspace.epics}
           assignees={assignees}
+          activeSprint={sprint ? { id: sprint.id, name: sprint.name } : null}
         />
       ) : null}
 

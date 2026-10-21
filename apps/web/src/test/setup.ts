@@ -5,6 +5,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 
 import { handlersForScenario, server } from "@/mocks/server";
 
+// jsdom thiếu ResizeObserver; Radix Checkbox nằm trong <form> đo kích thước nút bằng nó.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
 beforeEach(() => {
   vi.stubEnv("VITE_ENABLE_MOCKS", "true");
