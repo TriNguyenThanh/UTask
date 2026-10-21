@@ -20,7 +20,7 @@ chỉ số. AI chỉ đọc context để tạo proposal; không được ghi Ta
 
 Thực hiện theo thứ tự:
 
-1. Thêm xác thực service key theo caller, kết hợp xác thực Bearer hiện hành.
+1. Giữ xác thực Bearer hiện hành; service key AI→Work đang tạm tắt theo ngoại lệ dưới đây.
 2. Triển khai POST authorize `ai.analyze`, gồm ma trận intent/target.
 3. Triển khai GET context, serializer allowlist, giới hạn kích thước và phiên bản.
 4. Triển khai POST authorize `github.read` dành riêng cho Integration.
@@ -34,16 +34,22 @@ Không đưa proposal apply, Kafka projection mới hoặc specialist agent vào
 
 ## 2. Xác thực và quyền dùng chung
 
-Mọi lời gọi phải có cả hai header:
+AI→Work luôn phải có Bearer. Theo quyết định tạm thời ngày 22/10/2026,
+`AI_WORK_SERVICE_AUTH_ENABLED=false` bỏ yêu cầu service key trên hai endpoint
+AI authorize/context; vẫn kiểm phiên và quyền actor trên từng target.
+Integration→Work vẫn cần cả Bearer và service key; ngoại lệ không áp dụng cho
+Integration hoặc AI→Identity.
+
+Khi bật lại xác thực service bằng `AI_WORK_SERVICE_AUTH_ENABLED=true`, AI gửi:
 
 ```http
 Authorization: Bearer <JWT hiện hành của actor>
 X-Service-Key: <key của đúng caller>
 ```
 
-Service key xác định service gọi; Bearer xác định người dùng. Không cho phép
-chỉ một trong hai, không nhận `actor_id` từ body và không dùng JWT của service
-thay cho actor. Kiểm tra session bị thu hồi theo cơ chế Work hiện hành; lỗi
+Service key xác định service gọi khi cơ chế đó được bật; Bearer xác định
+người dùng và luôn bắt buộc. Không nhận `actor_id` từ body và không dùng JWT
+của service thay cho actor. Kiểm tra session bị thu hồi theo cơ chế Work hiện hành; lỗi
 nguồn xác minh quyền không được biến thành cho phép.
 
 Tái dùng quyền đọc Project: membership phải `ACTIVE`, hoặc quyền teacher
@@ -288,7 +294,7 @@ của Integration (ít nhất 32 ký tự ASCII hợp lệ).
 
 | Bên giữ key gửi | Phải khớp bên nhận |
 | --- | --- |
-| AI: `AI_WORK_SERVICE_KEY` | Work: một key trong `WORK_SERVICE_KEYS["ai"]` |
+| AI: `AI_WORK_SERVICE_KEY` khi bật lại service auth | Work: key caller `ai` khi bật lại cơ chế; mặc định tạm thời không yêu cầu key |
 | Integration: `INTEGRATION_WORK_SERVICE_KEY` | Work: một key trong `WORK_SERVICE_KEYS["integration"]` |
 | AI: `AI_INTEGRATION_SERVICE_KEY` | Integration: một key trong `INTEGRATION_SERVICE_KEYS["ai"]` |
 

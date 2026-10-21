@@ -80,17 +80,20 @@ class InternalContextAdapter:
         service_key: SecretStr | None,
         *,
         body: dict | None = None,
+        require_service_key: bool = True,
     ) -> tuple[dict, int]:
-        if service_key is None or not service_key.get_secret_value().strip():
+        if require_service_key and (
+            service_key is None or not service_key.get_secret_value().strip()
+        ):
             raise failure("CONTEXT_UNAVAILABLE")
+        headers = {"Authorization": f"Bearer {principal.bearer}"}
+        if require_service_key:
+            headers["X-Service-Key"] = service_key.get_secret_value()
         try:
             async with self.client.stream(
                 method,
                 url,
-                headers={
-                    "Authorization": f"Bearer {principal.bearer}",
-                    "X-Service-Key": service_key.get_secret_value(),
-                },
+                headers=headers,
                 json=body,
                 timeout=self.settings.http_timeout_seconds,
                 follow_redirects=False,
@@ -126,6 +129,7 @@ class InternalContextAdapter:
             principal,
             self.settings.work_service_key,
             body={"action": "ai.analyze", "intent": request.intent.value},
+            require_service_key=self.settings.work_service_auth_enabled,
         )
         decision = payload.get("data")
         if (
@@ -171,7 +175,13 @@ class InternalContextAdapter:
                 await self.authorize(principal, request)
                 key = self.settings.work_service_key
             raw, payload_bytes = await self._request(
-                "GET", self._url(self.settings.context_urls.get(pair), request), principal, key
+                "GET",
+                self._url(self.settings.context_urls.get(pair), request),
+                principal,
+                key,
+                require_service_key=(
+                    domain == "github_activity" or self.settings.work_service_auth_enabled
+                ),
             )
             try:
                 document = ContextDocument.model_validate(raw)

@@ -568,3 +568,71 @@ def test_deterministic_github_limitations_are_not_duplicated(principal):
     finalized = pool.finalize_result(result)
     assert finalized.limitations and result.limitations == []
     assert pool.finalize_result(finalized) is finalized
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+async def test_work_service_key_bypass_preserves_bearer_and_target_permission(principal, allowed):
+    from test_context import task_data
+
+    request = task_request()
+    calls = []
+
+    def respond(req):
+        calls.append(req.method)
+        assert req.headers["Authorization"] == f"Bearer {principal.bearer}"
+        assert "X-Service-Key" not in req.headers
+        if req.method == "POST":
+            assert json.loads(req.content) == {"action": "ai.analyze", "intent": request.intent}
+            return httpx.Response(200, json=authorization_decision(request, allowed))
+        return httpx.Response(
+            200,
+            json={
+                "domain": "task",
+                "as_of": datetime.now(UTC).isoformat(),
+                "status": "available",
+                "source_version": "test.v1",
+                "warning": None,
+                "data": task_data(),
+            },
+        )
+
+    settings = Settings(
+        work_service_key="ignored-key",
+        authorization_urls={"task": "http://work/authorize/{target_id}"},
+        context_urls={"task:task": "http://work/context/{target_id}"},
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        adapter = InternalContextAdapter(settings, client)
+        if allowed:
+            assert (await adapter.fetch("task", principal, request)).domain == "task"
+            assert calls == ["POST", "GET"]
+        else:
+            with pytest.raises(ServiceError) as caught:
+                await adapter.fetch("task", principal, request)
+            assert caught.value.code == "TARGET_ACCESS_DENIED"
+            assert calls == ["POST"]
+
+
+async def test_enabling_work_service_auth_requires_key_before_http(principal):
+    def unexpected(req):
+        pytest.fail("Enabled caller authentication requires a key")
+
+    settings = Settings(
+        work_service_auth_enabled=True,
+        authorization_urls={"task": "http://work/authorize/{target_id}"},
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unexpected)) as client:
+        with pytest.raises(ServiceError) as caught:
+            await InternalContextAdapter(settings, client).authorize(principal, task_request())
+    assert caught.value.code == "CONTEXT_UNAVAILABLE"
+
+
+async def test_work_bypass_does_not_disable_integration_service_auth(principal):
+    def unexpected(req):
+        pytest.fail("Integration still requires its own caller key")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unexpected)) as client:
+        adapter = InternalContextAdapter(Settings(), client)
+        with pytest.raises(ServiceError) as caught:
+            await adapter._request("GET", "http://integration/context", principal, None)
+    assert caught.value.code == "CONTEXT_UNAVAILABLE"

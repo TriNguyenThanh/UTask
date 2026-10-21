@@ -104,6 +104,7 @@ async def test_http_adapter_enforces_permission_size_freshness_and_filtering(pri
         context_urls={"task:task": "http://work/context/{target_id}"},
         max_context_bytes=1024,
         work_service_key="work-key",
+        work_service_auth_enabled=True,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
         adapter = InternalContextAdapter(settings, client)

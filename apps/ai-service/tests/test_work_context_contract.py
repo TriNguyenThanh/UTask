@@ -101,11 +101,12 @@ def context_document(domain):
     }
 
 
-def adapter_settings():
+def adapter_settings(*, service_auth=False):
     base = "http://work-service:8000/api/v1/internal/ai/targets/{target_type}/{target_id}"
     return Settings(
         _env_file=(),
         work_service_key="test-work-key",
+        work_service_auth_enabled=service_auth,
         authorization_urls={
             target: base + "/authorize" for target in ("project", "task", "sprint")
         },
@@ -128,7 +129,8 @@ def decision(target, *, allowed=True):
 
 
 @pytest.mark.parametrize("target,domain", PAIRS)
-async def test_work_matrix_contract_is_consumed_by_real_adapter(target, domain):
+@pytest.mark.parametrize("service_auth", [False, True])
+async def test_work_matrix_contract_is_consumed_by_real_adapter(target, domain, service_auth):
     request = request_for(target)
     body = context_document(domain)
     validator("ContextDocument").validate(body)
@@ -137,7 +139,10 @@ async def test_work_matrix_contract_is_consumed_by_real_adapter(target, domain):
     def transport(http_request):
         calls.append(http_request.method)
         assert http_request.headers["authorization"] == "Bearer test-bearer"
-        assert http_request.headers["x-service-key"] == "test-work-key"
+        if service_auth:
+            assert http_request.headers["x-service-key"] == "test-work-key"
+        else:
+            assert "x-service-key" not in http_request.headers
         prefix = f"/api/v1/internal/ai/targets/{target}/{TARGET_ID}"
         if http_request.method == "POST":
             assert http_request.url.path == prefix + "/authorize"
@@ -155,9 +160,9 @@ async def test_work_matrix_contract_is_consumed_by_real_adapter(target, domain):
         return httpx.Response(200, json=response, headers={"Cache-Control": "no-store"})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
-        document = await InternalContextAdapter(adapter_settings(), client).fetch(
-            domain, Principal("owner", "test-bearer"), request
-        )
+        document = await InternalContextAdapter(
+            adapter_settings(service_auth=service_auth), client
+        ).fetch(domain, Principal("owner", "test-bearer"), request)
     assert document.model_dump(mode="json") == body
     assert calls == ["POST", "GET"]
     assert WORK_CONTEXT_PAIRS == {f"{target}:{domain}" for target, domain in PAIRS}
@@ -267,3 +272,17 @@ async def test_work_hidden_target_404_denies_before_context_read():
             )
     assert error.value.code == "TARGET_ACCESS_DENIED" and not error.value.retryable
     assert calls == ["POST"]
+
+
+def test_temporary_work_key_bypass_preserves_bearer_and_integration_auth_contract():
+    for path, methods in CONTRACT["paths"].items():
+        for method in ("get", "post"):
+            if method not in methods:
+                continue
+            operation = methods[method]
+            if path.startswith("/api/v1/internal/ai/"):
+                assert operation["security"] == [{"WorkBearer": []}]
+                assert operation["x-temporary-service-key-optional"] is True
+                assert operation["x-implementation-status"] == "planned"
+            else:
+                assert operation["security"] == [{"WorkBearer": [], "WorkServiceKey": []}]
