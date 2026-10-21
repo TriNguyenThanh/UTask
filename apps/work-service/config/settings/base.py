@@ -146,6 +146,9 @@ CELERY_TASK_ROUTES.update(
 INTEGRATION_ADAPTER = os.environ.get(
     "WORK_INTEGRATION_ADAPTER", "infrastructure.integration.UnavailableIntegration"
 )
+WORK_INTEGRATION_BASE_URL = os.environ.get(
+    "WORK_INTEGRATION_BASE_URL", "http://integration-service:8000"
+)
 WORK_INTEGRATION_SERVICE_KEY = os.environ.get("WORK_INTEGRATION_SERVICE_KEY", "")
 try:
     INTEGRATION_WORK_SERVICE_KEYS = json.loads(
