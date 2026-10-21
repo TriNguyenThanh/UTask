@@ -7,6 +7,9 @@ qua Identity có source/test local. Identity/Work/Integration và LLM production
 Retention terminal đã có source, migration và lịch Celery beat; Kafka và
 specialist **Chưa triển khai**. Điều kiện phát hành và phần chưa xác minh nằm
 tại [mức sẵn sàng production](production-readiness.md).
+CI chạy deterministic evaluation; live evaluation là lệnh thủ công tùy chọn,
+không phải điều kiện deploy staging. Hướng dẫn và các biến `EVAL_AI_*` nằm tại
+[phần evaluation](production-readiness.md#evaluation-và-gate-phát-hành).
 
 Đây là trang điều hướng cho tài liệu AI Service. Không coi các phần thiết kế
 API, event, provider hoặc agent là deployment production đã hoàn chỉnh chỉ

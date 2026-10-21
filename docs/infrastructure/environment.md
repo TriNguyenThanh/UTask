@@ -391,6 +391,9 @@ tra phiên Identity hoặc quyền domain thật.
 
 LLM cần model/base URL/key và REST adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
 Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
+Các biến `EVAL_AI_*` và `EVAL_EXPECTED_MODEL` trong mẫu root chỉ dành cho
+evaluation live thủ công tùy chọn; deploy staging không đọc hoặc yêu cầu chúng.
+Xem [hướng dẫn evaluation AI](../ai-service/production-readiness.md#evaluation-và-gate-phát-hành).
 
 Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự
 thay password role đã lưu trong volume PostgreSQL. Redis DB1 là broker AI;

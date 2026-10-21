@@ -112,7 +112,7 @@ model pin, kết quả rule và thời gian; không lưu Bearer, service key hay
 thô. Deterministic dùng doubles/fake; chỉ live mới gọi gateway/runtime đã cấu
 hình. Phải kiểm tra kết quả CLI, không suy ra đã pass từ workflow YAML.
 
-Gate yêu cầu toàn bộ case đúng schema/context policy/safety, case lỗi có
+Evaluation đạt khi toàn bộ case đúng schema/context policy/safety, case lỗi có
 outcome đúng kỳ vọng 100%; tỷ lệ
 case kỳ vọng thành công đạt ít nhất 95%; quality trung bình ít nhất 85/100,
 mỗi intent ít nhất 80/100; p95 tối đa 25 giây và mọi case tối đa 30 giây.
@@ -124,14 +124,24 @@ không tham gia điểm quality. Đây là kiểm tra tự động theo tham chi
 đo đầy đủ tính đúng đắn/ngữ nghĩa do chuyên gia đánh giá. Model trong báo cáo
 là pin cấu hình của runner; cần nghiệm thu riêng model thực tế trên provider.
 
-Live cần cấu hình trong `.env` server staging:
+Live là kiểm tra thủ công tùy chọn. Chạy runner từ `apps/ai-service/` trong
+môi trường có thể truy cập gateway staging và đã nhận các biến cần thiết; không
+cần lưu chúng trong `.env` trên VPS hoặc thêm vào deploy workflow. Lệnh ghi
+báo cáo vào thư mục đã chọn:
+
+```sh
+PYTHONPATH=src uv run python -m evaluation --mode live --report-dir evaluation-reports/live
+```
+
+Các biến `EVAL_AI_*` và `EVAL_EXPECTED_MODEL` chỉ cần cho lần chạy live này.
+`AI_MODEL` là cấu hình model của service và phải khớp giá trị expected:
 
 | Biến | Mục đích |
 | --- | --- |
-| `EVAL_AI_BASE_URL` | Gateway mà runner truy cập, ví dụ `http://nginx`; không trỏ API AI trực tiếp |
+| `EVAL_AI_BASE_URL` | URL gateway staging mà runner truy cập được; không trỏ API AI trực tiếp |
 | `EVAL_AI_BEARER` | Token tài khoản kiểm thử có quyền trên target staging; giữ ngoài log/diff |
 | `EVAL_AI_PROJECT_ID`, `EVAL_AI_TASK_ID`, `EVAL_AI_SPRINT_ID` | Target fixture staging theo intent |
-| `AI_MODEL`, `EVAL_EXPECTED_MODEL` | Model pin bắt buộc trong live; expected phải bằng AI_MODEL |
+| `AI_MODEL`, `EVAL_EXPECTED_MODEL` | Model pin của service và giá trị đối chiếu trong live; expected phải bằng AI_MODEL |
 | `EVAL_AI_CASE_TARGETS` | JSON map case ID → UUID; bắt buộc ghi đè riêng cho các scenario partial/missing/stale/denied/large/injection và GitHub partial/missing/stale |
 | `EVAL_AI_CASE_EXPECTATIONS` | JSON map đủ 30 case → `{scenario, required_terms, evidence_ids}`; case thành công cần ≥2 từ khóa và risk cần ID evidence thật |
 
@@ -148,20 +158,15 @@ Manifest phải đủ case và khớp `live_overrides` trong dataset. Các lỗi
 bộ live thay chúng bằng available/dependencies để giữ 10 case mỗi intent.
 Trước mỗi live case, runner đọc authorization/context thật để xác minh fixture,
 status và evidence ID. Không gửi request nếu fixture sai. Candidate staging cần
-`AI_GITHUB_CONTEXT_ENABLED=true` để nghiệm thu GitHub; production chỉ bật sau
-khi gate đạt. Runner pacing theo `AI_REQUESTS_PER_MINUTE`, thời gian chờ pacing
+`AI_GITHUB_CONTEXT_ENABLED=true` để nghiệm thu GitHub; quyết định bật trên
+production cần được nghiệm thu riêng. Runner pacing theo `AI_REQUESTS_PER_MINUTE`, thời gian chờ pacing
 không tính latency. Mỗi case bị chặn cứng ở 30 giây cả POST và polling.
 
-Khi service được chọn phát hành có AI, script deploy chạy gate live sau
-rollout/migration/gateway checks bằng one-shot AI image qua Compose. Credential
-đọc whitelist từ `.env` server, truyền tên biến environment, không nằm trong
-tham số giá trị của SSH/Docker. Thiếu cấu hình hoặc gate lỗi làm release lỗi;
-không có bỏ qua gate cho release bật AI. Service không bật AI giữ luồng cũ.
-Báo cáo persist ở `ai-evaluation-reports/<image_tag>` trên host staging và
-workflow tải JSON/JUnit thành artifact `ai-evaluation-live-<source_sha>`, kể
-cả khi gate thất bại. Báo cáo không chứa response/context thô.
-Gate hiện sau rollout và không tự rollback; lỗi gate cần xử lý vận hành theo
-quy trình phát hành hiện hành, không tự suy ra quyền deploy/rollback.
+Nếu evaluation thủ công thất bại, kiểm tra báo cáo JSON/JUnit trong thư mục
+được truyền qua `--report-dir`; runner không ghi response/context thô vào báo
+cáo. Kết quả này không tự thay đổi trạng thái deploy hoặc rollback. Staging
+deploy tiếp tục kiểm tra migration và health gateway theo CI/CD; không yêu cầu
+`EVAL_AI_*` và không tải báo cáo live thành artifact phát hành.
 
 ## Những phần còn phải nghiệm thu
 
