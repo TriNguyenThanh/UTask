@@ -52,8 +52,9 @@ export interface LogoutAllDataDto {
   revoked_sessions_count: number;
 }
 
-/** Trường `PATCH /users/me` cho phép sửa; MSSV và email chỉ đọc (gửi `student_id` bị 403). */
+/** Trường được phép gửi đến `PATCH /users/me`; email và vai trò vẫn chỉ đọc. */
 export interface ProfilePatchDto {
+  student_id?: string | null;
   first_name?: string;
   last_name?: string;
   phone_number?: string | null;
