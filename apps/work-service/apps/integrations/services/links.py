@@ -86,7 +86,7 @@ def link_event(project, task, link, actor_id, verb):
     )
 
 
-def ingest_reference(task_id, fact, *, allow_relink=False):
+def ingest_reference(task_id, fact, *, allow_relink=False, verified_snapshot=False):
     fact.validate()
     with transaction.atomic():
         project, task = lock_subject(task_id)
@@ -115,13 +115,18 @@ def ingest_reference(task_id, fact, *, allow_relink=False):
                 for field, value in values.items()
                 if field != "synced_at"
             )
-            if incoming == current and changed:
+            if incoming == current and verified_snapshot and fact.synced_at <= link.synced_at:
+                return link, False
+            if incoming == current and changed and not verified_snapshot:
                 raise WorkError(
                     "SOURCE_VERSION_CONFLICT",
                     "Thông tin liên kết GitHub đã thay đổi. Vui lòng tải lại dữ liệu.",
                     409,
                 )
             if not changed:
+                if verified_snapshot and fact.synced_at > link.synced_at:
+                    link.synced_at = fact.synced_at
+                    link.save(update_fields=["synced_at"])
                 return link, False
             for field, value in values.items():
                 setattr(link, field, value)
@@ -228,7 +233,7 @@ def manual_link(actor, task_id, payload, bearer, scope=None):
             if not fresh:
                 return replay_response(receipt)
         require_connection(project, fact)
-        link, _ = ingest_reference(task_id, fact, allow_relink=True)
+        link, _ = ingest_reference(task_id, fact, allow_relink=True, verified_snapshot=True)
         link.created_by_user_id = link.created_by_user_id or actor.id
         link.save(update_fields=["created_by_user_id"])
         confirm_link_locked(project, task, link, actor)
