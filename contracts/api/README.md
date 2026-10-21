@@ -16,16 +16,20 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
   Xem [ADR-004](../../docs/adr/004-integration-github-account-ownership.md) và
   [ADR-005](../../docs/adr/005-integration-work-ai-contracts.md).
 
-- [`ai-service-v1.yaml`](ai-service-v1.yaml): API AI giai đoạn 1; đã chốt thiết
-  kế, có bootstrap implementation một phần; chưa có provider/ADK hoặc runtime
-  production. Xem [code map](../../docs/ai-service/code-map.md).
+- [`ai-service-v1.yaml`](ai-service-v1.yaml): API AI giai đoạn 1; pipeline
+  PostgreSQL/Celery/ADK đã triển khai, tích hợp domain production chưa nghiệm thu.
+  Xem [code map](../../docs/ai-service/code-map.md).
+- [`work-ai-context-v1.yaml`](work-ai-context-v1.yaml): contract Work nội bộ
+  được [`work-service.yaml`](work-service.yaml) tham chiếu; authorization và
+  project/task/team/progress context **Thiết kế mục tiêu**, Work provider chưa
+  triển khai. AI consumer đã có adapter và contract test bằng mock.
 
 ## Đối chiếu baseline mới
 
 [Baseline](../../docs/architecture/README.md) không tự thay URL/payload hoặc
 ngưỡng chờ của API v1. Quy tắc gateway-auth trong YAML cần đối chiếu với việc
-service xác thực token theo baseline. Internal-context API của Work chưa có
-contract. Các thay đổi cần version/quy tắc tương thích và kiểm thử riêng; xem
+service xác thực token theo baseline. Internal-context API của Work đã có
+contract mục tiêu nêu trên. Các thay đổi cần version/quy tắc tương thích và kiểm thử riêng; xem
 [ADR-001](../../docs/adr/001-adopt-architecture-baseline.md).
 
 Identity OpenAPI 1.8 được sinh từ URLconf và serializers của

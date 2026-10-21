@@ -3,6 +3,12 @@ info:
   title: UTask Work API
   version: '1.4'
 paths:
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/authorize:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1authorize'
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1contexts~1{domain}'
+  /api/v1/internal/integration/projects/{project_id}/authorize:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1integration~1projects~1{project_id}~1authorize'
   /comments/:
     post:
       operationId: comments_create
