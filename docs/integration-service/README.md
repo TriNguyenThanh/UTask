@@ -71,3 +71,11 @@ Các kế hoạch trong `plans/` là snapshot, không phải hợp đồng hiệ
 Thực hiện [runbook nghiệm thu GitHub thật](live-acceptance.md) để hoàn tất
 installation/repository, refresh, uninstall/revoke và kết nối lại. Kết quả
 thực tế được ghi tại checkpoint của phiên, không suy ra từ checklist.
+
+## Mở rộng thông báo
+
+Notification hiện chỉ nhận nguồn Identity/Work; sự kiện GitHub chưa có
+consumer Notification trong phạm vi đã bàn giao. Trước khi mở rộng, đọc
+[hướng dẫn thêm nguồn/event](../notification-service/implementation.md#thêm-service-hoặc-event-mới)
+và [checkpoint](../notification-service/checkpoint-2026-10-22.md).
+Integration tiếp tục là service duy nhất gọi GitHub API.
