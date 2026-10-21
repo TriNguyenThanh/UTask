@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from tests.e2e.http_client import wait_until
+from tests.e2e.membership import publish
 
 pytestmark = pytest.mark.e2e
 
@@ -290,7 +291,9 @@ def test_admin_feedback_is_own_comment_only_without_project_read(api, accounts, 
     api("DELETE", path, token=admin)
 
 
-def test_admin_member_removal_reaches_all_work_projects(api, accounts, linked_projects):
+def test_admin_member_removal_reaches_all_work_projects(
+    api, accounts, linked_projects, environment
+):
     current = api("GET", linked_projects.path, token=accounts.tokens["admin"])["data"]
     api(
         "POST",
@@ -302,6 +305,7 @@ def test_admin_member_removal_reaches_all_work_projects(api, accounts, linked_pr
             "reason": "Kiểm tra đồng bộ quyền Admin qua Kafka",
         },
     )
+    publish(environment)
     for project in linked_projects.projects:
         wait_until(
             lambda project=project: (
