@@ -1,9 +1,12 @@
 # Hướng dẫn Work Service cung cấp context cho AI
 
-**Trạng thái: Chưa triển khai provider Work; đây là hướng dẫn triển khai.**
-AI đã có HTTP adapter và kiểm thử consumer bằng mock, nhưng chưa chứng minh
-kết nối thật với Work. Work cần cung cấp ba API nội bộ dưới đây trước khi
-AI chạy với dữ liệu/quyền thật. Không cần triển khai agent hoặc LLM trong Work.
+**Trạng thái: Đã triển khai provider Work; đã kiểm quyền/context với service thật
+trên staging local. Nghiệm thu đầy đủ mọi intent AI: Một phần.**
+Ba API và đủ 10 cặp context đã kiểm với Identity/Classroom thật. Một ca Task
+đi hết queue/worker/LLM khi runtime AI tạm development để dùng endpoint HTTP;
+ba ca khác timeout. Đã khôi phục staging. Xem [báo cáo runtime](ai-context-staging-validation-20261022.md)
+để phân biệt cấu hình smoke và giới hạn, không suy ra mọi intent đã nghiệm thu.
+Xem [kết quả và cách chạy lại](ai-context-implementation-plan.md#10-kết-quả-triển-khai-và-giới-hạn-kiểm-chứng).
 
 Nguồn chuẩn cho path, schema và mã lỗi là
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
@@ -11,6 +14,10 @@ Nguồn chuẩn cho path, schema và mã lỗi là
 biệt, sửa đồng bộ contract, consumer, provider và test; không tự thêm trường
 vào response. Xem thêm [ADR-005](../adr/005-integration-work-ai-contracts.md)
 và [điều kiện phát hành AI](../ai-service/production-readiness.md).
+
+Checklist triển khai, vị trí sửa và cách kiểm thử nằm trong
+[kế hoạch context Work–AI](ai-context-implementation-plan.md). Kế hoạch này ghi
+quyết định nghiệp vụ mới; các checkbox chưa hoàn tất không phải bằng chứng API đã có.
 
 ## 1. Phạm vi và thứ tự thực hiện
 
@@ -20,7 +27,7 @@ chỉ số. AI chỉ đọc context để tạo proposal; không được ghi Ta
 
 Thực hiện theo thứ tự:
 
-1. Giữ xác thực Bearer hiện hành; service key AI→Work đang tạm tắt theo ngoại lệ dưới đây.
+1. Giữ xác thực Bearer và service key bắt buộc theo provider Work đã triển khai.
 2. Triển khai POST authorize `ai.analyze`, gồm ma trận intent/target.
 3. Triển khai GET context, serializer allowlist, giới hạn kích thước và phiên bản.
 4. Triển khai POST authorize `github.read` dành riêng cho Integration.
@@ -34,21 +41,18 @@ Không đưa proposal apply, Kafka projection mới hoặc specialist agent vào
 
 ## 2. Xác thực và quyền dùng chung
 
-AI→Work luôn phải có Bearer. Theo quyết định tạm thời ngày 22/10/2026,
-`AI_WORK_SERVICE_AUTH_ENABLED=false` bỏ yêu cầu service key trên hai endpoint
-AI authorize/context; vẫn kiểm phiên và quyền actor trên từng target.
-Integration→Work vẫn cần cả Bearer và service key; ngoại lệ không áp dụng cho
-Integration hoặc AI→Identity.
-
-Khi bật lại xác thực service bằng `AI_WORK_SERVICE_AUTH_ENABLED=true`, AI gửi:
+Provider Work hiện yêu cầu cả Bearer và service key. AI trên `dev` có tùy chọn
+`AI_WORK_SERVICE_AUTH_ENABLED`, mặc định `false`; khi nối provider này phải đặt
+`true` để AI gửi key. Cờ phía AI không tắt kiểm key trong Work và không cấp
+quyền cho actor. Integration→Work cũng cần cả hai header.
 
 ```http
 Authorization: Bearer <JWT hiện hành của actor>
 X-Service-Key: <key của đúng caller>
 ```
 
-Service key xác định service gọi khi cơ chế đó được bật; Bearer xác định
-người dùng và luôn bắt buộc. Không nhận `actor_id` từ body và không dùng JWT
+Service key xác định service gọi; Bearer xác định người dùng. Cả hai luôn bắt buộc
+đối với provider Work hiện tại. Không nhận `actor_id` từ body và không dùng JWT
 của service thay cho actor. Kiểm tra session bị thu hồi theo cơ chế Work hiện hành; lỗi
 nguồn xác minh quyền không được biến thành cho phép.
 
@@ -62,7 +66,7 @@ Tham chiếu source có thể tái dùng:
 
 - [JWT/session authentication](../../apps/work-service/common/authentication.py),
   [Identity adapter](../../apps/work-service/infrastructure/identity.py).
-- [read_project_scope và visible_project](../../apps/work-service/apps/projects/queries/projects.py).
+- [read_project_scope, visible_project và readable_project](../../apps/work-service/apps/projects/queries/projects.py).
 - [read_context_snapshot](../../apps/work-service/apps/projects/queries/context.py)
   và [test snapshot](../../apps/work-service/tests/integration/test_context_snapshot.py).
 
@@ -70,6 +74,13 @@ Snapshot hiện có là query nội bộ với chunks/checksum, không phải RE
 Chỉ tái dùng logic scope/lọc dữ liệu phù hợp; không trả nguyên snapshot,
 snapshot ID, chunks hoặc checksum thay cho `ContextDocument`. Endpoint mới
 không ghi snapshot, outbox hay dữ liệu nghiệp vụ.
+
+Luồng hiện tại: query chụp dữ liệu thuần và version dưới barrier Project;
+view gọi `ContextDocumentSerializer` để lọc nội dung, giới hạn danh sách/byte
+và tạo response. Serializer không đọc DB. Authorize Integration dùng
+`readable_project` chung, không phụ thuộc module context AI. Schema context
+được khai báo trực tiếp bằng extension `drf-spectacular`, không tạo proxy rồi
+ghi đè schema; chi tiết và kiểm chứng ở kế hoạch triển khai.
 
 ## 3. API cần triển khai
 
@@ -216,15 +227,19 @@ Quy tắc scope và chỉ số:
   cách xử lý mẫu số 0, task bị chặn, thiếu estimate và chia workload nhiều assignee
   trong test/provider docs; không tạo công thức riêng cho AI.
 
-Điểm cần Work và AI thống nhất trước nghiệm thu `team`: `weekly_capacity`
-theo giờ/tuần, còn phép phân bổ hiện có dùng estimate points của task cấp gốc.
+Quy tắc triển khai `team` đã chốt: `capacity` lấy `weekly_capacity` theo giờ/tuần;
+`workload` là điểm ước lượng còn lại của task cấp gốc, loại `COMPLETED/CANCELLED`,
+phân bổ bằng `allocate_points` hiện có. Task thiếu estimate phải được báo qua
+`partial/warning`, không được coi là đã biết đầy đủ khối lượng.
 [Dashboard query](../../apps/work-service/apps/projects/queries/dashboard.py)
-chưa loại task `COMPLETED/CANCELLED` khỏi phép phân bổ này; không mặc nhiên
-gọi kết quả là workload còn lại. Schema team cũng chưa có trường unit.
+chưa loại task `COMPLETED/CANCELLED` khỏi phép phân bổ này; cần lọc đúng scope
+cho context AI, không sửa ngầm ý nghĩa dashboard. Schema team chưa có trường unit;
+ghi đơn vị qua `warning` và tài liệu, giữ nguyên shape consumer đang dùng.
 Không lấy workload chia capacity hoặc gọi hai giá trị là cùng đơn vị.
-Chốt scope, ý nghĩa và đơn vị với consumer, ghi thành quy tắc có test;
-nếu cần đổi shape thì version hóa contract và cập nhật AI trước, không thêm
-`unit` ngoài schema. Không tự quy đổi story points thành giờ.
+Chi tiết scope, thiếu dữ liệu và các ca biên nằm trong mục team của
+[kế hoạch triển khai](ai-context-implementation-plan.md). Quy tắc này **đã triển khai
+và có provider tests**. Không thêm `unit` ngoài schema hoặc tự quy đổi
+story points thành giờ.
 
 ### Source version và thời điểm
 
@@ -232,10 +247,15 @@ nếu cần đổi shape thì version hóa contract và cập nhật AI trước
 | --- | --- |
 | Project, team, progress theo Project | Chuỗi `Project.event_sequence`, ví dụ `"42"` |
 | Task | Chuỗi `Task.version` |
-| Progress theo Sprint | Chuỗi `sprint.version:project.event_sequence`, ví dụ `"3:42"` |
+| Progress theo Sprint đang mở | Chuỗi `sprint.version:project.event_sequence`, ví dụ `"3:42"` |
+| Progress theo Sprint đã đóng | Phiên bản Sprint kèm `cut_project_sequence` của snapshot; không dùng Project sequence hiện tại cho payload lịch sử |
 
 Project/team đọc qua target Task/Sprint vẫn dùng phiên bản Project. Đọc dữ
 liệu và phiên bản nhất quán; không trả phiên bản mới với payload cũ.
+Với Sprint đã đóng, thiết kế provider giữ `captured_at`, trả `stale` và warning
+về dữ liệu lịch sử; không ghép summary task hiện tại vào totals snapshot.
+AI hiện từ chối context `stale`; không coi đây là luồng phân tích dữ liệu hiện hành
+đã hỗ trợ. Xem giới hạn snapshot và checklist trong kế hoạch triển khai.
 `as_of` không thay thế `source_version`. AI mặc định từ chối context quá 300
 giây hoặc timestamp tương lai quá 30 giây; đồng bộ đồng hồ môi trường.
 
@@ -285,8 +305,13 @@ Provider phải lọc PII/secret, không dựa hoàn toàn vào bộ lọc promp
 
 ## 6. Cấu hình phối hợp với AI và Integration
 
-`WORK_SERVICE_KEYS` là **cấu hình đích cần Work bổ sung**, map caller sang danh
-sách key hiện tại/trước để xoay vòng; không suy ra Work đã đọc biến này.
+`WORK_SERVICE_KEYS` **đã được Work đọc trong settings**, map caller sang danh
+sách key hiện tại/trước để xoay vòng. Default `{}` không cấp quyền cho AI.
+Map chỉ nhận `ai/integration`, mỗi caller 1–2 key hợp lệ, không dùng chung key.
+Caller Integration dùng map mới hoặc fallback `WORK_INTEGRATION_INBOUND_KEYS`
+đang có; nếu cùng khai báo thì hai bộ key phải khớp, không lấy hợp danh sách.
+JSON sai hoặc cấu hình xung đột đóng quyền. Receipt hiện hữu dùng cùng bộ key
+Integration hiệu lực nhưng vẫn key-only; hai API authorize mới cần thêm Bearer.
 Chỉ chấp nhận key thuộc caller đúng endpoint; so sánh an toàn, không log key.
 Dùng secret ngẫu nhiên riêng từng chiều, inject qua secret store/Compose;
 không commit giá trị thật. Key Integration cần tuân thủ giới hạn định dạng
@@ -294,7 +319,7 @@ của Integration (ít nhất 32 ký tự ASCII hợp lệ).
 
 | Bên giữ key gửi | Phải khớp bên nhận |
 | --- | --- |
-| AI: `AI_WORK_SERVICE_KEY` khi bật lại service auth | Work: key caller `ai` khi bật lại cơ chế; mặc định tạm thời không yêu cầu key |
+| AI: `AI_WORK_SERVICE_KEY`, với `AI_WORK_SERVICE_AUTH_ENABLED=true` | Work: key caller `ai` trong `WORK_SERVICE_KEYS` |
 | Integration: `INTEGRATION_WORK_SERVICE_KEY` | Work: một key trong `WORK_SERVICE_KEYS["integration"]` |
 | AI: `AI_INTEGRATION_SERVICE_KEY` | Integration: một key trong `INTEGRATION_SERVICE_KEYS["ai"]` |
 
@@ -380,5 +405,6 @@ Checklist nghiệm thu liên service:
    [production readiness](../ai-service/production-readiness.md), lưu báo cáo;
    chỉ đổi trạng thái tài liệu sang **Đã triển khai** cho phần đã có bằng chứng.
 
-Nếu Work provider chưa xong, AI tiếp tục phát triển bằng contract/mock. Không
-né blocker bằng đọc DB Work, bỏ kiểm quyền hoặc bật fixture trong staging.
+Provider Work đã có; khi môi trường chưa đủ key/URL/dependency thật thì giữ
+trạng thái nghiệm thu runtime là **Chưa xác minh**. Không né blocker bằng đọc
+DB Work, bỏ kiểm quyền hoặc bật fixture trong staging.

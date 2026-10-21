@@ -38,8 +38,12 @@ Project độc lập không gắn lớp/nhóm cần quyết định sản phẩm
 Work boundary cho AI đã chốt trong
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
 [Work contract](../../contracts/api/work-service.yaml) tham chiếu. Các endpoint
-được đánh dấu `planned`: **Chưa triển khai provider Work**, không suy ra đã có
-API từ hợp đồng. Boundary gồm POST authorize `ai.analyze` theo intent/target,
+được đánh dấu `implemented`: **Đã triển khai provider Work** và kiểm thử bằng
+PostgreSQL riêng; quyền/context đã kiểm trên staging local với Identity/Classroom
+thật. Luồng AI/LLM **Một phần**: một ca thành công với HTTP local, ba ca timeout;
+xem [báo cáo runtime](ai-context-staging-validation-20261022.md) để biết cấu hình
+smoke tạm và phần chưa nghiệm thu. Không suy ra đã triển khai VPS.
+Boundary gồm POST authorize `ai.analyze` theo intent/target,
 GET project/task/team/progress context và POST authorize `github.read` chỉ
 dành cho caller Integration. Bearer actor và service key cùng bắt buộc;
 context tối đa 65536 byte, theo shape allowlist và không chứa PII. Work tự
