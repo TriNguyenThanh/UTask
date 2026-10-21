@@ -2,6 +2,73 @@ from uuid import uuid4
 
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
+
+
+class GitHubConnectionOperation(models.Model):
+    """Work's durable decision and recovery intent; never contains bearer credentials."""
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    project = models.ForeignKey("projects.Project", on_delete=models.PROTECT)
+    operation_id = models.CharField(max_length=100)
+    actor_user_id = models.UUIDField()
+    action = models.CharField(
+        max_length=10, choices=[("CONNECT", "CONNECT"), ("DISCONNECT", "DISCONNECT")]
+    )
+    payload_hash = models.CharField(max_length=64)
+    request_body = models.JSONField()
+    state = models.CharField(max_length=12, default="NEW")
+    generation = models.BigIntegerField(null=True)
+    prepared = models.JSONField(default=dict)
+    accepted_at = models.DateTimeField(null=True)
+    response_data = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    last_error = models.CharField(max_length=80, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "github_connection_operations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "operation_id"], name="uq_work_github_operation"
+            ),
+            models.UniqueConstraint(
+                fields=["project"],
+                condition=Q(state__in=["NEW", "CONFIRM", "ABORT"]),
+                name="uq_work_github_pending",
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    state__in=[
+                        "NEW",
+                        "CONFIRM",
+                        "ABORT",
+                        "CONFIRMED",
+                        "ABORTED",
+                        "EXPIRED",
+                        "FAILED",
+                    ]
+                ),
+                name="chk_work_github_op_state",
+            ),
+            models.CheckConstraint(
+                condition=Q(action__in=["CONNECT", "DISCONNECT"]), name="chk_work_github_op_action"
+            ),
+            models.CheckConstraint(
+                condition=Q(generation__isnull=True) | Q(generation__gte=1),
+                name="chk_work_github_op_generation",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["next_attempt_at"],
+                condition=Q(state__in=["NEW", "CONFIRM", "ABORT"]),
+                name="ix_work_github_recovery",
+            )
+        ]
 
 
 class TaskGitHubLink(models.Model):
