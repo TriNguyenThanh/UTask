@@ -47,10 +47,11 @@ thực tế phía Work xem [hướng dẫn Work](../project-service/github-integ
 | `WORK_GITHUB_CONNECTION_ENABLED` | Work | Cờ bật luồng kết nối; mặc định `false`. |
 
 Giữ các key trong secret store của môi trường, không ghi vào repo, log hoặc
-response. Adapter Work chờ tối đa 2 giây kết nối và 20 giây đọc, thay vì
-ngắt sau 3 giây khi Integration còn kiểm quyền/repository/reference bằng
-các lượt GitHub tuần tự. Đây là giới hạn chờ mỗi request, không phải cam kết
-mọi trang discovery đều hoàn tất trong 20 giây. Timeout/lỗi nguồn không được
+response. Adapter Work dùng timeout 30 giây cho kết nối và 30 giây cho đọc
+dữ liệu khi Integration kiểm quyền/repository/reference bằng các lượt GitHub
+tuần tự. Đây là timeout của từng giai đoạn I/O, không phải giới hạn tổng
+thời gian xử lý hoặc cam kết mọi trang discovery đều hoàn tất trong 30 giây.
+Timeout/lỗi nguồn không được
 đổi thành kết quả cho phép. Tên biến và
 đường dẫn route cụ thể được đối chiếu trong test adapter và test hai backend.
 
