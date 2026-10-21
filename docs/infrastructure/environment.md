@@ -427,3 +427,12 @@ Redis DB0 dành cấu hình Identity. Đổi Compose không tự chuyển dữ l
 từ volume `ai_database` hoặc stack standalone vào database chung. Giữ volume
 cũ để kiểm tra/backup; không chạy `down -v`. Nếu AI từng có dữ liệu, cần xuất
 và khôi phục có chủ đích trước khi sử dụng database đích.
+
+## Notification Service
+
+Mapping `infra/env/notification-service.env` chỉ cấp credential database riêng
+`NOTIFICATION_DB_*`, không nhận PostgreSQL administrator. Các key nội bộ, Gmail
+App Password, AES key ring và cờ rollout theo
+[runbook Notification](../notification-service/operations.md).
+`NOTIFICATION_EMAIL_ENABLED=false` mặc định; ba cờ nhận Identity/Work và gửi
+email được bật độc lập. Gmail credential không nằm trong source hay Web.

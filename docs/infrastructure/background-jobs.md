@@ -163,3 +163,13 @@ Job thu hồi token của Integration tiếp tục chạy khi tắt feature GitH
 giữ client secret và key ring cho tới khi xử lý xong. Smoke Docker local đã
 xác minh luồng inbox → Beat → Redis → worker; GitHub thật và staging chưa
 xác minh, xem [foundation Integration](../integration-service/foundation.md).
+
+## Notification email và in-app
+
+**Đã triển khai trong source.** Hai consumer Identity/Work lưu inbox trước
+commit Kafka. Beat Notification giao task dispatcher mỗi 5 giây trên queue
+`notification`; worker xử lý PostgreSQL durable và SMTP. API, worker, Beat và
+consumer dùng chung image; migration chạy trước startup. Chi tiết lease,
+quota, expiry, SMTP unknown và replay tại
+[Notification](../notification-service/README.md) và
+[runbook](../notification-service/operations.md). SMTP Gmail thật đã ACK thư thử; staging và Inbox người nhận chưa xác minh.
