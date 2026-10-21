@@ -30,12 +30,13 @@ class RegistrationService:
 
     @staticmethod
     def create_student_profile(request, user, data):
-        UserProfile.objects.create(
+        profile = UserProfile.objects.create(
             user=user,
             first_name=data["first_name"],
             last_name=data["last_name"],
             display_name="",
         )
+        profile.refresh_from_db(fields=("display_name",))
         role, _ = GlobalRole.objects.get_or_create(
             code="STUDENT", defaults={"name": "Student", "description": "Student"}
         )

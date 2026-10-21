@@ -36,7 +36,9 @@ Truyền trace ID để liên kết API, job và event. Xem
 Kết nối repository của Project dùng contract
 [`integration.project.connection.changed.v1`](../../contracts/events/integration.project.connection.changed.v1.json).
 Contract này **đã có producer outbox/publisher phía Integration**, mặc định tắt;
-Work consumer thật chưa nghiệm thu. Thứ tự triển khai, receipt và ranh giới với
+Work đã có consumer và test hai backend qua HTTP/PostgreSQL/Kafka riêng với
+GitHub/Identity stub; staging và GitHub live chưa nghiệm thu. Xem
+[hướng dẫn Work](../project-service/github-integration.md). Thứ tự, receipt và ranh giới với
 REST được chốt tại [ADR-005](../adr/005-integration-work-ai-contracts.md).
 
 ## Hợp đồng cũ cần đối chiếu

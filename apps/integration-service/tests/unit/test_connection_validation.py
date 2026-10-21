@@ -84,6 +84,7 @@ def test_prepare_disconnect_and_command_validation():
         ("generation", 0),
         ("repo_id", "01"),
         ("link_type", "ISSUE"),
+        ("link_type", "COMMIT"),
         ("link_type", []),
         ("ref_id", ""),
         ("ref_id", "x" * 301),
@@ -99,3 +100,23 @@ def test_reference_rejects_malformed_input(field, value):
     body[field] = value
     with pytest.raises(ParseError):
         validation.reference_payload(body)
+
+
+@pytest.mark.parametrize(
+    "ref,valid",
+    [
+        ("a" * 6, False),
+        ("a" * 7, True),
+        ("A" * 40, True),
+        ("a" * 41, False),
+        ("not-a-sha", False),
+        ("１２３４５６７", False),
+    ],
+)
+def test_commit_reference_boundaries(ref, valid):
+    body = {"repo_id": "42", "generation": 1, "link_type": "COMMIT", "ref_id": ref}
+    if valid:
+        assert validation.reference_payload(body) == body
+    else:
+        with pytest.raises(ParseError):
+            validation.reference_payload(body)

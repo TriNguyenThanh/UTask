@@ -12,22 +12,25 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
 - [`integration-service-v1.yaml`](integration-service-v1.yaml): OpenAPI 1.4.0;
   public account/consent/installation/repository/webhook đã có trong source,
   internal Work/AI M5/M6 **đã triển khai phía provider, flags mặc định tắt**;
-  chưa nghiệm thu với implementation Work/AI thật.
+  Work đã có test hai backend qua HTTP/Kafka riêng với GitHub/Identity stub;
+  AI và GitHub live cho Project chưa nghiệm thu.
   Xem [ADR-004](../../docs/adr/004-integration-github-account-ownership.md) và
   [ADR-005](../../docs/adr/005-integration-work-ai-contracts.md).
 
 - [`ai-service-v1.yaml`](ai-service-v1.yaml): API AI giai đoạn 1; pipeline
   PostgreSQL/Celery/ADK đã triển khai, tích hợp domain production chưa nghiệm thu.
   Xem [code map](../../docs/ai-service/code-map.md).
-- [`work-service.yaml`](work-service.yaml): OpenAPI 1.5; receipt nội bộ
-  Integration→Work dùng `WorkGitHubOperationReceiptEnvelope` và chỉ service key,
-  giữ fact PENDING đã commit bất biến. **Thiết kế mục tiêu; provider receipt
-  Work chưa triển khai.** Xem
-  [guide Work–Integration](../../docs/integration-service/work-service-integration-guide.md).
 - [`work-ai-context-v1.yaml`](work-ai-context-v1.yaml): contract Work nội bộ
   được [`work-service.yaml`](work-service.yaml) tham chiếu; authorization và
-  project/task/team/progress context **Thiết kế mục tiêu**, Work provider chưa
-  triển khai. AI consumer đã có adapter và contract test bằng mock.
+  project/task/team/progress context **đã triển khai phía Work**, bắt buộc
+  Bearer actor và service key của đúng caller. AI consumer đã có adapter và
+  contract test; nghiệm thu runtime có phạm vi riêng trong
+  [hướng dẫn Work–AI](../../docs/project-service/ai-service-integration-guide.md).
+
+- [`work-service.yaml`](work-service.yaml): sinh từ URLconf/view/serializer Work
+  bằng drf-spectacular; có POST/DELETE repository trả 202, con trỏ
+  `command_generation` và receipt nội bộ cho Integration. Xem
+  [cấu hình và giới hạn nghiệm thu](../../docs/project-service/github-integration.md).
 
 ## Đối chiếu baseline mới
 

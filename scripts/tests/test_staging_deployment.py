@@ -1174,8 +1174,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         "work-service",
                         "work-publisher",
                         "work-beat",
-                        "work-profile-consumer",
-                        "work-group-consumer",
+                        "work-consumer",
                     }
                     if service == "work-service"
                     else {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"},

@@ -37,11 +37,9 @@ class ClassroomComposeTests(unittest.TestCase):
                     services[name]["depends_on"]["kafka"]["condition"],
                     "service_healthy",
                 )
-            work = services["work-group-consumer"]
+            work = services["work-consumer"]
             self.assertEqual(work["image"], services["work-service"]["image"])
-            self.assertEqual(
-                work["command"], ["python", "manage.py", "consume_classroom"]
-            )
+            self.assertEqual(work["command"], ["python", "manage.py", "consume_work"])
 
     def test_consumers_liveness_rejects_wrong_process_and_probe_itself(self):
         services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
@@ -49,7 +47,7 @@ class ClassroomComposeTests(unittest.TestCase):
         ]
         for name, command in (
             ("classroom-work-consumer", "consume_work"),
-            ("work-group-consumer", "consume_classroom"),
+            ("work-consumer", "consume_work"),
         ):
             probe = services[name]["healthcheck"]["test"]
             for arguments, healthy in (

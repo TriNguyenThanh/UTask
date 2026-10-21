@@ -1,12 +1,31 @@
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from common.serializers import StrictInputSerializer
 
 
+class IntegrationAuthorizeInputSerializer(StrictInputSerializer):
+    action = serializers.ChoiceField(choices=["github.read"])
+
+
+class IntegrationAuthorizeResultSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    action = serializers.CharField()
+    allowed = serializers.BooleanField()
+
+
 class RepositoryInputSerializer(StrictInputSerializer):
-    github_repo_id = serializers.CharField(max_length=100)
-    operation_id = serializers.CharField(max_length=100)
-    expected_connection_generation = serializers.IntegerField(min_value=0)
+    github_repo_id = serializers.RegexField(
+        r"^[1-9][0-9]{0,99}$",
+        error_messages={"invalid": "Mã kho GitHub phải là chuỗi số nguyên dương."},
+    )
+    operation_id = serializers.RegexField(
+        r"^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,100}$",
+        error_messages={"invalid": "Mã yêu cầu kết nối không hợp lệ."},
+    )
+    expected_connection_generation = serializers.IntegerField(
+        min_value=0, max_value=9223372036854775806
+    )
 
 
 class RepositorySerializer(serializers.Serializer):
@@ -20,3 +39,25 @@ class RepositorySerializer(serializers.Serializer):
     connection_generation = serializers.IntegerField(allow_null=True)
     source_version = serializers.IntegerField(allow_null=True)
     synced_at = serializers.DateTimeField(allow_null=True)
+    command_generation = serializers.IntegerField(min_value=0)
+
+
+class DisconnectRepositorySerializer(StrictInputSerializer):
+    operation_id = serializers.RegexField(
+        r"^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,100}$",
+        error_messages={"invalid": "Mã yêu cầu kết nối không hợp lệ."},
+    )
+    expected_connection_generation = serializers.IntegerField(
+        min_value=0, max_value=9223372036854775806
+    )
+
+
+@extend_schema_serializer(component_name="WorkGitHubOperationReceipt")
+class ConnectionReceiptSerializer(serializers.Serializer):
+    applied = serializers.BooleanField()
+    project_id = serializers.UUIDField()
+    operation_id = serializers.CharField()
+    generation = serializers.IntegerField(min_value=1)
+    status = serializers.ChoiceField(choices=["PENDING"])
+    repo_id = serializers.CharField(allow_null=True)
+    source_version = serializers.IntegerField(min_value=1)

@@ -34,7 +34,11 @@ class LinkListCreateView(GenericAPIView):
             message="Đã lấy danh sách liên kết GitHub của công việc.",
         )
 
-    @extend_schema(request=LinkInputSerializer, parameters=[KEY], responses={201: LINK, **ERRORS})
+    @extend_schema(
+        request=LinkInputSerializer,
+        parameters=[KEY],
+        responses={201: LINK, **ERRORS, 410: ERRORS[400], 429: ERRORS[400]},
+    )
     def post(self, request, task_id):
         visible_task(request.user, task_id, for_write=True)
         serializer = self.get_serializer(data=request.data)

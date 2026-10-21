@@ -14,6 +14,37 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-22 — Đồng bộ contract test với provider Work đã triển khai
+
+- `tests/test_work_context_contract.py` kiểm cả Bearer và caller key trên ba
+  operation nội bộ, trạng thái `implemented` và không còn ngoại lệ key-optional.
+  Không đổi permission provider hoặc mặc định cấu hình gửi key của AI.
+- Đồng bộ `docs/ai-service/code-map.md`: nối Work phải bật gửi service key;
+  source/test mock không thay bằng chứng phân quyền runtime.
+- Đã tái hiện assertion cũ thất bại; toàn module contract Work đạt sau sửa.
+  Deterministic evaluation đạt **30 ca**, tạo được JSON/JUnit report; Ruff
+  lint/format file test đạt. Chưa chạy lại toàn suite AI hoặc provider live.
+
+### 2026-10-22 — Cho phép endpoint LLM HTTP ở mọi môi trường
+
+- Theo yêu cầu người dùng, bỏ riêng điều kiện cấm HTTP ở staging/production
+  trong `src/infrastructure/providers.py`; giữ kiểm scheme HTTP/HTTPS, host,
+  port, credential/query/fragment, model và API key.
+- `tests/test_custom_provider_configuration.py` kiểm HTTP/HTTPS cho cả bốn
+  môi trường, HTTP từ Docker host và URL có fragment bị từ chối.
+- Cập nhật README về hành vi mới; không thêm cờ hoặc dependency, không đổi
+  model, budget, JWT/session hay quyền context.
+- Kiểm thử provider/configuration và workflow: **74 passed**, một cảnh báo
+  experimental từ ADK; HTTP transport của test là fake, không phải LLM thật.
+  Ruff lint toàn AI và format **101 file** đạt. Trên Windows bật UTF-8 khi
+  chạy test để đọc contract tiếng Việt, không sửa test khác để bỏ qua lỗi encoding.
+- Đã build và recreate bốn process AI trên staging local từ image mới; giữ
+  `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`, service key bật. Model dựng được
+  với endpoint HTTP đã cấu hình; HTTP `/models` trả 200. Không chạy lại bốn
+  workflow LLM trong lượt sửa này, không kết luận đã hết các timeout trước đó.
+- GitNexus đã reindex; impact cũ là LOW nhưng sau refresh tool không resolve
+  symbol này (UNKNOWN). Đối chiếu source/import và tests là bằng chứng chính.
+
 ### 2026-10-22 — JWT theo Work và tạm bỏ caller key AI→Work
 
 - Quyết định hiện tại thay hướng dẫn PEM staging trước đó: verifier luôn GET

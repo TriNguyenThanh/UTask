@@ -115,8 +115,9 @@ ADK dùng `LiteLlm` để gọi custom endpoint tương thích OpenAI. Model có
 ID gốc của proxy (ví dụ `gemini-3.8-flash-high`) hoặc route `openai/<model-id>`,
 kèm `AI_LLM_API_BASE` và key.
 Thiếu hoặc sai cấu hình thì worker trả `PROVIDER_UNAVAILABLE` trước lời gọi
-model, với reason chỉ rõ trường cần sửa. HTTPS được yêu cầu ngoài development/
-test; HTTP chỉ được phép trong development/test. Timeout lấy từ deadline
+model, với reason chỉ rõ trường cần sửa. Endpoint nhận HTTP hoặc HTTPS ở mọi
+môi trường; không có điều kiện chặn HTTP riêng cho staging/production.
+URL vẫn phải hợp lệ, không chứa credential, query hay fragment. Timeout lấy từ deadline
 request và LiteLLM không tự retry. Cách gọi này giữ nguyên pipeline request,
 context và budget; nó không xác nhận endpoint hay model cụ thể của nhà cung cấp.
 

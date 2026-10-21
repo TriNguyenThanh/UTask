@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 def reference(gateway, task):
     return gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -114,10 +114,10 @@ def test_repository_external_result_must_match_request_and_current_source(
     before = effect_state(task.project_id)
     reply = leader.post(
         route,
-        {"github_repo_id": "repo-2", "operation_id": "op-2", "expected_connection_generation": 1},
+        {"github_repo_id": "456", "operation_id": "op-2", "expected_connection_generation": 1},
         format="json",
     )
-    assert reply.status_code == (409 if mismatch == "old-source" else 503), reply.content
+    assert reply.status_code == 503, reply.content
     assert effect_state(task.project_id) == before
 
 

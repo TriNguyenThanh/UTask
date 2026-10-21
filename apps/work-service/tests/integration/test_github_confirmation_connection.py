@@ -19,7 +19,7 @@ def test_committed_confirm_replays_but_new_key_rechecks_current_connection(
     gateway, client, _, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -34,16 +34,16 @@ def test_committed_confirm_replays_but_new_key_rechecks_current_connection(
         2,
         1,
         "CONNECTED",
-        "repo-1",
+        "123",
         "team",
         "team/repo",
         "main",
         timezone.now(),
     )
     if connection == "switch":
-        current = replace(current, repo_id="repo-2")
+        current = replace(current, repo_id="456")
     elif connection == "disconnect":
-        current = replace(current, status="DISCONNECTED", generation=1, source_version=2)
+        current = replace(current, status="DISCONNECTED", generation=1, source_version=3)
     assert reconcile_connection(current)
     before = effect_state(task.project_id)
     historical = type(link).objects.filter(pk=link.pk).values().get()

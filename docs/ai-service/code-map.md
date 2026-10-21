@@ -2,7 +2,7 @@
 
 **Trạng thái: Một phần.** Runtime request/dispatcher/worker/ADK và PostgreSQL
 đã triển khai; verifier RS256, Identity session client và mock test bằng HTTP
-Identity giả có source/test local. Provider Work **Chưa triển khai**; tích hợp
+Identity giả có source/test local. Provider Work **đã có source**; tích hợp
 runtime domain/Identity, LLM production và E2E gateway staging **Chưa xác minh**.
 Xem [production readiness](production-readiness.md).
 Nguồn pipeline chuẩn: [architecture](architecture.md).
@@ -70,13 +70,15 @@ src/
 - `infrastructure/context_http.py`: AI-side POST Work authorize với envelope
   target/action; Bearer luôn gửi, `X-Service-Key` chỉ gửi khi
   `AI_WORK_SERVICE_AUTH_ENABLED=true`. GET raw context; timeout, stream giới hạn
-  65536 byte/freshness, không redirect. Work provider chưa có source nên client
-  này không chứng minh endpoint/role authorization runtime. GitHub giao
+  65536 byte/freshness, không redirect. Provider Work hiện yêu cầu cả Bearer
+  và caller key, nên cấu hình tích hợp phải bật flag này và cấp key khớp.
+  Source adapter và test mock không tự chứng minh quyền runtime. GitHub giao
   Integration authorize Work bằng key Integration riêng, AI không gọi Work lần
   nữa trong nhánh fetch đó.
 - `models/context.py`: shape project/task/team/progress/GitHub, kiểu và giới
   hạn lồng nhau; lọc trường ngoài allowlist Work, strict GitHub theo contract.
-  Work boundary có hợp đồng, provider **Chưa triển khai**.
+  Work boundary có hợp đồng và provider đã triển khai; xem
+  [phạm vi kiểm chứng Work–AI](../project-service/ai-service-integration-guide.md).
 - `workflow/instructions.py`: instruction riêng theo intent và JSON schema;
   input/context được đánh dấu untrusted. Provider adapter chỉ lắp ghép SDK.
 

@@ -32,6 +32,11 @@ Ví dụ: Integration xử lý đồng bộ GitHub, Notification gửi email, se
 nghiệp vụ chạy deadline scan hoặc dọn dữ liệu. Không tạo service worker dùng
 chung để truy cập database của tất cả service.
 
+Phía Work có task `apps.integrations.tasks.recover_connections` trên queue
+`work-publisher` sẵn có; Beat quét mỗi 10 giây. Operation trong PostgreSQL
+là nguồn bền vững để confirm/abort sau lỗi giao task. Tắt nhận lệnh mới không
+dừng recovery; xem [giới hạn retry và vận hành](../project-service/github-integration.md#ghi-dữ-liệu-và-phục-hồi).
+
 ### Integration GitHub jobs
 
 **Đã triển khai trong source; smoke Docker local đạt, staging chưa xác minh.** Integration lưu webhook

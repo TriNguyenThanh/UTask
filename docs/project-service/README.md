@@ -4,6 +4,12 @@ Phần tích hợp hồ sơ Identity đã có source và nghiệm thu local riê
 [Work nhận sự kiện Identity](identity-events.md). Trạng thái dưới đây mô tả tài liệu
 kiến trúc tổng quan, không phủ nhận phần tích hợp đã kiểm chứng này.
 
+Phía Work nối repository/Task link với Integration đã có adapter HTTP,
+operation/receipt bền vững, recovery và consumer trong source; kiểm thử ghép
+hai backend bằng HTTP/PostgreSQL/Kafka riêng đã chạy, GitHub/Identity dùng stub.
+Tính năng mặc định tắt, chưa nghiệm thu GitHub live/staging; xem
+[kết nối GitHub của Work](github-integration.md).
+
 **Trạng thái: Thiết kế mục tiêu; hiện trạng mã nguồn nghiệp vụ chưa xác minh.**
 Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
 mục 4.2, Work là core service, dùng Python + Django + DRF và sở hữu `work_db`.
@@ -32,8 +38,12 @@ Project độc lập không gắn lớp/nhóm cần quyết định sản phẩm
 Work boundary cho AI đã chốt trong
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
 [Work contract](../../contracts/api/work-service.yaml) tham chiếu. Các endpoint
-được đánh dấu `planned`: **Chưa triển khai provider Work**, không suy ra đã có
-API từ hợp đồng. Boundary gồm POST authorize `ai.analyze` theo intent/target,
+được đánh dấu `implemented`: **Đã triển khai provider Work** và kiểm thử bằng
+PostgreSQL riêng; quyền/context đã kiểm trên staging local với Identity/Classroom
+thật. Luồng AI/LLM **Một phần**: một ca thành công với HTTP local, ba ca timeout;
+xem [báo cáo runtime](ai-context-staging-validation-20261022.md) để biết cấu hình
+smoke tạm và phần chưa nghiệm thu. Không suy ra đã triển khai VPS.
+Boundary gồm POST authorize `ai.analyze` theo intent/target,
 GET project/task/team/progress context và POST authorize `github.read` chỉ
 dành cho caller Integration. Bearer actor và service key cùng bắt buộc;
 context tối đa 65536 byte, theo shape allowlist và không chứa PII. Work tự

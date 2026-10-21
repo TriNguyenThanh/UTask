@@ -24,7 +24,7 @@ def test_concurrent_github_confirmation_persists_one_owner_and_one_effect(
     gateway, _, _, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",

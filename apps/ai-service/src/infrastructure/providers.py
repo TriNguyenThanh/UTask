@@ -52,8 +52,6 @@ def build_litellm_model(settings: Settings) -> LiteLlm:
             and parsed_base.query == ""
             and parsed_base.fragment == ""
         )
-        if parsed_base.scheme == "http":
-            valid_base = valid_base and settings.environment in {"development", "test"}
     except ValueError:
         valid_base = False
     if not valid_base:

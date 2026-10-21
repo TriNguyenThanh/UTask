@@ -1356,6 +1356,17 @@ components:
       type: object
       additionalProperties: false
       required: [repo_id, generation, link_type, ref_id]
+      allOf:
+      - if:
+          properties:
+            link_type:
+              const: COMMIT
+        then:
+          properties:
+            ref_id:
+              pattern: '^[0-9a-fA-F]{7,40}$'
+              not:
+                pattern: '[^0-9a-fA-F]'
       properties:
         repo_id:
           type: string
@@ -1370,6 +1381,7 @@ components:
           type: string
           minLength: 1
           maxLength: 300
+          description: Với COMMIT, chỉ nhận mã 7–40 ký tự hệ thập lục phân ASCII.
     ReferenceFact:
       type: object
       additionalProperties: false

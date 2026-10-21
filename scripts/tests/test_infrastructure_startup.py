@@ -91,6 +91,7 @@ class InfrastructureStartupTests(unittest.TestCase):
                 "POSTGRES_PASSWORD": "fixture",
                 "KAFKA_BOOTSTRAP_SERVERS": "configured-broker:19092",
                 "WORK_KAFKA_TOPIC": "work.custom",
+                "WORK_IDENTITY_KAFKA_TOPIC": "identity.custom",
                 "CLASSROOM_KAFKA_TOPIC": "classroom.custom",
                 "CLASSROOM_WORK_KAFKA_DLQ_TOPIC": "classroom.dlq",
                 "WORK_CLASSROOM_KAFKA_DLQ_TOPIC": "work.dlq",
@@ -137,6 +138,10 @@ class InfrastructureStartupTests(unittest.TestCase):
             with self.subTest(infrastructure=infrastructure):
                 process, marker = self.start(infrastructure)
                 self.wait_ready(process, marker)
+                if infrastructure == "kafka":
+                    calls = (self.path / "topic_calls").read_text()
+                    self.assertIn("--topic identity.custom", calls)
+                    self.assertIn("--topic utask.work.profile.dlq", calls)
                 process.send_signal(signal.SIGTERM)
                 _, stderr = process.communicate(timeout=5)
                 self.assertEqual(process.returncode, 143, stderr)
@@ -228,7 +233,7 @@ class InfrastructureStartupTests(unittest.TestCase):
         calls = (self.path / "topic_calls").read_text().splitlines()
         self.assertIn("--bootstrap-server localhost:9092 --list", calls[0])
         creates = [call for call in calls if "--create" in call]
-        self.assertEqual(len(creates), 5)
+        self.assertEqual(len(creates), 8)
         for call, topic in zip(
             creates,
             (
@@ -236,7 +241,10 @@ class InfrastructureStartupTests(unittest.TestCase):
                 "classroom.custom",
                 "classroom.dlq",
                 "work.dlq",
+                "identity.custom",
+                "utask.work.profile.dlq",
                 "utask.integration.events",
+                "utask.work.integration.dlq",
             ),
             strict=True,
         ):

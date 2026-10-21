@@ -43,7 +43,10 @@ def test_teacher_external_recipient_requires_recipient_scope_adapter(task_api, a
         ("PULL_REQUEST", "0"),
         ("PULL_REQUEST", "abc"),
         ("BRANCH", "feature/work"),
+        ("COMMIT", "abc1234"),
         ("COMMIT", "abc123"),
+        ("COMMIT", "not-a-sha"),
+        ("COMMIT", "a" * 41),
     ],
 )
 def test_github_reference_input_canonicalization_by_ref_kind(github, kind, ref):
@@ -55,8 +58,9 @@ def test_github_reference_input_canonicalization_by_ref_kind(github, kind, ref):
         format="json",
         HTTP_IDEMPOTENCY_KEY="kind-reference",
     )
-    assert reply.status_code == (400 if kind == "PULL_REQUEST" else 201), reply.content
-    if kind == "PULL_REQUEST":
+    invalid = kind == "PULL_REQUEST" or (kind == "COMMIT" and ref != "abc1234")
+    assert reply.status_code == (400 if invalid else 201), reply.content
+    if invalid:
         assert effect_state(task.project_id) == before
     else:
         assert (

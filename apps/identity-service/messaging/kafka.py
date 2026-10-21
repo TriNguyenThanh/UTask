@@ -12,7 +12,7 @@ class KafkaPublisher:
             "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
             "security.protocol": settings.KAFKA_SECURITY_PROTOCOL,
             "enable.idempotence": True,
-            "message.timeout.ms": 5000,
+            "message.timeout.ms": 30000,
         }
         if "SASL" in settings.KAFKA_SECURITY_PROTOCOL:
             config.update(
@@ -34,6 +34,6 @@ class KafkaPublisher:
             value=json.dumps(event.data, ensure_ascii=False, separators=(",", ":")).encode(),
             on_delivery=lambda error, _message: delivered.append(error),
         )
-        pending = self.producer.flush(6)
+        pending = self.producer.flush(31)
         if pending or not delivered or delivered[0] is not None:
             raise RuntimeError("Kafka delivery was not acknowledged")

@@ -13,20 +13,20 @@ pytestmark = [pytest.mark.integration, pytest.mark.django_db]
 
 def test_repository_replay_source_order_and_member_cannot_select(github, actors, client_for):
     gateway, leader, route, task = github
-    body = {"github_repo_id": "repo-1", "operation_id": "op-1", "expected_connection_generation": 0}
-    assert leader.post(route, body, format="json").status_code == 200
+    body = {"github_repo_id": "123", "operation_id": "op-1", "expected_connection_generation": 0}
+    assert leader.post(route, body, format="json").status_code == 202
     assert gateway.calls == gateway.effects == 1
     assert client_for(actors["member"]).post(route, body, format="json").status_code == 403
     current = gateway.operations["op-1"]
     assert not reconcile_connection(replace(current, source_version=0))
-    assert Project.objects.get(pk=task.project_id).github_connection_version == 1
+    assert Project.objects.get(pk=task.project_id).github_connection_version == 2
 
 
 def test_candidate_confirm_and_merge_never_complete_task(github, actors, client_for):
     gateway, _, _, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -92,7 +92,7 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
     gateway, leader, route, task = github
     fact = gateway.verify_reference(
         project_id=task.project_id,
-        repo_id="repo-1",
+        repo_id="123",
         generation=1,
         link_type="PULL_REQUEST",
         github_ref_id="24",
@@ -102,13 +102,13 @@ def test_repo_switch_rejects_old_candidate_and_stale_facts(github, actors, clien
         leader.post(
             route,
             {
-                "github_repo_id": "repo-2",
+                "github_repo_id": "456",
                 "operation_id": "op-2",
                 "expected_connection_generation": 1,
             },
             format="json",
         ).status_code
-        == 200
+        == 202
     )
     member = client_for(actors["member"])
     confirmation = member.post(
@@ -135,3 +135,46 @@ def test_provider_unavailable_does_not_make_local_connection(created_project, ac
     )
     assert result.status_code == 503
     assert Project.objects.get(pk=created_project["id"]).github_repo_id is None
+
+
+def test_manual_reference_refresh_accepts_new_metadata_at_same_binding_version(github, monkeypatch):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    gateway, client, _, task = github
+    original = gateway.verify_reference
+    first = replace(
+        original(
+            project_id=task.project_id,
+            repo_id="123",
+            generation=1,
+            link_type="PULL_REQUEST",
+            github_ref_id="24",
+        ),
+        status="OPEN",
+        source_version=2,
+        synced_at=timezone.now(),
+    )
+    monkeypatch.setattr(gateway, "verify_reference", lambda **kwargs: first)
+    route = f"/tasks/{task.pk}/github-links/"
+    body = {"link_type": "PULL_REQUEST", "github_ref_id": "24"}
+    created = client.post(route, body, format="json")
+    assert created.status_code == 201
+    newer = replace(first, status="MERGED", synced_at=first.synced_at + timedelta(seconds=1))
+    monkeypatch.setattr(gateway, "verify_reference", lambda **kwargs: newer)
+    updated = client.post(route, body, format="json")
+    assert updated.status_code == 201, updated.content
+    assert updated.json()["data"]["id"] == created.json()["data"]["id"]
+    assert updated.json()["data"]["github_status"] == "MERGED"
+    same_metadata = replace(newer, synced_at=newer.synced_at + timedelta(seconds=2))
+    monkeypatch.setattr(gateway, "verify_reference", lambda **kwargs: same_metadata)
+    assert client.post(route, body, format="json").status_code == 201
+    middle = replace(first, synced_at=newer.synced_at + timedelta(seconds=1))
+    monkeypatch.setattr(gateway, "verify_reference", lambda **kwargs: middle)
+    assert client.post(route, body, format="json").json()["data"]["github_status"] == "MERGED"
+    monkeypatch.setattr(gateway, "verify_reference", lambda **kwargs: first)
+    older = client.post(route, body, format="json")
+    assert older.status_code == 201 and older.json()["data"]["github_status"] == "MERGED"
+    task.refresh_from_db()
+    assert task.completed_at is None
