@@ -1,0 +1,229 @@
+openapi: 3.0.3
+info:
+  title: UTask Notification Service
+  version: 1.0.0
+  description: API in-app và tùy chọn email. Bearer xác minh RS256 và phiên qua Identity;
+    quyền project kiểm tra qua Work trước trả nội dung.
+servers:
+- url: /api/notifications
+security:
+- Bearer: []
+paths:
+  /:
+    get:
+      operationId: listNotifications
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: read
+        in: query
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+  /unread-count:
+    get:
+      operationId: unreadNotificationCount
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+  /{notification_id}/read:
+    post:
+      operationId: markNotificationRead
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  read:
+                    type: boolean
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+      parameters:
+      - name: notification_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /read-all:
+    post:
+      operationId: markAllNotificationsRead
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  read:
+                    type: boolean
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+  /preferences:
+    get:
+      operationId: getNotificationPreferences
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+    patch:
+      operationId: updateNotificationPreferences
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '401':
+          description: Token không hợp lệ hoặc phiên bị thu hồi
+        '503':
+          description: Không thể xác minh dịch vụ phụ thuộc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Preferences'
+  /healthz:
+    get:
+      operationId: notificationHealth
+      security: []
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - ok
+components:
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Notification:
+      type: object
+      required:
+      - id
+      - category
+      - title
+      - body
+      - at
+      - read
+      - actionLabel
+      - target
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum:
+          - task-pr
+        title:
+          type: string
+        body:
+          type: string
+        at:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+        actionLabel:
+          type: string
+          nullable: true
+        target:
+          type: object
+          nullable: true
+          description: 'Target điều hướng Web: board-issue(projectId, issueKey) hoặc
+            backlog(projectId).'
+          additionalProperties: true
+    NotificationPage:
+      type: object
+      required:
+      - count
+      - next
+      - previous
+      - results
+      properties:
+        count:
+          type: integer
+          minimum: 0
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+    Preferences:
+      type: object
+      additionalProperties: false
+      properties:
+        assignment:
+          type: boolean
+          default: true
+        deadline:
+          type: boolean
+          default: true
+        mention:
+          type: boolean
+          default: true
+        feedback:
+          type: boolean
+          default: true
