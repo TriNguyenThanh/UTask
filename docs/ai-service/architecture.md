@@ -3,13 +3,14 @@
 **Trạng thái: Một phần.** Pipeline API → PostgreSQL → dispatcher → Redis/Celery
 → ADK workflow đã triển khai trong source. JWT, domain tools và adapter REST
 đã có; integration với Identity/Work/Integration và LLM production **chưa xác
-minh**, cần cấu hình và hợp đồng domain. Kafka, specialist và retention job
-**chưa triển khai**, không phải dependency của pipeline MVP.
+minh**. Work provider mới có hợp đồng, **Chưa triển khai**. Retention terminal
+đã có source/migration/Celery beat; Kafka và specialist **Chưa triển khai**.
 
 Thiết kế theo [baseline](../architecture/README.md),
 [ADR-001](../adr/001-adopt-architecture-baseline.md) và
 [ADR-002](../adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
-source/test ngày 2026-10-08. Xem [code map](code-map.md), [API v1](api.md),
+source/test và cấu hình M3. Xem [mức sẵn sàng production](production-readiness.md),
+[code map](code-map.md), [API v1](api.md),
 [workflow](workflow.md), [ERD](erd.md) và [hướng dẫn chạy](README.md).
 
 ## Responsibilities — thiết kế mục tiêu
@@ -91,7 +92,7 @@ GET /api/ai/v1/requests/{request_id}
    cùng transaction. Success phải bàn giao trước deadline; bàn giao quá hạn
    thành lỗi timeout. Dispatcher chỉ timeout request chưa có completion.
 
-API/dispatcher/worker là process của cùng AI Service, cùng code và AI DB;
+API/dispatcher/worker/beat là process của cùng AI Service, cùng code và AI DB;
 không bắt buộc singleton. ADK session chỉ ở memory trong một job, không phải
 request repository. Nguồn schema là [migration](../../apps/ai-service/migrations/versions/0001_request_pipeline.py),
 application lifespan không tạo bảng. Entrypoint container chạy
@@ -228,9 +229,9 @@ Xem [ERD](erd.md) và [code map](code-map.md).
 ### Thiết kế mục tiêu
 
 Đường chạy trên triển khai pipeline ADR-002. Phần **Chưa xác minh** là token
-production, contract REST của service sở hữu, quota/evaluation LLM và tích
-hợp gateway. Kafka projection/event kết quả, specialist, SSE/WebSocket và
-retention tự động là phần mở rộng; chỉ thêm khi có nhu cầu/contract.
+production, provider REST Work, quota/evaluation LLM và tích hợp gateway.
+Kafka projection/event kết quả, specialist, SSE/WebSocket **Chưa triển khai**;
+retention terminal đã có lịch beat. Xem [retention](erd.md#retention-terminal).
 
 ### Request semantics
 
@@ -348,8 +349,14 @@ Xem [cách dùng mock data](mock-data.md).
 credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_context`,
 `get_team_context`, `get_progress_context`, `get_development_context`.
 
-REST adapter dùng URL template từ cấu hình, kiểm tra lại quyền, không theo
-redirect, có timeout và giới hạn byte. Adapter kiểm tra domain/thời điểm,
+REST adapter dùng URL template từ cấu hình; Work authorize là POST
+`{action: ai.analyze, intent}` với Bearer actor và `X-Service-Key` riêng cho
+Work. Chỉ envelope `success: true`, `data` đúng target/action và `allowed: true`
+mới cấp quyền. Work context là GET `ContextDocument` trực tiếp, không bọc envelope.
+Adapter không theo redirect, có timeout và chặn response lớn hơn 65536 byte.
+GitHub GET gửi key Integration; Integration chịu trách nhiệm hỏi Work quyền
+`github.read`, AI không kiểm tra Work thêm trong nhánh fetch GitHub.
+Adapter kiểm tra domain/thời điểm,
 từ chối context thiếu/cũ/sai schema; lọc allowlist trường và giới hạn độ sâu,
 số phần tử và độ dài trước khi đưa cho agent. Metadata lưu nguồn/status,
 thời điểm và fingerprint của context đã lọc. Workflow kiểm tra context thiết
@@ -358,10 +365,15 @@ task decomposition cần task context, risk cần progress context. Chỉ gọi 
 hoặc development tool không thay thế dữ liệu thiết yếu. Agent vẫn tự chọn thứ
 tự lấy context và tool bổ sung.
 
-**Một phần:** adapter và unit test đã có; response domain thực tế chưa công bố.
-`ContextDocument` là hợp đồng nội bộ adapter, không tuyên bố Work đã cung cấp
-endpoint/schema này. Cần ánh xạ REST domain vào hợp đồng đó trước tích hợp;
-xem [cấu hình](README.md). Risk thiếu/cũ context kết thúc failed, không dùng
+**Một phần:** adapter và unit test đã có; Work boundary đã chốt trong
+[contract](../../contracts/api/work-ai-context-v1.yaml), provider Work
+**Chưa triển khai**. Integration provider đã có source; integration live
+**Chưa xác minh**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
+ngoài allowlist Work bị loại, không đưa tên/email/credential vào prompt.
+Tool GitHub chỉ xuất hiện khi risk Project, cờ bật và focus cho phép; Sprint
+không fetch GitHub và runtime tự thêm limitation, không dựa vào prompt.
+Xem [boundary chi tiết](production-readiness.md#boundary-domain-và-quyền).
+Risk thiếu/cũ context kết thúc failed, không dùng
 context rỗng như dữ liệu đầy đủ. Backlog nháp có thể thành công không context.
 
 ### Thiết kế theo baseline
@@ -397,12 +409,12 @@ loop/retry vô hạn; không log secret/raw provider response. Work vẫn tính 
 
 - OpenAPI v1 sửa cách ghép `allOf` với `unevaluatedProperties`; giữ các trường
   v1, không phát minh schema event. Test kiểm tra payload bằng JSON Schema.
-- Auth source production và REST quyền/context cần service sở hữu công bố;
+- Auth source production và provider quyền/context Work cần được xác minh;
   credential key phải giống giữa API/worker và được quản lý ngoài source.
-- Nginx root hiện bỏ `/api/ai/` trước proxy, khác route canonical của app;
-  cần cấu hình gateway riêng. Local gọi API trực tiếp, chưa kiểm chứng gateway.
-- Compose root chưa thêm DB/worker/dispatcher AI. Service có Compose local
-  riêng và hướng dẫn tại [README](README.md); không coi đó là integration
-  toàn hệ thống đã chạy.
+- Nginx root giữ nguyên `/api/ai/v1/...`; internal Identity/Work/Integration
+  bị chặn ở gateway. Cấu hình và test không chứng minh E2E staging đã chạy.
+- Compose root local/staging có bốn process AI, dùng database AI riêng trên
+  PostgreSQL chung; Compose standalone vẫn riêng network/volume. Xem
+  [README](README.md) và [gate phát hành](production-readiness.md).
 - Event context v1 cũ có producer Project/Progress; không dùng nguyên trạng
   với Work. Không tạo Progress Service riêng hoặc Kafka runtime không có contract.

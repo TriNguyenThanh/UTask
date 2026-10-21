@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from errors import ServiceError, failure
 from models import Intent
+from models.results import AiResult
 from models.validation import validate_result
 
 
@@ -21,6 +22,7 @@ class ProposalWorkflow(BaseAgent):
     intent: Intent
     revisions: int = 1
     validate_context: Callable[[], None]
+    finalize_result: Callable[[AiResult], AiResult] | None = None
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         agent = self.sub_agents[0]
@@ -82,6 +84,9 @@ class ProposalWorkflow(BaseAgent):
                 )
                 continue
             self.validate_context()
+            if self.finalize_result is not None:
+                result = self.finalize_result(result)
+                result = validate_result(self.intent, result.model_dump(mode="json"))
             yield Event(
                 author=self.name,
                 actions=EventActions(
@@ -93,7 +98,11 @@ class ProposalWorkflow(BaseAgent):
 
 
 def build_workflow(
-    intent: Intent, agent: LlmAgent, revisions: int, validate_context: Callable[[], None]
+    intent: Intent,
+    agent: LlmAgent,
+    revisions: int,
+    validate_context: Callable[[], None],
+    finalize_result: Callable[[AiResult], AiResult] | None = None,
 ) -> ProposalWorkflow:
     return ProposalWorkflow(
         name="proposal_workflow",
@@ -101,4 +110,5 @@ def build_workflow(
         revisions=revisions,
         sub_agents=[agent],
         validate_context=validate_context,
+        finalize_result=finalize_result,
     )

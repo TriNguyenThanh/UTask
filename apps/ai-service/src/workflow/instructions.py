@@ -20,7 +20,9 @@ INTENT_INSTRUCTIONS = {
         "Tổng hợp rủi ro từ context có evidence, tôn trọng focus và analysis_window. "
         "Lấy progress context do Work tính bằng quy tắc trước khi kết luận. "
         "Nêu limitations khi dữ liệu chỉ có một phần; không suy diễn năng lực thành viên "
-        "hoặc coi thiếu dữ liệu là không có rủi ro. Không đổi deadline/trạng thái."
+        "hoặc coi thiếu dữ liệu là không có rủi ro. "
+        "Chỉ lấy GitHub context nếu có tool được cấp và focus trống hoặc có github_activity; "
+        "không suy ra GitHub context cho sprint. Không đổi deadline/trạng thái."
     ),
 }
 

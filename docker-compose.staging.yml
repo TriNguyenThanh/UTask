@@ -475,6 +475,8 @@ services:
       AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-litellm}
       AI_MODEL: ${AI_MODEL:-}
       AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+      AI_WORK_SERVICE_KEY: ${AI_WORK_SERVICE_KEY:-}
+      AI_INTEGRATION_SERVICE_KEY: ${AI_INTEGRATION_SERVICE_KEY:-}
       AI_LLM_API_BASE: ${AI_LLM_API_BASE:-}
     volumes: &ai_volumes
       - ./datasets:/app/datasets:ro
@@ -525,6 +527,27 @@ services:
     # Process liveness only; delivery readiness requires an end-to-end check.
     healthcheck:
       test: ["CMD", "python", "-c", "from pathlib import Path; assert any(p.read_bytes().split(b'\\0')[1:3] == [b'-m', b'jobs.dispatcher'] for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  ai-beat:
+    x-deploy: *ai_worker
+    init: true
+    profiles: [ai-service]
+    image: *ai_image
+    restart: unless-stopped
+    env_file: *ai_env_files
+    environment: *ai_environment
+    volumes: *ai_volumes
+    command: ["celery", "-A", "jobs.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/ai-beat-schedule", "--pidfile=/tmp/ai-beat.pid"]
+    depends_on:
+      <<: *ai_dependencies
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/ai-beat.pid').read_text()), 0)"]
       interval: 15s
       timeout: 5s
       retries: 6

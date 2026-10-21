@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher")
+AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat")
 
 
 class AIComposeTests(unittest.TestCase):
@@ -69,7 +69,7 @@ class AIComposeTests(unittest.TestCase):
                 if "staging" in filename:
                     self.assertIn("healthcheck", services["ai-dispatcher"])
                     self.assertEqual(api["x-deploy"]["gateway_health_path"], None)
-                    for name in ("ai-worker", "ai-dispatcher"):
+                    for name in ("ai-worker", "ai-dispatcher", "ai-beat"):
                         self.assertEqual(
                             services[name]["x-deploy"]["application"], "ai-service"
                         )
@@ -92,6 +92,75 @@ class AIComposeTests(unittest.TestCase):
                 )
                 if "staging" in filename:
                     self.assertNotIn("ports", database)
+
+    def test_secrets_use_environment_and_retention_defaults_are_shared(self):
+        configuration = (ROOT / "infra/env/ai-service.env").read_text()
+        for variable, default in (
+            ("AI_GITHUB_CONTEXT_ENABLED", "false"),
+            ("AI_TERMINAL_RETENTION_DAYS", "30"),
+            ("AI_RETENTION_BATCH_SIZE", "500"),
+            ("AI_RETENTION_INTERVAL_SECONDS", "3600"),
+        ):
+            self.assertIn(f"{variable}=${{{variable}:-{default}}}", configuration)
+        for filename, names in (
+            ("docker-compose.yml", AI_PROCESSES),
+            ("docker-compose.staging.yml", AI_PROCESSES),
+            ("apps/ai-service/compose.yaml", ("api", "worker", "dispatcher", "beat")),
+        ):
+            services = yaml.safe_load((ROOT / filename).read_text())["services"]
+            for name in names:
+                for secret in ("AI_WORK_SERVICE_KEY", "AI_INTEGRATION_SERVICE_KEY"):
+                    with self.subTest(compose=filename, process=name, secret=secret):
+                        self.assertNotIn(secret, configuration)
+                        self.assertEqual(
+                            services[name]["environment"][secret], f"${{{secret}:-}}"
+                        )
+            beat = services[names[-1]]
+            self.assertEqual(beat["image"], services[names[0]]["image"])
+            self.assertEqual(beat["environment"], services[names[0]]["environment"])
+            self.assertEqual(beat["env_file"], services[names[0]]["env_file"])
+            self.assertEqual(
+                beat["command"],
+                [
+                    "celery",
+                    "-A",
+                    "jobs.celery_app:celery_app",
+                    "beat",
+                    "--loglevel=INFO",
+                    "--schedule=/tmp/ai-beat-schedule",
+                    "--pidfile=/tmp/ai-beat.pid",
+                ],
+            )
+            probe = beat["healthcheck"]["test"]
+            for pid, error in (
+                ("321", None),
+                ("missing", ValueError),
+                ("321", ProcessLookupError),
+            ):
+                with (
+                    self.subTest(pid=pid, error=error),
+                    patch.object(Path, "read_text", return_value=pid),
+                    patch("os.kill", side_effect=error) as kill,
+                ):
+                    if error:
+                        with self.assertRaises(error):
+                            exec(compile(probe[3], "beat-health", "exec"), {})  # noqa: S102 - trusted health probe with mocked OS calls
+                    else:
+                        exec(compile(probe[3], "beat-health", "exec"), {})  # noqa: S102 - trusted health probe with mocked OS calls
+                        kill.assert_called_once_with(321, 0)
+
+    def test_gateway_preserves_ai_versioned_uri_and_blocks_internal_routes(self):
+        nginx = (ROOT / "infra/nginx/nginx.conf").read_text()
+        location = nginx.split("location /api/ai/ {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("rewrite", location)
+        self.assertIn("proxy_pass http://$ai_backend;", location)
+        for path in (
+            "/api/auth/api/v1/internal",
+            "/api/work/api/v1/internal",
+            "/api/integrations/api/v1/internal",
+        ):
+            self.assertIn(f"location = {path} {{\n      return 404;", nginx)
+            self.assertIn(f"location ^~ {path}/ {{\n      return 404;", nginx)
 
     def test_dispatcher_liveness_accepts_only_matching_process_arguments(self):
         services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
@@ -192,6 +261,8 @@ class AIComposeTests(unittest.TestCase):
             UTASK_IMAGE_TAG="sha-compose-test",
             AI_ENVIRONMENT="",
             MOCK_TEST="",
+            AI_WORK_SERVICE_KEY="fixture-work-key",
+            AI_INTEGRATION_SERVICE_KEY="fixture-integration-key",
         )
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=filename):
@@ -222,6 +293,17 @@ class AIComposeTests(unittest.TestCase):
                         "@postgres:5432/ai_context_db", settings["AI_DATABASE_URL"]
                     )
                     self.assertEqual(settings["AI_BROKER_URL"], "redis://redis:6379/1")
+                    self.assertEqual(
+                        settings["AI_WORK_SERVICE_KEY"], "fixture-work-key"
+                    )
+                    self.assertEqual(
+                        settings["AI_INTEGRATION_SERVICE_KEY"],
+                        "fixture-integration-key",
+                    )
+                    self.assertEqual(settings["AI_GITHUB_CONTEXT_ENABLED"], "false")
+                    self.assertEqual(settings["AI_TERMINAL_RETENTION_DAYS"], "30")
+                    self.assertEqual(settings["AI_RETENTION_BATCH_SIZE"], "500")
+                    self.assertEqual(settings["AI_RETENTION_INTERVAL_SECONDS"], "3600")
                     self.assertEqual(
                         services[name]["image"], "utask/ai-service:sha-compose-test"
                     )

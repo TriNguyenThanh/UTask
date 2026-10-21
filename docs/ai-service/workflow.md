@@ -198,8 +198,7 @@ TaskDecompositionAgent
   +-- get_task_context
   +-- get_project_context
   +-- get_team_context
-  +-- get_progress_context
-  `-- get_github_context
+  `-- get_progress_context
 
 Agent tự quyết định tool nào thực sự cần.
 ```
@@ -209,6 +208,22 @@ Agent tự quyết định tool nào thực sự cần.
 ## 4. Context Tool Pool
 
 Context Tool Pool là giao diện duy nhất mà agent dùng để lấy dữ liệu nghiệp vụ.
+
+**Đã triển khai trong source/test:** tool được cấp theo target và quyền tối
+thiểu, không phải mọi agent đều thấy toàn bộ danh sách dưới đây. Không target
+thì không có tool; task tool chỉ cho Task. Project/team/progress gắn với target
+đã xác thực. Development tool chỉ cho `risk_analysis` target Project khi
+`AI_GITHUB_CONTEXT_ENABLED=true` và focus rỗng hoặc có `github_activity`.
+Risk Sprint không fetch GitHub; runtime tự thêm limitation khi focus cần
+GitHub, độc lập với việc model tuân thủ prompt. Cờ tắt cũng tạo limitation
+tương ứng. Source: [tool pool](../../apps/ai-service/src/context/tools.py).
+
+Adapter kiểm tra shape theo từng domain, kiểu dữ liệu/giới hạn lồng nhau và
+loại trường ngoài allowlist trước khi đưa Work context cho model; không trả
+PII như tên/email hay credential. GitHub shape bám contract Integration,
+tối đa 20 item mỗi loại và chỉ URL GitHub hợp lệ. Work provider vẫn
+**Chưa triển khai** dù boundary đã chốt; xem
+[production readiness](production-readiness.md#boundary-domain-và-quyền).
 
 Ví dụ:
 
@@ -722,7 +737,7 @@ PostgreSQL cluster/server
 ├── work_db
 ├── integration_db
 ├── notification_db
-└── ai_context_db (đã có trong Compose AI riêng; chưa có trong Compose root)
+└── ai_context_db (database riêng trong cả Compose root và Compose AI riêng)
 
 Redis instance/cluster
 └── namespace theo service

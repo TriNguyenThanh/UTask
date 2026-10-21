@@ -1,8 +1,110 @@
 openapi: 3.1.0
 info:
   title: UTask Work API
-  version: '1.4'
+  version: '1.5'
 paths:
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/authorize:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1authorize'
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1contexts~1{domain}'
+  /api/v1/internal/integration/projects/{project_id}/authorize:
+    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1integration~1projects~1{project_id}~1authorize'
+  /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}:
+    servers:
+    - url: http://work-service:8000
+    get:
+      operationId: internal_integration_github_receipt
+      summary: Đọc receipt Work đã chấp nhận operation GitHub
+      x-implementation-status: planned
+      x-utask-callers: [integration]
+      description: >-
+        Thiết kế mục tiêu; provider Work chưa triển khai. Chỉ caller integration,
+        dùng X-Service-Key Integration→Work, không yêu cầu Bearer actor. Không nhận
+        query hoặc body. Chỉ đọc receipt đã commit, không ghi dữ liệu hoặc confirm
+        connection. JSON UTF-8 tối đa 65536 byte. project_id và operation_id trong
+        receipt phải khớp path sau giải mã; operation_id là opaque ID, caller phải
+        percent-encode khi đặt vào path, không ép thành UUID.
+        Receipt là bằng chứng chấp nhận operation bất biến, giữ generation,
+        source_version và repo_id của fact prepare đã commit. status luôn PENDING,
+        kể cả khi connection đã CONNECTED/DISCONNECTED; không trả projection hiện
+        thời. CONNECT có repo_id đích, DISCONNECT có repo_id null. Giữ receipt ít
+        nhất 30 ngày và lâu hơn nếu còn đại diện binding đang dùng. Không có receipt
+        đã commit khớp project/operation thì trả 404, không trả 200 với applied=false.
+      parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema:
+          $ref: '#/components/schemas/WorkGitHubOperationReceipt/properties/project_id'
+      - in: path
+        name: operation_id
+        required: true
+        schema:
+          $ref: '#/components/schemas/WorkGitHubOperationReceipt/properties/operation_id'
+      security:
+      - WorkServiceKey: []
+      responses:
+        '200':
+          description: Receipt bất biến đã commit; Cache-Control no-store.
+          headers:
+            Cache-Control:
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkGitHubOperationReceiptEnvelope'
+              examples:
+                connect:
+                  summary: Work đã chấp nhận CONNECT, chưa suy ra trạng thái cuối
+                  value:
+                    success: true
+                    data:
+                      applied: true
+                      project_id: 11111111-1111-4111-8111-111111111111
+                      operation_id: connect:project:1
+                      generation: 1
+                      status: PENDING
+                      repo_id: '12345'
+                      source_version: 2
+                disconnect:
+                  summary: Work đã chấp nhận DISCONNECT
+                  value:
+                    success: true
+                    data:
+                      applied: true
+                      project_id: 11111111-1111-4111-8111-111111111111
+                      operation_id: disconnect:project:2
+                      generation: 2
+                      status: PENDING
+                      repo_id: null
+                      source_version: 4
+        '400':
+          description: Path không hợp lệ hoặc request có query/body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+        '403':
+          description: Service key thiếu, sai hoặc không thuộc caller integration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+        '404':
+          description: Không có receipt đã commit khớp project và operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+        '503':
+          description: Tạm thời không đọc được receipt; không fallback cho phép.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
   /comments/:
     post:
       operationId: comments_create
@@ -9890,6 +9992,70 @@ components:
           minimum: 0
       required:
       - expected_version
+    WorkGitHubOperationReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - applied
+      - project_id
+      - operation_id
+      - generation
+      - status
+      - repo_id
+      - source_version
+      properties:
+        applied:
+          type: boolean
+          const: true
+        project_id:
+          type: string
+          format: uuid
+          not:
+            const: 00000000-0000-0000-0000-000000000000
+        operation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          not:
+            anyOf:
+            - enum: ['.', '..']
+            - pattern: '[\u0000-\u001f]'
+        generation:
+          type: integer
+          minimum: 1
+          description: >-
+            Wire dùng token JSON integer không phần thập phân hoặc exponent
+            (1, không phải 1.0/1e0); consumer không ép float sang int.
+        status:
+          type: string
+          const: PENDING
+        repo_id:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          pattern: '^[1-9][0-9]{0,99}$'
+          not:
+            type: string
+            pattern: '[^0-9]'
+          description: ID repository CONNECT là chuỗi số ASCII dương; DISCONNECT là null.
+        source_version:
+          type: integer
+          minimum: 1
+          description: >-
+            Wire dùng token JSON integer không phần thập phân hoặc exponent
+            (1, không phải 1.0/1e0); consumer không ép float sang int.
+    WorkGitHubOperationReceiptEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/WorkGitHubOperationReceipt'
+      description: >-
+        Envelope Work; cho phép các metadata chuẩn message/meta/error ngoài
+        success và data. data chỉ có đúng bảy trường receipt đã chốt.
     WorkErrorEnvelope:
       type: object
       properties:
@@ -10127,6 +10293,13 @@ components:
           type: integer
           readOnly: true
   securitySchemes:
+    WorkServiceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: >-
+        Key riêng Integration→Work, nhận diện caller integration. Không dùng
+        key AI→Work hoặc Work→Integration; không đưa secret vào log/response.
     WorkBearer:
       type: http
       scheme: bearer

@@ -23,9 +23,14 @@ compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging
 # into the explicit application profiles without sourcing or printing .env.
 compose_environment=$("${compose[@]}" config --environment < /dev/null)
 profiles=()
+evaluation_names=(EVAL_AI_BASE_URL EVAL_AI_BEARER EVAL_AI_PROJECT_ID EVAL_AI_TASK_ID EVAL_AI_SPRINT_ID EVAL_EXPECTED_MODEL EVAL_AI_CASE_EXPECTATIONS EVAL_AI_CASE_TARGETS)
+unset "${evaluation_names[@]}"
 while IFS='=' read -r name value; do
   if [[ "$name" == COMPOSE_PROFILES && ",$value," == *,kafka,* ]]; then
     profiles+=(--profile kafka)
+  fi
+  if [[ " ${evaluation_names[*]} " == *" $name "* && -n "$name" ]]; then
+    export "$name=$value"
   fi
 done <<< "$compose_environment"
 unset compose_environment
@@ -126,4 +131,22 @@ PY
 for health_path in "${gateway_paths[@]}"; do
   "${compose[@]}" exec -T --interactive=false "${services[0]}" /app/.venv/bin/python -c "$gateway_check" "$health_path" "$gateway_service" < /dev/null
 done
+if [[ " $service_names " == *" ai-service "* ]]; then
+  # Selecting AI opts this release into the live gate. Missing credentials cannot
+  # silently skip it; values come from server .env and never command arguments.
+  for name in "${evaluation_names[@]:0:7}"; do
+    [[ -n "${!name:-}" ]] || { echo "Missing AI live evaluation setting: $name" >&2; exit 1; }
+  done
+  evaluation_reports="$workdir/ai-evaluation-reports/$image_tag"
+  mkdir -p -- "$evaluation_reports"
+  evaluation_environment=()
+  for name in "${evaluation_names[@]}"; do
+    evaluation_environment+=(--env "$name")
+  done
+  "${compose[@]}" run --rm --no-deps --interactive=false \
+    "${evaluation_environment[@]}" \
+    -v "$evaluation_reports:/app/evaluation-reports" \
+    ai-service /app/.venv/bin/python -m evaluation --mode live --report-dir /app/evaluation-reports < /dev/null
+  unset "${evaluation_names[@]}"
+fi
 "${compose[@]}" ps

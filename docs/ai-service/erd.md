@@ -4,7 +4,8 @@
 xác minh.** Nguồn thực thi là
 [migration 0001](../../apps/ai-service/migrations/versions/0001_request_pipeline.py)
 [migration 0002](../../apps/ai-service/migrations/versions/0002_completion_handoff.py)
-và [migration 0003](../../apps/ai-service/migrations/versions/0003_request_admission.py),
+[migration 0003](../../apps/ai-service/migrations/versions/0003_request_admission.py)
+và [migration 0004](../../apps/ai-service/migrations/versions/0004_terminal_retention.py),
 cùng [ORM metadata](../../apps/ai-service/src/infrastructure/db/tables.py).
 Không giữ các bảng projection cũ như schema bắt buộc khi pipeline dùng REST.
 
@@ -25,6 +26,7 @@ erDiagram
         text status
         text credential "Fernet ciphertext; xóa khi bàn giao/terminal"
         timestamptz created_at
+        timestamptz terminal_at "NULL khi queued/running"
         timestamptz queue_expires_at
         timestamptz execution_deadline
         uuid execution_token
@@ -99,16 +101,41 @@ trước khi thiết kế schema hoặc cache mới.
 
 Context snapshot/projection, execution history, Kafka outbox và specialist
 chỉ thêm khi có use case/contract. Không lưu raw LLM output hoặc dùng projection
-để cấp quyền. Retention/ẩn danh tự động và replay dead-letter chưa triển khai.
+để cấp quyền. Retention terminal đã có; ẩn danh tự động và replay dead-letter
+**Chưa triển khai**.
+
+## Retention terminal
+
+**Đã triển khai trong source và kiểm thử; vận hành production Chưa xác minh.**
+`terminal_at` ghi khi request chuyển sang succeeded/failed; queued/running
+phải có timestamp NULL. Migration `0004` backfill terminal legacy theo thứ tự
+`response.updated_at`, `response.completed_at`, rồi `created_at` khi cả hai
+thiếu/rỗng. Timestamp JSON không hợp lệ làm migration abort, không tự thay
+bằng thời điểm hiện tại. Cần kiểm tra/khắc phục dữ liệu trước khi chạy lại.
+
+Partial index `(terminal_at, id)` cho succeeded/failed hỗ trợ cleanup. Đây là
+index tạo thông thường trong migration, không phải `CONCURRENTLY`; với bảng
+lớn phải dự trù thời gian backfill, lock/index build và maintenance window.
+Check constraint bảo vệ quan hệ giữa trạng thái và timestamp.
+
+Celery beat gửi `utask_ai.cleanup_terminal` mỗi 3600 giây; mỗi lần worker xử
+lý một batch tối đa 500 request có `terminal_at` cũ hơn 30 ngày. Ba giá trị cấu
+hình là `AI_RETENTION_INTERVAL_SECONDS`, `AI_RETENTION_BATCH_SIZE` và
+`AI_TERMINAL_RETENTION_DAYS`. Batch dùng transaction ngắn,
+`FOR UPDATE SKIP LOCKED`, sắp theo timestamp/ID; xóa request cascade
+delivery/completion/dead-letter chỉ trong AI DB. Không xóa queued/running.
+Retry lỗi DB có giới hạn/backoff; log chỉ số lượng xóa và giới hạn batch,
+không chứa payload, response hay credential. Sau xóa, idempotency key cũ
+không còn bản ghi replay và GET request cũ trả không tìm thấy.
 
 ## Persistence phục vụ pipeline API/worker
 
-API, dispatcher và worker dùng chung PostgreSQL của AI; Redis chỉ là broker.
+API, dispatcher, worker và beat dùng chung cấu hình AI; Redis chỉ là broker.
 Bearer cần cho reauthorization tại worker được mã hóa bằng khóa Fernet ngoài
 source, cùng khóa ở API/worker. JWT còn được kiểm tra issuer/audience/expiry
 sau giải mã. Ciphertext bị xóa khi bàn giao completion hoặc khi succeeded/failed,
 kể cả queue timeout, worker timeout và dispatch hết retry. Payload/result cần
-policy retention riêng; completion được xóa khi API tiếp nhận. Xem
+retention terminal như trên; completion được xóa khi API tiếp nhận. Xem
 [cơ chế thông báo và phục hồi](architecture.md#bàn-giao-kết-quả-worker-cho-api).
 
 Worker chết không được chạy lại model trên request đang running; dispatcher
@@ -116,12 +143,13 @@ lưu failed khi deadline hết và chưa có completion. Completion đã commit 
 giữ lại cho API tiếp nhận sau khởi động lại. Không đặt lại budget hoặc cho worker cũ ghi đè.
 Application lifespan API/worker không tự tạo schema. Entrypoint container API
 chạy `alembic upgrade head` trước Uvicorn và dừng nếu migration lỗi; worker/
-dispatcher chờ API healthy trong Compose. Lệnh worker/dispatcher không tự
+dispatcher/beat chờ API healthy trong Compose. Lệnh worker/dispatcher/beat không tự
 migration; chạy từng process bằng `uv` vẫn cần bước Alembic thủ công.
 
 ## Quyết định cần chốt trước migration
 
 Migration local đã có và được kiểm thử upgrade/downgrade/schema drift.
 Trước production cần chốt credential/role AI DB riêng, secret rotation,
-retention, quota/concurrency, contract quyền/context và integration JWT.
-Tên database mặc định `ai_context_db` không chứng minh Compose root đã tạo nó.
+quota/concurrency, provider quyền/context Work và integration JWT. Retention
+đã có mặc định nhưng cần theo dõi backlog/xóa thực tế. Compose root tạo database
+AI riêng theo init script; dữ liệu staging và quyền DB vẫn cần nghiệm thu.

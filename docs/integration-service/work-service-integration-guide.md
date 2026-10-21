@@ -10,6 +10,11 @@ minh kết nối giữa hai service hay GitHub thật. Xem
 [ADR-003](../adr/003-integration-auth-and-contracts.md) và
 [contract Integration](../../contracts/api/integration-service-v1.yaml).
 
+Phần Work cung cấp context cho AI và kiểm quyền `github.read` cho Integration
+được bàn giao riêng tại
+[hướng dẫn Work–AI](../project-service/ai-service-integration-guide.md).
+Ba API đó không thay thế luồng kết nối repository trong tài liệu này.
+
 ## Ranh giới và xác thực
 
 Integration sở hữu credential GitHub và là service duy nhất gọi GitHub API.
@@ -62,12 +67,13 @@ Request/response dùng envelope `success` và `data` theo schema được dẫn.
 | `abort` | `POST /api/v1/internal/projects/{project_id}/github/connection/abort`; Work → Integration | Cùng `ConnectionOperationRequest`; chỉ hủy operation `PREPARED` khớp project/operation/generation. Abort trùng cùng payload thành công; lệnh muộn không ảnh hưởng connection/generation mới. |
 | `status` | `GET /api/v1/internal/projects/{project_id}/github/connection/operations/{operation_id}`; Work → Integration | Chỉ service key; trả operation state `PREPARED`, `CONFIRMED`, `ABORTED` hoặc `EXPIRED`, cùng snapshot kết quả nếu có. Không tự confirm. |
 | `verify reference` | `POST /api/v1/internal/projects/{project_id}/github/references/verify`; Work → Integration | `ReferenceVerifyRequest`: `repo_id`, `generation`, `link_type`, `ref_id`; Bearer actor + Work service key. Trả `ReferenceFact`; không tạo `TaskGitHubLink`. |
-| `receipt` | `GET /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}`; Integration → Work | Endpoint Work mục tiêu, chỉ service key Integration→Work. Trả `applied`, `project_id`, `operation_id`, `generation`, `status`, `repo_id`, `source_version`; hiện chưa có trong contract máy đọc. |
+| `receipt` | `GET /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}`; Integration → Work | Endpoint Work mục tiêu, chỉ service key Integration→Work. Schema `WorkGitHubOperationReceiptEnvelope` trong [Work OpenAPI 1.5](../../contracts/api/work-service.yaml); data có đúng `applied`, `project_id`, `operation_id`, `generation`, `status`, `repo_id`, `source_version`. Provider Work **Chưa triển khai**. |
 
 Contract đánh dấu operation Integration là provider đã triển khai. Riêng callback
-receipt Work là path/schema mục tiêu cần được bổ sung vào contract Work trước
-khi triển khai; payload phải khớp operation đã commit, không chỉ trạng thái
-projection hiện thời.
+receipt Work đã có path/schema trong contract Work với trạng thái `planned`,
+**Chưa triển khai provider**; payload phải khớp operation đã commit, không chỉ
+trạng thái projection hiện thời. Path này dùng origin nội bộ
+`http://work-service:8000`, không kế thừa prefix gateway `/api/work`.
 
 Không đưa token GitHub, raw authorization code hoặc secret vào request, fact,
 receipt, event hay log. `ConnectionFact`/`ReferenceFact` là biên dữ liệu trong
@@ -149,6 +155,28 @@ là bằng chứng chấp nhận operation bất biến, không phải snapshot 
 thể đã đổi do event. Integration so khớp toàn bộ trước khi finalize. Work phải
 giữ receipt ít nhất 30 ngày; receipt thiếu hoặc từ chối không kích hoạt connection.
 
+Schema máy đọc là `WorkGitHubOperationReceipt` và
+`WorkGitHubOperationReceiptEnvelope` trong [Work OpenAPI](../../contracts/api/work-service.yaml).
+Không yêu cầu Bearer actor, không nhận query/body; response đặt
+`Cache-Control: no-store`, JSON UTF-8 tối đa 65536 byte. `project_id` là UUID
+khác nil; `operation_id` là ID opaque 1–100 ký tự, không chứa ký tự điều khiển
+U+0000–U+001F, không bằng `.` hoặc `..`; percent-encode khi đặt vào URL.
+Hai ID trong data phải khớp path sau giải mã. `generation/source_version`
+là integer dương, không phải boolean hoặc chuỗi; repo ID CONNECT là chuỗi số
+ASCII dương tối đa 100 ký tự, DISCONNECT là `null`. Không trả status cuối của
+connection thay cho `PENDING` trong receipt, kể cả khi connection đã finalize.
+Trên wire, hai số version/generation phải dùng token JSON integer (`1`), không
+dùng phần thập phân hoặc exponent (`1.0`, `1e0`). JSON Schema kiểm integer theo
+giá trị toán học nên không thể phân biệt các token này; consumer hiện kiểm kiểu
+sau parse và từ chối float, không ép kiểu để cho phép.
+
+Lỗi `400` cho path/query/body không hợp lệ, `403` cho sai caller/key, `404`
+cho receipt chưa commit hoặc không khớp project/operation, `503` cho lỗi đọc
+tạm thời; dùng `WorkErrorEnvelope`. Không trả `200` với `applied=false`.
+Consumer Integration hiện coi HTTP khác `200` hoặc payload sai là Work
+unavailable và không finalize; envelope cho phép metadata Work ngoài `success/data`,
+nhưng object data không được có trường thừa.
+
 API quyền Work cho Integration là
 `POST /api/v1/internal/integration/projects/{project_id}/authorize`, header
 Bearer actor và key chiều Integration→Work, body duy nhất `{"action":"github.read"}`.
@@ -205,8 +233,8 @@ credential và repository thử nghiệm được cấp quyền.
 
 ## Rollout
 
-1. Hoàn thiện các operation nội bộ và receipt schema trong contract; kiểm tra
-   đường dẫn/gateway chặn internal path, key hai chiều và timeout.
+1. Đối chiếu implementation Work với operation/schema receipt `planned` trong
+   contract; kiểm tra đường dẫn/gateway chặn internal path, key hai chiều và timeout.
 2. Triển khai schema/outbox/dispatcher/consumer nhưng giữ
    `WORK_GITHUB_CONNECTION_ENABLED=false`. Chạy test adapter, contract và
    test tích hợp; xác nhận retry, duplicate, recovery và observability.

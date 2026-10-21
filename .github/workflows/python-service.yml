@@ -109,6 +109,18 @@ jobs:
           fi
       - name: Test, including AI evaluations when present
         run: uv run pytest
+      - name: Run deterministic AI release evaluation
+        if: inputs.service == 'ai-service'
+        env:
+          PYTHONPATH: src
+        run: uv run python -m evaluation --mode deterministic --report-dir evaluation-reports
+      - name: Upload deterministic AI evaluation reports
+        if: always() && inputs.service == 'ai-service'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-evaluation-deterministic
+          path: apps/ai-service/evaluation-reports/
+          if-no-files-found: error
       - name: Validate Docker image
         if: inputs.validate_image
         run: docker build --tag "utask/${{ inputs.service }}:ci" .
