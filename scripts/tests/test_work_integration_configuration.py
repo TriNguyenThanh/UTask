@@ -71,6 +71,21 @@ class WorkIntegrationConfigurationTests(unittest.TestCase):
             self.assertNotIn("proxy_pass", block)
         self.assertIn("location /api/work/", text)
 
+    def test_local_topic_preparation_has_work_integration_dlq(self):
+        text = (ROOT / "infra/kafka/start-kafka.sh").read_text(encoding="utf-8")
+        mapping = (ROOT / "infra/env/kafka-startup.env").read_text(encoding="utf-8")
+        self.assertIn("utask.integration.events", text)
+        self.assertIn("WORK_IDENTITY_KAFKA_TOPIC", text)
+        self.assertIn("utask.work.profile.dlq", text)
+        self.assertIn(
+            "WORK_IDENTITY_KAFKA_TOPIC=${WORK_IDENTITY_KAFKA_TOPIC:-${IDENTITY_KAFKA_TOPIC:-utask.identity.events}}",
+            mapping,
+        )
+        self.assertIn("WORK_INTEGRATION_DLQ_TOPIC", text)
+        self.assertIn(
+            "WORK_INTEGRATION_DLQ_TOPIC=${WORK_INTEGRATION_DLQ_TOPIC:-utask.work.integration.dlq}",
+            mapping,
+        )
 
     def test_compose_resolves_test_configuration_without_using_local_credentials(self):
         env = dict(os.environ)

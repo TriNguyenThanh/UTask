@@ -5,7 +5,7 @@ Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chu
 repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
 kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm sáu database
 được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
-`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
+`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo các topic nếu
 còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
 có container chuẩn bị riêng. Compose chỉ báo hai service này healthy sau khi
 đã chuẩn bị xong và kiểm tra kết nối thực.

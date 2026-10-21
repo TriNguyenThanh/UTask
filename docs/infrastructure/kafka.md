@@ -17,6 +17,12 @@ Danh mục sự kiện nằm trong [tài liệu hệ thống](../system/kafka-ev
 Schema máy đọc được thuộc [`contracts/events/`](../../contracts/events/);
 không publish JSON tùy ý hoặc tạo schema từ wildcard trong danh mục.
 
+Broker Docker chuẩn bị topic trước khi báo healthy. Mapping
+`infra/env/kafka-startup.env` dùng cùng `WORK_IDENTITY_KAFKA_TOPIC` và fallback
+`IDENTITY_KAFKA_TOPIC` như Work; script tạo cả topic hồ sơ này và
+`utask.work.profile.dlq` cho consumer chung. Đây chỉ là khởi tạo broker local;
+Kafka bên ngoài vẫn cần chuẩn bị topic riêng trước khi chạy consumer.
+
 ## Transactional outbox
 
 Outbox là bản ghi thông điệp chờ gửi, được lưu cùng thay đổi nghiệp vụ trong
@@ -116,9 +122,12 @@ Cách điền tài khoản/mật khẩu nếu cần nằm tại
 Trước khi chuyển, chuẩn bị các topic đang dùng trên broker bên ngoài:
 
 - `utask.work.events`, `utask.classroom.events` cho sự kiện nghiệp vụ.
-- `utask.classroom.work.dlq` cho thông điệp lỗi phía Classroom.
+- `utask.classroom.work.dlq`, `utask.work.classroom.dlq` cho thông điệp lỗi
+  Classroom nhận Work và Work nhận Classroom.
 - `utask.work.profile.dlq` nếu bật consumer Identity của Work; topic nguồn
   phải được thống nhất và cấu hình bằng `WORK_IDENTITY_KAFKA_TOPIC`.
+- `utask.integration.events` và `utask.work.integration.dlq` khi bật consumer
+  Integration của Work; group mặc định `work-integration-connections-v1`.
 
 Danh sách trên theo client có trong checkout; cấu hình topic riêng phải khớp
 giữa bên gửi và bên nhận. Thay đổi kết nối này không thêm consumer nghiệp vụ.
