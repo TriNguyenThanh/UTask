@@ -1,11 +1,11 @@
 # Hướng dẫn nối Work Service với Integration Service
 
-**Trạng thái: Thiết kế mục tiêu.** Work có adapter với `ConnectionFact` và
-`ReferenceFact`, cùng logic kiểm tra quyền, generation, receipt và projection.
-`WORK_INTEGRATION_ADAPTER` mặc định trỏ tới `UnavailableIntegration`; source
-được kiểm tra chưa chứng minh adapter HTTP, các endpoint nội bộ, dispatcher
-confirm hoặc consumer Kafka đã chạy. Các test Work dùng adapter giả không xác
-minh kết nối giữa hai service hay GitHub thật. Xem
+**Trạng thái: Hợp đồng giao tiếp đã chốt.** Work đã có adapter HTTP,
+operation/receipt, task phục hồi, disconnect và consumer kết nối trong source;
+hướng dẫn triển khai/cấu hình và phạm vi kiểm chứng hiện hành nằm tại
+[Work GitHub integration](../project-service/github-integration.md).
+`WORK_INTEGRATION_ADAPTER` vẫn mặc định unavailable và cờ nghiệp vụ mặc định tắt.
+GitHub live cho luồng Project và staging/production chưa được nghiệm thu. Xem
 [luồng liên kết repository](github-repository-linking.md),
 [ADR-003](../adr/003-integration-auth-and-contracts.md) và
 [contract Integration](../../contracts/api/integration-service-v1.yaml).
@@ -35,9 +35,8 @@ không dùng JWT người dùng cũ để giả danh actor.
 
 ### Cấu hình đích
 
-Tên dưới đây là quy ước cấu hình đích cho adapter và dispatcher; source Work
-hiện chỉ có `WORK_INTEGRATION_ADAPTER`, chưa có bằng chứng các biến này được
-đọc hoặc được cấu hình khi deploy.
+Tên dưới đây là cấu hình giao tiếp; cấu hình nhận key hiện tại/trước và consumer
+thực tế phía Work xem [hướng dẫn Work](../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 | Biến | Chủ sở hữu | Mục đích |
 | --- | --- | --- |
@@ -48,16 +47,19 @@ hiện chỉ có `WORK_INTEGRATION_ADAPTER`, chưa có bằng chứng các biế
 | `WORK_GITHUB_CONNECTION_ENABLED` | Work | Cờ bật luồng kết nối; mặc định `false`. |
 
 Giữ các key trong secret store của môi trường, không ghi vào repo, log hoặc
-response. HTTP timeout theo hướng dẫn hiện tại là 2 giây kết nối và 3 giây
-đọc. Timeout/lỗi nguồn không được đổi thành kết quả cho phép. Tên biến và
-đường dẫn route cụ thể phải đồng bộ với contract trước khi triển khai adapter.
+response. Adapter Work chờ tối đa 2 giây kết nối và 20 giây đọc, thay vì
+ngắt sau 3 giây khi Integration còn kiểm quyền/repository/reference bằng
+các lượt GitHub tuần tự. Đây là giới hạn chờ mỗi request, không phải cam kết
+mọi trang discovery đều hoàn tất trong 20 giây. Timeout/lỗi nguồn không được
+đổi thành kết quả cho phép. Tên biến và
+đường dẫn route cụ thể được đối chiếu trong test adapter và test hai backend.
 
 ## Giao diện nội bộ
 
 Contract Integration là nguồn chuẩn cho path, schema, mã lỗi và trạng thái
 endpoint. Các endpoint dưới đây đã được triển khai phía Integration với trạng
-thái `implemented`; kiểm thử dùng PostgreSQL/HTTP stub. Phần Work trong guide
-vẫn là thiết kế cần triển khai, chưa có bằng chứng tích hợp hai service thật.
+thái `implemented`. Phía Work đã có test hai backend qua HTTP/PostgreSQL/Kafka
+riêng; Identity và GitHub được thay thế trong test, chưa xác minh provider live.
 Request/response dùng envelope `success` và `data` theo schema được dẫn.
 
 | Operation | Bên gọi → bên nhận | Dữ liệu/hiệu lực |
@@ -67,13 +69,10 @@ Request/response dùng envelope `success` và `data` theo schema được dẫn.
 | `abort` | `POST /api/v1/internal/projects/{project_id}/github/connection/abort`; Work → Integration | Cùng `ConnectionOperationRequest`; chỉ hủy operation `PREPARED` khớp project/operation/generation. Abort trùng cùng payload thành công; lệnh muộn không ảnh hưởng connection/generation mới. |
 | `status` | `GET /api/v1/internal/projects/{project_id}/github/connection/operations/{operation_id}`; Work → Integration | Chỉ service key; trả operation state `PREPARED`, `CONFIRMED`, `ABORTED` hoặc `EXPIRED`, cùng snapshot kết quả nếu có. Không tự confirm. |
 | `verify reference` | `POST /api/v1/internal/projects/{project_id}/github/references/verify`; Work → Integration | `ReferenceVerifyRequest`: `repo_id`, `generation`, `link_type`, `ref_id`; Bearer actor + Work service key. Trả `ReferenceFact`; không tạo `TaskGitHubLink`. |
-| `receipt` | `GET /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}`; Integration → Work | Endpoint Work mục tiêu, chỉ service key Integration→Work. Schema `WorkGitHubOperationReceiptEnvelope` trong [Work OpenAPI 1.5](../../contracts/api/work-service.yaml); data có đúng `applied`, `project_id`, `operation_id`, `generation`, `status`, `repo_id`, `source_version`. Provider Work **Chưa triển khai**. |
+| `receipt` | `GET /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}`; Integration → Work | Đã triển khai trong Work, chỉ service key Integration→Work. Trả `applied`, `project_id`, `operation_id`, `generation`, `status`, `repo_id`, `source_version`; có trong OpenAPI Work. |
 
-Contract đánh dấu operation Integration là provider đã triển khai. Riêng callback
-receipt Work đã có path/schema trong contract Work với trạng thái `planned`,
-**Chưa triển khai provider**; payload phải khớp operation đã commit, không chỉ
-trạng thái projection hiện thời. Path này dùng origin nội bộ
-`http://work-service:8000`, không kế thừa prefix gateway `/api/work`.
+Callback receipt có trong [contract Work](../../contracts/api/work-service.yaml).
+Payload khớp operation đã commit, không suy từ projection hiện thời.
 
 Không đưa token GitHub, raw authorization code hoặc secret vào request, fact,
 receipt, event hay log. `ConnectionFact`/`ReferenceFact` là biên dữ liệu trong
@@ -113,13 +112,13 @@ Ngắt kết nối cũng dùng operation idempotent và CAS trên
 lại quyền/generation. Không gỡ GitHub App dùng chung chỉ vì một Project ngắt
 kết nối. Không giả định worker là singleton.
 
-Work cần bổ sung `DELETE /projects/{id}/github/repository/` trong API của
-chính Work, body `{operation_id,expected_connection_generation}` và quyền
+Work đã có `DELETE /projects/{id}/github/repository/`, body
+`{operation_id,expected_connection_generation}` và quyền
 Leader ACTIVE. HTTP adapter map body này sang prepare `DISCONNECT` với
 `github_repo_id:null`; sau khi lưu pending/receipt/intent trả 202; dispatcher
 confirm chuyển projection cuối DISCONNECTED. Không gọi uninstall GitHub.
-Giữ `WORK_INTEGRATION_ADAPTER=infrastructure.integration.UnavailableIntegration`
-làm cấu hình rollback cho đến khi adapter HTTP và recovery được nghiệm thu.
+Mặc định adapter vẫn unavailable. Khi tắt nhận lệnh mới ở môi trường đã bật,
+giữ adapter HTTP và recovery tới khi xử lý xong các operation đã commit.
 
 ## Lỗi, retry và phục hồi
 
@@ -142,8 +141,11 @@ làm cấu hình rollback cho đến khi adapter HTTP và recovery được nghi
   phát lại thay đổi nghiệp vụ cho event trùng.
 
 Các thời hạn reservation 24 giờ, timeout HTTP và quy tắc generation nêu trên
-đã có trong provider và kiểm thử; Work thật và GitHub trong luồng Project mới
-chưa nghiệm thu. Xem [cấu hình provider](runtime-connections.md).
+đã có trong provider và kiểm thử. Hai backend đã được kiểm qua HTTP/Kafka test;
+đã kiểm connect/disconnect, receipt/replay và branch/commit với GitHub thật
+trên staging local ngày 21–22/10/2026. Chưa nghiệm thu PR thành công hoặc mọi
+tình huống crash/race/thu hồi quyền. Xem [bằng chứng và giới hạn](../infrastructure/staging-http-validation-20261021.md#kiem-lai-20261022)
+và [cấu hình provider](runtime-connections.md).
 
 ### Quyết định wire cho runtime provider
 
@@ -226,10 +228,10 @@ Unit/contract tests cho adapter và service cần bao quát:
 - disconnect idempotent, race với prepare/confirm và không ảnh hưởng Project
   khác dùng cùng installation.
 
-Adapter giả hiện tại chỉ kiểm thử logic Work; cần kiểm tra contract giữa hai
-service bằng test tích hợp có service thật trong môi trường thử nghiệm. GitHub
-thật/deployment vẫn là phạm vi chưa xác minh cho tới khi chạy smoke test với
-credential và repository thử nghiệm được cấp quyền.
+Test fixture kiểm logic Work riêng; test `test_integration_wire.py` chạy hai
+backend và adapter HTTP thật với database riêng, có tùy chọn Kafka test.
+GitHub/Identity ở phép thử đó là stub. GitHub thật/deployment vẫn chưa xác minh
+cho tới khi nghiệm thu với credential và repository thử nghiệm được cấp quyền.
 
 ## Rollout
 
@@ -253,13 +255,12 @@ credential và repository thử nghiệm được cấp quyền.
 - **Đã triển khai:** adapter Work định nghĩa và kiểm tra `ConnectionFact`,
   `ReferenceFact`; service chọn repository khóa Project và gọi adapter ngoài
   transaction, rồi kiểm tra quyền/generation và ghi projection/receipt.
-- **Một phần:** Work có projection, outbox và idempotency; contract cũ mô tả
-  selection trực tiếp. Chưa có bằng chứng trong file source được kiểm tra về
-  prepare/confirm/abort/status, callback receipt, dispatcher durable, consumer
-  `integration.project.connection.changed`, disconnect qua contract mới hoặc
-  rollout flag.
-- **Chưa xác minh:** adapter Integration thật, triển khai gateway/internal
-  routes, cấu hình key/URL và kết nối tới GitHub thật.
+- **Đã triển khai phía Work:** HTTP adapter prepare/confirm/abort/status/reference,
+  receipt nội bộ, recovery bền vững, consumer connection, disconnect và cấu hình
+  Work liên quan. Authorize `github.read` cho AI nằm ngoài lượt nối Work này.
+- **Chưa xác minh:** GitHub live cho luồng Project mới, staging/production và
+  credential/ACL của môi trường triển khai. Xem phạm vi test service thật với
+  GitHub/Identity stub trong [hướng dẫn Work](../project-service/github-integration.md).
 
 Các nhãn trên chỉ mô tả file được đối chiếu; trước khi phát hành cần kiểm tra
 toàn bộ source, deployment và test liên quan theo contract mới.

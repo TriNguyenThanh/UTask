@@ -12,7 +12,8 @@ hợp đồng mục tiêu chưa triển khai; không tạo schema giả để l�
 - [`integration-service-v1.yaml`](integration-service-v1.yaml): OpenAPI 1.4.0;
   public account/consent/installation/repository/webhook đã có trong source,
   internal Work/AI M5/M6 **đã triển khai phía provider, flags mặc định tắt**;
-  chưa nghiệm thu với implementation Work/AI thật.
+  Work đã có test hai backend qua HTTP/Kafka riêng với GitHub/Identity stub;
+  AI và GitHub live cho Project chưa nghiệm thu.
   Xem [ADR-004](../../docs/adr/004-integration-github-account-ownership.md) và
   [ADR-005](../../docs/adr/005-integration-work-ai-contracts.md).
 
