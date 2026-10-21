@@ -16,6 +16,11 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` build các service đang bật từ commit đã qua CI, chuyển digest (mã xác định nội dung image) giữa các job bằng artifact của GitHub Actions. VPS dùng `docker-compose.staging.yml` cùng file ghi đè `staging-images.json` để chạy đúng image, migration rồi cập nhật container qua SSH.
 
+Work dùng bước pytest chung của `python-service.yml`; workflow không dựng Kafka
+hoặc có bước e2e riêng theo tên Work. Wire test được giữ để chạy chủ động trên
+môi trường PostgreSQL/Kafka test riêng; xem
+[phạm vi kiểm chứng Work](../project-service/github-integration.md).
+
 ## Dùng lại kết quả CI của Pull Request sau merge
 
 Khi CI của PR thành công, job `CI result` lưu artifact `ci-validation` trong
