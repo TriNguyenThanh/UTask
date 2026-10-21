@@ -37,6 +37,102 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 
 class StagingDeploymentTests(unittest.TestCase):
+    def test_ai_live_gate_is_required_and_propagates_failure_without_credentials_in_arguments(
+        self,
+    ):
+        for selected, settings, failure, expected in (
+            ("identity-service", "", "", 0),
+            ("identity-service ai-service", "", "", 1),
+            ("identity-service ai-service", None, "", 0),
+            ("identity-service ai-service", None, "ai-evaluation", 79),
+        ):
+            with (
+                self.subTest(selected=selected, settings=settings, failure=failure),
+                deployment_runtime(
+                    services=selected, fail_on=failure, fail_code=79
+                ) as (root, env, calls),
+            ):
+                if settings is not None:
+                    env["COMPOSE_TEST_ENVIRONMENT"] = settings
+                result = run_staging_deploy(root, env)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                commands = docker_calls(calls)
+                evaluations = [
+                    command for command in commands if "evaluation" in command
+                ]
+                self.assertEqual(
+                    len(evaluations), int("ai-service" in selected and settings is None)
+                )
+                self.assertNotIn(
+                    "fixture-eval-bearer",
+                    result.stdout + result.stderr + calls.read_text(),
+                )
+                if evaluations:
+                    command = evaluations[0]
+                    self.assertIn("EVAL_AI_BEARER", command)
+                    self.assertIn("EVAL_AI_CASE_EXPECTATIONS", command)
+                    self.assertIn("EVAL_EXPECTED_MODEL", command)
+                    self.assertIn("EVAL_AI_CASE_TARGETS", command)
+                    self.assertIn("live", command)
+                    self.assertIn(
+                        f"{root}/ai-evaluation-reports/sha-test:/app/evaluation-reports",
+                        command,
+                    )
+                    self.assertGreater(
+                        commands.index(command),
+                        max(
+                            i
+                            for i, c in enumerate(commands)
+                            if "nginx" in c and "-s" in c
+                        ),
+                    )
+                if expected:
+                    self.assertFalse(any("ps" in command for command in commands))
+
+    def test_deterministic_evaluation_is_an_ai_only_ci_gate_with_reports(self):
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/python-service.yml").read_text()
+        )
+        steps = workflow["jobs"]["verify"]["steps"]
+        evaluation = next(
+            step
+            for step in steps
+            if step.get("name") == "Run deterministic AI release evaluation"
+        )
+        self.assertEqual(evaluation["if"], "inputs.service == 'ai-service'")
+        self.assertEqual(evaluation["env"]["PYTHONPATH"], "src")
+        self.assertEqual(
+            evaluation["run"],
+            "uv run python -m evaluation --mode deterministic --report-dir evaluation-reports",
+        )
+        reports = next(
+            step
+            for step in steps
+            if step.get("name") == "Upload deterministic AI evaluation reports"
+        )
+        self.assertIn("always()", reports["if"])
+        self.assertEqual(reports["with"]["if-no-files-found"], "error")
+
+    def test_live_reports_are_retained_even_when_gate_fails(self):
+        steps = RELEASE["jobs"]["deploy-staging"]["steps"]
+        retrieve = next(
+            step
+            for step in steps
+            if step.get("name") == "Retrieve AI live evaluation reports"
+        )
+        upload = next(
+            step
+            for step in steps
+            if step.get("name") == "Upload AI live evaluation reports"
+        )
+        for step in (retrieve, upload):
+            self.assertIn("always()", step["if"])
+            self.assertIn("ai-service", step["if"])
+        self.assertIn("evaluation.junit.xml", retrieve["run"])
+        self.assertIn("evaluation.json", retrieve["run"])
+        self.assertNotIn("EVAL_AI_BEARER", retrieve["run"])
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+
     def test_discovery_gateway_json_is_decoded_before_remote_compose_commands(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         gateway_input = workflow["jobs"]["release-staging"]["with"]["gateway_service"]

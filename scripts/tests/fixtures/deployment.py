@@ -60,9 +60,10 @@ def deployment_runtime(
             "#!/usr/bin/env python3\n"
             "import json, os, sys\n"
             "args=sys.argv[1:]\n"
+            "if 'evaluation' in args and os.environ.get('EVAL_AI_BEARER') != 'fixture-eval-bearer': sys.exit(78)\n"
             "if 'login' in args and sys.stdin.read().rstrip('\\n') != os.environ['EXPECTED_REGISTRY_TOKEN']: sys.exit(2)\n"
             "with open(os.environ['CALLS'], 'a') as output: output.write(json.dumps(args) + '\\n')\n"
-            "stage='database-preparation' if '/docker-entrypoint-initdb.d/init-databases.sh' in args else 'environment' if 'config' in args and '--environment' in args else 'ai-migration' if '/app/.venv/bin/alembic' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
+            "stage='ai-evaluation' if 'evaluation' in args else 'database-preparation' if '/docker-entrypoint-initdb.d/init-databases.sh' in args else 'environment' if 'config' in args and '--environment' in args else 'ai-migration' if '/app/.venv/bin/alembic' in args else 'migration' if 'migrate' in args else 'up' if 'up' in args else 'reload' if 'nginx' in args and '-s' in args else 'nginx' if 'nginx' in args and '-t' in args else 'gateway' if '-c' in args else ''\n"
             "if stage and stage == os.environ['FAIL_ON']: sys.exit(int(os.environ['FAIL_CODE']))\n"
             "if 'run' in args: sys.stdin.read()\n"
             "if 'config' in args and '--environment' in args: print(os.environ.get('COMPOSE_TEST_ENVIRONMENT', ''))\n"
@@ -92,6 +93,7 @@ def deployment_runtime(
                 else ""
             ),
             "EXPECTED_GATEWAY_SERVICE": "nginx",
+            "COMPOSE_TEST_ENVIRONMENT": "EVAL_AI_BASE_URL=http://nginx\nEVAL_AI_BEARER=fixture-eval-bearer\nEVAL_AI_PROJECT_ID=fixture-project\nEVAL_AI_TASK_ID=fixture-task\nEVAL_AI_SPRINT_ID=fixture-sprint\nEVAL_EXPECTED_MODEL=fixture-model\nEVAL_AI_CASE_EXPECTATIONS={}\n",
             "registry": "test.invalid",
             "registry_user": "test",
             "image_prefix": "test/utask",
