@@ -330,7 +330,7 @@ function IssueDescription({ detail }: Readonly<{ detail: IssueDetail }>) {
   );
 }
 
-function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing, createSlot }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean; createSlot?: ReactNode }>) {
+function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdownWithAI, aiKeyMissing, createSlot, aiSlot }: Readonly<{ subtasks: { id: string; title: string; done: boolean }[]; onToggle: (id: string) => void; readOnly: boolean; projectId: string; canBreakdownWithAI: boolean; aiKeyMissing: boolean; createSlot?: ReactNode; aiSlot?: ReactNode }>) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -340,11 +340,13 @@ function SubtasksSection({ subtasks, onToggle, readOnly, projectId, canBreakdown
             {subtasks.filter((s) => s.done).length}/{subtasks.length} hoàn thành
           </span>
         </h3>
-        <AiSubtaskAction
-          canBreakdownWithAI={canBreakdownWithAI}
-          aiKeyMissing={aiKeyMissing}
-          projectId={projectId}
-        />
+        {aiSlot ?? (
+          <AiSubtaskAction
+            canBreakdownWithAI={canBreakdownWithAI}
+            aiKeyMissing={aiKeyMissing}
+            projectId={projectId}
+          />
+        )}
       </div>
       {subtasks.length > 0 ? (
         <SubtaskList subtasks={subtasks} onToggle={onToggle} readOnly={readOnly} persisted={createSlot !== undefined} />
@@ -543,6 +545,7 @@ function IssueDetailBody({
   subtasksEditable,
   editSlot,
   subtaskCreateSlot,
+  aiSlot,
   commentsSlot,
   historySlot,
   attachmentsSlot,
@@ -564,6 +567,8 @@ function IssueDetailBody({
   subtasksEditable: boolean;
   editSlot?: ReactNode;
   subtaskCreateSlot?: ReactNode;
+  /** Work thật: thay nút AI demo bằng nút AI gọi AI Service. */
+  aiSlot?: ReactNode;
   /** Work thật: thay khối bình luận, lịch sử và đính kèm bằng dữ liệu server. */
   commentsSlot?: ReactNode;
   historySlot?: ReactNode;
@@ -588,6 +593,7 @@ function IssueDetailBody({
             canBreakdownWithAI={canBreakdownWithAI}
             aiKeyMissing={aiKeyMissing}
             createSlot={subtaskCreateSlot}
+            aiSlot={aiSlot}
           />
           {commentsSlot ?? <CommentsSection detail={detail} readOnly={readOnly} projectId={projectId} issueKey={issueKey} />}
           {attachmentsSlot}
@@ -620,6 +626,7 @@ export function IssuePanel({
   subtasksEditable = true,
   editSlot,
   subtaskCreateSlot,
+  aiSlot,
   commentsSlot,
   historySlot,
   attachmentsSlot,
@@ -649,6 +656,8 @@ export function IssuePanel({
   editSlot?: ReactNode;
   /** Form thêm nhiệm vụ con (Work thật). */
   subtaskCreateSlot?: ReactNode;
+  /** Work thật: nút AI tách nhiệm vụ con (thay nút demo). */
+  aiSlot?: ReactNode;
   /** Work thật: bình luận, lịch sử và tệp đính kèm từ server thay cho khối demo. */
   commentsSlot?: ReactNode;
   historySlot?: ReactNode;
@@ -770,6 +779,7 @@ export function IssuePanel({
             subtasksEditable={subtasksEditable}
             editSlot={editSlot}
             subtaskCreateSlot={subtaskCreateSlot}
+            aiSlot={aiSlot}
             commentsSlot={commentsSlot}
             historySlot={historySlot}
             attachmentsSlot={attachmentsSlot}

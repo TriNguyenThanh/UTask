@@ -1,6 +1,6 @@
-export type RealService = "auth" | "classroom" | "work";
+export type RealService = "auth" | "classroom" | "work" | "ai";
 
-const REAL_SERVICES: readonly RealService[] = ["auth", "classroom", "work"];
+const REAL_SERVICES: readonly RealService[] = ["auth", "classroom", "work", "ai"];
 
 /**
  * Phân tích `VITE_REAL_SERVICES` (danh sách cách nhau bởi dấu phẩy).
