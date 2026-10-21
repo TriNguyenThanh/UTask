@@ -16,6 +16,11 @@ UTask dùng một workflow điều phối và hai workflow dùng lại trong Git
 2. `python-service.yml` không tự khởi động. Đây là workflow dùng lại được `ci.yml` gọi cho từng service Python để tránh lặp các bước cài dependency, lint, format, test và kiểm tra image.
 3. `release-staging.yml` build các service đang bật từ commit đã qua CI, chuyển digest (mã xác định nội dung image) giữa các job bằng artifact của GitHub Actions. VPS dùng `docker-compose.staging.yml` cùng file ghi đè `staging-images.json` để chạy đúng image, migration rồi cập nhật container qua SSH.
 
+Work dùng bước pytest chung của `python-service.yml`; workflow không dựng Kafka
+hoặc có bước e2e riêng theo tên Work. Wire test được giữ để chạy chủ động trên
+môi trường PostgreSQL/Kafka test riêng; xem
+[phạm vi kiểm chứng Work](../project-service/github-integration.md).
+
 ## Dùng lại kết quả CI của Pull Request sau merge
 
 Khi CI của PR thành công, job `CI result` lưu artifact `ci-validation` trong
@@ -458,7 +463,12 @@ response không có mã định danh backend nên probe chưa chứng minh danh 
 ở đầu kia; route vẫn phải được đối chiếu với Nginx. Work publisher dùng Celery ping
 tới đúng node; beat kiểm tra PID còn sống và kết nối broker. Các phép kiểm tra này
 chưa chứng minh scheduler tiến triển, task được thực thi hay event tới Kafka.
-`work-profile-consumer` dùng profile riêng và không được workflow này tự bật.
+Work dùng duy nhất `work-consumer`, cùng profile/image pin của Work API.
+Command `consume_work` chạy các consumer Identity/Classroom/Integration trong
+cùng container, giữ group/offset/retry/DLQ riêng; không cần profile consumer.
+Integration chỉ chạy khi chọn adapter thật, vẫn chạy khi tắt nhận command mới.
+Chi tiết chuyển từ container cũ và kiểm chứng tại
+[Work GitHub](../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của
 service nằm ngoài phạm vi. Nếu thu hẹp danh sách, các container đã chạy trước đó phải

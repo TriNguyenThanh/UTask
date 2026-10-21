@@ -186,23 +186,12 @@ services:
       retries: 6
       start_period: 15s
 
-  work-profile-consumer:
-    <<: *work_runtime
-    x-deploy: *work_worker
-    profiles: [work-profile-consumer]
-    command: ["python", "manage.py", "consume_identity"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-        required: false
-
-  work-group-consumer:
+  work-consumer:
     <<: *work_runtime
     x-deploy: *work_worker
     init: true
-    command: ["python", "manage.py", "consume_classroom"]
+    stop_grace_period: 15s
+    command: ["python", "manage.py", "consume_work"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -210,7 +199,7 @@ services:
         condition: service_healthy
         required: false
     healthcheck:
-      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(p.read_bytes().split(b'\\0')[1:3] == [b'manage.py', b'consume_classroom'] for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(p.read_bytes().split(b'\\0')[1:3] == [b'manage.py', b'consume_work'] for p in Path('/proc').glob('[0-9]*/cmdline'))"]
       interval: 15s
       timeout: 10s
       retries: 6

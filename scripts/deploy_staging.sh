@@ -19,8 +19,7 @@ export UTASK_IMAGE_PREFIX="$image_prefix" UTASK_IMAGE_TAG="$image_tag"
 read -r -a services <<< "$service_names"
 unset COMPOSE_PROFILES
 compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json)
-# CLI --profile replaces COMPOSE_PROFILES, so carry the server's Kafka choice
-# into the explicit application profiles without sourcing or printing .env.
+# CLI profiles replace COMPOSE_PROFILES; preserve the server's Kafka choice.
 compose_environment=$("${compose[@]}" config --environment < /dev/null)
 profiles=()
 while IFS='=' read -r name value; do

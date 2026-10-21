@@ -122,14 +122,23 @@ class IntegrationComposeTests(unittest.TestCase):
                         filename=filename,
                         enabled=expected["INTEGRATION_GITHUB_APP_ENABLED"],
                     ),
-                    patch.dict(os.environ, {"COMPOSE_PROFILES": "", **expected}),
+                    tempfile.TemporaryDirectory() as directory,
                 ):
+                    # Windows removes empty os.environ values; let Compose read them from a file.
+                    overrides = Path(directory) / "github-app.env"
+                    overrides.write_text(
+                        "COMPOSE_PROFILES=\n"
+                        + "\n".join(f"{key}={value}" for key, value in expected.items())
+                        + "\n"
+                    )
                     result = subprocess.run(
                         [
                             "docker",
                             "compose",
                             "--env-file",
                             ".env.example",
+                            "--env-file",
+                            str(overrides),
                             "-f",
                             filename,
                             "--profile",
@@ -139,6 +148,11 @@ class IntegrationComposeTests(unittest.TestCase):
                             "json",
                         ],
                         cwd=ROOT,
+                        env={
+                            key: value
+                            for key, value in os.environ.items()
+                            if key not in expected and key != "COMPOSE_PROFILES"
+                        },
                         capture_output=True,
                         text=True,
                         check=False,

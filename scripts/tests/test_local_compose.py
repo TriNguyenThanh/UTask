@@ -41,7 +41,7 @@ class LocalComposeTests(unittest.TestCase):
                 "work-service",
                 "work-publisher",
                 "work-beat",
-                "work-group-consumer",
+                "work-consumer",
                 "classroom-service",
                 "classroom-publisher",
                 "classroom-beat",
@@ -125,7 +125,7 @@ class LocalComposeTests(unittest.TestCase):
             self.assertIn(f"{variable}=${{{variable}:-", mapping)
         for name in (
             "work-publisher",
-            "work-group-consumer",
+            "work-consumer",
             "classroom-publisher",
             "classroom-work-consumer",
         ):
@@ -170,7 +170,7 @@ class LocalComposeTests(unittest.TestCase):
         self.assertEqual(len(services), 13)
         topics = services["kafka"]["environment"]
         self.assertEqual(topics["KAFKA_BOOTSTRAP_SERVERS"], "broker.custom:19092")
-        for name in ("work-group-consumer", "classroom-work-consumer"):
+        for name in ("work-consumer", "classroom-work-consumer"):
             self.assertEqual(
                 topics["KAFKA_BOOTSTRAP_SERVERS"],
                 services[name]["environment"]["KAFKA_BOOTSTRAP_SERVERS"],
@@ -183,9 +183,7 @@ class LocalComposeTests(unittest.TestCase):
         )
         self.assertEqual(
             topics["CLASSROOM_KAFKA_TOPIC"],
-            services["work-group-consumer"]["environment"][
-                "WORK_CLASSROOM_KAFKA_TOPIC"
-            ],
+            services["work-consumer"]["environment"]["WORK_CLASSROOM_KAFKA_TOPIC"],
         )
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
@@ -225,8 +223,6 @@ class LocalComposeTests(unittest.TestCase):
                             base,
                             "--profile",
                             "work-service",
-                            "--profile",
-                            "work-profile-consumer",
                             "config",
                             "--format",
                             "json",
@@ -251,8 +247,7 @@ class LocalComposeTests(unittest.TestCase):
                         "work-service",
                         "work-publisher",
                         "work-beat",
-                        "work-group-consumer",
-                        "work-profile-consumer",
+                        "work-consumer",
                     ):
                         for variable, value in expected.items():
                             with self.subTest(process=name, variable=variable):

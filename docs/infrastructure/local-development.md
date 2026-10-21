@@ -5,7 +5,7 @@ Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chu
 repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
 kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm sáu database
 được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
-`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo bốn topic nếu
+`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo các topic nếu
 còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
 có container chuẩn bị riêng. Compose chỉ báo hai service này healthy sau khi
 đã chuẩn bị xong và kiểm tra kết nối thực.
@@ -18,6 +18,10 @@ nghiệm thu startup không có container chuẩn bị.
 Kết quả local không xác nhận staging hoặc các provider bên ngoài.
 
 ## Khởi động Identity, Classroom và Work
+
+Nối repository Work với Integration là lựa chọn bật riêng; cấu hình mặc định
+giữ tắt. Dùng image/worker/Beat Work hiện có và profile consumer mới theo
+[hướng dẫn Work GitHub](../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 Các lệnh dưới đây dùng PowerShell. Tạo `.env` từ mẫu nếu máy chưa có tệp này;
 giữ lại `.env` hiện có để không ghi đè cấu hình local:
@@ -71,8 +75,9 @@ Migration diễn ra lúc API container khởi động. Nếu migration lỗi, Gu
 không chạy và API không đạt healthcheck, nên worker phụ thuộc API đó cũng chưa
 khởi chạy. Lần khởi động sau chạy lại migration; Django bỏ qua migration đã
 được ghi nhận là đã áp dụng. Các worker Classroom và Work chạy mặc định.
-Consumer hồ sơ Identity của Work vẫn là tùy chọn qua profile
-`work-profile-consumer`.
+Work có một container `work-consumer` dùng command `consume_work`: Classroom,
+Identity nếu có topic và Integration nếu chọn adapter thật. Không cần profile
+consumer riêng; group, offset và DLQ của từng nguồn giữ nguyên.
 
 Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoản là luồng Identity;
 xem các điều kiện trong [tài liệu Identity](../identity-service/README.md).
