@@ -4,6 +4,7 @@ import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import httpx
 import pytest
 from cryptography.fernet import Fernet
 from google.adk.models import BaseLlm
@@ -117,3 +118,16 @@ class ScriptedModel(BaseLlm):
             content=types.Content(role="model", parts=[part]),
             usage_metadata=types.GenerateContentResponseUsageMetadata(candidates_token_count=10),
         )
+
+
+def identity_transport(jwks):
+    """Double HTTP Identity: vẫn đi qua verifier JWT và session thật của AI."""
+
+    def respond(request):
+        if request.method == "GET" and request.url.path == "/.well-known/jwks.json":
+            return httpx.Response(200, json=jwks)
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/internal/auth/session-status"
+        return httpx.Response(200, json={"success": True, "data": {"active": True}})
+
+    return httpx.MockTransport(respond)

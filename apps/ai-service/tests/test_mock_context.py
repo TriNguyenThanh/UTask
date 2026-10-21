@@ -34,7 +34,7 @@ async def test_all_intents_use_fixture_context_without_network(sample):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(no_network)) as client:
         adapter = build_context_adapter(Settings(mock_test=True), client)
-        principal = Principal("mock-owner", "verified-bearer")
+        principal = Principal("00000000-0000-4000-8000-000000000001", "verified-bearer")
         await adapter.authorize(principal, payload)
         pool = ContextToolPool(adapter, principal, payload, AsyncMock(return_value=4), 5)
         for tool in pool.tools():
@@ -63,7 +63,11 @@ async def test_real_adk_workflow_with_fixture_adapter(sample, tool, result):
     payload = TypeAdapter(CreateAiRequest).validate_json((SAMPLES / sample).read_text())
     charge = AsyncMock(return_value=4000)
     pool = ContextToolPool(
-        FixtureContextAdapter(settings), Principal("mock-owner", "verified"), payload, charge, 5
+        FixtureContextAdapter(settings),
+        Principal("00000000-0000-4000-8000-000000000001", "verified"),
+        payload,
+        charge,
+        5,
     )
     call = types.Part(function_call=types.FunctionCall(name=tool, args={}))
     runtime = AdkRuntime(settings, ScriptedModel([call, json.dumps(result)]))
@@ -74,6 +78,8 @@ async def test_real_adk_workflow_with_fixture_adapter(sample, tool, result):
 
 
 async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
+    from test_context import authorization_decision, task_data
+
     payload = TypeAdapter(CreateAiRequest).validate_json(
         (SAMPLES / "task-decomposition.json").read_text()
     )
@@ -81,6 +87,7 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         mock_test=False,
         authorization_urls={"task": "http://work/authorize"},
         context_urls={"task:task": "http://work/context"},
+        work_service_key="work-key",
     )
     paths = []
 
@@ -89,13 +96,15 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         assert request.headers["Authorization"] == "Bearer verified"
         return httpx.Response(
             200,
-            json={"allowed": True}
+            json=authorization_decision(payload)
             if request.url.path == "/authorize"
             else {
                 "domain": "task",
                 "as_of": datetime.now(UTC).isoformat(),
                 "status": "available",
-                "data": {"title": "Real source", "secret": "hidden"},
+                "source_version": None,
+                "warning": None,
+                "data": {**task_data(), "title": "Real source", "secret": "hidden"},
             },
         )
 
@@ -103,7 +112,7 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
         adapter = build_context_adapter(settings, client)
         assert isinstance(adapter, InternalContextAdapter)
         doc = await adapter.fetch("task", Principal("owner", "verified"), payload)
-        assert doc.data == {"title": "Real source"}
+        assert doc.data["title"] == "Real source" and "secret" not in doc.data
     assert paths == ["/authorize", "/context"]
 
 
@@ -119,7 +128,12 @@ async def test_real_mode_uses_rest_with_configured_urls_and_filtering():
 )
 async def test_fixture_adapter_fails_closed(case, code):
     payload = TypeAdapter(CreateAiRequest).validate_json((SAMPLES / "backlog.json").read_text())
-    principal = Principal("mock-outsider" if case == "denied" else "mock-owner", "verified")
+    principal = Principal(
+        "00000000-0000-4000-8000-000000000002"
+        if case == "denied"
+        else "00000000-0000-4000-8000-000000000001",
+        "verified",
+    )
     if case == "unknown_target":
         payload.target.id = uuid4()
     if case == "no_target":
@@ -139,7 +153,7 @@ async def test_fixture_adapter_fails_closed(case, code):
 async def test_fixture_draft_authorization_and_document_isolation():
     adapter = FixtureContextAdapter(Settings(mock_test=True))
     payload = TypeAdapter(CreateAiRequest).validate_json((SAMPLES / "backlog.json").read_text())
-    principal = Principal("mock-owner", "verified")
+    principal = Principal("00000000-0000-4000-8000-000000000001", "verified")
     document = await adapter.fetch("project", principal, payload)
     document.data["tasks"][0]["title"] = "changed by caller"
     assert (await adapter.fetch("project", principal, payload)).data["tasks"][0][

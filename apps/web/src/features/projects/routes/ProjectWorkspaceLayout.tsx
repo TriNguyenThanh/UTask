@@ -18,6 +18,8 @@ import type { ProjectViewer, ProjectWorkspace } from "@/features/projects/types"
 import { isReadOnlyViewer } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { ProjectNavigation } from "@/features/projects/components/ProjectNavigation";
+import { isRealService } from "@/lib/config/services";
+import { RealProjectLayout } from "@/features/projects/components/RealProjectLayout";
 
 /** Module heading per tab, shown under the project breadcrumb. */
 export const projectModuleTitles = {
@@ -29,17 +31,26 @@ export const projectModuleTitles = {
 
 export type ProjectModule = keyof typeof projectModuleTitles;
 
-interface ProjectWorkspaceContextValue {
+export interface ProjectWorkspaceContextValue {
   projectId: string;
   workspace: ProjectWorkspace;
   viewer: ProjectViewer;
   /** Instructors read the workspace and never change it. */
   readOnly: boolean;
   activeModule: ProjectModule;
+  /** Dự án đã lưu trữ: chỉ đọc với mọi vai (Work thật). Demo luôn `false`. */
+  archived: boolean;
+  /** Thành viên ACTIVE có thể được giao việc (Work thật). Demo để trống. */
+  assignees: readonly { userId: string; name: string }[];
 }
 
 const ProjectWorkspaceContext =
   createContext<ProjectWorkspaceContextValue | null>(null);
+
+/** Chế độ Work thật dựng cùng context này từ API (`RealWorkspaceBoundary`) để dùng lại Board/Backlog. */
+export const ProjectWorkspaceProvider = ProjectWorkspaceContext.Provider;
+
+export const moduleOfPathname = moduleFromPathname;
 
 export function useProjectWorkspaceContext(): ProjectWorkspaceContextValue {
   const value = useContext(ProjectWorkspaceContext);
@@ -101,6 +112,8 @@ export default function ProjectWorkspaceLayout() {
             viewer: workspaceData.viewer,
             readOnly: isReadOnlyViewer(workspaceData.viewer),
             activeModule: moduleFromPathname(pathname),
+            archived: false,
+            assignees: [],
           }
         : null,
     [projectId, workspaceData, pathname],
@@ -225,5 +238,5 @@ function ProjectWorkspaceHeader({ workspace }: { workspace: ProjectWorkspace }) 
   );
 }
 export function Component() {
-  return <ProjectWorkspaceLayout />;
+  return isRealService("work") ? <RealProjectLayout /> : <ProjectWorkspaceLayout />;
 }

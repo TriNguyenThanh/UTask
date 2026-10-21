@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FeedbackComposer } from "@/features/teacher/components/FeedbackComposer";
+import { RealTeamDetail } from "@/features/teacher/components/RealTeamDetail";
 import {
   PersonAvatar,
   ProgressMeter,
@@ -313,7 +314,7 @@ function TeamBody({ detail }: Readonly<{ detail: TeacherTeamDetail }>) {
   );
 }
 
-export function Component() {
+function DemoTeamDetail() {
   const { teamId = "" } = useParams();
   const course = useTeacherCourseContext();
   const team = useTeacherTeam(course.courseId, teamId);
@@ -356,4 +357,9 @@ export function Component() {
       <TeamBody detail={detail} />
     </div>
   );
+}
+
+export function Component() {
+  const course = useTeacherCourseContext();
+  return course.classroom ? <RealTeamDetail /> : <DemoTeamDetail />;
 }

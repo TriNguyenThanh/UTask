@@ -5,54 +5,60 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { loginRequest, logoutRequest, refreshRequest } from "@/features/auth/api/auth";
-import type { LoginPayload } from "@/features/auth/api/auth";
+import { deviceName } from "@/features/auth/deviceName";
+import { publishSession } from "@/features/auth/sessionEvents";
 import type { AuthSession, AuthStatus, AuthUser } from "@/features/auth/types";
 import { clearAllDrafts } from "@/features/teacher/lib/drafts";
 import { createApiClient } from "@/lib/api/client";
+import { ensureCsrfToken } from "@/lib/api/csrf";
+import { ApiError } from "@/lib/api/errors";
+import {
+  getMe,
+  listSessions,
+  login as loginRequest,
+  logoutAll as logoutAllRequest,
+  refresh as refreshRequest,
+  revokeSession,
+} from "@/lib/api/identity/endpoints";
+import { jwtExpiry } from "@/lib/api/jwt";
 
-const MOCK_REFRESH_TOKEN_KEY = "utask.mock.refresh-token";
+/** Làm mới access token sớm hơn hạn này để request đang bay không gặp token hết hạn. */
+const REFRESH_LEAD_MS = 60_000;
+const MIN_REFRESH_DELAY_MS = 5_000;
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+type SessionEndReason = "signed-out" | "expired";
 
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   accessToken: string | null;
   login(payload: LoginPayload): Promise<AuthUser>;
-  logout(): Promise<void>;
+  /** `revoked: false` khi chưa thu hồi được phiên trên máy chủ; phiên cục bộ luôn bị xóa. */
+  logout(): Promise<{ revoked: boolean }>;
+  /** Đăng xuất mọi thiết bị; trả số phiên đã thu hồi. Phiên cục bộ luôn bị xóa. */
+  logoutAll(): Promise<number>;
+  /**
+   * Làm mới access token (single-flight). `null` khi refresh token không còn hợp lệ;
+   * ném lỗi khi lỗi tạm thời (mạng, 5xx) để giữ phiên.
+   */
+  refreshAccessToken(failedToken?: string): Promise<string | null>;
+  /** Cập nhật hồ sơ đang hiển thị (sau khi sửa hồ sơ) mà không đổi phiên. */
+  setUser(user: AuthUser): void;
   handleUnauthorized(): void;
+  /** true khi phiên kết thúc do người dùng tự đăng xuất. */
+  signedOut: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function mocksEnabled() {
-  // Mirror mocks/enableMocking.ts: run in any build when explicitly
-  // enabled, so a deployed mock demo also restores its session.
-  return import.meta.env.VITE_ENABLE_MOCKS === "true";
-}
-
-function readRefreshToken(): string | null {
-  try {
-    return sessionStorage.getItem(MOCK_REFRESH_TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeRefreshToken(token: string | null) {
-  try {
-    if (token) {
-      sessionStorage.setItem(MOCK_REFRESH_TOKEN_KEY, token);
-    } else {
-      sessionStorage.removeItem(MOCK_REFRESH_TOKEN_KEY);
-    }
-  } catch {
-    // In-memory auth remains functional when browser storage is unavailable.
-  }
-}
 
 export function AuthProvider({
   children,
@@ -64,92 +70,185 @@ export function AuthProvider({
   baseUrl?: string;
 }) {
   const queryClient = useQueryClient();
+  const [session, setSession] = useState<AuthSession | null>(initialSession ?? null);
+  const [status, setStatus] = useState<AuthStatus>(initialSession ? "authenticated" : "restoring");
+  const [signedOut, setSignedOut] = useState(false);
+  const sessionRef = useRef(session);
+  const refreshInFlight = useRef<Promise<string | null> | null>(null);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   const unauthenticatedClient = useMemo(() => createApiClient({
     baseUrl,
     getAccessToken: () => null,
     onUnauthorized: () => undefined,
   }), [baseUrl]);
-  const [session, setSession] = useState<AuthSession | null>(initialSession ?? null);
-  const [status, setStatus] = useState<AuthStatus>(initialSession ? "authenticated" : "restoring");
+  // 401 khi đăng xuất không cần xử lý thêm: phiên cục bộ vẫn bị xóa ngay sau đó.
+  const sessionClient = useMemo(() => createApiClient({
+    baseUrl,
+    getAccessToken: () => sessionRef.current?.accessToken ?? null,
+    onUnauthorized: () => undefined,
+  }), [baseUrl]);
 
-  const clearSession = useCallback(() => {
-    writeRefreshToken(null);
+  const clearSession = useCallback((reason: SessionEndReason) => {
     setSession(null);
     setStatus("anonymous");
+    setSignedOut(reason === "signed-out");
     queryClient.clear();
+    publishSession(null);
   }, [queryClient]);
 
+  const refreshAccessToken = useCallback((failedToken?: string) => {
+    const current = sessionRef.current;
+    // Request khác đã làm mới xong trong lúc request này đang bay.
+    if (failedToken && current && current.accessToken !== failedToken) {
+      return Promise.resolve(current.accessToken);
+    }
+    refreshInFlight.current ??= (async () => {
+      try {
+        const csrfToken = await ensureCsrfToken(baseUrl);
+        const { accessToken } = await refreshRequest(unauthenticatedClient, csrfToken);
+        const latest = sessionRef.current;
+        if (latest) {
+          const next = { ...latest, accessToken };
+          sessionRef.current = next;
+          setSession(next);
+          publishSession(next);
+        }
+        return accessToken;
+      } catch (error) {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          return null;
+        }
+        throw error;
+      } finally {
+        refreshInFlight.current = null;
+      }
+    })();
+    return refreshInFlight.current;
+  }, [baseUrl, unauthenticatedClient]);
+
+  // Khôi phục phiên khi mở app: refresh token nằm trong cookie HttpOnly nên chỉ server biết có phiên hay không.
   useEffect(() => {
     if (initialSession) {
       return;
     }
-    if (!mocksEnabled()) {
-      setStatus("anonymous");
-      return;
-    }
-
-    const refreshToken = readRefreshToken();
-    if (!refreshToken) {
-      setStatus("anonymous");
-      return;
-    }
-
-    let active = true;
-    void refreshRequest(unauthenticatedClient, refreshToken)
-      .then((response) => {
-        if (!active) {
-          return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const accessToken = await refreshAccessToken();
+        if (!accessToken) {
+          return null;
         }
-        setSession({
-          accessToken: response.access_token,
-          refreshToken,
-          user: response.user,
+        const meClient = createApiClient({
+          baseUrl,
+          getAccessToken: () => accessToken,
+          onUnauthorized: () => undefined,
         });
+        return { accessToken, user: await getMe(meClient) };
+      } catch {
+        return null;
+      }
+    })().then((restored) => {
+      if (cancelled) {
+        return;
+      }
+      if (restored) {
+        sessionRef.current = restored;
+        setSession(restored);
         setStatus("authenticated");
-      })
-      .catch(() => {
-        if (active) {
-          clearSession();
-        }
-      });
-
+        publishSession(restored);
+      } else {
+        setStatus("anonymous");
+      }
+    });
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [clearSession, initialSession, unauthenticatedClient]);
+    // Chỉ chạy một lần khi mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const accessToken = session?.accessToken ?? null;
+  useEffect(() => {
+    const expiry = accessToken ? jwtExpiry(accessToken) : null;
+    if (expiry === null) {
+      return;
+    }
+    const delay = Math.max(MIN_REFRESH_DELAY_MS, expiry * 1000 - Date.now() - REFRESH_LEAD_MS);
+    const timer = setTimeout(() => {
+      refreshAccessToken().then(
+        (fresh) => {
+          if (fresh === null) {
+            clearSession("expired");
+          }
+        },
+        // Lỗi tạm thời: giữ phiên, request kế tiếp sẽ thử lại qua 401.
+        () => undefined,
+      );
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [accessToken, clearSession, refreshAccessToken]);
 
   const login = useCallback(async (payload: LoginPayload) => {
-    const response = await loginRequest(unauthenticatedClient, payload);
-    const nextSession: AuthSession = {
-      accessToken: response.access_token,
-      refreshToken: response.refresh_token,
-      user: response.user,
-    };
-    if (mocksEnabled()) {
-      writeRefreshToken(response.refresh_token);
-    }
+    const { accessToken, user } = await loginRequest(unauthenticatedClient, {
+      ...payload,
+      deviceName: deviceName(),
+    });
     // A new sign-in starts from an empty cache so nothing fetched for a
     // previous account (or while anonymous) can be shown to this one.
     queryClient.clear();
-    setSession(nextSession);
+    setSignedOut(false);
+    setSession({ accessToken, user });
     setStatus("authenticated");
-    return response.user;
+    publishSession({ accessToken, user });
+    return user;
   }, [queryClient, unauthenticatedClient]);
 
   const logout = useCallback(async () => {
-    const refreshToken = session?.refreshToken;
+    let revoked = true;
     try {
-      if (refreshToken) {
-        await logoutRequest(unauthenticatedClient, refreshToken);
+      if (sessionRef.current) {
+        const current = (await listSessions(sessionClient)).find((item) => item.is_current);
+        if (current) {
+          await revokeSession(sessionClient, current.id);
+        }
       }
-    } catch {
-      // Logout is local-authoritative after best-effort token revocation.
+    } catch (error) {
+      // Phiên đã không còn trên máy chủ nghĩa là đã thu hồi.
+      revoked = error instanceof ApiError && error.code === "SESSION_NOT_FOUND";
     } finally {
       // An explicit sign-out also forgets unsent drafts; an expired session does not.
       clearAllDrafts();
-      clearSession();
+      clearSession("signed-out");
     }
-  }, [clearSession, session?.refreshToken, unauthenticatedClient]);
+    return { revoked };
+  }, [clearSession, sessionClient]);
+
+  const logoutAll = useCallback(async () => {
+    try {
+      const csrfToken = await ensureCsrfToken(baseUrl);
+      return await logoutAllRequest(sessionClient, csrfToken);
+    } finally {
+      clearAllDrafts();
+      clearSession("signed-out");
+    }
+  }, [baseUrl, clearSession, sessionClient]);
+
+  const setUser = useCallback((user: AuthUser) => {
+    const current = sessionRef.current;
+    if (!current) {
+      return;
+    }
+    const next = { ...current, user };
+    sessionRef.current = next;
+    setSession(next);
+    publishSession(next);
+  }, []);
+
+  const handleUnauthorized = useCallback(() => clearSession("expired"), [clearSession]);
 
   const value = useMemo<AuthContextValue>(() => ({
     status,
@@ -157,8 +256,12 @@ export function AuthProvider({
     accessToken: session?.accessToken ?? null,
     login,
     logout,
-    handleUnauthorized: clearSession,
-  }), [clearSession, login, logout, session, status]);
+    logoutAll,
+    refreshAccessToken,
+    setUser,
+    handleUnauthorized,
+    signedOut,
+  }), [handleUnauthorized, login, logout, logoutAll, refreshAccessToken, session, setUser, signedOut, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

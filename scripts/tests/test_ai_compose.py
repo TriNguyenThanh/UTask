@@ -12,10 +12,112 @@ from unittest.mock import Mock, patch
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher")
+AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat")
 
 
 class AIComposeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_identity_auth_defaults_and_overrides_reach_every_process(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "IDENTITY_", "COMPOSE_", "UTASK_"))
+        }
+        env.update(
+            UTASK_IMAGE_PREFIX="test/utask",
+            UTASK_IMAGE_TAG="test",
+            AI_JWT_ISSUER="",
+            AI_JWT_AUDIENCE="",
+            IDENTITY_JWT_ISSUER="",
+            IDENTITY_JWT_AUDIENCE="",
+            AI_CREDENTIAL_KEY="fixture-credential-key",
+            AI_IDENTITY_SERVICE_KEY="fixture-identity-service-key",
+            AI_IDENTITY_BASE_URL="",
+            AI_WORK_SERVICE_AUTH_ENABLED="",
+        )
+        cases = (
+            (
+                {},
+                "https://identity.utask.internal",
+                "utask-platform",
+                "http://identity-service:8000",
+            ),
+            (
+                {
+                    "IDENTITY_JWT_ISSUER": "https://identity.example.invalid",
+                    "IDENTITY_JWT_AUDIENCE": "identity-audience",
+                },
+                "https://identity.example.invalid",
+                "identity-audience",
+                "http://identity-service:8000",
+            ),
+            (
+                {
+                    "IDENTITY_JWT_ISSUER": "https://identity.example.invalid",
+                    "IDENTITY_JWT_AUDIENCE": "identity-audience",
+                    "AI_JWT_ISSUER": "https://override.example.invalid",
+                    "AI_JWT_AUDIENCE": "override-audience",
+                    "AI_IDENTITY_BASE_URL": "https://identity-api.example.invalid",
+                    "AI_WORK_SERVICE_AUTH_ENABLED": "true",
+                    "AI_WORK_SERVICE_KEY": "fixture-work-key",
+                },
+                "https://override.example.invalid",
+                "override-audience",
+                "https://identity-api.example.invalid",
+            ),
+        )
+        for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
+            for overrides, issuer, audience, identity_base in cases:
+                with self.subTest(compose=filename, overrides=overrides):
+                    result = subprocess.run(
+                        [
+                            "docker",
+                            "compose",
+                            "--env-file",
+                            ".env.example",
+                            "-f",
+                            filename,
+                            "--profile",
+                            "ai-service",
+                            "config",
+                            "--format",
+                            "json",
+                        ],
+                        cwd=ROOT,
+                        env={**env, **overrides},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    services = json.loads(result.stdout)["services"]
+                    for name in AI_PROCESSES:
+                        with self.subTest(process=name):
+                            runtime = services[name]["environment"]
+                            self.assertEqual(runtime["AI_JWT_ISSUER"], issuer)
+                            self.assertEqual(runtime["AI_JWT_AUDIENCE"], audience)
+                            self.assertNotIn("AI_JWT_PUBLIC_KEY", runtime)
+                            self.assertNotIn("AI_JWT_JWKS_URL", runtime)
+                            self.assertEqual(
+                                runtime["AI_WORK_SERVICE_AUTH_ENABLED"],
+                                overrides.get("AI_WORK_SERVICE_AUTH_ENABLED", "false"),
+                            )
+                            if "AI_WORK_SERVICE_KEY" in overrides:
+                                self.assertEqual(
+                                    runtime["AI_WORK_SERVICE_KEY"],
+                                    overrides["AI_WORK_SERVICE_KEY"],
+                                )
+                            self.assertEqual(
+                                runtime["AI_IDENTITY_BASE_URL"], identity_base
+                            )
+                            self.assertEqual(
+                                runtime["AI_IDENTITY_SERVICE_KEY"],
+                                "fixture-identity-service-key",
+                            )
+                            self.assertEqual(
+                                runtime["AI_CREDENTIAL_KEY"], "fixture-credential-key"
+                            )
+
     def test_ci_runs_compose_checks_when_either_configuration_test_changes(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         step = next(
@@ -69,7 +171,7 @@ class AIComposeTests(unittest.TestCase):
                 if "staging" in filename:
                     self.assertIn("healthcheck", services["ai-dispatcher"])
                     self.assertEqual(api["x-deploy"]["gateway_health_path"], None)
-                    for name in ("ai-worker", "ai-dispatcher"):
+                    for name in ("ai-worker", "ai-dispatcher", "ai-beat"):
                         self.assertEqual(
                             services[name]["x-deploy"]["application"], "ai-service"
                         )
@@ -92,6 +194,82 @@ class AIComposeTests(unittest.TestCase):
                 )
                 if "staging" in filename:
                     self.assertNotIn("ports", database)
+
+    def test_secrets_use_environment_and_retention_defaults_are_shared(self):
+        configuration = (ROOT / "infra/env/ai-service.env").read_text()
+        for variable, default in (
+            ("AI_GITHUB_CONTEXT_ENABLED", "false"),
+            ("AI_TERMINAL_RETENTION_DAYS", "30"),
+            ("AI_RETENTION_BATCH_SIZE", "500"),
+            ("AI_RETENTION_INTERVAL_SECONDS", "3600"),
+        ):
+            self.assertIn(f"{variable}=${{{variable}:-{default}}}", configuration)
+        for filename, names in (
+            ("docker-compose.yml", AI_PROCESSES),
+            ("docker-compose.staging.yml", AI_PROCESSES),
+            ("apps/ai-service/compose.yaml", ("api", "worker", "dispatcher", "beat")),
+        ):
+            services = yaml.safe_load((ROOT / filename).read_text())["services"]
+            for name in names:
+                for secret in ("AI_WORK_SERVICE_KEY", "AI_INTEGRATION_SERVICE_KEY"):
+                    with self.subTest(compose=filename, process=name, secret=secret):
+                        self.assertNotIn(secret, configuration)
+                        self.assertEqual(
+                            services[name]["environment"][secret], f"${{{secret}:-}}"
+                        )
+            for name in names:
+                self.assertNotIn("AI_JWT_PUBLIC_KEY", services[name]["environment"])
+                self.assertNotIn("AI_JWT_JWKS_URL", services[name]["environment"])
+                self.assertEqual(
+                    services[name]["environment"]["AI_WORK_SERVICE_AUTH_ENABLED"],
+                    "${AI_WORK_SERVICE_AUTH_ENABLED:-false}",
+                )
+            beat = services[names[-1]]
+            self.assertEqual(beat["image"], services[names[0]]["image"])
+            self.assertEqual(beat["environment"], services[names[0]]["environment"])
+            self.assertEqual(beat["env_file"], services[names[0]]["env_file"])
+            self.assertEqual(
+                beat["command"],
+                [
+                    "celery",
+                    "-A",
+                    "jobs.celery_app:celery_app",
+                    "beat",
+                    "--loglevel=INFO",
+                    "--schedule=/tmp/ai-beat-schedule",
+                    "--pidfile=/tmp/ai-beat.pid",
+                ],
+            )
+            probe = beat["healthcheck"]["test"]
+            for pid, error in (
+                ("321", None),
+                ("missing", ValueError),
+                ("321", ProcessLookupError),
+            ):
+                with (
+                    self.subTest(pid=pid, error=error),
+                    patch.object(Path, "read_text", return_value=pid),
+                    patch("os.kill", side_effect=error) as kill,
+                ):
+                    if error:
+                        with self.assertRaises(error):
+                            exec(compile(probe[3], "beat-health", "exec"), {})  # noqa: S102 - trusted health probe with mocked OS calls
+                    else:
+                        exec(compile(probe[3], "beat-health", "exec"), {})  # noqa: S102 - trusted health probe with mocked OS calls
+                        kill.assert_called_once_with(321, 0)
+
+    def test_gateway_preserves_ai_versioned_uri_and_blocks_internal_routes(self):
+        nginx = (ROOT / "infra/nginx/nginx.conf").read_text()
+        location = nginx.split("location /api/ai/ {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("rewrite", location)
+        self.assertIn("proxy_pass http://$ai_backend;", location)
+        for path in (
+            "/api/auth/api/v1/internal",
+            "/api/work/api/v1/internal",
+            "/api/integrations/api/v1/internal",
+        ):
+            self.assertIn(f"location = {path} {{\n      return 404;", nginx)
+            self.assertIn(f"location ^~ {path}/ {{\n      return 404;", nginx)
 
     def test_dispatcher_liveness_accepts_only_matching_process_arguments(self):
         services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
@@ -192,6 +370,8 @@ class AIComposeTests(unittest.TestCase):
             UTASK_IMAGE_TAG="sha-compose-test",
             AI_ENVIRONMENT="",
             MOCK_TEST="",
+            AI_WORK_SERVICE_KEY="fixture-work-key",
+            AI_INTEGRATION_SERVICE_KEY="fixture-integration-key",
         )
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=filename):
@@ -222,6 +402,17 @@ class AIComposeTests(unittest.TestCase):
                         "@postgres:5432/ai_context_db", settings["AI_DATABASE_URL"]
                     )
                     self.assertEqual(settings["AI_BROKER_URL"], "redis://redis:6379/1")
+                    self.assertEqual(
+                        settings["AI_WORK_SERVICE_KEY"], "fixture-work-key"
+                    )
+                    self.assertEqual(
+                        settings["AI_INTEGRATION_SERVICE_KEY"],
+                        "fixture-integration-key",
+                    )
+                    self.assertEqual(settings["AI_GITHUB_CONTEXT_ENABLED"], "false")
+                    self.assertEqual(settings["AI_TERMINAL_RETENTION_DAYS"], "30")
+                    self.assertEqual(settings["AI_RETENTION_BATCH_SIZE"], "500")
+                    self.assertEqual(settings["AI_RETENTION_INTERVAL_SECONDS"], "3600")
                     self.assertEqual(
                         services[name]["image"], "utask/ai-service:sha-compose-test"
                     )

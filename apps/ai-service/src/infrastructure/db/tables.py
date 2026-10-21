@@ -27,10 +27,21 @@ class RequestRow(Base):
         UniqueConstraint("user_id", "idempotency_key", name="uq_ai_request_user_key"),
         CheckConstraint("status IN ('queued','running','succeeded','failed')", name="ck_ai_status"),
         CheckConstraint(
+            "(status IN ('queued','running') AND terminal_at IS NULL) OR "
+            "(status IN ('succeeded','failed') AND terminal_at IS NOT NULL)",
+            name="ck_ai_request_terminal_at",
+        ),
+        CheckConstraint(
             "model_calls >= 0 AND tool_calls >= 0 AND output_tokens >= 0", name="ck_ai_budget"
         ),
         Index("ix_ai_request_expiry", "status", "queue_expires_at", "execution_deadline"),
         Index("ix_ai_request_user_created", "user_id", "created_at"),
+        Index(
+            "ix_ai_request_terminal_retention",
+            "terminal_at",
+            "id",
+            postgresql_where=text("status IN ('succeeded','failed')"),
+        ),
         Index(
             "ix_ai_request_user_active",
             "user_id",
@@ -46,6 +57,7 @@ class RequestRow(Base):
     status: Mapped[str] = mapped_column(Text)
     credential: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     queue_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     execution_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     execution_token: Mapped[UUID | None]

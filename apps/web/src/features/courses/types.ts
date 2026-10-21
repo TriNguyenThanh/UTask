@@ -64,7 +64,8 @@ export interface CourseDetail {
   instructorName: string;
   /** Allowed team size range. */
   teamSize: { min: number; max: number };
-  classSize: { total: number; teamed: number };
+  /** `null` khi API không cho đọc (sinh viên không đọc được danh sách ghi danh). */
+  classSize: { total: number; teamed: number } | null;
   membership: TeamMembership;
   teamFormation: {
     mode: "self-select" | "join-code" | "instructor-assigned";
@@ -75,11 +76,19 @@ export interface CourseDetail {
   team: {
     teamId: string;
     teamName: string;
+    /**
+     * Phiên bản nhóm (`Group.source_version`) gửi kèm mọi lệnh nhóm; chỉ có ở chế độ
+     * service thật. Mock không có, nên UI thao tác nhóm bị ẩn khi `undefined`.
+     */
+    version?: number;
+    /** Hạn mã mời hiện tại (ISO 8601); `null` khi mã đang tắt. Chỉ có ở chế độ thật. */
+    inviteExpiresAt?: string | null;
     isLeader: boolean;
     memberCount: number;
     maxMembers: number;
     members: TeamMember[];
-    topic: TopicProposal;
+    /** `null` khi chưa có API đề tài (chế độ service thật). */
+    topic: TopicProposal | null;
     /** Repository full name once the project is provisioned. */
     repository: string | null;
     /** Project key once the topic is approved and workspace provisioned. */

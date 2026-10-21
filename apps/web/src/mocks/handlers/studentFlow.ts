@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import type { MockScenario } from "@/mocks/scenarios";
 import {
   accountSettingsForScenario,
@@ -13,7 +14,7 @@ import {
   type ProjectIssueOverlay,
 } from "@/mocks/data/studentFlow";
 import type { Issue, IssueStatus, ProjectWorkspace } from "@/features/projects/types";
-import { STATUS_LABELS } from "@/features/projects/issueMeta";
+import { DEMO_STATES, STATUS_LABELS, statusForGroup } from "@/features/projects/issueMeta";
 import type { MockCreatedTeam, MockDatabase, MockIssueState } from "@/mocks/data/database";
 import {
   accessibleProjectsForUser,
@@ -35,11 +36,6 @@ function sleepFor(scenario: MockScenario): Promise<void> | undefined {
   return scenario === "slow-network" || scenario === "student-loading"
     ? delay(1200)
     : undefined;
-}
-
-function parseTokenUserId(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  return /^Bearer mock-access:([^:]+):/.exec(header)?.[1] ?? null;
 }
 
 /**
@@ -245,7 +241,7 @@ async function resolveIssueWrite(
   params: Record<string, string | readonly string[] | undefined>,
 ): Promise<Response | WriteContext> {
   await sleepFor(scenario);
-  const userId = parseTokenUserId(request);
+  const userId = resolveMockUserId(request);
   if (!userId) return unauthorized();
   const status = errorStatus(scenario);
   if (status) {
@@ -298,6 +294,8 @@ function recordIssueChange(
 function stateOf(issue: Issue): MockIssueState {
   return {
     status: issue.status,
+    statusId: issue.statusId,
+    stateGroup: issue.stateGroup,
     sprintId: issue.sprintId,
     rank: issue.rank,
     version: issue.version,
@@ -309,7 +307,7 @@ function stateOf(issue: Issue): MockIssueState {
 type ParsedMove = {
   status?: IssueStatus;
   sprintId?: string | null;
-  rank?: string;
+  rank?: number;
   reason: string;
 };
 
@@ -320,7 +318,7 @@ function parseMove(context: WriteContext): Response | ParsedMove {
   if (body.status !== undefined && !ISSUE_STATUSES.includes(body.status as IssueStatus)) {
     return validationError("status", "Trạng thái không hợp lệ.");
   }
-  if (body.rank !== undefined && (typeof body.rank !== "string" || body.rank === "")) {
+  if (body.rank !== undefined && (typeof body.rank !== "number" || !isFinite(body.rank))) {
     return validationError("rank", "Thứ tự không hợp lệ.");
   }
   const sprintId = body.sprintId as string | null | undefined;
@@ -352,7 +350,7 @@ function parseMove(context: WriteContext): Response | ParsedMove {
   return {
     status: body.status as IssueStatus | undefined,
     sprintId,
-    rank: body.rank as string | undefined,
+    rank: body.rank as number | undefined,
     reason,
   };
 }
@@ -390,9 +388,13 @@ function createIssueWriteHandlers(
       const move = parseMove(context);
       if (move instanceof Response) return move;
       const { issue, userId, workspace } = context;
+      const newStatus = move.status ?? issue.status;
+      const stateForStatus = DEMO_STATES.find((s) => statusForGroup(s.group) === newStatus) ?? DEMO_STATES[0];
       const next: MockIssueState = {
         ...stateOf(issue),
-        status: move.status ?? issue.status,
+        status: newStatus,
+        statusId: stateForStatus.id,
+        stateGroup: stateForStatus.group,
         sprintId: move.sprintId === undefined ? issue.sprintId : move.sprintId,
         rank: move.rank ?? issue.rank,
         version: issue.version + 1,
@@ -455,7 +457,7 @@ export function createStudentFlowHandlers(
     // Courses & teams
     http.get(`${ROOT}/courses`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -465,7 +467,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/courses/:courseId`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -483,7 +485,7 @@ export function createStudentFlowHandlers(
     }),
     http.post(`${ROOT}/courses/:courseId/teams`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -569,7 +571,7 @@ export function createStudentFlowHandlers(
     // Projects
     http.get(`${ROOT}/projects`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -597,7 +599,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) {
@@ -624,7 +626,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId/issues/:issueKey`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) {
@@ -649,7 +651,7 @@ export function createStudentFlowHandlers(
     }),
     http.get(`${ROOT}/projects/:projectId/code`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "server-error" || scenario === "student-partial-error") {
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
@@ -671,7 +673,7 @@ export function createStudentFlowHandlers(
     // others hide.
     http.get(`${ROOT}/notifications`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "server-error" || scenario === "student-partial-error") {
         return HttpResponse.json({ detail: SERVER_ERROR }, { status: 500 });
@@ -685,7 +687,7 @@ export function createStudentFlowHandlers(
       );
     }),
     http.post(`${ROOT}/notifications/:id/read`, ({ params, request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const id = String(params.id);
       if (!visibleNotifications(scenario, userId).some((notification) => notification.id === id)) {
@@ -699,7 +701,7 @@ export function createStudentFlowHandlers(
       return new HttpResponse(null, { status: 204 });
     }),
     http.post(`${ROOT}/notifications/read-all`, ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const read = new Set(db.notificationReadByUser[userId] ?? []);
       for (const notification of visibleNotifications(scenario, userId)) {
@@ -713,7 +715,7 @@ export function createStudentFlowHandlers(
     // Settings — account fields stored per user.
     http.get(`${ROOT}/me/settings`, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const status = errorStatus(scenario);
       if (status) return HttpResponse.json({ detail: SERVER_ERROR }, { status });
@@ -744,7 +746,7 @@ export function createStudentFlowHandlers(
       });
     }),
     http.patch(`${ROOT}/me/settings`, async ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       let payload: Record<string, unknown>;
       try {
@@ -783,7 +785,7 @@ export function createStudentFlowHandlers(
       return new HttpResponse(null, { status: 204 });
     }),
     http.post(`${ROOT}/me/github/disconnect`, ({ request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       db.githubDisconnectedByUser[userId] = true;
       repository.save();
@@ -793,7 +795,7 @@ export function createStudentFlowHandlers(
     // Project settings (leader-only, BYOK AI provider state)
     http.get(`${ROOT}/projects/:projectId/settings`, async ({ params, request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       if (scenario === "student-forbidden") {
         return HttpResponse.json({ detail: FORBIDDEN_ERROR }, { status: 403 });
@@ -829,7 +831,7 @@ export function createStudentFlowHandlers(
       });
     }),
     http.put(`${ROOT}/projects/:projectId/settings/ai-key`, async ({ params, request }) => {
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) return unauthorized();
       const projectId = String(params.projectId);
       const viewer = projectViewerOf(db, userId, projectId, scenario);

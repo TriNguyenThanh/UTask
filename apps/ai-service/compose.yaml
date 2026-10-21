@@ -7,8 +7,12 @@ x-ai: &ai
     AI_DATABASE_URL: postgresql+psycopg://ai_service:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in root .env}@database:5432/ai_context_db
     AI_BROKER_URL: redis://broker:6379/0
     AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
-    AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
     AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+    AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
+    AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}
+    AI_WORK_SERVICE_AUTH_ENABLED: ${AI_WORK_SERVICE_AUTH_ENABLED:-false}
+    AI_WORK_SERVICE_KEY: ${AI_WORK_SERVICE_KEY:-}
+    AI_INTEGRATION_SERVICE_KEY: ${AI_INTEGRATION_SERVICE_KEY:-}
     AI_MODEL: ${AI_MODEL:?Set AI_MODEL in ai-service.env or the process environment}
     AI_LLM_API_BASE: ${AI_LLM_API_BASE:?Set AI_LLM_API_BASE in ai-service.env or the process environment}
   extra_hosts:
@@ -70,6 +74,21 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
+
+  beat:
+    <<: *ai
+    command: [celery, -A, jobs.celery_app:celery_app, beat, --loglevel=INFO, --schedule=/tmp/ai-beat-schedule, --pidfile=/tmp/ai-beat.pid]
+    depends_on:
+      api:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import os; from pathlib import Path; os.kill(int(Path('/tmp/ai-beat.pid').read_text()), 0)"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
 volumes:
   ai-database:

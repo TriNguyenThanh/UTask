@@ -1,3 +1,5 @@
+import { isRealService } from "@/lib/config/services";
+import { RealWorkspaceBoundary } from "@/features/projects/components/RealWorkspaceBoundary";
 import {
   BookOpen,
   Bug,
@@ -12,14 +14,33 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+import { DisabledAction } from "@/components/feedback/DisabledAction";
+import { useRealProjectContext } from "@/features/projects/components/RealProjectLayout";
+import { useRealIssueDetail, type IssueDetailState } from "@/features/projects/hooks/useRealIssueDetail";
+import { useIssueParam } from "@/features/projects/hooks/useIssueParam";
+import { useRealIssueTools } from "@/features/projects/hooks/useRealIssueTools";
+import { IssuePanelHost } from "@/features/projects/components/IssuePanelHost";
+
+import { useAuth } from "@/features/auth/AuthProvider";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CreateEpicButton,
+  EpicEditButton,
+  LabelManagerButton,
+  ScopedTaskList,
+  TaskScopeTabs,
+} from "@/features/projects/components/RealBacklogTools";
+import { AiBacklogButton } from "@/features/projects/components/ai/AiBacklogDialog";
 import { IssueActionsMenu } from "@/features/projects/components/IssueActionsMenu";
+import { CreateSprintButton, SprintHeaderActions, SprintInsights } from "@/features/projects/components/RealSprintTools";
+import type { IssueWrites } from "@/features/projects/lib/issueWrites";
 import { IssueFilterBar } from "@/features/projects/components/IssueFilterBar";
 import { useBacklogDropMonitor, useSectionDropTarget } from "@/features/projects/dnd/backlogDnd";
 import { PressableText } from "@/features/projects/components/PressableText";
@@ -46,7 +67,8 @@ import {
   viewerRole,
   type ProjectPermissionContext,
 } from "@/lib/permissions";
-import { useProjectAiSettings } from "@/lib/query/studentFlowHooks";
+import type { TaskScopeDto } from "@/lib/api/work/dto";
+import { useIssueDetail, useProjectAiSettings } from "@/lib/query/studentFlowHooks";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -78,6 +100,7 @@ const priorityConfig: Record<Issue["priority"], { label: string; badge: string }
 };
 
 function sprintDateRange(sprint: Sprint): string {
+  if (!sprint.startDate || !sprint.endDate) return "Chưa đặt ngày";
   const start = new Date(sprint.startDate).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -259,6 +282,8 @@ function SprintSection({
   onOpenIssue,
   canComplete,
   mover,
+  actions,
+  insights,
 }: {
   projectId: string;
   sprint: Sprint;
@@ -266,6 +291,9 @@ function SprintSection({
   onOpenIssue: (projectId: string, issueKey: string) => void;
   canComplete: boolean;
   mover: ReturnType<typeof useIssueMover>;
+  /** Chế độ Work thật: thay nút "Hoàn thành Sprint" chưa có API bằng bộ nút thật. */
+  actions?: ReactNode;
+  insights?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -328,17 +356,13 @@ function SprintSection({
           <span className="text-[11px] font-bold text-muted-foreground">
             {sprint.completedPoints}/{sprint.totalPoints} SP
           </span>
-          {canComplete && isActive ? (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled
-              title="Chưa có API hoàn thành Sprint"
-              className="text-xs"
-            >
+          {actions !== undefined ? (
+            actions
+          ) : canComplete && isActive ? (
+            <DisabledAction size="xs" reason="Chưa có API hoàn thành Sprint" className="text-xs">
               <CheckCircle2 className="size-3.5" aria-hidden />
               Hoàn thành Sprint
-            </Button>
+            </DisabledAction>
           ) : null}
         </div>
       </div>
@@ -357,6 +381,7 @@ function SprintSection({
               {percent}%
             </span>
           </div>
+          {insights}
 
           {issues.length === 0 ? (
             <p className="px-3 py-3 text-xs text-muted-foreground">
@@ -428,22 +453,31 @@ function BacklogSkeleton() {
   );
 }
 
-export default function ProjectBacklogRoute() {
-  const navigate = useNavigate();
-  const { projectId, workspace: data, viewer, readOnly } = useProjectWorkspaceContext();
+/** `real`: dữ liệu Work thật; `writes` là cách ghi thật cho menu/kéo-thả. AI chưa tích hợp nên ẩn thanh AI. */
+function BacklogView({
+  detail,
+  real,
+  realTools,
+}: Readonly<{
+  detail: IssueDetailState;
+  real: boolean;
+  realTools?: { writes: IssueWrites; toggleSubtask: (subtaskId: string, done: boolean) => void };
+}>) {
+  const { projectId, workspace: data, viewer, readOnly, archived, assignees } = useProjectWorkspaceContext();
+  const { user } = useAuth();
+  const [scope, setScope] = useState<TaskScopeDto>("active");
   // Only the leader can read project settings; nobody else asks for them.
   const { data: aiSettings } = useProjectAiSettings(
     projectId,
-    viewer.kind === "team-member" && viewer.role === "leader",
+    !real && viewer.kind === "team-member" && viewer.role === "leader",
   );
 
   const { filters, setFilters, toggleFlag, clear: clearFilters } = useIssueFilters();
   const epicFilter = filters.epic;
   const setEpicFilter = (epic: string | null) => setFilters({ ...filters, epic });
 
-  const openIssue = (pid: string, key: string) => {
-    navigate(`/projects/${pid}/board?issue=${key}`);
-  };
+  const { openIssue: openIssueKey } = useIssueParam();
+  const openIssue = (_projectId: string, key: string) => openIssueKey(key);
 
   const filtersActive = hasActiveFilters(filters);
 
@@ -460,9 +494,16 @@ export default function ProjectBacklogRoute() {
   const isLeader = permCtx.role === "leader";
   const needsAiKey = aiRequiresKey(permCtx);
   const canCompleteSprint = canManageSprint(permCtx);
-  const showCreateEpic = canCreateTask(permCtx);
+  const realCanWrite = real && !archived && !readOnly;
+  const showCreateEpic = real ? realCanWrite && isLeader : canCreateTask(permCtx);
 
-  const mover = useIssueMover({ projectId, workspace, role: viewerRole(viewer) });
+  const mover = useIssueMover({
+    projectId,
+    workspace,
+    role: viewerRole(viewer),
+    canWrite: real ? realCanWrite : undefined,
+    writes: realTools?.writes,
+  });
   const backlogSectionRef = useRef<HTMLElement | null>(null);
   const backlogOver = useSectionDropTarget(
     backlogSectionRef,
@@ -512,23 +553,46 @@ export default function ProjectBacklogRoute() {
       );
     }
     return (
-      <Button
+      <DisabledAction
         key={label}
-        variant="outline"
         size="sm"
-        disabled
-        title="Chưa có API cho tính năng AI này"
+        reason="Chưa có API cho tính năng AI này"
         className="h-7 gap-1 border-indigo-200 bg-indigo-50/60 px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
       >
         <Icon className="size-3.5" aria-hidden />
         {label}
-      </Button>
+      </DisabledAction>
     );
   };
+
+  /** Chế độ thật: nút của Leader trên đầu sprint, và tiến độ/burndown cho sprint đang chạy. */
+  const sprintExtras = (sprint: Sprint) =>
+    real
+      ? {
+          actions:
+            realCanWrite && isLeader ? (
+              <SprintHeaderActions
+                projectId={projectId}
+                sprint={sprint}
+                sprints={workspace.sprints}
+                issues={workspace.issues.filter((issue) => issue.sprintId === sprint.id)}
+              />
+            ) : null,
+          insights: sprint.state === "active" ? <SprintInsights sprintId={sprint.id} /> : null,
+        }
+      : {};
 
   return (
     <div className="flex min-h-0 flex-col">
       {mover.dialog}
+      <IssuePanelHost
+        detail={detail}
+        real={real}
+        mover={mover}
+        permissionCtx={permCtx}
+        toggleSubtask={realTools?.toggleSubtask}
+        backLabel="Quay lại Backlog"
+      />
       {/* 2-column workspace */}
       <div className="flex flex-1 min-h-0 flex-col md:flex-row">
 
@@ -539,16 +603,19 @@ export default function ProjectBacklogRoute() {
               Epics
             </span>
             {showCreateEpic ? (
-              <Button
-                variant="link"
-                size="xs"
-                disabled
-                title="Chưa có API tạo Epic"
-                className="h-auto p-0 text-xs"
-              >
-                <Plus className="size-3.5" aria-hidden />
-                Tạo Epic
-              </Button>
+              real ? (
+                <CreateEpicButton projectId={projectId} assignees={assignees} />
+              ) : (
+                <DisabledAction
+                  variant="link"
+                  size="xs"
+                  reason="Chưa có API tạo Epic"
+                  className="h-auto p-0 text-xs"
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  Tạo Epic
+                </DisabledAction>
+              )
             ) : null}
           </div>
           <div className="space-y-1">
@@ -577,9 +644,8 @@ export default function ProjectBacklogRoute() {
               const count = workspace.issues.filter(
                 (issue) => issue.epicId === epic.id,
               ).length;
-              return (
+              const row = (
                 <button
-                  key={epic.id}
                   type="button"
                   onClick={() => setEpicFilter(epic.id)}
                   aria-pressed={epicFilter === epic.id}
@@ -603,8 +669,26 @@ export default function ProjectBacklogRoute() {
                   </span>
                 </button>
               );
+              if (!real || !user || !realCanWrite) return <Fragment key={epic.id}>{row}</Fragment>;
+              return (
+                <div key={epic.id} className="flex items-center gap-0.5">
+                  {row}
+                  <EpicEditButton
+                    projectId={projectId}
+                    epic={epic}
+                    role={isLeader ? "leader" : "member"}
+                    userId={user.id}
+                    assignees={assignees}
+                  />
+                </div>
+              );
             })}
           </div>
+          {real && realCanWrite && isLeader ? (
+            <div className="mt-3 border-t pt-2">
+              <LabelManagerButton projectId={projectId} />
+            </div>
+          ) : null}
         </aside>
 
         {/* Sprints + backlog */}
@@ -620,8 +704,16 @@ export default function ProjectBacklogRoute() {
             />
           </div>
 
+          {real ? <TaskScopeTabs scope={scope} onChange={setScope} /> : null}
+          {real && realCanWrite && isLeader ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <CreateSprintButton projectId={projectId} />
+              <AiBacklogButton projectId={projectId} />
+            </div>
+          ) : null}
+
           {/* Leader-only toolbar */}
-          {isLeader ? (
+          {isLeader && !real ? (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-2.5">
               <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700">
                 <Sparkles className="size-4" aria-hidden />
@@ -634,7 +726,9 @@ export default function ProjectBacklogRoute() {
             </div>
           ) : null}
 
-          {filteredIssues.length === 0 ? (
+          {real && scope !== "active" ? (
+            <ScopedTaskList projectId={projectId} scope={scope} canRestore={realCanWrite && isLeader} />
+          ) : filteredIssues.length === 0 && (filtersActive || workspace.sprints.length === 0) ? (
             <EmptyState
               title={filtersActive ? "Không có issue khớp bộ lọc" : "Backlog trống"}
               description={emptyBacklogDescription(filtersActive, readOnly)}
@@ -659,6 +753,7 @@ export default function ProjectBacklogRoute() {
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
                   mover={mover}
+                  {...sprintExtras(sprint)}
                 />
               ))}
               {upcomingSprints.map((sprint) => (
@@ -672,6 +767,7 @@ export default function ProjectBacklogRoute() {
                   onOpenIssue={openIssue}
                   canComplete={canCompleteSprint}
                   mover={mover}
+                  {...sprintExtras(sprint)}
                 />
               ))}
 
@@ -724,6 +820,28 @@ export default function ProjectBacklogRoute() {
   );
 }
 
+export default function ProjectBacklogRoute() {
+  const { projectId } = useProjectWorkspaceContext();
+  const detail = useIssueDetail(projectId, useIssueParam().issueKey);
+  return <BacklogView detail={detail} real={false} />;
+}
+
+function RealBacklog() {
+  return (
+    <RealWorkspaceBoundary>
+      <RealBacklogContent />
+    </RealWorkspaceBoundary>
+  );
+}
+
+function RealBacklogContent() {
+  const { projectId, workspace } = useProjectWorkspaceContext();
+  const { shell } = useRealProjectContext();
+  const detail = useRealIssueDetail(workspace, shell, useIssueParam().issueKey);
+  const realTools = useRealIssueTools(projectId, workspace.states);
+  return <BacklogView detail={detail} real realTools={realTools} />;
+}
+
 export function Component() {
-  return <ProjectBacklogRoute />;
+  return isRealService("work") ? <RealBacklog /> : <ProjectBacklogRoute />;
 }

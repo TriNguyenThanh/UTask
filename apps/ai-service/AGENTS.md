@@ -2,8 +2,9 @@
 
 **Trạng thái hiện tại: Một phần.** Pipeline API/PostgreSQL/dispatcher/Redis/
 Celery/ADK, JWT và REST context adapter đã có, kèm unit/integration tests.
-Integration domain/LLM production **Chưa xác minh**; Kafka, specialist và
-retention tự động **Chưa triển khai**. Xem code map trước khi sửa.
+Retention terminal và context consumer đã có source/test; integration domain/LLM
+production **Chưa xác minh**; Kafka và specialist **Chưa triển khai**.
+Xem code map trước khi sửa.
 
 ## Vai trò
 

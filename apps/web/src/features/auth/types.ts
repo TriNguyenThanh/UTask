@@ -1,15 +1,10 @@
-export interface AuthUser {
-  id: string;
-  email: string;
-  display_name: string;
-  global_role: "USER";
-  capabilities: string[];
-  roles?: ("STUDENT" | "TEACHER" | "SYSTEM_ADMIN")[];
-}
+import type { CurrentUserDto } from "@/lib/api/identity/dto";
 
+export type AuthUser = CurrentUserDto;
+
+/** Access token chỉ giữ trong bộ nhớ; refresh token nằm trong cookie HttpOnly. */
 export interface AuthSession {
   accessToken: string;
-  refreshToken: string;
   user: AuthUser;
 }
 

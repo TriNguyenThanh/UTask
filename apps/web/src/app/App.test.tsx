@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe("authentication routes", () => {
-  it("shows generic invalid-credential error and restores a valid Leader session", async () => {
+  it("shows generic invalid-credential error and signs in a valid Leader", async () => {
     vi.stubEnv("VITE_ENABLE_MOCKS", "true");
     const user = userEvent.setup();
     const first = renderApp(<LoginRoute />, {
@@ -36,21 +36,6 @@ describe("authentication routes", () => {
     await user.type(screen.getByLabelText("Mật khẩu"), "demo1234");
     await user.click(screen.getByRole("button", { name: "Đăng nhập" }));
     expect(await screen.findByRole("heading", { name: "Trang chủ UTask" })).toBeInTheDocument();
-    expect(sessionStorage.getItem("utask.mock.refresh-token")).toBe(`mock-refresh:${LEADER_ID}`);
-    first.unmount();
-
-    renderApp(<div />, {
-      route: "/",
-      session: null,
-      routes: [
-        { path: "/login", element: <AuthLayout><LoginForm /></AuthLayout> },
-        {
-          element: <RequireAuth />,
-          children: [{ path: "/", element: <h1>Phiên đã khôi phục</h1> }],
-        },
-      ],
-    });
-    expect(await screen.findByRole("heading", { name: "Phiên đã khôi phục" })).toBeInTheDocument();
   });
 });
 

@@ -26,8 +26,13 @@ Xem thêm:
 - [Board và Backlog: kéo thả](kanban-board.md) — cách đổi trạng thái, thứ tự và
   Sprint của issue (Demo MSW), quyền theo vai trò, trợ năng, nhu cầu gửi Project
   Service.
+- [Tích hợp API thật](api-integration.md) — cách chạy với Identity thật, hiện
+  trạng từng Phase, việc cần backend.
 - [Lộ trình frontend](frontend-roadmap.md) — hiện trạng backend và frontend,
   các mảng công việc, thứ tự các đợt từ mock sang tích hợp thật.
 - [Phân tích vai trò](utask-role-analysis.md) — nguồn nghiệp vụ về vai trò,
   ma trận quyền và user story.
+- [Đánh giá UI/UX](ux-audit.md) — báo cáo hiện trạng trải nghiệm (2026-10-21):
+  luồng chính, kết quả axe/đo DOM/responsive, danh sách phát hiện có mức độ và
+  lộ trình khắc phục.
 - Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.

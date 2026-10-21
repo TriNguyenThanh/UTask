@@ -19,7 +19,6 @@ import { createMemoryRepository, type MockRepository } from "@/mocks/data/storag
 import type { MockScenario } from "@/mocks/scenarios";
 import { teacherKeys } from "@/lib/query/teacherFlowHooks";
 import {
-  legacyStudentTestSession,
   renderAppRoutes,
   studentTestSession,
   teacher2TestSession,
@@ -95,10 +94,10 @@ describe("Teacher home (T01)", () => {
     expect(value("Lớp phụ trách")).toHaveTextContent(String(summaries.length));
     expect(value("Nhóm")).toHaveTextContent(String(summaries.reduce((n, c) => n + c.teamCount, 0)));
     expect(value("Chưa có nhóm")).toHaveTextContent(
-      String(summaries.reduce((n, c) => n + c.studentsWithoutTeam, 0)),
+      String(summaries.reduce((n, c) => n + (c.studentsWithoutTeam ?? 0), 0)),
     );
     expect(value("Nhóm chưa có project")).toHaveTextContent(
-      String(summaries.reduce((n, c) => n + c.teamsWithoutProject, 0)),
+      String(summaries.reduce((n, c) => n + (c.teamsWithoutProject ?? 0), 0)),
     );
     // Overdue comes from the same formula as the team dashboard, with its denominator.
     const overdue = summaries.flatMap((c) => (c.overdue ? [c.overdue] : []));
@@ -144,10 +143,11 @@ describe("Teacher home (T01)", () => {
     expect(within(list).getAllByText("Chưa ghi nhận hoạt động")).toHaveLength(2);
   });
 
-  it("links Tạo lớp to the form page, which exists", async () => {
+  it("offers Tạo lớp as a dialog button on Home, not a page link", async () => {
     setup("/teacher");
     await screen.findByRole("heading", { name: "Bàn làm việc giảng viên" });
-    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
+    expect(screen.getByRole("button", { name: "Tạo lớp" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Tạo lớp" })).not.toBeInTheDocument();
   });
 
   it("keeps the term filter in the URL and distinguishes it from having no classes", async () => {
@@ -164,7 +164,7 @@ describe("Teacher home (T01)", () => {
   it("shows an empty state for a teacher with no classes", async () => {
     setup("/teacher", teacherTestSession, "teacher-empty");
     expect(await screen.findByText("Chưa phụ trách lớp nào", { selector: "h2" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Tạo lớp" })).toHaveAttribute("href", "/teacher/courses/new");
+    expect(screen.getByRole("button", { name: "Tạo lớp" })).toBeInTheDocument();
   });
 
   it("shows a loading skeleton while the classes load", async () => {
@@ -256,10 +256,8 @@ describe("Access: role, assignment, sidebar and deep link agree", () => {
     expect(await screen.findAllByText("Phạm Quốc Huy")).not.toHaveLength(0);
   });
 
-  it.each([
-    ["a student", studentTestSession],
-    ["a session saved before roles existed", legacyStudentTestSession],
-  ])("blocks %s from the Teacher area without issuing a Teacher request", async (_label, session) => {
+  it("blocks a student from the Teacher area without issuing a Teacher request", async () => {
+    const session = studentTestSession;
     const tracker = trackRequests();
     for (const route of ["/teacher", "/teacher/courses", "/teacher/courses/course-se330/students"]) {
       const view = setup(route, session);
@@ -591,7 +589,7 @@ describe("Teams (T07)", () => {
     const value = (label: string) => within(stats).getByRole("group", { name: label });
     expect(value("Tổng số sinh viên")).toHaveTextContent(String(summary.studentCount));
     expect(value("Chưa có nhóm")).toHaveTextContent(String(summary.studentsWithoutTeam));
-    expect(value("Đã có nhóm")).toHaveTextContent(String(summary.studentCount - summary.studentsWithoutTeam));
+    expect(value("Đã có nhóm")).toHaveTextContent(String(summary.studentCount - (summary.studentsWithoutTeam ?? 0)));
     expect(value("Quy định sĩ số")).toHaveTextContent("3–5");
   });
 

@@ -1,0 +1,43 @@
+{
+  "version": "phase1-2026-10-21.v1",
+  "rubric_version": "reference-evidence-v1",
+  "live_overrides": {
+    "backlog-invalid-context": {"scenario":"available","error":null},
+    "backlog-no-context": {"scenario":"available","error":null},
+    "task-invalid-context": {"scenario":"dependencies","error":null},
+    "task-no-context": {"scenario":"dependencies","error":null},
+    "risk-disabled-github": {"scenario":"available","error":null}
+  },
+  "cases": [
+    {"id":"backlog-project","intent":"backlog_generation","scenario":"available","target":"project"},
+    {"id":"backlog-description","intent":"backlog_generation","scenario":"available","target":null},
+    {"id":"backlog-partial","intent":"backlog_generation","scenario":"partial","target":"project"},
+    {"id":"backlog-missing","intent":"backlog_generation","scenario":"missing","target":"project","error":"CONTEXT_UNAVAILABLE"},
+    {"id":"backlog-stale","intent":"backlog_generation","scenario":"stale","target":"project","error":"CONTEXT_STALE"},
+    {"id":"backlog-denied","intent":"backlog_generation","scenario":"denied","target":"project","error":"TARGET_ACCESS_DENIED"},
+    {"id":"backlog-injection","intent":"backlog_generation","scenario":"injection","target":"project"},
+    {"id":"backlog-large","intent":"backlog_generation","scenario":"large","target":"project"},
+    {"id":"backlog-invalid-context","intent":"backlog_generation","scenario":"invalid","target":"project","error":"CONTEXT_INVALID"},
+    {"id":"backlog-no-context","intent":"backlog_generation","scenario":"omit_required","target":"project","error":"CONTEXT_UNAVAILABLE"},
+    {"id":"task-current","intent":"task_decomposition","scenario":"available","target":"task"},
+    {"id":"task-dependencies","intent":"task_decomposition","scenario":"dependencies","target":"task"},
+    {"id":"task-partial","intent":"task_decomposition","scenario":"partial","target":"task"},
+    {"id":"task-missing","intent":"task_decomposition","scenario":"missing","target":"task","error":"CONTEXT_UNAVAILABLE"},
+    {"id":"task-stale","intent":"task_decomposition","scenario":"stale","target":"task","error":"CONTEXT_STALE"},
+    {"id":"task-denied","intent":"task_decomposition","scenario":"denied","target":"task","error":"TARGET_ACCESS_DENIED"},
+    {"id":"task-injection","intent":"task_decomposition","scenario":"injection","target":"task"},
+    {"id":"task-large","intent":"task_decomposition","scenario":"large","target":"task"},
+    {"id":"task-invalid-context","intent":"task_decomposition","scenario":"invalid","target":"task","error":"CONTEXT_INVALID"},
+    {"id":"task-no-context","intent":"task_decomposition","scenario":"omit_required","target":"task","error":"CONTEXT_UNAVAILABLE"},
+    {"id":"risk-project","intent":"risk_analysis","scenario":"available","target":"project"},
+    {"id":"risk-sprint","intent":"risk_analysis","scenario":"available","target":"sprint"},
+    {"id":"risk-github","intent":"risk_analysis","scenario":"github","target":"project"},
+    {"id":"risk-github-partial","intent":"risk_analysis","scenario":"github_partial","target":"project"},
+    {"id":"risk-github-missing","intent":"risk_analysis","scenario":"github_missing","target":"project"},
+    {"id":"risk-github-stale","intent":"risk_analysis","scenario":"github_stale","target":"project","error":"CONTEXT_STALE"},
+    {"id":"risk-denied","intent":"risk_analysis","scenario":"denied","target":"project","error":"TARGET_ACCESS_DENIED"},
+    {"id":"risk-injection","intent":"risk_analysis","scenario":"injection","target":"project"},
+    {"id":"risk-sprint-github","intent":"risk_analysis","scenario":"github","target":"sprint"},
+    {"id":"risk-disabled-github","intent":"risk_analysis","scenario":"github_disabled","target":"project"}
+  ]
+}

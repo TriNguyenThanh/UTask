@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/features/auth/AuthProvider";
+import { useSignOut } from "@/features/auth/useSignOut";
 import { SettingsHeader } from "@/features/notifications/components/SettingsHeader";
 import { useAccountSettings } from "@/lib/query/studentFlowHooks";
 
@@ -34,7 +34,7 @@ function SecuritySkeleton() {
 
 export function SettingsSecurityPage() {
   const settingsQuery = useAccountSettings();
-  const auth = useAuth();
+  const signOut = useSignOut();
   const now = useMemo(() => new Date(), []);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -54,9 +54,7 @@ export function SettingsSecurityPage() {
       : null;
 
   function handleLogout() {
-    auth.logout().catch(() => {
-      // Local session already cleared by provider; nothing else to do.
-    });
+    void signOut();
   }
 
   if (settingsQuery.isError) {

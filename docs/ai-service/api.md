@@ -50,11 +50,15 @@ API đọc AI DB để trả POST/GET response.
 
 - API nhận ý định, phạm vi đối tượng và các chỉ dẫn bổ sung cần thiết.
 - `requester_user_id` lấy từ ngữ cảnh xác thực của request, không lấy từ body
-  do client tự khai báo. Source xác minh Bearer JWT; cấu hình issuer/key và
-  integration Identity production cần kiểm chứng.
-- Quyền trên target được service sở hữu xác nhận qua internal REST API trước
-  khi giao job. Context adapter tiếp tục kiểm tra quyền khi lấy dữ liệu; không
-  dùng Kafka hỏi–đáp hoặc projection để cấp quyền.
+  do client tự khai báo. AI chỉ chấp nhận JWT RS256 có `sub` là UUID, `token_type`
+  bằng `access` và các claim bắt buộc `exp`, `iss`, `aud`, `sub`, `token_type`;
+  `iat` là tùy chọn. Mỗi lần xác thực, AI tải JWKS từ Identity rồi xác minh
+  session trực tiếp. Production **Chưa xác minh**.
+- Theo luồng đã chốt, AI-side client yêu cầu service sở hữu xác nhận quyền
+  target qua internal REST trước khi giao job. Work contract còn `planned` và
+  Work provider chưa có source nên quyền target/role runtime chưa xác minh.
+  Context được kiểm tra khi lấy; không dùng Kafka hỏi–đáp hoặc projection làm
+  bằng chứng quyền.
 - Workflow kiểm tra request, chạy agent, kiểm tra structured output, revise hoặc
   retry trong giới hạn rồi lưu kết quả.
 - Agent chỉ được chọn các domain context tool. Agent không biết topic Kafka,
@@ -73,8 +77,8 @@ Nginx hiện có route `/api/ai/`. Prefix đã được contract v1 đặc tả 
 /api/ai/v1
 ```
 
-Source dùng route canonical trên và xác minh JWT. Integration gateway root
-chưa xác minh; Nginx hiện rewrite prefix khác route app, cần cấu hình deployment.
+Source dùng route canonical trên và xác minh JWT. Nginx giữ nguyên URI AI;
+test hạ tầng kiểm tra routing, tích hợp domain qua gateway thật còn cần nghiệm thu.
 
 Quy ước dữ liệu:
 
@@ -89,6 +93,11 @@ Quy ước dữ liệu:
   Request lặp hợp lệ dùng lại request ID và trạng thái/kết quả đã lưu, không
   tạo job mới. Cần bảo vệ request đồng thời bằng persistence và chống xử lý
   trùng ở worker khi task được giao lại.
+
+Request/result terminal được lưu 30 ngày tính từ `terminal_at`, sau đó cleanup
+xóa theo batch, gồm các bản ghi con. GET request đã xóa trả `404`; cùng
+`user_id + Idempotency-Key` được phép tạo request mới sau purge. Request
+queued/running không bị retention xóa. Xem [vận hành retention](production-readiness.md).
 
 ### Giới hạn chống spam
 
@@ -410,7 +419,7 @@ Response lỗi dùng format thống nhất:
 | `409`       | `IDEMPOTENCY_CONFLICT`                               | Idempotency key đã gắn với payload khác.                     |
 | `422`       | `OUTPUT_VALIDATION_FAILED`                           | Agent không tạo được output đúng schema sau retry hữu hạn.   |
 | `429`       | `RATE_LIMITED`                                       | Vượt giới hạn request hoặc budget dùng chung.                |
-| `500`       | `INTERNAL_ERROR`                                     | Lỗi không xác định trong AI Service.                         |
+| `500`       | `INTERNAL_ERROR`                                     | Lỗi nội bộ hoặc không thể xác minh Identity.                 |
 | `502`/`504` | `PROVIDER_UNAVAILABLE`, `WORKFLOW_TIMEOUT`           | Provider lỗi hoặc workflow vượt timeout; tùy khả năng retry. |
 
 Không trả raw prompt, API credential, raw provider response hoặc thông tin
@@ -484,12 +493,18 @@ hoặc event schema mới vào contract v1.
 
 ## 11. Các quyết định contract v1
 
-Các quyết định dưới đây đã được ghi vào schema máy đọc được:
+Contract v1 và boundary xác thực được diễn giải theo các quy tắc sau:
 
-1. API dùng Bearer token; AI Service xác minh chữ ký JWT, issuer, audience và
-   thời hạn bằng public key/JWKS cấu hình. Không tin header identity từ client.
-   AI kiểm tra quyền target qua REST của service sở hữu trước khi enqueue,
-   worker xác minh lại JWT/quyền trước khi chạy workflow.
+1. API dùng Bearer token. AI chỉ chấp nhận RS256; claim bắt buộc là `exp`,
+   `iss`, `aud`, `sub`, `token_type`, còn `iat` tùy chọn. `sub` phải là UUID,
+   `token_type` phải bằng `access`. Mỗi lần xác thực, AI gọi GET
+   `{AI_IDENTITY_BASE_URL}/.well-known/jwks.json`, không cache JWKS; chỉ nhận
+   khóa RSA có `use` mặc định `sig`, `alg` mặc định `RS256`, lọc theo `kid`
+   nếu token có `kid`, và yêu cầu còn đúng một khóa. Không dùng PEM hoặc URL
+   JWKS cấu hình riêng, không tin identity header từ client. Sau chữ ký, AI gọi
+   Identity session-status; worker lặp lại xác minh chữ ký/session và gửi yêu
+   cầu authorize target/intent theo contract. Work provider chưa có source,
+   nên không xem quyền/role Work là đã kiểm tra runtime.
 2. `POST` chờ persistence tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
    `GET` để polling. Hard timeout của workflow là 30 giây.
 3. V1 chỉ hỗ trợ các status `queued`, `running`, `succeeded`, `failed`; không
@@ -509,6 +524,50 @@ Các quyết định dưới đây đã được ghi vào schema máy đọc đ�
 Contract không xác nhận endpoint hoặc event producer/consumer đã chạy. Mọi thay
 đổi contract sau v1 phải tăng version hoặc bổ sung quy tắc tương thích ngược.
 
+### Xác minh phiên với Identity
+
+Mỗi lần xác minh access token, AI tải JWKS sống từ
+`GET {AI_IDENTITY_BASE_URL}/.well-known/jwks.json`. Base URL mặc định là
+`http://identity-service:8000`; AI không đọc public PEM, không có cấu hình URL
+JWKS riêng và không cache JWKS. AI chỉ dùng khóa `kty=RSA`, `use` mặc định
+`sig`, `alg` mặc định `RS256`; nếu JWT có `kid`, lọc theo `kid`, rồi yêu cầu
+đúng một khóa còn lại. Claim bắt buộc là `exp`, `iss`, `aud`, `sub`,
+`token_type`; `iat` tùy chọn. `sub` phải parse được thành UUID và
+`token_type` phải là `access`.
+
+Sau chữ ký, AI gửi access token tới `POST /api/v1/internal/auth/session-status` của
+Identity qua `Authorization: Bearer <access-token>` và
+`X-Service-Key: <AI_IDENTITY_SERVICE_KEY>`. Base URL lấy từ
+`AI_IDENTITY_BASE_URL`, mặc định `http://identity-service:8000`. Secret AI phải
+khớp entry `ai` trong `IDENTITY_SERVICE_KEYS` của Identity. Đây là kiểm tra
+đồng bộ, không cache kết quả active.
+
+Chỉ response HTTP thành công 2xx có `success: true` và `data.active` kiểu
+boolean mới là response hợp lệ. `active: true` cho phép tiếp tục kiểm tra
+quyền domain;
+`active: false` trả `401 AUTHENTICATION_REQUIRED`. Timeout, lỗi HTTP hoặc
+response sai schema làm AI từ chối xử lý. Lỗi được ghi nhận là
+`AUTH_UNAVAILABLE` với trạng thái nội bộ `503`; error envelope công khai v1
+ánh xạ thành `500 INTERNAL_ERROR` với `details.reason=AUTH_UNAVAILABLE`. AI
+không dùng dữ liệu cache hay bỏ qua kiểm tra. Endpoint này là API nội bộ, không
+đi qua gateway công khai;
+việc tích hợp runtime/production **Chưa xác minh**.
+
+### Kiểm tra quyền qua Work
+
+AI-side adapter dựng POST theo contract Work với Bearer actor và body
+`{action: "ai.analyze", intent}`. Cờ `AI_WORK_SERVICE_AUTH_ENABLED` mặc định
+`false` chỉ bỏ header Work `X-Service-Key`; Bearer và kiểm tra authorize theo
+target/intent vẫn được gửi. Khi cờ là `true`, AI bắt buộc có và gửi
+`AI_WORK_SERVICE_KEY`. Cờ này không đổi `AI_IDENTITY_SERVICE_KEY` hoặc
+`AI_INTEGRATION_SERVICE_KEY`.
+
+[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml) còn ở trạng
+thái `planned`; AI-side client có source nhưng Work provider chưa có source.
+Vì vậy tài liệu mô tả contract, không khẳng định endpoint, kiểm tra role hoặc
+authorize target đã chạy runtime. Bật/tắt header cũng không tạo hoặc thay thế
+Work endpoint.
+
 ## 12. Đối chiếu baseline và công việc chuyển đổi
 
 Giữ URL, intent, status và envelope v1. Baseline là chuẩn kiến trúc, không
@@ -517,8 +576,8 @@ giới hạn tích hợp:
 
 | Chủ đề        | Baseline / thiết kế mới                                            | Hợp đồng hoặc hiện trạng còn lại                                                            |
 | ------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền     | Đã có JWT verifier và REST authorizer; integration Identity/domain chưa xác minh |
-| Context       | Internal API của Work qua adapter/domain tool                      | Đã có adapter/tool pool; endpoint/schema domain cần công bố; projection v1 dùng producer cũ |
+| Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền     | JWKS fetch/session client có source/test local; Identity runtime/production **Chưa xác minh** |
+| Context       | Internal API của Work qua adapter/domain tool                      | AI-side adapter có source; contract Work còn `planned`, Work provider **Chưa triển khai** |
 | Job nội bộ    | Request + ý định giao job bền vững; dispatcher → Redis → worker AI | Đã có PostgreSQL/Celery/dispatcher, giữ ngưỡng chờ/polling v1 |
 | Event kết quả | Baseline nêu `ai.analysis.completed`, `ai.project.risk.detected`   | Chưa có event schema/topic/consumer; v1 chưa phát event                                     |
 | URL/version   | Nginx reverse proxy và API có version                              | Giữ `/api/ai/v1/requests`; ví dụ URL trong baseline không tự đổi route                      |

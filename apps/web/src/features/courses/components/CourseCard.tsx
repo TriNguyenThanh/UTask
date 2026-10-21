@@ -11,8 +11,8 @@ import type { CourseEnrollment } from "@/features/my-work/types";
 
 /** Thẻ môn học kiểu Google Classroom: dải tiêu đề, thân trống thoáng, chân thẻ chứa hành động. */
 export function CourseCard({ enrollment }: Readonly<{ enrollment: CourseEnrollment }>) {
-  const { membership } = enrollment;
-  const badge = membershipBadge(membership);
+  const { membership, formationClosed } = enrollment;
+  const badge = membershipBadge(membership, formationClosed);
   const href = `/courses/${enrollment.courseId}/team`;
   const StateIcon = membership.status === "none" ? UserRound : Users;
   return (
@@ -50,7 +50,7 @@ export function CourseCard({ enrollment }: Readonly<{ enrollment: CourseEnrollme
           to={href}
           className="relative z-10 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
-          {courseCtaLabel(membership)}
+          {courseCtaLabel(membership, formationClosed)}
           <ArrowUpRight className="size-4" aria-hidden />
         </Link>
       </div>

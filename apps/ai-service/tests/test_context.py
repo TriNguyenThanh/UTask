@@ -9,8 +9,35 @@ from pydantic import TypeAdapter
 from config import Settings
 from context.tools import ContextToolPool
 from errors import ServiceError, failure
-from infrastructure.context_http import InternalContextAdapter, filter_data
+from infrastructure.context_http import InternalContextAdapter
 from models import CreateAiRequest
+
+
+def task_data():
+    return {
+        "id": str(uuid4()),
+        "project_id": str(uuid4()),
+        "title": "Task",
+        "description": "",
+        "status": "todo",
+        "priority": "medium",
+        "deadline": None,
+        "estimate_points": None,
+        "dependencies": [str(uuid4())],
+        "acceptance_criteria": "",
+    }
+
+
+def authorization_decision(request, allowed=True):
+    return {
+        "success": True,
+        "data": {
+            "target_type": request.target.type,
+            "target_id": str(request.target.id),
+            "action": "ai.analyze",
+            "allowed": allowed,
+        },
+    }
 
 
 def task_request():
@@ -40,11 +67,18 @@ def task_request():
 )
 async def test_http_adapter_enforces_permission_size_freshness_and_filtering(principal, case):
     request = task_request()
+    data = task_data()
 
     def handle(req):
         assert req.headers["Authorization"] == "Bearer " + principal.bearer
+        assert req.headers["X-Service-Key"] == "work-key"
         if req.url.path.startswith("/authorize"):
-            return httpx.Response(200, json={"allowed": case != "denied"})
+            assert req.method == "POST"
+            import json
+
+            assert json.loads(req.content) == {"action": "ai.analyze", "intent": request.intent}
+            return httpx.Response(200, json=authorization_decision(request, case != "denied"))
+        assert req.method == "GET"
         if case == "timeout":
             raise httpx.ReadTimeout("private", request=req)
         if case == "oversized":
@@ -59,11 +93,9 @@ async def test_http_adapter_enforces_permission_size_freshness_and_filtering(pri
                 datetime.now(UTC) - timedelta(seconds=1000 if case == "stale" else 0)
             ).isoformat(),
             "status": "missing" if case == "missing" else "available",
-            "data": {
-                "title": "Task",
-                "access_token": "secret",
-                "dependencies": [{"id": "1", "api_key": "secret"}],
-            },
+            "source_version": None,
+            "warning": None,
+            "data": {} if case == "missing" else {**data, "access_token": "secret"},
         }
         return httpx.Response(200, json=raw)
 
@@ -71,12 +103,14 @@ async def test_http_adapter_enforces_permission_size_freshness_and_filtering(pri
         authorization_urls={"task": "http://work/authorize/{target_id}"},
         context_urls={"task:task": "http://work/context/{target_id}"},
         max_context_bytes=1024,
+        work_service_key="work-key",
+        work_service_auth_enabled=True,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
         adapter = InternalContextAdapter(settings, client)
-        if case == "ok":
+        if case in {"ok", "missing"}:
             document = await adapter.fetch("task", principal, request)
-            assert document.data == {"title": "Task", "dependencies": [{"id": "1"}]}
+            assert document.data == ({} if case == "missing" else data)
         else:
             with pytest.raises(ServiceError) as error:
                 await adapter.fetch("task", principal, request)
@@ -108,8 +142,8 @@ async def test_tool_pool_target_boundary_budget_and_metadata(principal, payload)
     await pool.get_project_context()
     await pool.get_team_context()
     await pool.get_progress_context()
-    await pool.get_development_context()
-    assert len(pool.metadata().sources) == 5
+    await pool.get_task_context()
+    assert len(pool.metadata().sources) == 4
     with pytest.raises(ServiceError) as error:
         await pool.get_task_context()
     assert error.value.code == "BUDGET_EXCEEDED"
@@ -117,12 +151,6 @@ async def test_tool_pool_target_boundary_budget_and_metadata(principal, payload)
     assert draft.tools() == [] and draft.metadata().sources == []
     with pytest.raises(ServiceError):
         await draft.get_task_context()
-
-
-def test_context_filters_nested_secrets_and_limits_depth():
-    assert filter_data({"id": "x", "token": "secret"}) == {"id": "x"}
-    with pytest.raises(ServiceError):
-        filter_data({"id": {"id": {"id": {"id": {"id": {"id": {"id": "x"}}}}}}})
 
 
 @pytest.mark.parametrize("domain", ["task", "project", "team", "progress", "github_activity"])

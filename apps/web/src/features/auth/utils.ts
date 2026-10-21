@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { AuthUser } from "@/features/auth/types";
 import { isSafeInternalPath } from "@/lib/navigation/safeInternalPath";
 
@@ -7,15 +9,14 @@ import { isSafeInternalPath } from "@/lib/navigation/safeInternalPath";
  * This is a capability check only. It decides which navigation and routes
  * are available; it grants NO access to any class. Reading a class needs an
  * assignment for that class, which only the server (or the demo mock)
- * decides. Sessions created before `roles` existed carry no roles and are
- * treated as plain students.
+ * decides.
  */
 export function canUseTeacherSpace(user: AuthUser | null | undefined): boolean {
-  return user?.roles?.includes("TEACHER") ?? false;
+  return user?.roles.includes("TEACHER") ?? false;
 }
 
 export function isStudentAccount(user: AuthUser | null | undefined): boolean {
-  return user?.roles?.includes("STUDENT") ?? false;
+  return user?.roles.includes("STUDENT") ?? false;
 }
 
 /**
@@ -24,7 +25,14 @@ export function isStudentAccount(user: AuthUser | null | undefined): boolean {
  * home and reaches the Teacher space through the sidebar link.
  */
 export function defaultLandingPath(user: AuthUser | null | undefined): string {
-  return canUseTeacherSpace(user) && !isStudentAccount(user) ? "/teacher" : "/my-work";
+  if (canUseTeacherSpace(user) && !isStudentAccount(user)) {
+    return "/teacher";
+  }
+  // Chưa có khu quản trị: tài khoản chỉ có SYSTEM_ADMIN không có dữ liệu sinh viên để hiển thị.
+  if (user?.roles.length === 1 && user.roles[0] === "SYSTEM_ADMIN") {
+    return "/settings/profile";
+  }
+  return "/my-work";
 }
 
 /**
@@ -37,4 +45,12 @@ export function resolveLoginTarget(state: unknown, user: AuthUser | null | undef
     return state.returnTo;
   }
   return defaultLandingPath(user);
+}
+
+const loginNoticeSchema = z.object({ notice: z.string().min(1) });
+
+/** Thông báo một lần truyền qua router state khi chuyển về `/login` (ví dụ sau khi đổi mật khẩu). */
+export function readLoginNotice(state: unknown): string | null {
+  const parsed = loginNoticeSchema.safeParse(state);
+  return parsed.success ? parsed.data.notice : null;
 }

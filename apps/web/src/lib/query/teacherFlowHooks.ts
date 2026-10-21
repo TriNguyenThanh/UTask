@@ -1,7 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useApiClient } from "@/lib/api/ApiClientProvider";
+import {
+  fetchRoster,
+  loadTeacherCourse,
+  loadTeacherCourses,
+  toTeacherStudents,
+  toTeacherTeams,
+} from "@/lib/api/classroom/teacherLoaders";
+import { isRealService } from "@/lib/config/services";
 import {
   teacherCourseRequest,
   teacherCoursesRequest,
@@ -10,6 +18,8 @@ import {
   teacherTeamRequest,
   teacherTeamsRequest,
 } from "@/lib/api/teacherFlow";
+import { loadGroupProjects } from "@/lib/api/work/loaders";
+import type { ProjectDto } from "@/lib/api/work/dto";
 
 /**
  * Teacher cache keys are scoped by the signed-in user AND the class, so one
@@ -28,6 +38,9 @@ export const teacherKeys = {
     [...teacherKeys.course(userId, courseId), "teams"] as const,
   team: (userId: string, courseId: string, teamId: string) =>
     [...teacherKeys.course(userId, courseId), "teams", teamId] as const,
+  /** Dữ liệu thô của lớp thật, dùng chung cho tổng quan, sinh viên và nhóm. */
+  roster: (userId: string, courseId: string) =>
+    [...teacherKeys.course(userId, courseId), "roster"] as const,
   oversight: (userId: string, courseId: string) =>
     [...teacherKeys.course(userId, courseId), "oversight"] as const,
 };
@@ -41,37 +54,64 @@ export function useTeacherCourses() {
   const userId = useTeacherUserId();
   return useQuery({
     queryKey: teacherKeys.courses(userId ?? "anonymous"),
-    queryFn: () => teacherCoursesRequest(client),
+    queryFn: () =>
+      isRealService("classroom") ? loadTeacherCourses(client) : teacherCoursesRequest(client),
     enabled: userId !== null,
   });
 }
 
 export function useTeacherCourse(courseId: string) {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   const userId = useTeacherUserId();
   return useQuery({
     queryKey: teacherKeys.course(userId ?? "anonymous", courseId),
-    queryFn: () => teacherCourseRequest(client, courseId),
+    queryFn: () =>
+      isRealService("classroom")
+        ? loadTeacherCourse(queryClient, client, teacherKeys.roster(userId ?? "anonymous", courseId), courseId)
+        : teacherCourseRequest(client, courseId),
     enabled: userId !== null,
   });
 }
 
 export function useTeacherStudents(courseId: string) {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   const userId = useTeacherUserId();
   return useQuery({
     queryKey: teacherKeys.students(userId ?? "anonymous", courseId),
-    queryFn: () => teacherStudentsRequest(client, courseId),
+    queryFn: async () =>
+      isRealService("classroom")
+        ? {
+            students: toTeacherStudents(
+              await fetchRoster(queryClient, client, teacherKeys.roster(userId ?? "anonymous", courseId), courseId),
+            ),
+          }
+        : teacherStudentsRequest(client, courseId),
     enabled: userId !== null,
   });
 }
 
 export function useTeacherTeams(courseId: string) {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   const userId = useTeacherUserId();
   return useQuery({
     queryKey: teacherKeys.teams(userId ?? "anonymous", courseId),
-    queryFn: () => teacherTeamsRequest(client, courseId),
+    queryFn: async () => {
+      if (!isRealService("classroom")) return teacherTeamsRequest(client, courseId);
+      const roster = await fetchRoster(queryClient, client, teacherKeys.roster(userId ?? "anonymous", courseId), courseId);
+      let projectsByGroup: Map<string, ProjectDto[]> | undefined;
+      if (isRealService("work")) {
+        try {
+          const gp = await loadGroupProjects(client);
+          if (!gp.partial) projectsByGroup = gp.byGroup;
+        } catch {
+          // Work unavailable: teams still render, project field stays null.
+        }
+      }
+      return { teams: toTeacherTeams(roster, projectsByGroup) };
+    },
     enabled: userId !== null,
   });
 }

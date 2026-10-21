@@ -1,166 +1,232 @@
 """HTTP adapter tới URL đã cấu hình; agent không chọn URL hay credential."""
 
 import json
+import logging
 from datetime import UTC, datetime
-from urllib.parse import quote, urlsplit
+from time import monotonic
+from typing import get_args, get_origin
+from urllib.parse import quote
 
 import httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 
-from config import Settings
-from errors import failure
-from models import CreateAiRequest
-from models.context import ContextDocument
+from config import WORK_CONTEXT_PAIRS, Settings, valid_internal_url
+from errors import ServiceError, failure
+from models import CreateAiRequest, Intent
+from models.context import CONTEXT_DATA_SCHEMAS, ContextDocument
 from models.security import Principal
 
-# Chỉ đưa trường domain đã được review vào prompt, bỏ token/secret/metadata hạ tầng.
+from .observability import configure_context_logging, request_id_context
+
+logger = logging.getLogger(__name__)
 ALLOWED_FIELDS = {
-    "project": {"id", "name", "description", "goals", "deadline", "tasks", "sprints"},
-    "task": {
-        "id",
-        "title",
-        "description",
-        "status",
-        "priority",
-        "deadline",
-        "dependencies",
-        "acceptance_criteria",
-        "estimate_points",
-        "project_id",
-    },
-    "team": {"members", "workload", "capacity"},
-    "progress": {"metrics", "blocked_tasks", "completed_tasks", "total_tasks", "as_of"},
-    "github_activity": {"commits", "pull_requests", "issues", "mapping_status"},
-}
-NESTED_FIELDS = {
-    "id",
-    "name",
-    "title",
-    "description",
-    "status",
-    "priority",
-    "deadline",
-    "estimate_points",
-    "dependencies",
-    "acceptance_criteria",
-    "user_id",
-    "capacity",
-    "workload",
-    "value",
-    "unit",
-    "observed_at",
-    "task_id",
-    "project_id",
-    "occurred_at",
-    "merged_at",
-    "created_at",
-    "updated_at",
-    "count",
-    "state",
+    domain: set(schema.model_fields) for domain, schema in CONTEXT_DATA_SCHEMAS.items()
 }
 
 
-def filter_data(value: object, depth: int = 0) -> object:
-    if depth > 5:
-        raise failure("CONTEXT_INVALID")
-    if isinstance(value, dict):
+def _select_fields(value: object, annotation: object) -> object:
+    """Loại dữ liệu ngoài allowlist trước validation, không ép kiểu giá trị nguồn."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if not isinstance(value, dict):
+            return value
         return {
-            key: filter_data(item, depth + 1) for key, item in value.items() if key in NESTED_FIELDS
+            key: _select_fields(item, annotation.model_fields[key].annotation)
+            for key, item in value.items()
+            if key in annotation.model_fields
         }
-    if isinstance(value, list):
-        return [filter_data(item, depth + 1) for item in value[:100]]
-    if isinstance(value, str):
-        return value[:4000]
+    if get_origin(annotation) is list and isinstance(value, list):
+        item_type = get_args(annotation)[0]
+        return [_select_fields(item, item_type) for item in value]
     return value
+
+
+def validate_context_data(document: ContextDocument) -> ContextDocument:
+    schema = CONTEXT_DATA_SCHEMAS[document.domain]
+    if document.status == "missing" and document.domain != "github_activity":
+        return document.model_copy(update={"data": {}})
+    try:
+        filtered = (
+            document.data
+            if document.domain == "github_activity"
+            else _select_fields(document.data, schema)
+        )
+        data = schema.model_validate_json(
+            json.dumps(filtered, allow_nan=False), strict=True
+        ).model_dump(mode="json", exclude_unset=True)
+    except (ValidationError, ValueError, TypeError) as error:
+        raise failure("CONTEXT_INVALID") from error
+    return document.model_copy(update={"data": data})
 
 
 class InternalContextAdapter:
     def __init__(self, settings: Settings, client: httpx.AsyncClient):
         self.settings = settings
         self.client = client
+        configure_context_logging()
 
     def _url(self, template: str | None, request: CreateAiRequest) -> str:
-        if not template or request.target is None:
+        if not template or request.target is None or not valid_internal_url(template):
             raise failure("CONTEXT_UNAVAILABLE")
-        url = template.format(
+        return template.format(
             target_type=quote(request.target.type, safe=""),
             target_id=quote(str(request.target.id), safe=""),
         )
-        parts = urlsplit(url)
-        if (
-            parts.scheme not in {"http", "https"}
-            or not parts.hostname
-            or parts.username
-            or parts.fragment
+
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        principal: Principal,
+        service_key: SecretStr | None,
+        *,
+        body: dict | None = None,
+        require_service_key: bool = True,
+    ) -> tuple[dict, int]:
+        if require_service_key and (
+            service_key is None or not service_key.get_secret_value().strip()
         ):
             raise failure("CONTEXT_UNAVAILABLE")
-        return url
-
-    async def _get(self, url: str, principal: Principal) -> dict:
+        headers = {"Authorization": f"Bearer {principal.bearer}"}
+        if require_service_key:
+            headers["X-Service-Key"] = service_key.get_secret_value()
         try:
             async with self.client.stream(
-                "GET",
+                method,
                 url,
-                headers={"Authorization": f"Bearer {principal.bearer}"},
+                headers=headers,
+                json=body,
                 timeout=self.settings.http_timeout_seconds,
                 follow_redirects=False,
             ) as response:
-                if response.status_code in {401, 403}:
+                if response.status_code in {401, 403, 404}:
                     raise failure("TARGET_ACCESS_DENIED", 403)
                 if response.status_code != 200:
-                    raise failure("CONTEXT_UNAVAILABLE", retryable=response.status_code >= 500)
-                body = bytearray()
+                    raise failure(
+                        "CONTEXT_UNAVAILABLE",
+                        retryable=response.status_code == 429 or response.status_code >= 500,
+                    )
+                body_bytes = bytearray()
                 async for chunk in response.aiter_bytes():
-                    body.extend(chunk)
-                    if len(body) > self.settings.max_context_bytes:
+                    if len(body_bytes) + len(chunk) > self.settings.max_context_bytes:
                         raise failure("CONTEXT_INVALID")
-                payload = json.loads(body)
+                    body_bytes.extend(chunk)
+                payload = json.loads(body_bytes)
                 if not isinstance(payload, dict):
                     raise failure("CONTEXT_INVALID")
-                return payload
+                return payload, len(body_bytes)
         except httpx.HTTPError as error:
             raise failure("CONTEXT_UNAVAILABLE", retryable=True) from error
-        except (ValueError, UnicodeError) as error:
+        except (ValueError, UnicodeError, RecursionError) as error:
             raise failure("CONTEXT_INVALID") from error
 
     async def authorize(self, principal: Principal, request: CreateAiRequest) -> None:
         if request.target is None:
             return
         url = self._url(self.settings.authorization_urls.get(request.target.type), request)
-        payload = await self._get(url, principal)
-        # Adapter contract phải trả quyết định rõ ràng; không coi HTTP 200 là quyền.
-        if payload.get("allowed") is not True:
+        payload, _ = await self._request(
+            "POST",
+            url,
+            principal,
+            self.settings.work_service_key,
+            body={"action": "ai.analyze", "intent": request.intent.value},
+            require_service_key=self.settings.work_service_auth_enabled,
+        )
+        decision = payload.get("data")
+        if (
+            payload.get("success") is not True
+            or not {"success", "data"} <= payload.keys()
+            or not payload.keys() <= {"success", "data", "message", "meta", "error"}
+            or not isinstance(decision, dict)
+            or set(decision) != {"target_type", "target_id", "action", "allowed"}
+            or decision.get("target_type") != request.target.type
+            or decision.get("target_id") != str(request.target.id)
+            or decision.get("action") != "ai.analyze"
+            or type(decision.get("allowed")) is not bool
+        ):
+            raise failure("CONTEXT_INVALID")
+        if decision["allowed"] is not True:
             raise failure("TARGET_ACCESS_DENIED", 403)
 
     async def fetch(
         self, domain: str, principal: Principal, request: CreateAiRequest
     ) -> ContextDocument:
-        if domain not in ALLOWED_FIELDS:
-            raise failure("CONTEXT_INVALID")
-        await self.authorize(principal, request)
-        url = self._url(
-            self.settings.context_urls.get(f"{request.target.type}:{domain}")
-            if request.target
-            else None,
-            request,
-        )
-        raw = await self._get(url, principal)
+        started = monotonic()
+        error_code = None
+        status = None
+        retryable = False
+        payload_bytes = None
+        provider = "integration" if domain == "github_activity" else "work"
         try:
-            document = ContextDocument.model_validate(raw)
-        except ValidationError as error:
-            raise failure("CONTEXT_INVALID") from error
-        if document.domain != domain or document.as_of.tzinfo is None:
-            raise failure("CONTEXT_INVALID")
-        age = (datetime.now(UTC) - document.as_of).total_seconds()
-        if age < -30:
-            raise failure("CONTEXT_INVALID")
-        if document.status in {"missing", "unavailable"}:
-            raise failure("CONTEXT_UNAVAILABLE")
-        if age > self.settings.context_max_age_seconds or document.status == "stale":
-            raise failure("CONTEXT_STALE")
-        filtered = {
-            key: filter_data(value)
-            for key, value in document.data.items()
-            if key in ALLOWED_FIELDS[domain]
-        }
-        return document.model_copy(update={"data": filtered})
+            if domain not in ALLOWED_FIELDS or request.target is None:
+                raise failure("CONTEXT_INVALID")
+            pair = f"{request.target.type}:{domain}"
+            if domain == "github_activity":
+                if (
+                    not self.settings.github_context_enabled
+                    or request.target.type != "project"
+                    or request.intent != Intent.RISK_ANALYSIS
+                    or (request.input.focus and "github_activity" not in request.input.focus)
+                ):
+                    raise failure("CONTEXT_INVALID")
+                key = self.settings.integration_service_key
+            else:
+                if pair not in WORK_CONTEXT_PAIRS:
+                    raise failure("CONTEXT_INVALID")
+                await self.authorize(principal, request)
+                key = self.settings.work_service_key
+            raw, payload_bytes = await self._request(
+                "GET",
+                self._url(self.settings.context_urls.get(pair), request),
+                principal,
+                key,
+                require_service_key=(
+                    domain == "github_activity" or self.settings.work_service_auth_enabled
+                ),
+            )
+            try:
+                document = ContextDocument.model_validate(raw)
+            except ValidationError as error:
+                raise failure("CONTEXT_INVALID") from error
+            if document.domain != domain or document.as_of.tzinfo is None:
+                raise failure("CONTEXT_INVALID")
+            if (
+                not {"domain", "as_of", "status", "source_version", "data", "warning"} <= raw.keys()
+                or not isinstance(raw.get("as_of"), str)
+                or (document.source_version is not None and len(document.source_version) > 100)
+                or (document.warning is not None and len(document.warning) > 500)
+                or (
+                    domain != "github_activity"
+                    and document.status == "partial"
+                    and not document.warning
+                )
+            ):
+                raise failure("CONTEXT_INVALID")
+            status = document.status
+            age = (datetime.now(UTC) - document.as_of).total_seconds()
+            if age < -30:
+                raise failure("CONTEXT_INVALID")
+            if age > self.settings.context_max_age_seconds or document.status == "stale":
+                raise failure("CONTEXT_STALE")
+            if document.status == "unavailable":
+                raise failure("CONTEXT_UNAVAILABLE", retryable=True)
+            document = validate_context_data(document)
+            return document
+        except ServiceError as error:
+            error_code = error.code
+            retryable = error.retryable
+            raise
+        finally:
+            logger.info(
+                "ai_context_fetch",
+                extra={
+                    "request_id": request_id_context.get(),
+                    "provider": provider,
+                    "domain": domain if domain in ALLOWED_FIELDS else "invalid",
+                    "target_type": request.target.type if request.target else None,
+                    "context_status": status,
+                    "error_code": error_code,
+                    "retryable": retryable,
+                    "duration_ms": round((monotonic() - started) * 1000, 2),
+                    "payload_bytes": payload_bytes,
+                },
+            )

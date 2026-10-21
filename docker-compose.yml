@@ -13,8 +13,12 @@ x-ai: &ai
     AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${AI_DB_NAME:-ai_context_db}}
     AI_BROKER_URL: redis://redis:6379/1
     AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
-    AI_JWT_PUBLIC_KEY: ${AI_JWT_PUBLIC_KEY:-}
+    AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
+    AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}
     AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+    AI_WORK_SERVICE_AUTH_ENABLED: ${AI_WORK_SERVICE_AUTH_ENABLED:-false}
+    AI_WORK_SERVICE_KEY: ${AI_WORK_SERVICE_KEY:-}
+    AI_INTEGRATION_SERVICE_KEY: ${AI_INTEGRATION_SERVICE_KEY:-}
   extra_hosts:
     - host.docker.internal:host-gateway
 
@@ -495,6 +499,23 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  ai-beat:
+    <<: *ai
+    command: [ celery, -A, jobs.celery_app:celery_app, beat, --loglevel=INFO, --schedule=/tmp/ai-beat-schedule, --pidfile=/tmp/ai-beat.pid ]
+    depends_on:
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/ai-beat.pid').read_text()), 0)" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   nginx:
     image: nginx:1.27-alpine

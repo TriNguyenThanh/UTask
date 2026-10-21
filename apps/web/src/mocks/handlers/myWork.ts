@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 
+import { resolveMockUserId } from "@/mocks/resolveMockUserId";
 import type { MockScenario } from "@/mocks/scenarios";
 import {
   buildEmptyTasksOverview,
@@ -26,11 +27,6 @@ const SERVER_ERROR = "Lỗi hệ thống, vui lòng thử lại sau.";
 
 function sleepFor(scenario: MockScenario): Promise<void> | undefined {
   return scenario === "slow-network" ? delay(1200) : undefined;
-}
-
-function parseTokenUserId(request: Request): string | null {
-  const header = request.headers.get("Authorization") ?? "";
-  return /^Bearer mock-access:([^:]+):/.exec(header)?.[1] ?? null;
 }
 
 function overviewForScenario(scenario: MockScenario, db: MockDatabase, userId: string): MyWorkOverview {
@@ -94,7 +90,7 @@ export function createMyWorkHandlers(
   return [
     http.get(MY_WORK_OVERVIEW_PATH, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) {
         return HttpResponse.json(
           { detail: "Phiên đăng nhập đã hết hạn." },
@@ -109,7 +105,7 @@ export function createMyWorkHandlers(
 
     http.get(MY_WORK_GITHUB_PATH, async ({ request }) => {
       await sleepFor(scenario);
-      const userId = parseTokenUserId(request);
+      const userId = resolveMockUserId(request);
       if (!userId) {
         return HttpResponse.json(
           { detail: "Phiên đăng nhập đã hết hạn." },

@@ -124,7 +124,7 @@ AI Service nhận toàn bộ cấu hình từ `.env` root; `infra/env/ai-service
 chỉ ánh xạ các biến vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
 không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
-export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_JWT_PUBLIC_KEY` và `AI_LLM_API_KEY`
+export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY`
 vào các process AI. Compose root dùng chung container `postgres` cho mọi service,
 AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
 `POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
@@ -349,9 +349,47 @@ URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết
 riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
 `AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
 tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
-`AI_CREDENTIAL_KEY` phải giống nhau cho các process; JWT chọn public key hoặc
-JWKS, cùng issuer/audience đúng từ Identity; LLM cần model/base URL/key và REST
-adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
+`AI_CREDENTIAL_KEY` phải giống nhau cho các process. AI xác minh JWT như Work:
+RS256, issuer mặc định `https://identity.utask.internal`, audience mặc định
+`utask-platform` (kế thừa `IDENTITY_JWT_ISSUER`/`IDENTITY_JWT_AUDIENCE` nếu
+không có override AI). AI luôn lấy JWKS từ `AI_IDENTITY_BASE_URL` cộng
+`/.well-known/jwks.json`; không nhận PEM hoặc URL JWKS riêng.
+
+Cấu hình xác thực trong `.env` trên server staging:
+
+```dotenv
+AI_ENVIRONMENT=staging
+MOCK_TEST=false
+AI_JWT_ISSUER=https://identity.utask.internal
+AI_JWT_AUDIENCE=utask-platform
+AI_CREDENTIAL_KEY=<khóa Fernet hợp lệ>
+AI_IDENTITY_BASE_URL=http://identity-service:8000
+AI_IDENTITY_SERVICE_KEY=<secret khớp IDENTITY_SERVICE_KEYS.ai>
+AI_WORK_SERVICE_AUTH_ENABLED=false
+AI_WORK_SERVICE_KEY=
+```
+
+Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công khai là
+`/api/auth/.well-known/jwks.json`; AI dùng URL nội bộ phía trên. AI kiểm tra
+phiên tại Identity bằng service key riêng; không tự tạo secret hoặc ghi đè
+`.env` server.
+
+Tạm thời `AI_WORK_SERVICE_AUTH_ENABLED=false` chỉ tắt việc gửi service key
+AI→Work. Bearer của người dùng vẫn được chuyển tiếp và kiểm tra quyền domain
+vẫn bắt buộc. Giữ mapping `AI_WORK_SERVICE_KEY` để bật lại bằng
+`AI_WORK_SERVICE_AUTH_ENABLED=true` khi Work sẵn sàng; không dùng flag này
+để tắt JWT, kiểm tra phiên Identity hoặc kiểm tra quyền.
+Provider quyền/context AI phía Work **Chưa triển khai**; cấu hình này chưa
+chứng minh luồng tích hợp AI→Work hoạt động thật.
+
+Settings của AI từ chối khởi động staging/production khi thiếu issuer,
+audience, key AI→Identity hoặc Fernet key không hợp lệ. API, worker,
+dispatcher và beat dùng chung environment. Compose vẫn render được khi
+không bật AI mà thiếu secret; khi bật AI phải điền đủ trước khi chạy
+migration/khởi động. Kiểm thử mock và render Compose không thay thế kiểm
+tra phiên Identity hoặc quyền domain thật.
+
+LLM cần model/base URL/key và REST adapter cần URL quyền/context thật. Xem [cấu hình AI](../ai-service/README.md#cấu-hình).
 Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
 
 Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự

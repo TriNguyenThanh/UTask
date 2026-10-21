@@ -1,4 +1,8 @@
+import json
+
+import jwt
 import pytest
+from conftest import identity_transport
 from dotenv import dotenv_values
 from pydantic import ValidationError
 
@@ -21,10 +25,20 @@ def test_mock_mode_rejects_non_local_environments(environment):
 
 
 def test_mock_false_keeps_real_urls_and_rejects_fixture_adapter():
+    from config import WORK_CONTEXT_PAIRS
+
     settings = Settings(
         environment="production",
         mock_test=False,
-        context_urls={"task:task": "http://work/context/{target_id}"},
+        jwt_issuer="https://identity.utask.internal",
+        jwt_audience="utask-platform",
+        identity_service_key="test-identity-key",
+        credential_key="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        context_urls={key: "http://work/context/{target_id}" for key in WORK_CONTEXT_PAIRS},
+        authorization_urls={
+            key: "http://work/authorize/{target_id}" for key in ("project", "task", "sprint")
+        },
+        work_service_key="test-work-key",
     )
     assert settings.context_urls["task:task"] == "http://work/context/{target_id}"
     with pytest.raises(ValueError):
@@ -54,13 +68,25 @@ async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
     prepare_mock_environment(tmp_path)
     before = dotenv_values(tmp_path / ".env")
     config = tmp_path / "infra/env/ai-service.env"
-    settings = Settings(_env_file=(config, tmp_path / ".env"))
+    settings = Settings(_env_file=(config, tmp_path / ".env"), identity_service_key="test-key")
     token_path = tmp_path / ".env.mock/mock-owner.jwt"
     assert (
-        await JwtAuthenticator(settings).authenticate(token_path.read_text().strip())
-    ).user_id == "mock-owner"
+        await JwtAuthenticator(
+            settings,
+            transport=identity_transport(
+                json.loads((tmp_path / ".env.mock/jwks.json").read_text())
+            ),
+        ).authenticate(token_path.read_text().strip())
+    ).user_id == "00000000-0000-4000-8000-000000000001"
+    assert (
+        jwt.decode(token_path.read_text().strip(), options={"verify_signature": False})[
+            "token_type"
+        ]
+        == "access"
+    )
     with pytest.raises(FileExistsError):
         prepare_mock_environment(tmp_path)
+    before_jwks = (tmp_path / ".env.mock/jwks.json").read_text()
     prepare_mock_environment(tmp_path, refresh=True)
     after = dotenv_values(tmp_path / ".env")
     for key in [
@@ -71,7 +97,7 @@ async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
         "OTHER_SECRET",
     ]:
         assert before[key] == after[key]
-    assert before["AI_JWT_PUBLIC_KEY"] != after["AI_JWT_PUBLIC_KEY"]
+    assert before_jwks != (tmp_path / ".env.mock/jwks.json").read_text()
     assert "AI_MOCK_DOMAIN_URL" not in dotenv_values(config)
     assert "GOOGLE_API_KEY" not in dotenv_values(config)
     assert (tmp_path / ".env").stat().st_mode & 0o777 == 0o600
@@ -109,3 +135,37 @@ def test_setup_cli_uses_repo_root_and_protects_existing_keys(tmp_path, monkeypat
         main()
     assert error.value.code == 1
     assert "Không tạo được" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"jwt_issuer": None},
+        {"jwt_issuer": " "},
+        {"jwt_audience": None},
+        {"jwt_audience": " "},
+        {"credential_key": None},
+        {"credential_key": "invalid-sensitive-secret"},
+        {"identity_service_key": None},
+        {"identity_service_key": " "},
+    ],
+)
+def test_deployed_environments_reject_missing_auth_configuration(environment, overrides):
+    from test_context_contract import production_settings
+
+    with pytest.raises(ValidationError) as error:
+        production_settings(environment=environment, **overrides)
+    assert "invalid-sensitive-secret" not in str(error.value)
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_deployed_environments_accept_complete_auth_configuration(environment):
+    from test_context_contract import production_settings
+
+    settings = production_settings(environment=environment, work_service_key=None)
+    assert settings.environment == environment
+    assert settings.jwt_issuer == "https://identity.utask.internal"
+    assert settings.jwt_audience == "utask-platform"
+    assert settings.identity_base_url == "http://identity-service:8000"
+    assert not settings.work_service_auth_enabled

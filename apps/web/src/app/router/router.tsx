@@ -1,9 +1,10 @@
-import { Navigate, createBrowserRouter, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { RequireAuth } from "@/app/router/RequireAuth";
 import { HomeRedirect, RequireTeacherSpace } from "@/app/router/RequireTeacherSpace";
 import { RequireProjectManagePermission } from "@/features/projects/routes/RequireProjectManagePermission";
+import { ProjectIndexRedirect } from "@/features/projects/routes/ProjectIndexRedirect";
 import { RouteError } from "@/app/router/RouteError";
 
 /** Exported so tests exercise the real route table, guards included. */
@@ -19,8 +20,18 @@ export const appRoutes: RouteObject[] = [
     errorElement: <RouteError />,
   },
   {
-    path: "/reset-password",
+    path: "/auth/reset",
     lazy: () => import("@/features/auth/routes/ResetPasswordRoute"),
+    errorElement: <RouteError />,
+  },
+  {
+    path: "/auth/activate",
+    lazy: () => import("@/features/auth/routes/ActivateAccountRoute"),
+    errorElement: <RouteError />,
+  },
+  {
+    path: "/register",
+    lazy: () => import("@/features/auth/routes/RegisterRoute"),
     errorElement: <RouteError />,
   },
   {
@@ -30,7 +41,7 @@ export const appRoutes: RouteObject[] = [
       </RequireAuth>
     ),
     errorElement: <RouteError />,
-    children: [
+    children: [{ errorElement: <RouteError inShell />, children: [
       { path: "/", element: <HomeRedirect /> },
       {
         path: "/my-work",
@@ -57,7 +68,7 @@ export const appRoutes: RouteObject[] = [
         handle: { title: "Dự án" },
         lazy: () => import("@/features/projects/routes/ProjectWorkspaceLayout"),
         children: [
-          { index: true, element: <Navigate to="backlog" replace /> },
+          { index: true, element: <ProjectIndexRedirect /> },
           {
             path: "backlog",
             lazy: () => import("@/features/projects/routes/ProjectBacklogRoute"),
@@ -80,6 +91,7 @@ export const appRoutes: RouteObject[] = [
               },
             ],
           },
+          { path: "info", lazy: () => import("@/features/projects/routes/ProjectInfoRoute") },
         ],
       },
       {
@@ -96,11 +108,6 @@ export const appRoutes: RouteObject[] = [
             path: "courses",
             handle: { title: "Lớp phụ trách" },
             lazy: () => import("@/features/teacher/routes/TeacherCoursesRoute"),
-          },
-          {
-            path: "courses/new",
-            handle: { title: "Tạo lớp" },
-            lazy: () => import("@/features/teacher/routes/TeacherCourseCreateRoute"),
           },
           {
             path: "courses/:courseId",
@@ -167,7 +174,7 @@ export const appRoutes: RouteObject[] = [
         lazy: () => import("@/features/notifications/routes/SettingsSecurityRoute"),
       },
       { path: "*", lazy: () => import("@/app/router/NotFoundRoute") },
-    ],
+    ] }],
   },
 ];
 

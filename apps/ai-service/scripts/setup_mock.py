@@ -1,13 +1,13 @@
 """Thiết lập mock: cấu hình trong ai-service.env, secret trong .env root."""
 
 import argparse
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from secrets import token_hex
 
 import jwt
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from dotenv import dotenv_values, set_key
 
@@ -32,20 +32,18 @@ def prepare_mock_environment(
     ):
         raise FileExistsError("Đã có credential mock; dùng --refresh để thay JWT có chủ đích")
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public = private.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    )
+    jwks = {"keys": [jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key(), as_dict=True)]}
     secrets = {
         "AI_DB_PASSWORD": existing.get("AI_DB_PASSWORD") or token_hex(16),
         "AI_CREDENTIAL_KEY": existing.get("AI_CREDENTIAL_KEY") or Fernet.generate_key().decode(),
-        "AI_JWT_PUBLIC_KEY": public.decode(),
         "AI_LLM_API_KEY": existing.get("AI_LLM_API_KEY") or "",
     }
     now = datetime.now(UTC)
     tokens = {
         user: jwt.encode(
             {
-                "sub": user,
+                "sub": user_id,
+                "token_type": "access",
                 "iat": now,
                 "exp": now + timedelta(hours=token_hours),
                 "iss": "utask-local-mock",
@@ -54,7 +52,10 @@ def prepare_mock_environment(
             private,
             algorithm="RS256",
         )
-        for user in ("mock-owner", "mock-outsider")
+        for user, user_id in (
+            ("mock-owner", "00000000-0000-4000-8000-000000000001"),
+            ("mock-outsider", "00000000-0000-4000-8000-000000000002"),
+        )
     }
     config_path.parent.mkdir(parents=True, exist_ok=True)
     tokens_path.mkdir(mode=0o700, exist_ok=refresh)
@@ -68,11 +69,13 @@ def prepare_mock_environment(
         "AI_JWT_ISSUER": "utask-local-mock",
         "AI_JWT_AUDIENCE": "utask-ai",
         "AI_JWT_ALGORITHM": "RS256",
-        "AI_JWT_JWKS_URL": "",
     }.items():
         set_key(config_path, key, value)
     secret_path.chmod(0o600)
     config_path.chmod(0o644)
+    jwks_path = tokens_path / "jwks.json"
+    jwks_path.write_text(json.dumps(jwks), encoding="utf-8")
+    jwks_path.chmod(0o600)
     for user, token in tokens.items():
         path = tokens_path / f"{user}.jwt"
         path.write_text(token + "\n", encoding="utf-8")

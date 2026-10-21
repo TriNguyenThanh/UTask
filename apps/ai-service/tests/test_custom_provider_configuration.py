@@ -1,7 +1,7 @@
 import pytest
 from pydantic import SecretStr
 
-from config import Settings
+from config import WORK_CONTEXT_PAIRS, Settings
 from errors import ServiceError
 from infrastructure.providers import build_litellm_model
 
@@ -9,8 +9,17 @@ from infrastructure.providers import build_litellm_model
 def model_settings(**overrides):
     values = {
         "model": "openai/example-model",
+        "jwt_issuer": "https://identity.utask.internal",
+        "jwt_audience": "utask-platform",
+        "identity_service_key": "test-identity-key",
+        "credential_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "llm_api_base": "https://llm.example.test/v1",
         "llm_api_key": "test-api-key",
+        "work_service_key": "test-work-key",
+        "authorization_urls": {
+            kind: "https://work/authorize/{target_id}" for kind in ("project", "task", "sprint")
+        },
+        "context_urls": {pair: "https://work/context/{target_id}" for pair in WORK_CONTEXT_PAIRS},
     }
     values.update(overrides)
     return Settings(**values)

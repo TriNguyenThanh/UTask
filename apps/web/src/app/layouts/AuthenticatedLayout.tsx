@@ -30,6 +30,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useSignOut } from "@/features/auth/useSignOut";
 import { canUseTeacherSpace, isStudentAccount } from "@/features/auth/utils";
 import { TeacherChromeContext } from "@/app/layouts/TeacherChromeContext";
 import { PageTitleContext } from "@/app/layouts/PageTitleContext";
@@ -181,6 +182,7 @@ function SidebarShell({
 export function AuthenticatedLayout() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const signOut = useSignOut();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [hovered, setHovered] = useState(false);
@@ -226,8 +228,7 @@ export function AuthenticatedLayout() {
     mainRef.current?.scrollTo?.({ top: 0 });
   }, [location.pathname]);
   function logout() {
-    void auth.logout();
-    navigate("/login", { replace: true });
+    void signOut();
   }
   function togglePinned() {
     setPinned((value) => {

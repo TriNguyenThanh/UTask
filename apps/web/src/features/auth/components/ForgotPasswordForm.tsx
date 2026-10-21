@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, BadgeCheck, KeyRound, LockKeyhole, School, Send, ShieldCheck } from "lucide-react";
+import { ArrowLeft, BadgeCheck, KeyRound, School, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
@@ -9,6 +9,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NEUTRAL_RECOVERY_MESSAGE, recoveryErrorMessage } from "@/features/auth/errorMessages";
+import { requestPasswordReset } from "@/lib/api/identity/endpoints";
+import { useApiClient } from "@/lib/api/ApiClientProvider";
+import { ApiError } from "@/lib/api/errors";
 
 const forgotPasswordSchema = z.object({
   email: z.email("Nhập địa chỉ email trường học hợp lệ."),
@@ -17,11 +21,24 @@ const forgotPasswordSchema = z.object({
 type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 export function ForgotPasswordForm() {
-  const [showIntegrationNotice, setShowIntegrationNotice] = useState(false);
+  const client = useApiClient();
+  const [sent, setSent] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const form = useForm<ForgotPasswordValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: { email: "" },
   });
+
+  async function submit({ email }: ForgotPasswordValues) {
+    setSent(false);
+    setSubmitError(null);
+    try {
+      await requestPasswordReset(client, email);
+      setSent(true);
+    } catch (error) {
+      setSubmitError(error instanceof ApiError ? recoveryErrorMessage(error) : "Không thể gửi yêu cầu. Vui lòng thử lại.");
+    }
+  }
 
   return (
     <section className="w-full max-w-[400px]" aria-labelledby="forgot-password-title">
@@ -42,20 +59,23 @@ export function ForgotPasswordForm() {
         </h1>
       </div>
 
-      {showIntegrationNotice ? (
-        <Alert className="mb-5 border-primary/20 bg-primary/5 text-[#1a1c1c]">
+      {sent ? (
+        <Alert className="mb-5 border-primary/20 bg-primary/5 text-[#1a1c1c]" role="status">
           <ShieldCheck className="text-primary" aria-hidden="true" />
-          <AlertTitle className="text-primary">Chưa kết nối dịch vụ khôi phục</AlertTitle>
-          <AlertDescription>
-            Giao diện đã sẵn sàng, nhưng Identity API chưa cung cấp endpoint gửi email. Không có email nào được gửi.
-          </AlertDescription>
+          <AlertTitle className="text-primary">Đã tiếp nhận yêu cầu</AlertTitle>
+          <AlertDescription>{NEUTRAL_RECOVERY_MESSAGE}</AlertDescription>
+        </Alert>
+      ) : null}
+      {submitError ? (
+        <Alert className="mb-5 border-destructive/30 bg-white" variant="destructive">
+          <AlertDescription>{submitError}</AlertDescription>
         </Alert>
       ) : null}
 
       <Form {...form}>
         <form
           className="mb-6 space-y-4"
-          onSubmit={form.handleSubmit(() => setShowIntegrationNotice(true))}
+          onSubmit={form.handleSubmit(submit)}
           noValidate
         >
           <FormField
@@ -74,9 +94,9 @@ export function ForgotPasswordForm() {
                       {...field}
                     />
                   </FormControl>
-                  <School className="pointer-events-none absolute right-3.5 top-1/2 size-[18px] -translate-y-1/2 text-[#787586]" aria-hidden="true" />
+                  <School className="pointer-events-none absolute right-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 </div>
-                <p className="flex items-start gap-1 text-[11.5px] leading-relaxed text-[#787586]">
+                <p className="flex items-start gap-1 text-[11.5px] leading-relaxed text-muted-foreground">
                   <BadgeCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
                   Dùng email trường đã liên kết với tài khoản UTask.
                 </p>
@@ -85,7 +105,7 @@ export function ForgotPasswordForm() {
             )}
           />
 
-          <Button className="h-11 w-full rounded-lg font-medium" type="submit">
+          <Button className="h-11 w-full rounded-lg font-medium" type="submit" disabled={form.formState.isSubmitting}>
             Gửi liên kết khôi phục
             <Send aria-hidden="true" />
           </Button>

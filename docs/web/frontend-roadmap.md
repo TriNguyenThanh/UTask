@@ -239,7 +239,7 @@ Quy tắc đã có trong mã:
 | M8 | Đăng xuất | Body `{refresh_token}` | `logout` cần CSRF khi có cookie; `DELETE sessions/{id}` thì không | Đợt 1 |
 | M9 | Cùng origin | Không có proxy Vite; `credentials` mặc định | Cookie path `/api/auth`; CORS chỉ localhost | Đợt 0 |
 | M10 | Hồ sơ | `/api/work/api/v1/me/settings` (MSW) | `GET`/`PATCH /api/auth/users/me` | Đợt 2 |
-| M11 | Link email | `/reset-password`; không có trang kích hoạt | `/auth/activate?key=`, `/auth/reset?uid=&token=` | Đợt 4 |
+| M11 | Link email | `/reset-password` (đã thay bằng `/auth/reset`; xem [api-integration.md](api-integration.md)) | `/auth/activate?key=`, `/auth/reset?uid=&token=` | Đợt 4 |
 | M12 | Mock dùng token giả | Handler chỉ nhận `mock-access:<id>:` | JWT RS256 thật | Đợt 0 (cầu nối persona) |
 
 ### 4.2 Ma trận năng lực
@@ -260,11 +260,11 @@ Phân loại: **Sẵn sàng** = nối thật được ngay; **Sau đổi nhỏ**
 | Đăng xuất mọi thiết bị | — | — | `POST logout-all` | Cần CSRF khi có cookie (G1) | **FE chưa có** — 3 |
 | Khôi phục phiên khi tải lại, tự refresh | `RequireAuth` | MSW `sessionStorage` | `POST refresh` | G1 | **Chặn backend** — 3 |
 | Đăng ký, kích hoạt, gửi lại kích hoạt | — | — | `register`, `activate`, `activation/resend` | G3 (không gửi được email) | **FE chưa có** + **Chặn backend** — 4 |
-| Quên/đặt lại mật khẩu | `/forgot-password`, `/reset-password` | Không gọi API | `password-reset/request`, `confirm` | G3; M11 | **Sau đổi nhỏ** + **Chặn backend** — 4 |
+| Quên/đặt lại mật khẩu | `/forgot-password`, `/auth/reset`, `/auth/activate`, `/register` | Đã gọi API thật (Phase 4, xem [api-integration.md](api-integration.md)) | `password-reset/request`, `confirm` | G3; M11 | **Sau đổi nhỏ** + **Chặn backend** — 4 |
 | Quản trị tài khoản | — | — | `admin/users`… | Quyết định nghiệp vụ Admin | **FE chưa có** — 5 |
 | Liên kết GitHub (OAuth), avatar | Nút ngắt GitHub (MSW) | MSW | OAuth/avatar sau cờ | Cờ tắt; cấu hình OAuth | **Chặn backend** (cấu hình) — 6 |
 | Project, Board, Backlog, task, Sprint, comment | Workspace | Demo MSW | — (Work) | Phụ lục A | **Làm sau** |
-| Lớp, nhóm, Teacher T01–T10 | `/courses`, `/teacher` | Demo MSW | — (Classroom) | Phụ lục A | **Làm sau** |
+| Lớp, nhóm, Teacher T01–T10 | `/courses`, `/teacher` | Demo MSW; `/courses` và `/teacher` (lớp, tạo lớp, cài đặt lớp, sinh viên, nhập danh sách, điều chỉnh nhóm, lịch sử) có chế độ Classroom thật (một phần, xem [api-integration](api-integration.md)) | — (Classroom) | Phụ lục A | **Làm sau** |
 | Thông báo, My Work, GitHub, AI, khóa AI dự án | Nhiều màn | Demo MSW | — | Phụ lục A | **Làm sau** |
 
 ## 5. Lộ trình tích hợp Identity
@@ -491,7 +491,7 @@ sửa file hạ tầng dùng chung.
    - Trang đăng ký.
    - `/auth/activate?key=`: tài khoản được import phải đặt mật khẩu.
    - Gửi lại email kích hoạt.
-   - Quên mật khẩu; `/auth/reset?uid=&token=` (giữ `/reset-password` làm alias).
+   - Quên mật khẩu; `/auth/reset?uid=&token=` (không giữ alias `/reset-password`).
 2. **Điều kiện vào**:
    - Đợt 1.
    - Môi trường Identity có `IDENTITY_MAIL_KEY`.

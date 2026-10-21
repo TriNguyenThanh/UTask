@@ -131,7 +131,11 @@ class AdkRuntime:
         )
         # Schema validation do workflow sở hữu để có thể revise và phối hợp domain tools.
         workflow = build_workflow(
-            payload.intent, agent, settings.max_revisions, pool.validate_context
+            payload.intent,
+            agent,
+            settings.max_revisions,
+            pool.validate_context,
+            pool.finalize_result,
         )
         sessions = InMemorySessionService()
         session = await sessions.create_session(
@@ -187,6 +191,7 @@ class AdkRequestExecutor:
             stored.payload,
             charge,
             self.runtime.settings.max_context_tool_calls,
+            github_enabled=self.runtime.settings.github_context_enabled,
         )
         return await self.runtime.run(
             stored.request_id,

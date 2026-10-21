@@ -260,6 +260,7 @@ jobs:
           fi
 
       - name: Deploy tested release
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -278,3 +279,21 @@ jobs:
               "infrastructure_names=$STAGING_INFRASTRUCTURE_SERVICES" \
               "gateway_service=$STAGING_GATEWAY_SERVICE"
           } | ssh "$target" 'IFS= read -r workdir; exec bash "$workdir/scripts/deploy_staging.sh" "$workdir"'
+
+      - name: Retrieve AI live evaluation reports
+        if: always() && steps.deploy.outcome != 'skipped' && contains(env.STAGING_SERVICES, 'ai-service')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ai-evaluation-live
+          target="${STAGING_USER}@${STAGING_HOST}"
+          scp "$target:${STAGING_WORKDIR}/ai-evaluation-reports/${STAGING_IMAGE_TAG}/evaluation.json" ai-evaluation-live/
+          scp "$target:${STAGING_WORKDIR}/ai-evaluation-reports/${STAGING_IMAGE_TAG}/evaluation.junit.xml" ai-evaluation-live/
+
+      - name: Upload AI live evaluation reports
+        if: always() && steps.deploy.outcome != 'skipped' && contains(env.STAGING_SERVICES, 'ai-service')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-evaluation-live-${{ inputs.source_sha }}
+          path: ai-evaluation-live/
+          if-no-files-found: error

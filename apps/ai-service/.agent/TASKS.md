@@ -14,6 +14,131 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-10-22 — JWT theo Work và tạm bỏ caller key AI→Work
+
+- Quyết định hiện tại thay hướng dẫn PEM staging trước đó: verifier luôn GET
+  raw JWKS từ `AI_IDENTITY_BASE_URL/.well-known/jwks.json` mỗi lần xác thực,
+  không cache/PEM/URL JWKS riêng. Chọn RSA/use/alg/kid và required claims đúng
+  Work (`exp`, `iss`, `aud`, `sub`, `token_type`); `iat` không bắt buộc.
+  Kiểm UUID, access token, session Identity vẫn giữ; HTTP 401 thêm
+  `WWW-Authenticate: Bearer`. Không gọi Identity với JWT sai cấu trúc/thuật toán.
+- `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định tạm bỏ header/key AI→Work,
+  vẫn gửi Bearer, action/intent và yêu cầu quyết định quyền đúng target.
+  Bật lại flag yêu cầu Work key. Không bỏ key AI→Identity, AI→Integration
+  hoặc mã hóa Fernet. Settings, ba Compose và env example đã đồng bộ.
+- Cập nhật contract hai endpoint AI theo ngoại lệ tạm thời và ADR-005;
+  Integration→Work vẫn bắt buộc key. Provider Work **Chưa triển khai**, không
+  tự tạo endpoint giả và chưa xác minh role/quyền với Work runtime.
+- `setup_mock.py` giữ public JWKS test tại `.env.mock/jwks.json`, không ghi
+  PEM vào `.env`. Test API/worker dùng HTTP Identity giả nhưng JWT ký thật.
+- Kiểm tra: full AI suite PostgreSQL/Redis thật **585 passed**; sau bổ sung
+  auth challenge header chạy lại auth/API/admission **79 passed**. Toàn bộ
+  **170 test script** do agent hạ tầng chạy đạt. Ruff lint/format, Docker build,
+  kiểm tra diff và link tài liệu đạt. Identity/domain/LLM trong test là giả;
+  staging thật **Chưa xác minh**. Không sửa secret `.env` hoặc deploy.
+
+### 2026-10-21 — Sửa cấu hình xác thực staging và chặn thiếu secret lúc khởi động
+
+- Compose staging lấy issuer/audience mặc định từ Identity, dùng PEM trong
+  `AI_JWT_PUBLIC_KEY`, cố định JWKS rỗng và truyền Identity URL/caller key cho
+  API/worker/dispatcher/beat. `.env.example` bổ sung key caller AI và hướng dẫn
+  thay các giá trị mock khi triển khai.
+- `src/config.py` từ chối staging/production khi thiếu issuer/audience, khóa
+  xác minh, key AI→Identity hoặc Fernet key không hợp lệ. Không bắt buộc secret
+  AI khi chỉ render Compose cho profile khác.
+- `tests/test_environment_modes.py` kiểm đủ/thiếu cấu hình và Fernet sai;
+  `test_identity_session_auth.py` xác nhận `Bearer x.y.z` trả 401 trước HTTP
+  Identity/application. Các fixture production cho context/provider bổ sung
+  cấu hình auth để tiếp tục kiểm đúng boundary riêng.
+- Full suite AI trong Docker với PostgreSQL/Redis thật: **561 passed**;
+  Identity HTTP và LLM giả, không xác nhận integration staging thật.
+- Kiểm thử Compose render PEM nhiều dòng, mặc định/override Identity và cấu
+  hình dùng chung: 64 test Compose/deployment do agent chính chạy đạt;
+  toàn bộ 170 test script do agent hạ tầng chạy đạt. Lint/format, Docker build,
+  diff check và kiểm tra link tài liệu cập nhật đạt.
+- Tài liệu chuẩn: `docs/infrastructure/environment.md`, `ci-cd.md`, README và
+  code map AI. User chọn **chỉ sửa repo**; không đổi secret `.env` hiện có hoặc
+  deploy server. PEM/secret/session và luồng Identity staging thật **Chưa xác minh**.
+
+### 2026-10-21 — Xác thực JWT và phiên Identity theo Work Service
+
+- **Đã triển khai** trong `src/infrastructure/security.py`: chỉ nhận RS256,
+  kiểm chữ ký/issuer/audience/hạn/claim bắt buộc, `token_type=access`, UUID
+  `sub`; JWKS chọn khóa RSA theo alg/use/kid và từ chối khóa mơ hồ.
+- API và worker dùng chung verifier; mỗi lần xác minh đều POST Identity
+  `/api/v1/internal/auth/session-status` bằng Bearer và caller key AI.
+  Phiên bị thu hồi trả 401; thiếu key, timeout, redirect, lỗi HTTP/schema
+  đều từ chối. Giữ mapping lỗi công khai v1 cho `AUTH_UNAVAILABLE`.
+- `src/config.py` bổ sung `AI_IDENTITY_BASE_URL` và secret
+  `AI_IDENTITY_SERVICE_KEY`; Compose riêng truyền cả hai vào API/worker.
+  `scripts/setup_mock.py` và fixture đổi sang UUID ổn định, access-token claim;
+  test dùng HTTP Identity giả, không có bypass xác thực ở chế độ mock.
+- Test: `tests/test_identity_session_auth.py` bao phủ JWT/JWKS, active/revoked,
+  lỗi Identity, API và worker từ chối trước application/executor; cập nhật
+  `test_security.py`, `test_environment_modes.py`, `test_mock_context.py` và
+  `test_mock_pipeline.py`. Full suite trong Docker với PostgreSQL/Redis thật:
+  **532 passed**; sau đó thêm hai case worker revoked/unavailable và chạy lại
+  file auth: **46 passed**. Identity HTTP và LLM đều giả trong kiểm thử.
+- Ruff check/format, Docker build và `git diff --check` đạt; liên kết file nội
+  bộ của 5 tài liệu AI cập nhật không có đích thiếu. GitNexus impact/check
+  đã chạy; index chậm HEAD 2 commit nên đối chiếu source trực tiếp.
+- **Chưa xác minh** Identity runtime/staging/production. Cần inject
+  `AI_IDENTITY_SERVICE_KEY` vào Compose root local/staging, cấu hình key khớp
+  `IDENTITY_SERVICE_KEYS.ai` của Identity, issuer/audience và public key/JWKS
+  thật. Không sửa Compose root hoặc `.env.example` ngoài phạm vi AGENTS AI.
+
+### 2026-10-21 — Context boundary, retention và gate phát hành phase 1
+
+- Trạng thái: Đã triển khai và kiểm thử local; **chưa nghiệm thu domain/LLM
+  staging/production**. Không sửa business implementation Work, không deploy.
+- Work contract mục tiêu ở `contracts/api/work-ai-context-v1.yaml`, được
+  `work-service.yaml` tham chiếu. AI consumer gọi POST authorize với Bearer và
+  key AI→Work, đọc typed project/task/team/progress ContextDocument; Work
+  provider vẫn do đội Work triển khai. GitHub chỉ gọi Integration với key
+  riêng, không gọi Work thêm cho github.read; Integration sở hữu bước quyền đó.
+- GitHub tool chỉ cấp risk Project theo flag/focus; mặc định flag tắt. Sprint
+  và Project khi tắt GitHub nhận limitation deterministic sau schema validation.
+  Required context chỉ nhận available/partial. Domain schemas lọc PII/field
+  ngoài allowlist, kiểm giới hạn 20/100 item và 64 KiB. Log JSON metadata có
+  correlation ID; không log credential hoặc context thô.
+- Migration `0004` thêm terminal_at/check/partial index; backfill từ updated_at,
+  completed_at rồi created_at, abort khi timestamp legacy sai. Cleanup giữ
+  30 ngày, một batch tối đa 500 mỗi giờ, SKIP LOCKED và cascade. Mọi terminal
+  path gán timestamp; retry không đổi mốc. API/worker/dispatcher/beat dùng chung
+  secret/config, staging/production fail startup nếu thiếu cấu hình domain.
+- Nginx giữ nguyên `/api/ai/v1/...`, chặn internal Work. Thêm beat ở ba Compose,
+  deterministic CI gate và live gate staging; JSON/JUnit persist theo release
+  và được workflow upload artifact, kể cả khi gate lỗi. Live gate chạy sau
+  rollout, không tự rollback.
+- Golden dataset 30 case, 10 mỗi intent; fake model vẫn đi qua ADK và adapter
+  thật. Live dùng fixture manifest có scenario/từ khóa/evidence IDs, preflight
+  quyền/context thật, kiểm full response/request binding, pacing quota và hard
+  timeout. Case chỉ mock ép được có live override riêng; quality chỉ chấm case
+  kỳ vọng success. Rubric theo tham chiếu không thay đánh giá ngữ nghĩa của người.
+- File chính: `src/config.py`, `src/models/context.py`, `src/context/tools.py`,
+  `src/infrastructure/context_http.py`, `observability.py`, `repositories.py`,
+  `db/tables.py`, `src/jobs/**`, `src/evaluation/**`, `tests/test_*context*`,
+  `test_retention_*`, `test_evaluation.py`, Compose/CI/scripts và docs liên quan.
+- Kiểm tra thực tế: **485 AI tests passed, 0 skipped** trong Python 3.12 với
+  PostgreSQL 16/Redis 7 cô lập; gồm migration/backfill/cascade/concurrency,
+  beat scheduler → Redis/Celery worker thật, API/completion và mock domain/LLM. **135 script
+  tests passed**, gồm Nginx container và Compose/deploy failure boundaries.
+  Ruff check/format (100 Python file), `git diff --check` và Docker build
+  `utask/ai-service:production-readiness` đạt. Evaluation CLI trong image build
+  đạt **30/30 deterministic cases**; không gọi model/domain production.
+  Image từ chối startup production thiếu Work config và chặn live gate thiếu
+  fixture/pin; cả hai được kiểm tra bằng process container thực tế.
+- GitNexus: refresh incremental ban đầu thất bại; force rebuild với PDG và
+  2 worker đã đạt tại HEAD `40bb330`, runner 1.6.12 current, incompleteReasons
+  rỗng. `detect_changes(all)` báo HIGH, 9 flow AI/evaluation bị ảnh hưởng như
+  dự kiến. Công cụ diff chỉ nhận file tracked, nên các file mới untracked
+  được đọc/kiểm thử riêng; không coi graph là bằng chứng bao phủ toàn bộ diff.
+  Analyzer còn cảnh báo giới hạn chọn execution flow; không suy ra flow vắng
+  mặt là không bị ảnh hưởng. Không commit/push.
+- Rủi ro vận hành: migration backfill/index thường cần cửa sổ bảo trì với bảng
+  lớn; cleanup tối đa 500/giờ cần theo dõi backlog. Work API, JWT/rotation,
+  fixture staging và model thật phải nghiệm thu trước khi bật GitHub production.
+
 ### 2026-10-18 — Migration trước API trong container entrypoint
 
 - Trạng thái: Đã triển khai source và kiểm tra local; không commit/push/deploy
@@ -653,13 +778,14 @@ Chưa có.
 
 - Xác minh issuer/public key hoặc JWKS của Identity production; quản lý và
   rotation credential key dùng chung API/worker.
-- Tích hợp REST quyền/context với endpoint/schema thật của Work/Integration;
-  adapter/tool pool đã có nhưng hợp đồng domain cần công bố.
+- Nghiệm thu REST quyền/context với Work provider triển khai theo contract
+  đã chốt và Integration thật; consumer/mock test không thay E2E.
 - Chạy evaluation LLM/model thật, quota/concurrency và cost budget production.
-- Chốt retention/ẩn danh request/result và vận hành dead-letter trước production.
+- Nghiệm thu retention 30 ngày trên volume thật, theo dõi backlog cleanup và
+  vận hành dead-letter trước production.
 - Nếu cần projection Kafka, đối chiếu/version hoặc mapping contract context
   cũ với Work trước khi thêm consumer; không mặc định dùng schema cũ.
-- Thống nhất auth/prefix gateway với contract rồi kiểm tra tích hợp thực tế.
+- Kiểm tra auth/gateway bằng fixture staging và chạy live release gate/model pin.
 
 ## Mẫu mục log
 

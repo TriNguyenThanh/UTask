@@ -23,7 +23,7 @@ export function AuthLayout({
             </span>
           </Link>
           {headerActions ? (
-            <div className="flex items-center gap-3 text-xs text-[#787586]">{headerActions}</div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">{headerActions}</div>
           ) : null}
         </div>
       </header>
@@ -33,7 +33,7 @@ export function AuthLayout({
       </main>
 
       <footer className="w-full border-t border-[#e5e3df] bg-[#faf9f8] py-4 short:py-2">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 short:gap-1 px-4 text-center text-xs text-[#787586] sm:px-6 lg:flex-row lg:text-left">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 short:gap-1 px-4 text-center text-xs text-muted-foreground sm:px-6 lg:flex-row lg:text-left">
           <p>© 2026 UTask Academic Platform</p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2" aria-label="Thông tin nền tảng">
             <span>Quy chế đồ án</span>

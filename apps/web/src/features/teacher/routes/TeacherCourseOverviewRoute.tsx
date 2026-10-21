@@ -4,9 +4,18 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { TeacherCourseDetail } from "@/lib/api/teacherFlow";
 import { useTeacherCourseContext } from "@/features/teacher/courseContext";
-import { StatCard, activityText } from "@/features/teacher/components/shared";
+import { ActivityList } from "@/features/teacher/components/ActivityList";
+import { NoData, StatCard, activityText } from "@/features/teacher/components/shared";
 import { useTeacherTeams } from "@/lib/query/teacherFlowHooks";
+
+/** Mã thô của Classroom không đọc lại được; chỉ biết mã còn hạn hay không. */
+function joinCodeText(course: TeacherCourseDetail): string {
+  const expires = course.classroom?.joinCodeExpiresAt;
+  if (!course.classroom) return "Chưa có mã";
+  return expires && new Date(expires).getTime() > Date.now() ? "Đang bật" : "Chưa có mã";
+}
 
 export function Component() {
   const course = useTeacherCourseContext();
@@ -16,7 +25,11 @@ export function Component() {
     return (
       <EmptyState
         title="Lớp chưa có sinh viên"
-        description="Lớp mới chưa có sinh viên hay nhóm là trạng thái hợp lệ. Việc thêm sinh viên sẽ khả dụng ở giai đoạn sau."
+        description={
+          course.classroom
+            ? "Thêm sinh viên hoặc nhập danh sách ở tab Sinh viên, hoặc cấp mã lớp ở Cài đặt để sinh viên tự vào."
+            : "Lớp mới chưa có sinh viên hay nhóm là trạng thái hợp lệ."
+        }
       />
     );
   }
@@ -48,12 +61,12 @@ export function Component() {
     <div className="space-y-6">
       <section aria-label="Chỉ số của lớp" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard label="Sinh viên" value={course.studentCount} />
-        <StatCard label="Chưa có nhóm" value={course.studentsWithoutTeam} />
+        <StatCard label="Chưa có nhóm" value={course.studentsWithoutTeam ?? <NoData />} />
         <StatCard label="Nhóm" value={course.teamCount} />
         <StatCard
           label="Nhóm có tín hiệu cần chú ý"
-          value={course.teamsWithSignals}
-          tone={course.teamsWithSignals > 0 ? "attention" : "default"}
+          value={course.teamsWithSignals ?? <NoData />}
+          tone={course.teamsWithSignals ? "attention" : "default"}
           hint="Xem nguyên nhân ở mục Giám sát"
         />
       </section>
@@ -61,7 +74,7 @@ export function Component() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">Quy định nhóm và tham gia lớp</CardTitle>
-          <Badge variant="secondary">Chỉ xem</Badge>
+          <Badge variant="secondary">{course.classroom ? "Sửa ở Cài đặt" : "Chỉ xem"}</Badge>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -82,7 +95,7 @@ export function Component() {
                 {course.joinCode ? (
                   <span className="font-mono">{course.joinCode}</span>
                 ) : (
-                  <span className="text-base font-normal text-muted-foreground">Chưa có mã</span>
+                  <span className="text-base font-normal text-muted-foreground">{joinCodeText(course)}</span>
                 )}
               </dd>
             </div>
@@ -99,10 +112,12 @@ export function Component() {
               <dd className="mt-1">{activityText(course.lastActivity)}</dd>
             </div>
           </dl>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Chỉnh sửa quy định, hạn lập nhóm và trạng thái nhận sinh viên sẽ khả dụng ở giai đoạn
-            sau.
-          </p>
+          {course.classroom ? null : (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Chỉnh sửa quy định, hạn lập nhóm và trạng thái nhận sinh viên sẽ khả dụng ở giai đoạn
+              sau.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -136,6 +151,8 @@ export function Component() {
           </CardContent>
         </Card>
       </div>
+
+      {course.classroom ? <ActivityList scope={{ classId: course.courseId }} title="Lịch sử lớp" /> : null}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export function LatestCoursesSection({
       </div>
       <ul className="divide-y rounded-lg border bg-card">
         {shown.map((enrollment) => {
-          const badge = membershipBadge(enrollment.membership);
+          const badge = membershipBadge(enrollment.membership, enrollment.formationClosed);
           return (
             <li key={enrollment.courseId} className="flex items-center gap-3 px-4 py-3">
               <Badge variant="secondary" className="shrink-0 font-mono font-semibold">

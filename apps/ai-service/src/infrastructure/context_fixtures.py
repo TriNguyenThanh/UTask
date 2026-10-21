@@ -9,12 +9,12 @@ from pydantic import model_validator
 
 from config import Settings
 from errors import failure
-from models import CreateAiRequest
+from models import CreateAiRequest, Intent
 from models.common import StrictModel
 from models.context import ContextDocument
 from models.security import Principal
 
-from .context_http import ALLOWED_FIELDS, filter_data
+from .context_http import ALLOWED_FIELDS, validate_context_data
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "domain.json"
 Domain = Literal["project", "task", "team", "progress", "github_activity"]
@@ -56,6 +56,7 @@ class FixtureContextAdapter:
     def __init__(self, settings: Settings, fixture_path: Path = FIXTURE_PATH):
         if not settings.mock_test or settings.environment not in {"development", "test"}:
             raise ValueError("Fixture adapter chỉ dùng khi bật MOCK_TEST trong development/test")
+        self.settings = settings
         self.dataset = load_mock_dataset(fixture_path)
 
     async def authorize(self, principal: Principal, request: CreateAiRequest) -> None:
@@ -70,20 +71,25 @@ class FixtureContextAdapter:
     ) -> ContextDocument:
         if domain not in ALLOWED_FIELDS or request.target is None:
             raise failure("CONTEXT_INVALID")
+        if domain == "github_activity" and (
+            not self.settings.github_context_enabled
+            or request.target.type != "project"
+            or request.intent != Intent.RISK_ANALYSIS
+            or (request.input.focus and "github_activity" not in request.input.focus)
+        ):
+            raise failure("CONTEXT_INVALID")
         await self.authorize(principal, request)
         target = self.dataset.targets[f"{request.target.type}:{request.target.id}"]
         if domain not in target.contexts:
             raise failure("CONTEXT_UNAVAILABLE")
         document = self.dataset.documents[target.contexts[domain]]
-        return ContextDocument(
-            domain=domain,
-            as_of=datetime.now(UTC),
-            status="available",
-            source_version="mock.v1",
-            data={
-                key: filter_data(value)
-                for key, value in document.data.items()
-                if key in ALLOWED_FIELDS[domain]
-            },
-            warning="Dữ liệu mock local, không phải dữ liệu Work/Integration thật.",
+        return validate_context_data(
+            ContextDocument(
+                domain=domain,
+                as_of=datetime.now(UTC),
+                status="available",
+                source_version="mock.v1",
+                data=document.data,
+                warning="Dữ liệu mock local, không phải dữ liệu Work/Integration thật.",
+            )
         )

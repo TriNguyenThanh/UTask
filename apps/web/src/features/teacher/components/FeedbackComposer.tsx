@@ -3,14 +3,14 @@ import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { DisabledAction } from "@/features/teacher/components/shared";
+import { DisabledAction } from "@/components/feedback/DisabledAction";
 import { draftKey, useDraft } from "@/features/teacher/lib/drafts";
 
 /** Interface limit only; the backend will own the real one. */
 export const FEEDBACK_MAX_LENGTH = 2000;
 
 export const FEEDBACK_UNAVAILABLE =
-  "Gửi phản hồi chưa khả dụng: chưa có hợp đồng API bình luận/phản hồi. Nội dung bạn viết chỉ được giữ làm nháp trong tab này, chưa gửi cho ai và nhóm không nhận được thông báo.";
+  "Gửi phản hồi chưa khả dụng ở chế độ demo: chưa nối API bình luận của Work. Nội dung bạn viết chỉ được giữ làm nháp trong tab này, chưa gửi cho ai và nhóm không nhận được thông báo.";
 
 export function validateFeedback(text: string): string | null {
   const trimmed = text.trim();

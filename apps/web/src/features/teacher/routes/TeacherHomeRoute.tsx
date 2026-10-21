@@ -1,10 +1,10 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageSkeleton } from "@/components/feedback/PageSkeleton";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
+import { CreateClassButton } from "@/features/teacher/components/CreateClassButton";
 import { AttentionPanel } from "@/features/teacher/components/AttentionPanel";
 import { FilterSelect } from "@/features/teacher/components/FilterSelect";
 import {
@@ -14,6 +14,7 @@ import {
   formatDateTime,
 } from "@/features/teacher/components/shared";
 import type { TeacherCourseSummary } from "@/lib/api/teacherFlow";
+import { isRealService } from "@/lib/config/services";
 import { useTeacherCourses } from "@/lib/query/teacherFlowHooks";
 
 /**
@@ -60,8 +61,16 @@ export function Component() {
   const terms = [...new Set(all.map((course) => course.term))];
   const visible = term === "all" ? all : all.filter((course) => course.term === term);
 
-  const sum = (pick: (course: (typeof all)[number]) => number) =>
-    visible.reduce((total, course) => total + pick(course), 0);
+  // Null when any listed class cannot tell: a partial sum would read as the total.
+  const sum = (pick: (course: (typeof all)[number]) => number | null) => {
+    let total = 0;
+    for (const course of visible) {
+      const value = pick(course);
+      if (value === null) return null;
+      total += value;
+    }
+    return total;
+  };
 
   function changeTerm(next: string) {
     const params = new URLSearchParams(searchParams);
@@ -76,9 +85,7 @@ export function Component() {
         title="Bàn làm việc giảng viên"
         description="Các lớp và nhóm bạn phụ trách."
       >
-        <Button asChild>
-          <Link to="/teacher/courses/new">Tạo lớp</Link>
-        </Button>
+        <CreateClassButton />
       </PageHeader>
 
       {all.length === 0 ? (
@@ -111,23 +118,23 @@ export function Component() {
                 <StatCard label="Nhóm" value={sum((course) => course.teamCount)} />
                 <StatCard
                   label="Chưa có nhóm"
-                  value={sum((course) => course.studentsWithoutTeam)}
+                  value={sum((course) => course.studentsWithoutTeam) ?? <NoData />}
                   hint="Sinh viên, tính theo từng lớp"
                 />
                 <StatCard
                   label="Nhóm chưa có project"
-                  value={sum((course) => course.teamsWithoutProject)}
+                  value={sum((course) => course.teamsWithoutProject) ?? <NoData />}
                 />
                 <StatCard
                   label="Nhóm có tín hiệu cần chú ý"
-                  value={sum((course) => course.teamsWithSignals)}
+                  value={sum((course) => course.teamsWithSignals) ?? <NoData />}
                   hint="Theo quy tắc cố định, xem ở mục Giám sát của từng lớp"
                   tone="attention"
                 />
                 <OverdueStat classes={visible} />
               </section>
 
-              <AttentionPanel courses={visible} />
+              {isRealService("classroom") ? null : <AttentionPanel courses={visible} />}
 
               <section aria-label="Danh sách lớp" className="space-y-3">
                 <h2 className="text-lg font-semibold">Lớp phụ trách ({visible.length})</h2>

@@ -1,0 +1,284 @@
+openapi: 3.1.0
+info:
+  title: Work internal AI context boundary
+  version: 1.0.0
+  description: >-
+    Thiết kế mục tiêu đã chốt cho đội Work; chưa triển khai provider. Đây là phần
+    contract nội bộ được work-service.yaml tham chiếu, không phải API gateway.
+servers:
+  - url: http://work-service:8000
+paths:
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/authorize:
+    servers: [{url: 'http://work-service:8000'}]
+    parameters:
+      - $ref: '#/components/parameters/TargetType'
+      - $ref: '#/components/parameters/TargetId'
+    post:
+      operationId: internal_ai_authorize
+      x-implementation-status: planned
+      security: [{WorkBearer: []}]
+      x-temporary-service-key-optional: true
+      description: >-
+        Caller ai. Kiểm tra quyền đọc và intent phù hợp target tại thời điểm gọi.
+        backlog_generation chỉ Project, task_decomposition chỉ Task,
+        risk_analysis chỉ Project/Sprint. Target không tồn tại hoặc actor không
+        được đọc trả 404, không tiết lộ tài nguyên. Chỉ allowed=true rõ ràng cấp quyền.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AiAuthorizeInput'}
+      responses:
+        '200':
+          description: Quyết định quyền, Cache-Control no-store.
+          headers:
+            Cache-Control: {schema: {const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AiAuthorizeEnvelope'}
+        default: {$ref: '#/components/responses/Failure'}
+  /api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}:
+    servers: [{url: 'http://work-service:8000'}]
+    parameters:
+      - $ref: '#/components/parameters/TargetType'
+      - $ref: '#/components/parameters/TargetId'
+      - in: path
+        name: domain
+        required: true
+        schema: {enum: [project, task, team, progress]}
+    get:
+      operationId: internal_ai_context
+      x-implementation-status: planned
+      security: [{WorkBearer: []}]
+      x-temporary-service-key-optional: true
+      description: >-
+        Caller ai; tự kiểm quyền mỗi lần đọc. Project/Sprint hỗ trợ project, team,
+        progress; Task hỗ trợ thêm task. Work tự resolve Project từ target.
+        Không nhận query/body, không ghi snapshot/outbox/dữ liệu nghiệp vụ.
+        JSON UTF-8 tối đa 65536 byte. Mảng cắt ở 100 mục phải trả partial và warning;
+        metric/count vẫn tính trên toàn bộ scope. Loại deleted/archived task và
+        thành viên không ACTIVE, dùng description đã strip HTML. Không trả PII.
+        source_version dùng project.event_sequence; task dùng task.version;
+        Sprint progress dùng chuỗi sprint.version:project.event_sequence.
+      responses:
+        '200':
+          description: ContextDocument trực tiếp, không bọc envelope Work.
+          headers:
+            Cache-Control: {schema: {const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ContextDocument'}
+        default: {$ref: '#/components/responses/Failure'}
+  /api/v1/internal/integration/projects/{project_id}/authorize:
+    servers: [{url: 'http://work-service:8000'}]
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: internal_integration_github_authorize
+      x-implementation-status: planned
+      security: [{WorkBearer: [], WorkServiceKey: []}]
+      description: >-
+        Chỉ caller integration, dùng key Integration→Work; không nhận AI key.
+        Kiểm tra quyền Project github.read bằng Bearer hiện hành. Không cache quyền.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action: {const: github.read}
+      responses:
+        '200':
+          description: Quyết định quyền.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {const: true}
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [project_id, action, allowed]
+                    properties:
+                      project_id: {type: string, format: uuid}
+                      action: {const: github.read}
+                      allowed: {type: boolean}
+        default: {$ref: '#/components/responses/Failure'}
+components:
+  securitySchemes:
+    WorkBearer: {type: http, scheme: bearer, bearerFormat: JWT}
+    WorkServiceKey: {type: apiKey, in: header, name: X-Service-Key}
+  parameters:
+    TargetType:
+      in: path
+      name: target_type
+      required: true
+      schema: {enum: [project, task, sprint]}
+    TargetId:
+      in: path
+      name: target_id
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Failure:
+      description: >-
+        400 invalid target/domain/body; 401 invalid actor; 403 invalid service key;
+        404 inaccessible target; 422 context too large; 429/503 temporary failure.
+        Envelope lỗi Work hiện hành, không chứa credential hoặc raw context.
+      content:
+        application/json:
+          schema: {$ref: './work-service.yaml#/components/schemas/WorkErrorEnvelope'}
+  schemas:
+    AiAuthorizeInput:
+      type: object
+      additionalProperties: false
+      required: [action, intent]
+      properties:
+        action: {const: ai.analyze}
+        intent: {enum: [backlog_generation, task_decomposition, risk_analysis]}
+    AiAuthorizeEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {const: true}
+        data:
+          type: object
+          additionalProperties: false
+          required: [target_type, target_id, action, allowed]
+          properties:
+            target_type: {enum: [project, task, sprint]}
+            target_id: {type: string, format: uuid}
+            action: {const: ai.analyze}
+            allowed: {type: boolean}
+    TaskSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, status]
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string, maxLength: 300}
+        status: {type: string, maxLength: 100}
+        priority: {type: string, maxLength: 100}
+        deadline: {type: [string, 'null'], format: date}
+        estimate_points: {type: [number, 'null'], minimum: 0}
+    SprintSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, deadline]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 200}
+        status: {enum: [DRAFT, ACTIVE, COMPLETED]}
+        deadline: {type: [string, 'null'], format: date}
+    ProjectData:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, goals, deadline, tasks, sprints]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 200}
+        description: {type: string, maxLength: 4000}
+        goals: {type: string, maxLength: 4000}
+        deadline: {type: [string, 'null'], format: date}
+        tasks:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/TaskSummary'}
+        sprints:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/SprintSummary'}
+    TaskData:
+      type: object
+      additionalProperties: false
+      required: [id, project_id, title, description, status, priority, deadline, estimate_points, dependencies, acceptance_criteria]
+      properties:
+        id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        title: {type: string, maxLength: 300}
+        description: {type: string, maxLength: 4000}
+        status: {type: string, maxLength: 100}
+        priority: {type: string, maxLength: 100}
+        deadline: {type: [string, 'null'], format: date}
+        estimate_points: {type: [number, 'null'], minimum: 0}
+        dependencies:
+          type: array
+          maxItems: 100
+          items: {type: string, format: uuid}
+        acceptance_criteria: {type: string, maxLength: 4000}
+    TeamMember:
+      type: object
+      additionalProperties: false
+      required: [user_id, capacity, workload]
+      properties:
+        user_id: {type: string, format: uuid}
+        capacity: {type: number, minimum: 0}
+        workload: {type: number, minimum: 0}
+    TeamData:
+      type: object
+      additionalProperties: false
+      required: [members, capacity, workload]
+      properties:
+        members:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/TeamMember'}
+        capacity: {type: number, minimum: 0}
+        workload: {type: number, minimum: 0}
+    ProgressMetric:
+      type: object
+      additionalProperties: false
+      required: [name, value, unit, observed_at]
+      properties:
+        name: {type: string, maxLength: 100}
+        value: {type: [number, 'null']}
+        unit: {type: string, maxLength: 100}
+        observed_at: {type: string, format: date-time}
+    ProgressData:
+      type: object
+      additionalProperties: false
+      required: [metrics, blocked_tasks, completed_tasks, total_tasks, as_of]
+      properties:
+        metrics:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/ProgressMetric'}
+        blocked_tasks:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/TaskSummary'}
+        completed_tasks: {type: integer, minimum: 0}
+        total_tasks: {type: integer, minimum: 0}
+        as_of: {type: string, format: date-time}
+    ContextDocument:
+      type: object
+      additionalProperties: false
+      required: [domain, as_of, status, source_version, data, warning]
+      properties:
+        domain: {enum: [project, task, team, progress]}
+        as_of: {type: string, format: date-time}
+        status: {enum: [available, partial, missing, stale, unavailable]}
+        source_version: {type: [string, 'null'], maxLength: 100}
+        warning: {type: [string, 'null'], maxLength: 500}
+        data: {type: object}
+      allOf:
+        - if:
+            properties: {status: {enum: [available, partial]}}
+          then:
+            oneOf:
+              - properties: {domain: {const: project}, data: {$ref: '#/components/schemas/ProjectData'}}
+              - properties: {domain: {const: task}, data: {$ref: '#/components/schemas/TaskData'}}
+              - properties: {domain: {const: team}, data: {$ref: '#/components/schemas/TeamData'}}
+              - properties: {domain: {const: progress}, data: {$ref: '#/components/schemas/ProgressData'}}
+        - if:
+            properties: {status: {const: partial}}
+          then:
+            properties: {warning: {type: string, minLength: 1, maxLength: 500}}
