@@ -79,6 +79,9 @@ Lockout không phải một trạng thái vòng đời của user.
 Thay đổi user/profile/role, audit và outbox được ghi trong cùng transaction.
 Identity không ghi enrollment, project membership hoặc dữ liệu repository.
 
+Khi đăng ký, service đọc lại tên hồ sơ do trigger PostgreSQL sinh trước khi
+phát `identity.user.created`; event và API dùng cùng tên đã lưu.
+
 <a id="api-de-tich-hop"></a>
 
 ## API để tích hợp
