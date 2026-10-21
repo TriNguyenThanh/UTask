@@ -88,3 +88,24 @@ def test_consumer_exhaustion_waits_for_dlq_ack_before_committing(monkeypatch, se
     if not dlq_fails:
         assert events.index("dlq") < events.index("commit")
     assert events[-1] == "close"
+
+
+@pytest.mark.parametrize("code", [3, 29, 30, -169, -195])
+def test_broker_poll_failure_reports_code_without_exposing_raw_error(monkeypatch, code):
+    from unittest.mock import Mock
+
+    from confluent_kafka import KafkaError
+    from django.core.management.base import CommandError
+
+    error = KafkaError(code, "raw test credentials must not appear")
+    broker, dlq = Mock(), Mock()
+    broker.poll.return_value = SimpleNamespace(error=lambda: error)
+    monkeypatch.setattr(consume_work, "Consumer", lambda config: broker)
+    monkeypatch.setattr(consume_work, "DeadLetterPublisher", lambda: dlq)
+    with pytest.raises(CommandError) as captured:
+        consume_work.Command().handle()
+    assert error.name() in str(captured.value) and f"({code})" in str(captured.value)
+    assert "credentials" not in str(captured.value)
+    broker.commit.assert_not_called()
+    dlq.publish.assert_not_called()
+    broker.close.assert_called_once()

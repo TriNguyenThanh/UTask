@@ -24,7 +24,7 @@ SERVICES = (
     "classroom-service",
     "work-service",
     "work-publisher",
-    "work-group-consumer",
+    "work-consumer",
     "classroom-work-consumer",
     "nginx",
 )
@@ -83,11 +83,12 @@ class DockerEnvironment:
             )
         )
         key_path.chmod(0o644)
+        template_names = {
+            line.split("=", 1)[0]
+            for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#") and "=" in line
+        }
         values = {}
-        for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
-            if line and not line.startswith("#") and "=" in line:
-                name, value = line.split("=", 1)
-                values[name] = value
         classroom_caller = secrets.token_urlsafe(32)
         work_caller = secrets.token_urlsafe(32)
         values.update(
@@ -136,11 +137,15 @@ class DockerEnvironment:
         env_path.write_text(
             "\n".join(f"{k}='{v}'" for k, v in values.items()) + "\n", encoding="utf-8"
         )
-        process_env = {k: v for k, v in os.environ.items() if k not in values}
+        process_env = {
+            k: v for k, v in os.environ.items() if k not in template_names | values.keys()
+        }
         result = subprocess.run(
             [
                 "docker",
                 "compose",
+                "--env-file",
+                str(ROOT / ".env.example"),
                 "--env-file",
                 str(env_path),
                 "-f",
@@ -149,6 +154,8 @@ class DockerEnvironment:
                 "work-service",
                 "--profile",
                 "classroom-service",
+                "--profile",
+                "kafka",
                 "config",
                 "--format",
                 "json",

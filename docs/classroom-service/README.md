@@ -96,7 +96,7 @@ Các quyết định chính:
 thật và nhiều dự án hoạt động đồng thời mỗi nhóm. Work có migration bỏ
 ràng buộc cũ. Không cần
 `class_work_item_id` theo nghiệp vụ đã chốt. Phần việc Work và bằng chứng nằm tại
-[ghi chú Work](../work-service/classroom-project-linking.md).
+[ghi chú Work](../project-service/classroom-project-linking.md).
 OpenAPI và schema sự kiện được sinh/tạo từ phần triển khai thật, kiểm thử và
 khóa phiên bản trong bước tích hợp; không tạo hợp đồng giả trước mã nguồn.
 
@@ -221,8 +221,9 @@ nằm tại [hướng dẫn chạy local](../infrastructure/local-development.md
 Dockerfile của API chạy migration Django trong entrypoint trước Gunicorn; Docker
 build không kết nối database. Worker dùng cùng image nhưng lệnh Celery/consumer
 bỏ qua migration. Compose đợi API Classroom healthy trước khi chạy publisher,
-Beat và consumer; worker Work cũng đợi API Work healthy. `work-profile-consumer`
-vẫn opt-in. Cấu hình và triển khai staging độc lập với luồng local.
+Beat và consumer; worker Work cũng đợi API Work healthy. Work có một container
+`work-consumer` chạy các nguồn event, không cần profile hồ sơ riêng.
+Cấu hình và triển khai staging độc lập với luồng local.
 
 Sau khi thay đổi biến môi trường, tạo lại container để nạp giá trị mới. Deploy
 staging vẫn chạy migration tuần tự trước khi cập nhật runtime; entrypoint API
@@ -255,3 +256,13 @@ Identity hoặc container đang có của người phát triển. Bộ E2E chạ
 chủ động gọi pytest, không tự chạy trong CI hoặc `ci_local.py`.
 JUnit/diagnostics nằm trong artifact từng lần chạy; số test đạt
 không thay coverage hoặc bằng chứng staging.
+
+Fixture Docker để Compose tự đọc `.env.example`, rồi nạp file chỉ chứa giá trị
+test ghi đè; không tự phân tích hoặc bọc lại giá trị JSON của mẫu môi trường.
+Stack riêng bật profile Kafka, dùng `work-consumer` chung và tạo đầy đủ topic
+trước khi chờ các consumer healthy. Không dùng `.env` hoặc credential staging
+cho bộ e2e này.
+
+Các ca đồng bộ thành viên gọi helper publisher thật sau mutation để chủ động
+phát outbox; fixture không chạy publisher/Beat Classroom tự động. Vì vậy bộ
+này kiểm HTTP → outbox → Kafka → consumer, không chứng minh lịch chạy Beat.
