@@ -3,6 +3,8 @@ from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.tasks.views.notification_resolution import NotificationResolutionView
+
 
 def healthz(request):
     try:
@@ -14,6 +16,7 @@ def healthz(request):
 
 
 urlpatterns = [
+    path("api/v1/internal/notifications/resolve", NotificationResolutionView.as_view()),
     path("healthz", healthz),
     path(
         "openapi/",

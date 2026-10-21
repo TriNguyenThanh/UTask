@@ -53,3 +53,17 @@ corepack pnpm build
 ```
 
 Browser smoke remains required for responsive layout, focus restoration, mock scenarios, and production mock exclusion.
+
+### Thông báo qua API thật
+
+Thêm `notifications` vào `VITE_REAL_SERVICES` để dùng API Gateway
+`/api/notifications/` (danh sách phân trang, số chưa đọc và đánh dấu đã đọc).
+Ví dụ: `VITE_REAL_SERVICES=auth,classroom,work,notifications`. Khi bật cờ này,
+lỗi API thật được hiển thị để thử lại, không chuyển sang dữ liệu demo. Nếu không
+bật, chế độ MSW hiện có vẫn hoạt động.
+
+Chuông và trang thông báo cập nhật mỗi 30 giây khi tab đang hiển thị; trang
+thông báo có nút tải thêm. Các lựa chọn email nằm trong Cài đặt → Hồ sơ, gồm
+phân công, hạn công việc, nhắc tên và phản hồi giảng viên. Tích hợp đã được
+kiểm bằng component test với HTTP giả lập; gửi email và kết nối dịch vụ đang
+chạy cần được kiểm tra riêng trên môi trường triển khai.

@@ -14,7 +14,7 @@ class SessionStatusView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny, ServiceKeyPermission]
-    service_callers = ("work", "classroom", "ai")
+    service_callers = ("work", "classroom", "ai", "notification")
 
     @extend_schema(
         request=None,

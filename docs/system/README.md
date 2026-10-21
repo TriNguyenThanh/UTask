@@ -23,6 +23,8 @@ từ baseline. AI Service hiện có bootstrap, xem [code map](../ai-service/cod
 - [Classroom Service](../classroom-service/README.md)
 - [Integration Service](../integration-service/README.md)
 - [Notification Service](../notification-service/README.md)
+- [Checkpoint Notification 22/10/2026](../notification-service/checkpoint-2026-10-22.md)
+- [Tích hợp Notification cho các service](../notification-service/implementation.md)
 - [AI Service](../ai-service/README.md)
 - [Web](../web/README.md)
 - [Hạ tầng](../infrastructure/README.md)

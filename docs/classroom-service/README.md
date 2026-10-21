@@ -266,3 +266,11 @@ cho bộ e2e này.
 Các ca đồng bộ thành viên gọi helper publisher thật sau mutation để chủ động
 phát outbox; fixture không chạy publisher/Beat Classroom tự động. Vì vậy bộ
 này kiểm HTTP → outbox → Kafka → consumer, không chứng minh lịch chạy Beat.
+
+## Phối hợp Notification
+
+Notification hiện chưa đăng ký consumer nguồn Classroom. Khi cần thông báo
+trực tiếp cho sự kiện lớp/nhóm, chốt hợp đồng và người nhận theo
+[hướng dẫn thêm nguồn/event](../notification-service/implementation.md#thêm-service-hoặc-event-mới),
+không gửi HTTP tùy ý hoặc ghi DB Notification từ Classroom. Hiện trạng và
+phần chưa nghiệm thu tại [checkpoint Notification](../notification-service/checkpoint-2026-10-22.md).

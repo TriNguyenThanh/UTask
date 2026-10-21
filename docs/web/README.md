@@ -36,3 +36,11 @@ Xem thêm:
   luồng chính, kết quả axe/đo DOM/responsive, danh sách phát hiện có mức độ và
   lộ trình khắc phục.
 - Hướng dẫn chạy ứng dụng và tài khoản demo: `apps/web/README.md`.
+## Notification với backend thật
+
+Adapter Notification, badge, phân trang, trạng thái đọc và tùy chọn email đã
+có source/test; bật bằng cách thêm `notifications` vào `VITE_REAL_SERVICES`
+rồi build lại. Hợp đồng và thứ tự rollout tại
+[hướng dẫn tích hợp Notification](../notification-service/implementation.md);
+phạm vi đã kiểm chứng và phần tiếp tục tại
+[checkpoint](../notification-service/checkpoint-2026-10-22.md).

@@ -25,3 +25,21 @@ schema trong tài liệu service và không tạo hợp đồng giả.
 Chuẩn event mục tiêu và những khác biệt nằm trong
 [danh mục sự kiện](../../docs/system/kafka-events.md). Baseline nêu event kết
 quả AI nhưng chưa chốt schema; không tự bổ sung tên/schema để lấp đầy thư mục.
+
+## Notification: Identity và Work
+
+Schema v1 theo producer hiện hành, envelope `data`; Notification validate trước lưu:
+
+- [Kích hoạt](identity.activation.requested.v1.json),
+  [nhập sinh viên](identity.student.imported.v1.json),
+  [đặt lại mật khẩu](identity.password_reset.requested.v1.json).
+- [Giao task](task.assigned.v1.json),
+  [nhắc hạn](task.deadline.reminder.v1.json),
+  [nhắc tên](comment.mentions.added.v1.json),
+  [phản hồi giảng viên](teacher.feedback.added.v1.json),
+  [chuyển trạng thái](task.transitioned.v1.json).
+
+`task.assigned` chỉ chứa người mới được giao, trừ actor. `task.transitioned`
+giữ dữ liệu Task hiện có và bổ sung actor/người nhận. Không suy ra schema
+GitHub/AI từ các ví dụ mục tiêu. Quy tắc gửi và trạng thái nghiệm thu tại
+[Notification Service](../../docs/notification-service/README.md).

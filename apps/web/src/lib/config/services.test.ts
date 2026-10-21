@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { isRealService, parseRealServices } from "@/lib/config/services";
 
 describe("parseRealServices", () => {
+  it("accepts notifications independently", () => {
+    expect([...parseRealServices("notifications")]).toEqual(["notifications"]);
+  });
   it("returns an empty set for undefined, empty and blank input", () => {
     expect(parseRealServices(undefined).size).toBe(0);
     expect(parseRealServices("").size).toBe(0);

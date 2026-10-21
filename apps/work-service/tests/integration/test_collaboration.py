@@ -13,6 +13,7 @@ from apps.projects.models import Project
 from apps.tasks.models import Epic, Label, Task
 from apps.tasks.tasks import scan_deadlines
 from infrastructure.storage import ObjectFacts
+from tests.event_contracts import assert_event_contract
 from tests.fixtures.storage import storage as storage
 
 pytestmark = [pytest.mark.django_db, pytest.mark.integration]
@@ -156,6 +157,8 @@ def test_teacher_feedback_mentions_diff_scope_and_timeline(
         == 200
     )
     assert OutboxEvent.objects.filter(event_type="comment.mentions.added").count() == 1
+    assert_event_contract(OutboxEvent.objects.get(event_type="comment.mentions.added"))
+    assert_event_contract(OutboxEvent.objects.get(event_type="teacher.feedback.added"))
     response = teacher.patch(
         route,
         {"content_html": "<p>Mới</p>", "mentioned_user_ids": [str(actors["leader"])]},
