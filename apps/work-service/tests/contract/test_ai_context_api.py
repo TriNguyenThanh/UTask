@@ -127,3 +127,23 @@ def test_validation_and_method_errors_do_not_echo_internal_details(context_clien
     assert all("issue" in item for item in response.json()["error"]["details"])
     assert client.get(url).status_code == 405
     assert client.post(url, "{", content_type="application/json").status_code == 400
+
+
+def test_integration_authorize_rejects_ai_caller_and_wrong_action(context_client, created_project):
+    url = f"/api/v1/internal/integration/projects/{created_project['id']}/authorize"
+    assert (
+        context_client(caller="ai").post(url, {"action": "github.read"}, format="json").status_code
+        == 403
+    )
+    assert (
+        context_client(caller="integration")
+        .post(url, {"action": "ai.analyze"}, format="json")
+        .status_code
+        == 400
+    )
+    assert (
+        context_client(caller="integration")
+        .post(url, {"action": "github.read", "actor_id": "x"}, format="json")
+        .status_code
+        == 400
+    )

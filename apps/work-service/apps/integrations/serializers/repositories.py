@@ -3,6 +3,16 @@ from rest_framework import serializers
 from common.serializers import StrictInputSerializer
 
 
+class IntegrationAuthorizeInputSerializer(StrictInputSerializer):
+    action = serializers.ChoiceField(choices=["github.read"])
+
+
+class IntegrationAuthorizeResultSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    action = serializers.CharField()
+    allowed = serializers.BooleanField()
+
+
 class RepositoryInputSerializer(StrictInputSerializer):
     github_repo_id = serializers.CharField(max_length=100)
     operation_id = serializers.CharField(max_length=100)
