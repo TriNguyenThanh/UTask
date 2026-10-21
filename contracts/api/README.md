@@ -63,3 +63,11 @@ Khi Identity chạy local, Swagger UI ở `/docs/` và OpenAPI JSON ở
   cd apps/identity-service
   uv run --locked --env-file ../../.env python manage.py export_identity_api --output ../../contracts/api/identity.openapi.json
   ```
+
+## Notification
+
+- [Public API v1](notification-service-v1.yaml): danh sách/count, trạng thái đọc
+  và tùy chọn email qua `/api/notifications/`.
+- [Internal dependencies v1](notification-internal-v1.yaml): contacts Identity
+  và resolve quyền/nội dung Work đơn/lô; chỉ backend dùng service token.
+- [Tài liệu triển khai và nghiệm thu](../../docs/notification-service/README.md).
