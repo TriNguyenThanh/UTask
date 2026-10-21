@@ -14,7 +14,7 @@ export function AiRunStatus({
       <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground" role="status">
         <span className="flex items-center gap-2">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          AI đang phân tích… (có thể mất tới 30 giây)
+          AI đang phân tích… (thường dưới 30 giây, lâu hơn khi đang chờ tới lượt)
         </span>
         <Button type="button" variant="outline" size="xs" onClick={onCancel}>
           Hủy

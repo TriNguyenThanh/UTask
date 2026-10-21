@@ -19,8 +19,10 @@ export interface AiCall {
 }
 
 export interface AiFixture {
-  /** `sync` (mặc định): POST trả 200 xong ngay. `async`: POST trả 202, GET đầu `running`, GET sau `succeeded`. */
+  /** `sync` (mặc định): POST trả 200 xong ngay. `async`: POST trả 202, `pendingPolls` GET đầu `running`, GET sau đó xong. */
   mode?: "sync" | "async";
+  /** Số GET trả `running` trước khi xong (mặc định 1). */
+  pendingPolls?: number;
   decomposition?: AiTaskDecompositionResultDto;
   backlog?: AiBacklogResultDto;
   risk?: AiRiskAnalysisResultDto;
@@ -123,7 +125,7 @@ export function aiHandlers(fixture: AiFixture = {}): HttpHandler[] {
       }
       const count = (polls.get(id) ?? 0) + 1;
       polls.set(id, count);
-      return HttpResponse.json(count < 2 ? { ...head(id, intent), status: "running" } : finished(id, intent));
+      return HttpResponse.json(count <= (fixture.pendingPolls ?? 1) ? { ...head(id, intent), status: "running" } : finished(id, intent));
     }),
   ];
 }

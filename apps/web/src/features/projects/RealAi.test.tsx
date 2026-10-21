@@ -146,11 +146,12 @@ describe("AI task decomposition", () => {
 
   it("polls an asynchronous request until the suggestions arrive", async () => {
     const user = userEvent.setup();
-    const { aiCalls } = setup({}, { ...TWO_SUBTASKS, mode: "async" });
+    // Một lần chờ thật (2 giây); nhánh `running` và giãn khoảng chờ được kiểm ở endpoints.test.ts.
+    const { aiCalls } = setup({}, { ...TWO_SUBTASKS, mode: "async", pendingPolls: 0 });
     await openAndGenerate(user);
 
     expect(await screen.findByDisplayValue("Viết API", {}, { timeout: 8000 })).toBeInTheDocument();
-    expect(aiCalls.map((call) => call.method)).toEqual(["POST", "GET", "GET"]);
+    expect(aiCalls.map((call) => call.method)).toEqual(["POST", "GET"]);
   });
 
   it("shows how long to wait when the AI rate limits the request", async () => {

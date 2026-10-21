@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AiDecompositionRequest } from "@/lib/api/ai/dto";
-import { runAiRequest } from "@/lib/api/ai/endpoints";
+import { pollDelayMs, runAiRequest } from "@/lib/api/ai/endpoints";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { server } from "@/mocks/server";
@@ -91,5 +91,27 @@ describe("runAiRequest", () => {
     );
 
     expect(error).toMatchObject({ status: 504, code: "WORKFLOW_TIMEOUT" });
+  });
+
+  it("keeps polling past the server workflow timeout while the request waits in the queue", async () => {
+    // 30 lần `running` ≈ 150 giây: lâu hơn 30 giây chạy, vẫn trong hạn 300 giây hàng đợi của server.
+    const calls = use({ mode: "async", pendingPolls: 30 });
+    let clock = 0;
+    const sleep = (ms: number) => {
+      clock += ms;
+      return Promise.resolve();
+    };
+
+    const run = await runAiRequest(client, body, { idempotencyKey: "k", sleep, now: () => clock });
+
+    expect(run.result).toEqual({ subtasks: [buildAiSubtask()], warnings: [] });
+    expect(calls.filter((call) => call.method === "GET")).toHaveLength(31);
+    expect(clock).toBeGreaterThan(45_000);
+  });
+});
+
+describe("pollDelayMs", () => {
+  it("starts at 2 seconds, backs off by 1.5x and caps at 5 seconds", () => {
+    expect([0, 1, 2, 3, 10].map(pollDelayMs)).toEqual([2_000, 3_000, 4_500, 5_000, 5_000]);
   });
 });
