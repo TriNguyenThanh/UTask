@@ -13,6 +13,10 @@ describe("parseRealServices", () => {
     expect([...parseRealServices(" auth , classroom,auth")].sort()).toEqual(["auth", "classroom"]);
   });
 
+  it("accepts the integration service", () => {
+    expect([...parseRealServices("auth,integration")].sort()).toEqual(["auth", "integration"]);
+  });
+
   it("throws on unknown names so typos do not silently fall back to mocks", () => {
     expect(() => parseRealServices("auth,clasroom")).toThrow(
       "VITE_REAL_SERVICES chứa giá trị không hợp lệ: clasroom",

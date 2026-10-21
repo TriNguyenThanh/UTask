@@ -419,6 +419,32 @@ Giới hạn:
 - AI gợi ý backlog (Phase 17): nút "AI gợi ý backlog" cạnh "Tạo sprint" ở trang Backlog, chỉ Leader, dự án chưa lưu trữ. Form điền sẵn mô tả (hoặc tên nếu mô tả trống) và mục tiêu từ dự án; công nghệ để trống vì `tech_stack` của Work là object tự do (B17). Mỗi danh sách một mục mỗi dòng, tối đa 30 mục (vượt thì chặn gửi); `deadline` = hết ngày `end_date` giờ Việt Nam (+07:00); khóa rỗng không gửi vì AI Service từ chối. Accept tạo từng issue qua `POST /projects/{id}/tasks/` (loại TASK, `priority` low/medium/high/critical → LOW/MEDIUM/HIGH/URGENT, điểm = làm tròn `estimate_points`), cùng cơ chế tuần tự/thử lại như tách nhiệm vụ con; issue tạo ra có `source=MANUAL`. Logic form ở `features/projects/lib/aiBacklogForm.ts`.
 - Kiểm tra: `tsc`, test cả khi có và không có `.env.local` (97 file, 1147 test), build. ESLint không chạy được. Smoke trình duyệt (Chrome, Vite `VITE_REAL_SERVICES=auth,classroom,work`, AI qua MSW): Phase 16 hộp gợi ý hiện sau ~3 giây, Accept tạo 3 nhiệm vụ con thật; Phase 17 form điền sẵn mô tả, gợi ý hiện sau ~3 giây, Accept tạo 3 issue thật hiện trong Backlog trên dự án smoke staging; đã xóa sau khi kiểm. Lưu ý WSL: `node.exe` không thấy biến môi trường của WSL nếu thiếu `WSLENV=VITE_REAL_SERVICES:VITE_ENABLE_MOCKS`.
 
+## GitHub qua Integration và Work (Phase 18)
+
+Trạng thái: **Một phần** (đang làm theo từng giai đoạn; mục dưới ghi phần đã có). Kế hoạch: nối web với Integration Service (liên kết tài khoản, cài GitHub App, xem repo) và các route GitHub của Work (username, repository dự án, link task). Theo ADR-004, Integration sở hữu liên kết tài khoản GitHub, nên web dùng luồng consent của Integration, **không** dùng `/api/auth/oauth/github` của Identity.
+
+### Nền tảng client Integration (giai đoạn 1)
+
+- Bật bằng `VITE_REAL_SERVICES=...,integration`. Không có `integration` thì phần GitHub vẫn dùng dữ liệu demo như cũ.
+- Mã: `lib/api/integration/dto.ts`, `lib/api/integration/endpoints.ts`. Gateway `/api/integrations/` chuyển nguyên đường dẫn; nginx chặn `/api/integrations/api/v1/internal/*`.
+- Phản hồi dạng `{success:true,data}`, lỗi `{success:false,error:{code,message}}`; `client.requestEnvelope` đọc được cả hai.
+- Hai route `start` từ chối mọi body và query: client không gửi `body` (nên cũng không có header `Content-Type`). Hai route `complete` chỉ nhận đúng bộ key của nó, thiếu hoặc thừa đều bị từ chối.
+
+| Endpoint (tiền tố `/api/integrations/api/v1/github`) | Hàm client | Nhãn (source) | Nhãn (staging) |
+|---|---|---|---|
+| `GET /account` | `getGitHubAccount` | Đã triển khai | Chưa xác minh (không token → 401 `NOT_AUTHENTICATED`; cờ App chưa rõ) |
+| `DELETE /account` | `unlinkGitHubAccount` | Đã triển khai | Chưa xác minh |
+| `POST /authorizations/start` | `startGitHubAuthorization` | Đã triển khai | Chưa xác minh |
+| `POST /authorizations/complete` body `{code,state}` | `completeGitHubAuthorization` | Đã triển khai | Chưa xác minh |
+| `POST /installations/start` | `startGitHubInstallation` | Đã triển khai | Chưa xác minh |
+| `POST /installations/complete` body `{state,installation_id,setup_action}` | `completeGitHubInstallation` | Đã triển khai | Chưa xác minh |
+| `GET /installations?page=&per_page=` | `listGitHubInstallations` | Đã triển khai | Chưa xác minh |
+| `GET /installations/{id}/repositories?page=&per_page=` | `listGitHubRepositories` | Đã triển khai | Chưa xác minh |
+
+Khi `INTEGRATION_GITHUB_APP_ENABLED=false`, mọi route trả 503 `GITHUB_UNAVAILABLE`. `/api/integrations/healthz` trả 200 trên staging (ngày 21/10/2026).
+
+Test dùng `src/test/integrationHandlers.ts` (MSW): handler `start` trả 400 nếu request có body hoặc query, handler `complete` trả 400 nếu thiếu hoặc thừa key.
+
 ## Việc cần backend (tổng hợp)
 
 | Mã | Nội dung |
