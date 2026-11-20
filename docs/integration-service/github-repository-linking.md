@@ -363,7 +363,7 @@ flow mới và không mặc định tái sử dụng installation ID cũ.
 
 Thiết kế prepare/confirm/abort/status, event
 `integration.project.connection.changed` và AI context đã được chốt tại
-[ADR-005](../adr/005-integration-work-ai-contracts.md). Provider hiện đã có source
+[ADR-005](../system/adr/005-integration-work-ai-contracts.md). Provider hiện đã có source
 và test; xem [vận hành](runtime-connections.md). Chỉ ghi “đã tích hợp runtime”
 sau E2E với implementation Work/AI thật.
 

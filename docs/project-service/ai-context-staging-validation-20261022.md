@@ -30,7 +30,7 @@ Phải phân biệt hai cấu hình đã kiểm:
 
 ## Source và môi trường
 
-Tiếp tục đúng stack của [phiên kiểm HTTP trước](../infrastructure/staging-http-validation-20261021.md):
+Tiếp tục đúng stack của [phiên kiểm HTTP trước](../system/infrastructure/staging-http-validation-20261021.md):
 project Docker `utask-staging-local-20261021`, gateway `http://127.0.0.1:18080`.
 Không SSH/VPS, không GHCR, không tạo lại volume hoặc reset database.
 

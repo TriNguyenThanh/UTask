@@ -51,7 +51,7 @@ Không xác minh được dịch vụ phụ thuộc thì API trả lỗi, không
 - [Schema Kafka](../../contracts/events/README.md): giữ envelope `data` của
   producer. Notification đóng gói bản sao schema trong image; test đối chiếu
   với contract chuẩn để tránh lệch.
-- [Mã nguồn](../../apps/notification-service/): API, consumer, worker và Beat
+- [Mã nguồn](../../apps/notification-service): API, consumer, worker và Beat
   dùng chung image. Consumer group Identity/Work riêng, offset commit đồng bộ
   sau lưu inbox hoặc cách ly bền vững; không chờ SMTP mới commit Kafka.
 

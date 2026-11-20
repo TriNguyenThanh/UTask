@@ -7,7 +7,7 @@ Schema máy đọc được nằm tại
 
 Tài liệu này mô tả API mà client dùng để yêu cầu AI xử lý một ý định cụ thể.
 API chỉ nhận yêu cầu và trả bản phân tích hoặc proposal có cấu trúc. Theo
-[baseline](../architecture/README.md), AI lấy context qua internal API sau
+[baseline](../system/architecture-baseline.md), AI lấy context qua internal API sau
 Context Layer/domain tool; projection qua Kafka có thể bổ sung khi cần.
 Client không gửi toàn bộ dữ liệu nghiệp vụ; agent không tự gọi HTTP tùy ý,
 Kafka hoặc database service khác. Xem [kiến trúc](architecture.md).
@@ -488,7 +488,7 @@ hạn.
 
 Luồng chi tiết và trách nhiệm retry/dead-letter là thiết kế tại
 [kiến trúc AI](architecture.md), được ghi nhận trong
-[ADR-002](../adr/002-ai-request-pipeline.md); không bổ sung status, endpoint
+[ADR-002](../system/adr/002-ai-request-pipeline.md); không bổ sung status, endpoint
 hoặc event schema mới vào contract v1.
 
 ## 11. Các quyết định contract v1
@@ -584,5 +584,5 @@ giới hạn tích hợp:
 
 Cơ chế luôn trả `202` hoặc SSE/WebSocket cần quyết định và cập nhật contract
 riêng. Sau `202`, polling dùng HTTP GET mới; Kafka không gửi response thứ hai
-trên request POST đã kết thúc. Xem [ADR-001](../adr/001-adopt-architecture-baseline.md).
-Pipeline job nền đã được chốt riêng trong [ADR-002](../adr/002-ai-request-pipeline.md).
+trên request POST đã kết thúc. Xem [ADR-001](../system/adr/001-adopt-architecture-baseline.md).
+Pipeline job nền đã được chốt riêng trong [ADR-002](../system/adr/002-ai-request-pipeline.md).

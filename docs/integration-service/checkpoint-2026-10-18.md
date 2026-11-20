@@ -2,7 +2,7 @@
 
 **Trạng thái: Một phần.** Đây là bản chụp tiến độ và điểm tiếp tục công việc
 ngày 18/10/2026. Quyết định kiến trúc hiện hành nằm tại
-[ADR-004](../adr/004-integration-github-account-ownership.md); bằng chứng và
+[ADR-004](../system/adr/004-integration-github-account-ownership.md); bằng chứng và
 cách kiểm tra nằm tại [foundation](foundation.md). Các kết quả bên dưới được
 ghi nhận từ lượt triển khai trước khi lưu checkpoint, không phải lượt chạy mới.
 

@@ -12,7 +12,7 @@ Nguồn chuẩn cho path, schema và mã lỗi là
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
 [contract Work](../../contracts/api/work-service.yaml) tham chiếu. Khi có khác
 biệt, sửa đồng bộ contract, consumer, provider và test; không tự thêm trường
-vào response. Xem thêm [ADR-005](../adr/005-integration-work-ai-contracts.md)
+vào response. Xem thêm [ADR-005](../system/adr/005-integration-work-ai-contracts.md)
 và [điều kiện phát hành AI](../ai-service/production-readiness.md).
 
 Checklist triển khai, vị trí sửa và cách kiểm thử nằm trong

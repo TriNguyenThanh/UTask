@@ -17,8 +17,8 @@ và smoke service thật còn mở; không suy ra đã triển khai staging từ
 - [x] Giữ nguyên JSON contract AI; không thêm trường đơn vị ngoài schema team.
 - [x] Capacity là giờ/tuần; workload là story points còn lại, không quy đổi giữa hai đơn vị.
 - [x] Đọc lại toàn bộ [AGENTS.md](../../AGENTS.md), rule thư mục liên quan và [mục lục hệ thống](../system/README.md) trước triển khai.
-- [x] Đọc [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md), [cấu hình môi trường](../infrastructure/environment.md), [tài liệu Work](README.md).
-- [x] Đọc [guide Work–AI](ai-service-integration-guide.md), [contract context](../../contracts/api/work-ai-context-v1.yaml), [contract Work](../../contracts/api/work-service.yaml) và [ADR-005](../adr/005-integration-work-ai-contracts.md).
+- [x] Đọc [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md), [cấu hình môi trường](../system/infrastructure/environment.md), [tài liệu Work](README.md).
+- [x] Đọc [guide Work–AI](ai-service-integration-guide.md), [contract context](../../contracts/api/work-ai-context-v1.yaml), [contract Work](../../contracts/api/work-service.yaml) và [ADR-005](../system/adr/005-integration-work-ai-contracts.md).
 - [x] Kiểm tra worktree hiện tại, đọc source/config/tests thực tế; không ghi đè công việc có sẵn.
 - [x] Dùng skill Django và PostgreSQL phù hợp, GitNexus truy vết và impact trước khi sửa symbol hiện hữu. Kết quả graph phải được đối chiếu source.
 

@@ -26,8 +26,12 @@ không thuộc checkout Git. Chúng là dấu vết từng lần chạy, không 
 chứng runtime hoặc trạng thái staging hiện tại. Tài liệu API và mã nguồn
 được liên kết trong các mục dưới là nguồn dùng khi review checkout sạch.
 
-Theo [baseline](../architecture/README.md), mục 4.3, service dùng Python +
+Theo [baseline](../system/architecture-baseline.md), mục 4.3, service dùng Python +
 Django + DRF, sở hữu cả điểm danh, điểm số và liên kết nhóm–project.
+
+Tài liệu cùng service: [mô hình dữ liệu](data-model.md),
+[đặc tả đối tượng](objects.md), [chức năng](chuc-nang.md) và
+[sơ đồ](diagram/README.md).
 
 Classroom Service quản lý môn học, lớp theo học kỳ, giảng viên, sinh viên, ghi
 danh, nhóm, thành viên nhóm và liên kết dự án. Nhóm tự chọn đề tài và tạo dự
@@ -54,7 +58,7 @@ Kế hoạch triển khai (bản local `implementation-plan.md`) đi từ khung 
 lớp/ghi danh/nhóm đến tích hợp Work–Kafka và Web; có vị trí mã, kiểm thử theo
 từng bước và bảng truy vết toàn bộ sơ đồ.
 
-Bộ sơ đồ tại [docs/diagram/classroom-service](../diagram/classroom-service/README.md)
+Bộ sơ đồ tại [docs/classroom-service/diagram](diagram/README.md)
 phân tích phạm vi P0/P1/P2, actor/quyền, các luồng Classroom–Identity–Work và
 ERD PostgreSQL mục tiêu. Các bản vẽ đã đồng bộ với nhóm tự chọn đề tài và nhiều
 dự án hoạt động đồng thời, xem kế hoạch triển khai (bản local `implementation-plan.md`).
@@ -102,7 +106,7 @@ khóa phiên bản trong bước tích hợp; không tạo hợp đồng giả t
 
 ## API backend và quyền
 
-Nguồn mã tại [apps/classroom-service](../../apps/classroom-service/) có ba app
+Nguồn mã tại [apps/classroom-service](../../apps/classroom-service) có ba app
 `courses`, `groups`, `messaging`. Mỗi miền tách models, serializers, queries,
 services, views và urls. Bộ dùng chung copy/điều chỉnh từ Work theo bảng 2.1
 của kế hoạch; không import Work ở runtime. Model/migration có 10 bảng, khóa
@@ -114,7 +118,7 @@ Các đường dưới đây là tài nguyên tương đối. Lệnh có chống
 sau guard quyền hiện hành của chính thao tác đó; kiểm tra nghiệp vụ nào nằm
 sau receipt có thể không chạy lại cho replay. Cùng khóa nhưng khác nội dung bị
 từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể xem
-[luồng xử lý và replay](../diagram/classroom-service/sequence.md#3-quy-tắc-kỹ-thuật-chung-dành-cho-người-triển-khai).
+[luồng xử lý và replay](diagram/sequence.md#3-quy-tắc-kỹ-thuật-chung-dành-cho-người-triển-khai).
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
@@ -210,14 +214,14 @@ Quyền ghi danh mục Course và hành vi của `created_by_id` được mô t�
 quyền API ở mục [API backend và quyền](#api-backend-và-quyền).
 
 Classroom nhận cấu hình theo pipeline `.env` → `infra/env/classroom-service.env`
-→ Compose `env_file` → settings; xem [tài liệu biến môi trường](../infrastructure/environment.md).
+→ Compose `env_file` → settings; xem [tài liệu biến môi trường](../system/infrastructure/environment.md).
 Đặt `CLASSROOM_DJANGO_SECRET_KEY`, `CLASSROOM_ACCESS_CODE_HMAC_KEY`,
 `IDENTITY_CLASSROOM_SERVICE_KEY` và `CLASSROOM_WORK_SERVICE_KEY`; caller
 `classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp khóa tương ứng.
 Các khóa này không có secret mặc định. Celery Classroom dùng Redis DB3, Work DB2.
 
 Quy trình local chuẩn, gồm một lệnh build/khởi động và các điều kiện đầu vào,
-nằm tại [hướng dẫn chạy local](../infrastructure/local-development.md#khởi-động-identity-classroom-và-work).
+nằm tại [hướng dẫn chạy local](../system/infrastructure/local-development.md#khởi-động-identity-classroom-và-work).
 Dockerfile của API chạy migration Django trong entrypoint trước Gunicorn; Docker
 build không kết nối database. Worker dùng cùng image nhưng lệnh Celery/consumer
 bỏ qua migration. Compose đợi API Classroom healthy trước khi chạy publisher,
@@ -230,7 +234,7 @@ staging vẫn chạy migration tuần tự trước khi cập nhật runtime; en
 có thể chạy migration lần nữa, Django bỏ qua các migration đã áp dụng. Migration
 đạt và container healthy chưa tự xác nhận tích hợp HTTP/Kafka; phạm vi và bằng
 chứng kiểm tra hiện có được ghi tại nghiệm thu backend (bản local `backend-validation.md`)
-và [Kafka](../infrastructure/kafka.md).
+và [Kafka](../system/infrastructure/kafka.md).
 
 ## Cấu trúc kiểm thử và CI
 
@@ -243,7 +247,7 @@ Classroom dùng discovery và workflow Python hiện có: lint/format, kiểm
 Django/migration, chạy `uv run pytest` cho bộ mặc định của service. `ci-result`
 chặn release nếu kiểm tra được chọn lỗi; release giữ cơ chế build/push image
 theo digest. Không thêm job phân tầng hoặc E2E dùng chung. Xem
-[CI/CD](../infrastructure/ci-cd.md#classroom-dùng-nền-ci-chung).
+[CI/CD](../system/infrastructure/ci-cd.md#classroom-dùng-nền-ci-chung).
 
 Test trong service tách `tests/unit`, `tests/integration`, `tests/contract`.
 Kiểm thử OpenAPI dùng schema sinh trực tiếp từ URLconf/serializer bằng

@@ -1,8 +1,8 @@
 # Stack AI Service
 
 **Trạng thái: Một phần.** Runtime và dependencies pipeline đã có; integration
-production và evaluation LLM chưa xác minh. Theo [baseline](../architecture/README.md)
-và [ADR-002](../adr/002-ai-request-pipeline.md).
+production và evaluation LLM chưa xác minh. Theo [baseline](../system/architecture-baseline.md)
+và [ADR-002](../system/adr/002-ai-request-pipeline.md).
 
 | Layer | Đã triển khai |
 | --- | --- |

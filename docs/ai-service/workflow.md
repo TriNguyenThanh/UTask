@@ -30,7 +30,7 @@ Nguyên tắc cốt lõi:
 
 ## 2. Kiến trúc tổng thể
 
-Thiết kế theo [baseline](../architecture/README.md), mục 4.6, 9–11 và 18.
+Thiết kế theo [baseline](../system/architecture-baseline.md), mục 4.6, 9–11 và 18.
 Source hiện theo các layer dưới đây; vị trí và kiểm thử ở [code map](code-map.md).
 
 ```text
@@ -55,7 +55,7 @@ completion và phát PostgreSQL NOTIFY; listener trong API tiếp nhận và ghi
 kết quả cuối vào persistence chung của AI để trả cho client. Consumer Kafka chạy
 ngoài agent loop; khi có use case/contract, consumer cập nhật projection hoặc
 tạo job qua cùng application/dispatcher. Xem nguồn chi tiết tại
-[pipeline AI](architecture.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
+[pipeline AI](architecture.md) và [ADR-002](../system/adr/002-ai-request-pipeline.md).
 
 API/worker có thể tách process/container, không bắt buộc singleton. MVP dùng
 polling và giữ ngưỡng chờ 10 giây của [API v1](api.md); luôn trả `202` hoặc
@@ -354,8 +354,8 @@ offset hoặc replay. Không bắt LlmAgent consume/publish Kafka.
 Consumer không dùng Kafka để hỏi quyền hoặc lấy context đồng bộ. Khi tạo job,
 consumer phải bàn giao bền vững và chống trùng trước khi xác nhận xử lý event;
 retry/dead-letter không được làm mất job hoặc chạy AI ngoài budget. Chi tiết
-nằm trong [job nền](../infrastructure/background-jobs.md) và
-[Kafka/outbox](../infrastructure/kafka.md).
+nằm trong [job nền](../system/infrastructure/background-jobs.md) và
+[Kafka/outbox](../system/infrastructure/kafka.md).
 
 Sau khi lưu kết quả, AI có thể phát event theo baseline cho Notification.
 `ai.analysis.completed`/`ai.project.risk.detected` chưa có schema/topic được

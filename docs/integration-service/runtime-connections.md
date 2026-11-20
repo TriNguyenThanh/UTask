@@ -8,7 +8,7 @@ và [event v1](../../contracts/events/integration.project.connection.changed.v1.
 
 ## Source và tính nhất quán
 
-App [github_connections](../../apps/integration-service/apps/github_connections/)
+App [github_connections](../../apps/integration-service/apps/github_connections)
 sở hữu ProjectConnection, ConnectionOperation và IntegrationOutboxEvent;
 không có FK hoặc truy vấn database Work/Identity. Installation vẫn là metadata
 hint; mọi truy cập reference/context đều kiểm installation và repository live.

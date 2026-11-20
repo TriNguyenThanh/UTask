@@ -2,11 +2,11 @@
 
 Identity là nguồn dữ liệu gốc về tài khoản, hồ sơ, vai trò toàn hệ thống và phiên đăng
 nhập của UTask. Tài liệu này hướng dẫn các service khác tích hợp; chi tiết request/response
-nằm trong [đặc tả API](../architecture/Identity_Service_API_Specification.md).
+nằm trong [đặc tả API](api-specification.md).
 Schema OpenAPI local được cung cấp tại `/openapi/`; qua gateway staging là
 `/api/auth/openapi/`.
 
-Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>),
+Theo [baseline](<../system/architecture-baseline.md>),
 mục 4.1 và 7, service dùng Python + Django + DRF, Django Authentication,
 JWT access token và refresh token; không dùng Keycloak ở giai đoạn hiện tại.
 
@@ -16,6 +16,10 @@ chúng không đọc Identity DB.
 **Phạm vi:** API lõi có source và kiểm thử local. Google/GitHub OAuth và avatar R2 được
 mở bằng feature flags khi đủ cấu hình. Publisher Kafka và avatar R2 đã có kiểm chứng
 runtime local. Google/GitHub thật, gửi email và gateway/staging chưa được nghiệm thu.
+
+Tài liệu cùng service: [đặc tả API](api-specification.md),
+[đặc tả kiểm thử](testing-specification.md), [lịch sử kiểm thử](testing-history.md)
+và [sơ đồ](diagram/README.md).
 
 <a id="trach-nhiem-va-du-lieu"></a>
 
@@ -29,7 +33,7 @@ dùng, Identity dùng IP đó cho session, audit, Axes và rate limit. Hạ tầ
 cấu hình để chỉ nhận header IP từ mạng proxy nội bộ; header giả từ nguồn khác
 bị bỏ qua. Chạy app ngoài Compose mặc định dùng IP kết nối trực tiếp.
 Chi tiết tại
-[cấu hình proxy và IP client](../infrastructure/environment.md#ip-client-qua-proxy).
+[cấu hình proxy và IP client](../system/infrastructure/environment.md#ip-client-qua-proxy).
 Các bản ghi lịch sử không tự đổi IP sau khi deploy bản sửa.
 
 Các service xác thực token nhưng không truy cập Identity DB. Phân quyền kết
@@ -276,7 +280,7 @@ cũ hơn7 ngày và token/session/email-confirmation kỹ thuật đã quá hạ
 event chưa publish. Audit được giữ nguyên đến khi có chính sách được phê duyệt.
 Expired mail secret được redaction dù event còn pending; TTL Redis do Redis quản lý.
 
-Theo [ADR-004](../adr/004-integration-github-account-ownership.md), luồng GitHub
+Theo [ADR-004](../system/adr/004-integration-github-account-ownership.md), luồng GitHub
 mới thuộc Integration và dùng `GET /users/me` của Identity để xác thực actor.
 Không cần sửa code/allowlist Identity. Nội dung GitHub sau đây mô tả **source
 legacy còn giữ nguyên**, không phải dependency hoặc ownership của luồng mới.
@@ -295,7 +299,7 @@ Stack: Django/DRF, dj-rest-auth, allauth, SimpleJWT, Axes, Argon2; PostgreSQL v�
 Compose local và staging cùng dùng mapping `infra/env/identity-service.env`.
 Điền giá trị tại `.env` của từng máy theo `.env.example`: signing key host path,
 caller keys, mail encryption và nhóm Google/GitHub/R2. Giữ secrets ngoài source;
-xem [cấu hình môi trường](../infrastructure/environment.md).
+xem [cấu hình môi trường](../system/infrastructure/environment.md).
 Swagger local `/docs/`; qua gateway staging là
 `/api/auth/docs/`. OpenAPI JSON local `/openapi/`, qua gateway là
 `/api/auth/openapi/`; health `/healthz`.
@@ -307,11 +311,11 @@ và hooks thư viện; `messaging` ghi event/mã hóa mail; `common` xử lý re
 Kiểm thử bao phủ register→activate→login→me→refresh→logout, recovery/change password,
 quyền, lockout, replay/concurrency và rollback. Unit không cần DB; integration dùng
 PostgreSQL/Redis kiểm thử riêng. Lệnh và ma trận ở
-[đặc tả kiểm thử](../architecture/Identity_Service_Test_Specification.md#5-chạy-test-bằng-pytest).
+[đặc tả kiểm thử](testing-specification.md#5-chạy-test-bằng-pytest).
 
-Tài liệu chi tiết: [API](../architecture/Identity_Service_API_Specification.md),
-[ERD](../diagram/identity-service/erd.md),
-[use case](../diagram/identity-service/usecase.md), [sequence](../diagram/identity-service/sequence.md),
+Tài liệu chi tiết: [API](api-specification.md),
+[ERD](diagram/erd.md),
+[use case](diagram/usecase.md), [sequence](diagram/sequence.md),
 [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md).
 
 ## Bàn giao tích hợp Notification

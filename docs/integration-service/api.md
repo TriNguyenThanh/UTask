@@ -90,7 +90,7 @@ nghiệm thu. Tất cả dùng `X-Service-Key` theo caller và bị chặn tại
 Schema request/response và error là nguồn chuẩn trong OpenAPI. Quy trình phía
 caller xem [guide Work](work-service-integration-guide.md) và
 [guide AI](ai-service-integration-guide.md); quyết định kiến trúc ở
-[ADR-005](../adr/005-integration-work-ai-contracts.md).
+[ADR-005](../system/adr/005-integration-work-ai-contracts.md).
 
 Prepare trả snapshot PENDING bất biến cả khi retry sau confirm; status phản
 ánh state operation hiện tại, confirm replay trả kết quả cuối cũ. Operation ID

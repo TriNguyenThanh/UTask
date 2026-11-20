@@ -22,7 +22,7 @@ này chỉ trỏ tới.
 - **Nguồn ranh giới service**: [kiến trúc](../system/architecture.md),
   [quyền sở hữu dữ liệu](../system/data-ownership.md),
   [giao tiếp REST và Kafka](../system/communication.md). Nguồn nghiệp vụ tài khoản:
-  [đặc tả API Identity](../architecture/Identity_Service_API_Specification.md) (đối
+  [đặc tả API Identity](../identity-service/api-specification.md) (đối
   chiếu với mã; khi lệch, mã nguồn là sự thật hiện tại).
 - **Nhãn trạng thái** theo [quy ước chung](../system/README.md): `Đã triển khai`,
   `Một phần`, `Chưa triển khai`, `Thiết kế mục tiêu`, `Chưa xác minh`; thêm

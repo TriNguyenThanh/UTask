@@ -7,9 +7,9 @@ runtime với Identity/Work/Integration và LLM production **Chưa xác minh**. 
 provider mới có hợp đồng, **Chưa triển khai**. Retention terminal
 đã có source/migration/Celery beat; Kafka và specialist **Chưa triển khai**.
 
-Thiết kế theo [baseline](../architecture/README.md),
-[ADR-001](../adr/001-adopt-architecture-baseline.md) và
-[ADR-002](../adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
+Thiết kế theo [baseline](../system/architecture-baseline.md),
+[ADR-001](../system/adr/001-adopt-architecture-baseline.md) và
+[ADR-002](../system/adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
 source/test và cấu hình M3. Xem [mức sẵn sàng production](production-readiness.md),
 [code map](code-map.md), [API v1](api.md),
 [workflow](workflow.md), [ERD](erd.md) và [hướng dẫn chạy](README.md).
@@ -155,7 +155,7 @@ scheduler, conversation hoặc notification runtime trong thay đổi này.
 **Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
 Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
 và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
-[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+[ADR-002](../system/adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
 terminal result ở mục 3 của quyết định ban đầu.
 
 - Worker gọi `stage_completion`: khóa request, kiểm tra execution token,
@@ -218,7 +218,7 @@ scheduler, conversation hoặc notification runtime trong thay đổi này.
 **Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
 Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
 và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
-[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+[ADR-002](../system/adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
 terminal result ở mục 3 của quyết định ban đầu.
 
 - Worker gọi `stage_completion`: khóa request, kiểm tra execution token,

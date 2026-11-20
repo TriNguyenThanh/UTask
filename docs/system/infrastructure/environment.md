@@ -1,0 +1,441 @@
+# Biến môi trường
+
+`docker-compose.yml` dành local; `docker-compose.staging.yml` dành triển khai staging
+bằng image đã phát hành. Hai Compose dùng chung bộ ánh xạ `infra/env/*.env` và
+một mẫu [.env.example](../../../.env.example). Mỗi máy có `.env` riêng, không commit:
+
+- `database.env`: thông tin PostgreSQL dùng chung (`POSTGRES_*`).
+- `django.env`: cấu hình dùng chung cho các dịch vụ Django.
+- `postgres.env`: tên database do script khởi tạo sử dụng.
+- `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
+- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
+  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
+
+Phần Work kết nối Integration có URL, key hai chiều, cờ nhận lệnh và consumer
+riêng trong `infra/env/work-service.env`, cùng nguồn `.env` như các biến khác.
+Mặc định adapter unavailable và cờ tắt; cách ghép key, bật profile và recreate
+process Work nằm tại [hướng dẫn Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
+Không cần thêm giá trị cố định vào Compose hoặc sửa nghiệp vụ service khác.
+
+## Web gọi API và CORS
+
+Nginx chỉ cho origin Web staging `https://utask.u-code.dev` và các origin local
+đã ghi rõ trong map đọc response API. Nginx bật gửi cookie; không dùng `*` vì
+trình duyệt từ chối wildcard khi request cần credentials. API vẫn xác thực
+`Bearer` token ở backend; CORS không cấp quyền đăng nhập hay quyền dữ liệu.
+
+Origin được phép cho CSRF vẫn giới hạn theo frontend. `.env` dùng
+`http://localhost:5173` và `http://127.0.0.1:5173`; `.env.staging` dùng
+`https://utask.u-code.dev` cho `IDENTITY_FRONTEND_URL` và
+`IDENTITY_CSRF_TRUSTED_ORIGINS`. Origin gồm scheme, host và port; không thêm
+đường dẫn `/` ở cuối. CORS allowlist và `CSRF_TRUSTED_ORIGINS` là hai kiểm tra
+riêng.
+
+Web đọc `VITE_API_BASE_URL` lúc build; mặc định mã nguồn để trống và gọi đường
+dẫn cùng origin. Khi Web chạy trên Vercel cùng API ở host riêng, cấu hình biến
+build của Vercel thành `https://utask-api.u-code.dev`; `.env.staging` trên VPS
+không được Vercel đọc. Xem [Web API client](../../../apps/web/src/lib/api/ApiClientProvider.tsx)
+và [Nginx gateway](../../../infra/nginx/nginx.conf).
+
+## Chọn Kafka Docker hoặc Kafka bên ngoài
+
+**Đã triển khai ở cấu hình và client Work/Classroom.** Đã kiểm tra đăng nhập
+Aiven và metadata; ngày 21/10/2026 đã kiểm producer ACK và consumer nhận/commit
+trên topic chẩn đoán riêng từ container dùng `.env.staging`. Đã tái hiện lỗi
+topic thiếu khi bật đủ profile như deploy; xem
+[bằng chứng và giới hạn](staging-consumer-verification-20261021.md). Chưa xác minh VPS sau khắc phục.
+Dùng cùng một bộ biến trên local và staging:
+
+```dotenv
+# Local: bật profile kafka để chạy broker trong Docker.
+COMPOSE_PROFILES=kafka
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_SECURITY_PROTOCOL=PLAINTEXT
+```
+
+```dotenv
+# Staging: thay bằng địa chỉ do nhà cung cấp Kafka cấp.
+COMPOSE_PROFILES=
+KAFKA_BOOTSTRAP_SERVERS=broker.example.com:9092
+```
+
+Nếu nhà cung cấp yêu cầu đăng nhập, điền thêm đúng thông số họ cấp:
+
+```dotenv
+KAFKA_SECURITY_PROTOCOL=SASL_SSL
+KAFKA_SASL_MECHANISM=PLAIN
+KAFKA_SASL_USERNAME=...
+KAFKA_SASL_PASSWORD=...
+```
+
+`KAFKA_SECURITY_PROTOCOL` chọn kiểu kết nối: `PLAINTEXT` không mã hóa,
+`SSL` mã hóa đường truyền, `SASL_PLAINTEXT` đăng nhập không mã hóa,
+`SASL_SSL` đăng nhập qua đường truyền mã hóa. `KAFKA_SASL_MECHANISM` là
+cách đăng nhập, hỗ trợ `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`;
+chỉ cần điền theo nhà cung cấp, không tự đoán. Khi không dùng SASL, client
+không gửi thông tin đăng nhập. Giá trị không hợp lệ hoặc thiếu tài khoản/mật
+khẩu khi dùng SASL khiến client dừng với lỗi cấu hình, không tự hạ kiểu kết nối.
+
+`KAFKA_SSL_CA_LOCATION` để trống để dùng chứng chỉ tin cậy mặc định của client.
+Nếu nhà cung cấp cấp chứng chỉ CA riêng (chứng chỉ dùng để xác minh máy chủ),
+Compose staging gắn thư mục `infra/env` chỉ đọc vào `/run/kafka-certificates`
+cho các container Work/Classroom. Đặt tệp tại `infra/env/ca.pem`, rồi cấu hình:
+
+```dotenv
+KAFKA_SSL_CA_LOCATION=/run/kafka-certificates/ca.pem
+```
+
+Đây là đường dẫn **trong container**, không phải đường dẫn Windows. Khi không
+dùng CA riêng, để biến trống; không bắt buộc có `ca.pem` nếu dùng Kafka Docker.
+Tệp CA chỉ dùng với `SSL`/`SASL_SSL`. Chỉ đặt chứng chỉ CA công khai và các
+mapping không chứa bí mật trong thư mục này, không đặt khóa riêng hoặc `.env`
+chứa thông tin đăng nhập.
+
+Trên VPS cũng cần tệp tại `STAGING_WORKDIR/infra/env/ca.pem`. Tệp PEM đang được
+Git bỏ qua; workflow chỉ chuyển các mapping `*.env`, không tự chuyển CA.
+Chuẩn bị CA trên VPS trước khi tạo lại container; không đưa khóa riêng vào Git.
+
+Chạy trực tiếp Docker Compose từ repository root. Compose tự đọc `.env`:
+
+```bash
+docker compose up --build -d
+
+# Trên VPS, dùng .env của staging cạnh file Compose.
+# Workflow deploy vẫn cấp image đã phát hành qua staging-images.json.
+docker compose -f docker-compose.staging.yml -f staging-images.json up -d
+```
+
+Nếu cần chạy app có profile khi thao tác staging thủ công, thêm
+`--profile work-service --profile classroom-service` trước `up`.
+Khi truyền `--profile` trên lệnh, Docker Compose ưu tiên danh sách đó thay cho
+`COMPOSE_PROFILES`; nếu vẫn dùng broker Docker, thêm cả `--profile kafka`.
+Deploy staging tự bật profile các app được phát hành và giữ lựa chọn profile
+`kafka` nếu máy chủ đã chọn. `work-consumer` chạy cùng Work, không có profile
+riêng; nguồn Integration chỉ chạy khi chọn adapter thật. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
+(giữ các profile khác nếu có) rồi điền địa chỉ broker.
+Không cần file Compose riêng hay script khởi động bổ sung.
+Worker chỉ chờ broker Docker khi profile `kafka` được bật; khi tắt, dependency
+này không bắt buộc. Docker Compose cần hỗ trợ `depends_on.required` (từ 2.20).
+Biến đã export trong shell được Compose ưu tiên hơn giá trị trong `.env`.
+
+Tắt profile `kafka` không tạo topic trên cloud, không chuyển dữ liệu/offset và không tự
+xóa container Kafka cũ. Chuẩn bị topic, quyền gửi/nhận, nhóm đọc và thời gian
+lưu theo [hướng dẫn Kafka](kafka.md#kafka-bên-ngoài). Giữ nguyên volume nếu
+cần quay lại broker Docker. Sau khi sửa cấu hình kết nối, tạo lại các container
+liên quan để nhận biến mới; chỉ restart không nạp lại giá trị.
+
+Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
+`infra/env/classroom-service.env` → Compose `env_file` → settings → client
+gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
+không thay đổi nội dung sự kiện.
+
+AI Service nhận toàn bộ cấu hình từ `.env` root; `infra/env/ai-service.env`
+chỉ ánh xạ các biến vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
+chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
+không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
+export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY`
+vào các process AI. Compose root dùng chung container `postgres` cho mọi service,
+AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
+`POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
+`postgres` và broker sang Redis DB1, tránh `localhost` trong container.
+CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
+[cấu hình AI](../../ai-service/README.md#cấu-hình) và
+[mock data](../../ai-service/mock-data.md).
+
+Không ghi bí mật thật vào các tệp được theo dõi trong Git. Tạo `.env` cục bộ
+theo mẫu repository rồi kiểm tra cấu hình Compose:
+
+```powershell
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+docker compose -p utask config --quiet
+```
+
+Điền các giá trị local còn thiếu trước khi khởi động. Với Identity–Classroom–Work,
+dùng một nguồn hướng dẫn là [quy trình local](local-development.md#khởi-động-identity-classroom-và-work).
+Trong local, `start-postgres.sh` gọi `init-databases.sh` sau khi PostgreSQL sẵn
+sàng; script tạo các database còn thiếu kể cả khi volume đã được khởi tạo.
+`start-kafka.sh` khởi động broker rồi tạo các topic còn thiếu theo
+`kafka-startup.env`. API chạy migration trong entrypoint trước Gunicorn; worker
+bỏ qua migration và đợi API tương ứng healthy. Build không kết nối database.
+Staging không dùng hai startup wrapper local: PostgreSQL tiếp tục dùng script
+khởi tạo database theo cơ chế volume mới của image, còn migration chạy tuần tự
+trước runtime theo [quy trình CI/CD](ci-cd.md).
+
+Các tệp ánh xạ Compose không phải kho chứa mật khẩu. Không commit `.env`, khóa
+Django, token hoặc thông tin xác thực môi trường dùng chung.
+
+## Phân tách theo môi trường
+
+- Local dùng `.env` không commit.
+- CI dùng `.env.example` với giá trị kiểm tra an toàn.
+- Staging giữ `.env` trên server, cũng dùng mẫu `.env.example`; thay toàn bộ mật khẩu,
+  secret, domain, Kafka cluster ID và đường dẫn PEM bằng giá trị dành cho staging.
+  Workflow upload mapping dùng chung, không upload `.env` hoặc PEM.
+- Production dùng cấu hình của nền tảng và hạ tầng bên ngoài theo baseline; không đặt secret trong repository.
+
+<a id="phan-tach-volume-local-staging"></a>
+
+### Volume khi kiểm staging trên máy local
+
+Giữ Compose project riêng cho local và staging để hai môi trường dùng volume
+riêng. Khi tái hiện deploy trên máy local, thư mục release tạm dùng bản sao
+`.env.staging` làm `.env`, image theo digest và project staging riêng; không
+đổi credential của volume local để ép nó chạy với cấu hình staging.
+
+`POSTGRES_PASSWORD` chỉ khởi tạo mật khẩu role khi volume mới. Recreate với
+giá trị khác không đổi mật khẩu đã lưu trong volume. Nếu migration báo sai mật
+khẩu trên volume cũ, xác minh đúng project/volume và credential đăng nhập TCP
+trước; không dùng `down -v`, reset mật khẩu hoặc xóa dữ liệu để vượt lỗi.
+Lượt kiểm ngày 22/10 xác nhận volume local cũ đăng nhập được bằng `.env` local,
+còn volume staging riêng chạy với credential staging; xem
+[báo cáo kiểm lại](staging-http-validation-20261021.md#kiem-lai-20261022).
+
+**Một phần:** các service Django local/staging hiện dùng chung `POSTGRES_USER` và
+`POSTGRES_PASSWORD`, mỗi service nhận `DATABASE_NAME` riêng. Baseline mục 8
+yêu cầu database và user/credential riêng cho từng service. Script khởi tạo
+hiện chỉ tạo database, chưa tạo role hoặc giới hạn quyền theo service; đây là
+khoảng trống triển khai, không phải lựa chọn bảo mật production.
+
+AI đã có Celery broker qua Redis; Kafka client và R2 tùy service vẫn là
+công nghệ mục tiêu theo baseline; biến môi trường của từng adapter chỉ được liệt kê như đã có sau khi kiểm tra mã
+triển khai. Không xem URL service trong file env là bằng chứng client đã gọi
+service đó. Xem [job nền](background-jobs.md), [Kafka](kafka.md) và
+[lưu trữ file](storage.md).
+
+## Điền biến trên VPS staging
+
+Điền trước lần deploy đầu vào **một file `.env` tại `STAGING_WORKDIR`**, cạnh
+`docker-compose.staging.yml`. Ví dụ `STAGING_WORKDIR=/opt/utask` thì dùng
+`/opt/utask/.env`. Mẫu nằm trong repository và được upload thành `.env.example`;
+chỉ copy thành `.env` nếu chưa có file thật, rồi sửa trên VPS. Không ghi đè file đã có.
+
+```bash
+cd /opt/utask
+# Chỉ thực hiện khi chưa có .env:
+cp -n .env.example .env
+nano .env
+chmod 600 .env
+```
+
+Khi bật AI trên staging, đặt `AI_ENVIRONMENT=staging` và `MOCK_TEST=false`
+trong `.env` VPS. `.env.example` khai báo `development`/`true` cho local;
+không giữ hai giá trị đó khi sao chép mẫu sang staging. Nếu hai biến trống
+hoặc chưa khai báo, Compose staging dùng mặc định `staging`/`false`, còn
+Compose local dùng `development`/`true`. Giá trị đã điền trong `.env` hoặc
+export ở shell được ưu tiên hơn mặc định; cả API, worker và dispatcher nhận
+cùng cấu hình. Đã kiểm tra nội suy Compose, chưa xác minh deploy thật.
+
+Workflow đọc `.env` này nhưng không upload hoặc ghi đè nó. Secrets GitHub như khóa SSH
+và token GHCR phục vụ triển khai; chúng không tự trở thành biến của ứng dụng.
+
+| Giá trị trong `.env` VPS                                       | Container nhận                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `POSTGRES_*`                                                   | PostgreSQL và các app cần database, qua mapping dùng chung       |
+| `IDENTITY_DB_NAME`, `IDENTITY_DJANGO_SECRET_KEY`, `IDENTITY_*` | Identity: `DATABASE_NAME`, `DJANGO_SECRET_KEY` và cấu hình riêng |
+| `WORK_DB_NAME`, `WORK_DJANGO_SECRET_KEY`                       | Work khi bật profile của service                                 |
+| `CLASSROOM_DB_NAME`, `CLASSROOM_DJANGO_SECRET_KEY`             | Classroom khi bật                                                |
+| `INTEGRATION_DB_NAME`, `INTEGRATION_DB_USER`, `INTEGRATION_DB_PASSWORD`, `INTEGRATION_DJANGO_SECRET_KEY`, `INTEGRATION_IDENTITY_URL` | Integration khi bật |
+| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
+
+Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
+Không tạo thêm `.env` trong từng container và không đưa nguyên `.env` chung vào tất cả
+app. Hiện chỉ cần điền secret runtime của Identity và PostgreSQL, cùng khóa mail nếu
+dùng đăng ký/reset; các app chưa bật chưa cần secret riêng. Giữ các tên database theo
+mẫu cho script khởi tạo PostgreSQL. Xem [phạm vi staging và biến cần có](ci-cd.md).
+
+Sau khi sửa `.env`, phải tạo lại container của service để áp dụng biến mới, không chỉ
+`restart`. Workflow deploy lần tiếp theo sẽ áp dụng; nếu thao tác thủ công, cấp đúng
+hai biến nội suy image prefix/tag và giữ file `staging-images.json` của lần phát hành.
+Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
+`up -d --no-build --force-recreate <service>`; xem lệnh trong [CI/CD](ci-cd.md).
+
+Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
+
+Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
+publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
+`WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
+có placeholder trống trong `.env.example`; chỉ điền credentials của môi trường
+được phép dùng. `WORK_STORAGE_ADAPTER` mặc định tại mapping là
+`infrastructure.storage.R2Storage`. `WORK_AI_ADAPTER` và
+`WORK_INTEGRATION_ADAPTER` mặc định vẫn là `UnavailableProposals` và
+`UnavailableIntegration`: thêm mapping không tự nối service thật. Giữ
+`WORK_CLASSROOM_DEV_ENABLED=false` ở staging; không đưa fixture test vào adapter
+runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
+
+`env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
+
+<a id="ip-client-qua-proxy"></a>
+
+### IP client qua proxy
+
+Luồng staging là client → Cloudflare → Nginx → Identity. Nginx chỉ tin
+`CF-Connecting-IP` nếu IP kết nối nằm trong CIDR Cloudflare chính thức; truy cập
+trực tiếp từ nguồn khác không được tự khai IP qua header này. Danh sách IPv4/IPv6
+nằm ngay trong `infra/nginx/nginx.conf`, đối chiếu ngày 2026-10-19 với
+[Cloudflare IPv4](https://www.cloudflare.com/ips-v4) và
+[Cloudflare IPv6](https://www.cloudflare.com/ips-v6). Cần cập nhật khi nhà cung cấp
+đổi dải IP. Nginx ghi đè `X-Real-IP` và `X-Forwarded-For` bằng IP đã xác nhận.
+
+**Dùng Compose hiện tại không cần khai báo biến IP trong `.env`, `.env.staging`
+hoặc `.env.example`.** Hạ tầng tự cấp cấu hình mạng Docker qua
+`infra/env/identity-service.env`; Nginx gửi IP người dùng đã xác nhận cho Identity.
+
+Trường hợp hạ tầng tùy chỉnh: mapping có thể ghi đè bằng biến môi trường nội bộ
+`IDENTITY_TRUSTED_PROXY_CIDRS`, là danh sách IP/CIDR proxy cách nhau bằng dấu phẩy.
+Mặc định `172.16.0.0/12` bao gồm mạng bridge Docker thông thường; nếu chuyển sang
+subnet ngoài dải này hoặc muốn giới hạn chặt hơn, quản trị hạ tầng cấu hình theo
+IP/subnet Nginx thực tế. Không dùng `0.0.0.0/0` hoặc `::/0` và không publish cổng
+HTTP của Identity ra ngoài. Chạy app ngoài Compose mặc định không tin header proxy.
+
+Middleware Identity chuẩn hóa `REMOTE_ADDR` trước session, audit, Axes và rate
+limit. DRF bỏ qua header XFF thô (`NUM_PROXIES=0`); Axes đọc `REMOTE_ADDR` đã chuẩn
+hóa. Header không hợp lệ hoặc nguồn không được tin cậy giữ IP kết nối ban đầu.
+Các service khác chưa được đổi cách lấy IP trong thay đổi này.
+
+Triển khai cần cả image Identity mới và cấu hình Nginx mới; chỉ reload Nginx hoặc
+restart image cũ chưa đủ. Sau deploy, đăng nhập mới qua domain Cloudflare rồi kiểm
+tra `user_sessions.ip_address` và audit của lần đó. Có thể đối chiếu IP proxy bằng
+`docker inspect utask-nginx-1 --format '{{json .NetworkSettings.Networks}}'`.
+Kiểm tra thêm request trực tiếp có header giả không được ghi nhận là IP giả.
+Session/audit cũ giữ nguyên IP lịch sử; kiểm thử local không thay cho xác minh VPS.
+
+Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
+publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
+`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa Work `CLASSROOM_WORK_SERVICE_KEY`.
+Các secret để trống trong mẫu, phải điền riêng từng môi trường. Caller keys
+`classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp; không thay route
+Identity để nối Classroom. Work dùng `CLASSROOM_BASE_URL`, adapter
+`RemoteClassroom`, cùng khóa Work; staging giữ chế độ Classroom dev tắt.
+
+Classroom Celery dùng Redis DB3 (`CLASSROOM_REDIS_URL`); Work dùng DB2.
+`CLASSROOM_KAFKA_TOPIC`, `CLASSROOM_WORK_KAFKA_TOPIC`, nhóm đọc và DLQ có mapping
+riêng; phía Work nhận các biến `WORK_CLASSROOM_KAFKA_*`. `KAFKA_LOG_RETENTION_MS`
+mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp vụ và DLQ
+không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
+Chi tiết tại [Classroom backend](../../classroom-service/README.md).
+
+Mapping Work dùng `CLASSROOM_KAFKA_TOPIC` ở `.env` làm nguồn cho
+`WORK_CLASSROOM_KAFKA_TOPIC` trong container để bên gửi Classroom và bên nhận
+Work dùng cùng topic. `WORK_KAFKA_TOPIC`, nhóm đọc
+`WORK_CLASSROOM_KAFKA_GROUP`, topic lỗi `WORK_CLASSROOM_KAFKA_DLQ_TOPIC` và
+giới hạn `WORK_CLASSROOM_CONSUMER_MAX_RETRIES` cũng đi qua mapping này cho
+API và mọi worker Work ở cả Compose local lẫn staging. Chỉ khai báo trong
+`.env.example` không tự đưa biến vào container; phải có ánh xạ `env_file`.
+Consumer Classroom của Work dùng cùng hàm cấu hình kết nối với publisher,
+consumer Identity và bên gửi thông điệp lỗi, gồm tài khoản, mật khẩu và CA
+khi dùng Kafka cloud. Quy tắc chỉ xác nhận offset sau xử lý hoặc DLQ thành công
+được giữ nguyên; kiểm thử cấu hình không thay cho nghiệm thu luồng sự kiện thật.
+
+Consumer hồ sơ Work dùng `WORK_IDENTITY_KAFKA_TOPIC`; khi để trống, mapping lấy
+`IDENTITY_KAFKA_TOPIC` (mặc định `utask.identity.events`) để khớp producer Identity.
+Không tạo broker Identity riêng. Đã có kiểm chứng local riêng tại
+[Work nhận sự kiện Identity](../../project-service/identity-events.md); không coi đó là
+nghiệm thu staging hoặc consumer Notification.
+
+Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
+Workflow cấp image app/worker theo digest qua `staging-images.json`;
+deploy thủ công vẫn cần UTASK_IMAGE_PREFIX/UTASK_IMAGE_TAG để nội suy file gốc và
+phải dùng kèm file ghi đè image. Khóa phải có trước khi startup và user container
+đọc được; workflow không vận chuyển PEM. Nginx hiện chỉ nghe HTTP trong container
+trên port 80; port trên host lấy từ `UTASK_HTTP_PORT` (mặc định 8080). Compose hiện
+không publish HTTPS 443, mount chứng chỉ hoặc chạy Certbot. TLS trên VPS thực tế
+chưa được xác minh; xem [cấu hình staging](ci-cd.md#chuẩn-bị-máy-staging).
+Các giá trị OAuth/R2/caller keys nằm trong `.env` của từng máy; file ánh xạ chỉ
+chứa `${...}` hoặc hằng cấu hình container không bí mật. Không điền credential hoặc
+flags trực tiếp vào `infra/env/identity-service.env`.
+
+Local để `IDENTITY_REDIS_URL` trống theo cấu hình cache hiện tại. Compose staging đặt
+mặc định Redis `redis://redis:6379/0` và Integration `http://integration-service:8000`;
+giá trị không trống trong `.env` có thể thay các mặc định này. Chỉ bật OAuth/avatar sau
+khi có đủ credential và callback theo [tài liệu Identity](../../identity-service/README.md).
+
+Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
+chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
+chạy script qua cơ chế khởi tạo volume mới; khi deploy có AI, script còn chạy lại
+trên PostgreSQL đã healthy để bổ sung database AI còn thiếu trước migration.
+Sửa `.env` không tự đổi tên database hoặc
+chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
+
+## Cấu hình AI trong Compose root
+
+Local giữ cờ và biến thường trong `infra/env/ai-service.env`. Staging mặc định
+`AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; dùng giá trị cấu hình staging trong
+`.env` server theo các override được khai báo ở Compose. Không bật mock ở staging.
+
+Root Compose chỉ có một container PostgreSQL 16 (`postgres`), với các database
+riêng cho từng service. AI dùng `AI_DB_NAME=ai_context_db`; tên này được truyền
+qua `infra/env/postgres.env` cho script khởi tạo database. Không còn container
+`ai-postgres` trong Compose local/staging. `AI_DB_PASSWORD` chỉ còn phục vụ
+Compose standalone của AI, không được dùng để khởi động stack root.
+
+URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết nối database
+riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
+`AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
+tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
+`AI_CREDENTIAL_KEY` phải giống nhau cho các process. AI xác minh JWT như Work:
+RS256, issuer mặc định `https://identity.utask.internal`, audience mặc định
+`utask-platform` (kế thừa `IDENTITY_JWT_ISSUER`/`IDENTITY_JWT_AUDIENCE` nếu
+không có override AI). AI luôn lấy JWKS từ `AI_IDENTITY_BASE_URL` cộng
+`/.well-known/jwks.json`; không nhận PEM hoặc URL JWKS riêng.
+
+Cấu hình xác thực trong `.env` trên server staging:
+
+```dotenv
+AI_ENVIRONMENT=staging
+MOCK_TEST=false
+AI_JWT_ISSUER=https://identity.utask.internal
+AI_JWT_AUDIENCE=utask-platform
+AI_CREDENTIAL_KEY=<khóa Fernet hợp lệ>
+AI_IDENTITY_BASE_URL=http://identity-service:8000
+AI_IDENTITY_SERVICE_KEY=<secret khớp IDENTITY_SERVICE_KEYS.ai>
+AI_WORK_SERVICE_AUTH_ENABLED=false
+AI_WORK_SERVICE_KEY=
+```
+
+Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công khai là
+`/api/auth/.well-known/jwks.json`; AI dùng URL nội bộ phía trên. AI kiểm tra
+phiên tại Identity bằng service key riêng; không tự tạo secret hoặc ghi đè
+`.env` server.
+
+Tạm thời `AI_WORK_SERVICE_AUTH_ENABLED=false` chỉ tắt việc gửi service key
+AI→Work. Bearer của người dùng vẫn được chuyển tiếp và kiểm tra quyền domain
+vẫn bắt buộc. Giữ mapping `AI_WORK_SERVICE_KEY` để bật lại bằng
+`AI_WORK_SERVICE_AUTH_ENABLED=true` khi Work sẵn sàng; không dùng flag này
+để tắt JWT, kiểm tra phiên Identity hoặc kiểm tra quyền.
+Provider quyền/context AI phía Work **Chưa triển khai**; cấu hình này chưa
+chứng minh luồng tích hợp AI→Work hoạt động thật.
+
+Settings của AI từ chối khởi động staging/production khi thiếu issuer,
+audience, key AI→Identity hoặc Fernet key không hợp lệ. API, worker,
+dispatcher và beat dùng chung environment. Compose vẫn render được khi
+không bật AI mà thiếu secret; khi bật AI phải điền đủ trước khi chạy
+migration/khởi động. Kiểm thử mock và render Compose không thay thế kiểm
+tra phiên Identity hoặc quyền domain thật.
+
+LLM cần model/base URL/key và REST adapter cần URL quyền/context thật. Xem [cấu hình AI](../../ai-service/README.md#cấu-hình).
+Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
+Các biến `EVAL_AI_*` và `EVAL_EXPECTED_MODEL` trong mẫu root chỉ dành cho
+evaluation live thủ công tùy chọn; deploy staging không đọc hoặc yêu cầu chúng.
+Xem [hướng dẫn evaluation AI](../../ai-service/production-readiness.md#evaluation-và-gate-phát-hành).
+
+Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự
+thay password role đã lưu trong volume PostgreSQL. Redis DB1 là broker AI;
+Redis DB0 dành cấu hình Identity. Đổi Compose không tự chuyển dữ liệu AI cũ
+từ volume `ai_database` hoặc stack standalone vào database chung. Giữ volume
+cũ để kiểm tra/backup; không chạy `down -v`. Nếu AI từng có dữ liệu, cần xuất
+và khôi phục có chủ đích trước khi sử dụng database đích.
+
+## Notification Service
+
+Notification dùng credential `POSTGRES_*` chung từ `infra/env/database.env`,
+như Identity/Work/Classroom. `infra/env/notification-service.env` mapping
+`NOTIFICATION_DB_NAME` thành `DATABASE_NAME`; không còn đọc
+`NOTIFICATION_DB_USER`/`NOTIFICATION_DB_PASSWORD`. Đây là hiện trạng theo yêu
+cầu đơn giản hóa, chưa đáp ứng tách credential theo baseline. Các key nội bộ, Gmail
+App Password, AES key ring và cờ rollout theo
+[runbook Notification](../../notification-service/operations.md).
+`NOTIFICATION_EMAIL_ENABLED=false` mặc định; ba cờ nhận Identity/Work và gửi
+email được bật độc lập. Gmail credential không nằm trong source hay Web.

@@ -7,7 +7,7 @@ hướng dẫn triển khai/cấu hình và phạm vi kiểm chứng hiện hàn
 `WORK_INTEGRATION_ADAPTER` vẫn mặc định unavailable và cờ nghiệp vụ mặc định tắt.
 GitHub live cho luồng Project và staging/production chưa được nghiệm thu. Xem
 [luồng liên kết repository](github-repository-linking.md),
-[ADR-003](../adr/003-integration-auth-and-contracts.md) và
+[ADR-003](../system/adr/003-integration-auth-and-contracts.md) và
 [contract Integration](../../contracts/api/integration-service-v1.yaml).
 
 Phần Work cung cấp context cho AI và kiểm quyền `github.read` cho Integration
@@ -145,7 +145,7 @@ Các thời hạn reservation 24 giờ, timeout HTTP và quy tắc generation n�
 đã có trong provider và kiểm thử. Hai backend đã được kiểm qua HTTP/Kafka test;
 đã kiểm connect/disconnect, receipt/replay và branch/commit với GitHub thật
 trên staging local ngày 21–22/10/2026. Chưa nghiệm thu PR thành công hoặc mọi
-tình huống crash/race/thu hồi quyền. Xem [bằng chứng và giới hạn](../infrastructure/staging-http-validation-20261021.md#kiem-lai-20261022)
+tình huống crash/race/thu hồi quyền. Xem [bằng chứng và giới hạn](../system/infrastructure/staging-http-validation-20261021.md#kiem-lai-20261022)
 và [cấu hình provider](runtime-connections.md).
 
 ### Quyết định wire cho runtime provider

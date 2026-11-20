@@ -21,9 +21,9 @@ ngày 15/10 riêng để không nhầm với nghiệm thu domain/staging.
 
 ## Baseline và phạm vi
 
-Thiết kế mục tiêu theo [baseline](../architecture/README.md), mục 4.6, 9–11
+Thiết kế mục tiêu theo [baseline](../system/architecture-baseline.md), mục 4.6, 9–11
 và 18. Các quyết định chuyển đổi nằm trong
-[ADR-001](../adr/001-adopt-architecture-baseline.md). Baseline chọn Celery +
+[ADR-001](../system/adr/001-adopt-architecture-baseline.md). Baseline chọn Celery +
 Redis cho job nội bộ; Kafka cho event giữa service; AI lấy context qua internal
 API sau domain tool/Context Layer. API, dispatcher, worker và beat thuộc cùng service,
 scale độc lập và dùng chung PostgreSQL của AI.
@@ -41,7 +41,7 @@ Listener trong API tiếp nhận và cập nhật trạng thái/kết quả cu�
 inbox khi bỏ lỡ tín hiệu. API đọc cùng persistence để client polling;
 Kafka phục vụ sự kiện giữa service. Nguồn chi tiết là
 [pipeline trong kiến trúc AI](architecture.md) và quyết định tại
-[ADR-002](../adr/002-ai-request-pipeline.md). Pipeline source đã được kiểm thử
+[ADR-002](../system/adr/002-ai-request-pipeline.md). Pipeline source đã được kiểm thử
 với PostgreSQL, Redis và ADK fake model. Work AI contract còn `planned`, provider
 chưa có source nên quyền/role Work runtime chưa xác minh; giới hạn tích hợp nằm trong
 [code map](code-map.md).
@@ -209,10 +209,10 @@ Root Compose mặc định tạo URL `postgresql+psycopg://<POSTGRES_USER>:<POST
 Nếu credential chứa ký tự đặc biệt trong URL, đặt `AI_DATABASE_URL` với credential
 đã percent-encode. Override này có ưu tiên cao hơn URL mặc định; xóa hoặc cập nhật
 URL cũ trỏ tới `ai-postgres`/`localhost` trước khi chạy root Compose. Xem
-[cấu hình môi trường](../infrastructure/environment.md) cho cấu hình root.
+[cấu hình môi trường](../system/infrastructure/environment.md) cho cấu hình root.
 Hướng dẫn và giới hạn kiểm tra nằm tại
-[chạy AI local từ root](../infrastructure/local-development.md#chạy-riêng-pipeline-ai-từ-root)
-và [CI/CD](../infrastructure/ci-cd.md). Compose riêng dưới đây vẫn dành cho môi
+[chạy AI local từ root](../system/infrastructure/local-development.md#chạy-riêng-pipeline-ai-từ-root)
+và [CI/CD](../system/infrastructure/ci-cd.md). Compose riêng dưới đây vẫn dành cho môi
 trường AI độc lập, có network/volume và cổng host riêng; không dùng chung dữ liệu tự động.
 
 ## Chạy bằng Compose riêng của AI
@@ -332,7 +332,7 @@ buộc và phần liên quan trong cột tùy chọn.
 - [Workflow bounded agent và Context Tool Pool](workflow.md)
 - [ERD và schema mục tiêu](erd.md)
 - [Stack mục tiêu và dependency hiện tại](tech-stack.md)
-- [Job nền và worker](../infrastructure/background-jobs.md)
+- [Job nền và worker](../system/infrastructure/background-jobs.md)
 - [Code map và các entry point đã xác minh](code-map.md)
 
 Instruction mặc định khi làm việc trong source nằm tại
@@ -347,7 +347,7 @@ staging. Mỗi xác thực tải JWKS từ Identity, lọc khóa RSA phù hợp 
 kết quả. `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định nên Work key không bắt
 buộc; khi bật cờ, Compose phải cấp `AI_WORK_SERVICE_KEY` cho các process AI.
 Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực
-hoặc Fernet key không hợp lệ. Xem [cấu hình staging](../infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
+hoặc Fernet key không hợp lệ. Xem [cấu hình staging](../system/infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
 
 ## Mở rộng thông báo
 
