@@ -31,7 +31,7 @@ src/
   `AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`) và
   `AI_IDENTITY_SERVICE_KEY`; `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định,
   chỉ bắt buộc Work key khi bật cờ. Cấm mock ngoài development/test; staging/
-  production yêu cầu issuer/audience, Identity key và Fernet key hợp lệ.
+  production yêu cầu issuer/audience và Identity key hợp lệ.
 - `main.py`: composition root API, cleanup HTTP client/DB pool qua lifespan.
 - `api/routes.py`: `/healthz`, POST/GET `/api/ai/v1/requests`; POST 200/202,
   GET ownership; chỉ gọi application, không gọi workflow.
@@ -104,7 +104,7 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
 
 ## Persistence
 
-- `application/ports.py`: repository/auth/authorizer/vault/publisher protocols.
+- `application/ports.py`: repository/auth/authorizer/publisher protocols.
 - `models/budget.py`: budget callback protocol, trả số còn lại sau khi trừ.
 - `infrastructure/repositories.py`: transaction enqueue + delivery,
   unique user/key, claim, budget, fencing, retry/redelivery/expiry/dead-letter
@@ -133,9 +133,10 @@ chỉ thêm khi có nhu cầu và contract mới phù hợp Work.
   chọn), UUID `sub`, `token_type=access`; gọi session-status với Bearer và
   `X-Service-Key`, yêu cầu response 2xx cùng `success: true` và
   `data.active` boolean. Session revoked trả 401; dependency/response lỗi phát sinh
-  `AUTH_UNAVAILABLE`. Fernet vault giữ token giữa API/worker và xóa ciphertext
-  khi bàn giao completion hoặc terminal. `infrastructure/bootstrap.py`:
-  SQLAlchemy connection pool.
+  `AUTH_UNAVAILABLE`. Bearer nguyên bản được lưu trong credential PostgreSQL AI
+  để worker xác thực lại; xóa khi bàn giao completion hoặc terminal. Redis chỉ
+  nhận request UUID; không cần Fernet vault hay `AI_CREDENTIAL_KEY`.
+  `infrastructure/bootstrap.py`: SQLAlchemy connection pool.
 
 ## LLM providers
 
@@ -180,7 +181,7 @@ cung cấp cụ thể hoặc chạy evaluation production.
 - `test_models.py`, `test_contract.py`: request/version/range và wire schema v1.
 - `test_identity_session_auth.py`: JWKS fetch từng lần, key filter/kid, JWT
   claims và session-status; HTTP Identity fake, không bypass auth. `test_security.py`
-  kiểm tra vault/config.
+  kiểm tra JWT/Bearer trực tiếp (principal giữ nguyên token) và config.
 - `test_context.py`: quyền, thiếu/cũ context, HTTP lỗi/redirect/size, filter/tool budget.
 - `test_context_contract.py`: Work POST/envelope/key theo đích, typed shape,
   PII allowlist, GitHub không double authorize, tool scope/flag và limitation.

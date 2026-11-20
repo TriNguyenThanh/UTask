@@ -7,7 +7,7 @@ from uuid import UUID
 from errors import ServiceError, failure
 from models import AiResponse, CreateAiRequest, FailedAiResponse, QueuedAiResponse
 
-from .ports import Authorizer, CredentialVault, Principal, RequestRepository
+from .ports import Authorizer, Principal, RequestRepository
 
 
 class AiApplicationService:
@@ -15,13 +15,11 @@ class AiApplicationService:
         self,
         repository: RequestRepository,
         authorizer: Authorizer,
-        vault: CredentialVault,
         sync_timeout: float = 10,
         poll_interval: float = 0.1,
     ):
         self.repository = repository
         self.authorizer = authorizer
-        self.vault = vault
         self.sync_timeout = sync_timeout
         self.poll_interval = poll_interval
 
@@ -29,13 +27,12 @@ class AiApplicationService:
         self, payload: CreateAiRequest, *, principal: Principal, idempotency_key: str
     ) -> AiResponse:
         await self.authorizer.authorize(principal, payload)
-        credential = self.vault.seal(principal.bearer)
         stored = await asyncio.to_thread(
             self.repository.enqueue,
             payload,
             principal.user_id,
             idempotency_key,
-            credential,
+            principal.bearer,
             datetime.now(UTC),
         )
         end = asyncio.get_running_loop().time() + self.sync_timeout

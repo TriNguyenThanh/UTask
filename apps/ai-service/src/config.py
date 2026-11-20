@@ -6,7 +6,6 @@ from string import Formatter
 from typing import Literal
 from urllib.parse import urlsplit
 
-from cryptography.fernet import Fernet
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,7 +61,6 @@ class Settings(BaseSettings):
     app_name: str = "utask-ai-service"
     database_url: str = "postgresql+psycopg://localhost/ai_context_db"
     broker_url: str = "redis://localhost:6379/0"
-    credential_key: SecretStr | None = None
     jwt_issuer: str = "https://identity.utask.internal"
     jwt_audience: str = "utask-platform"
     jwt_algorithm: str = "RS256"
@@ -119,12 +117,6 @@ class Settings(BaseSettings):
                 or not self.identity_service_key.get_secret_value().strip()
             ):
                 raise ValueError("AI_IDENTITY_SERVICE_KEY là bắt buộc")
-            if not self.credential_key:
-                raise ValueError("AI_CREDENTIAL_KEY là bắt buộc")
-            try:
-                Fernet(self.credential_key.get_secret_value().encode())
-            except (ValueError, TypeError) as error:
-                raise ValueError("AI_CREDENTIAL_KEY phải là khóa Fernet hợp lệ") from error
             if self.work_service_auth_enabled and (
                 not self.work_service_key or not self.work_service_key.get_secret_value().strip()
             ):

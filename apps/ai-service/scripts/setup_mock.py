@@ -7,7 +7,6 @@ from pathlib import Path
 from secrets import token_hex
 
 import jwt
-from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import rsa
 from dotenv import dotenv_values, set_key
 
@@ -35,7 +34,6 @@ def prepare_mock_environment(
     jwks = {"keys": [jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key(), as_dict=True)]}
     secrets = {
         "AI_DB_PASSWORD": existing.get("AI_DB_PASSWORD") or token_hex(16),
-        "AI_CREDENTIAL_KEY": existing.get("AI_CREDENTIAL_KEY") or Fernet.generate_key().decode(),
         "AI_LLM_API_KEY": existing.get("AI_LLM_API_KEY") or "",
     }
     now = datetime.now(UTC)
@@ -87,7 +85,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=ROOT_DIR)
     parser.add_argument("--token-hours", type=int, default=24)
-    parser.add_argument("--refresh", action="store_true", help="Thay JWT, giữ DB/Fernet/LLM key")
+    parser.add_argument("--refresh", action="store_true", help="Thay JWT, giữ DB/LLM key")
     args = parser.parse_args()
     try:
         secret_path = prepare_mock_environment(

@@ -20,7 +20,7 @@ AI_LLM_API_BASE=http://host.docker.internal:8317/v1
 ```
 
 Secret runtime giữ trong `.env` root theo
-[mẫu root](../../.env.example): AI_LLM_API_KEY, AI_CREDENTIAL_KEY,
+[mẫu root](../../.env.example): AI_LLM_API_KEY,
 AI_IDENTITY_SERVICE_KEY. AI không nhận `AI_JWT_PUBLIC_KEY` hoặc URL JWKS riêng;
 nó tải khóa công khai trực tiếp từ Identity khi xác minh từng access token.
 Cấu hình thêm

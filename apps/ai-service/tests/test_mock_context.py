@@ -205,7 +205,7 @@ async def test_api_and_worker_composition_use_same_fixture_adapter(monkeypatch):
     captured = []
 
     class Worker:
-        def __init__(self, repository, authenticator, authorizer, vault, executor):
+        def __init__(self, repository, authenticator, authorizer, executor):
             captured.append((authorizer, executor.gateway))
 
         async def execute(self, request_id):

@@ -352,7 +352,7 @@ async def test_api_rejects_revoked_or_malformed_session_before_application(
 
 @pytest.mark.parametrize("session", [False, "unavailable"])
 async def test_worker_rechecks_session_before_running_executor(
-    signing_keys, identity_settings, access_claims, payload, vault, session
+    signing_keys, identity_settings, access_claims, payload, session
 ):
     from unittest.mock import AsyncMock, Mock
 
@@ -374,7 +374,7 @@ async def test_worker_rechecks_session_before_running_executor(
             output_schema_version=payload.output_schema_version,
             created_at=now,
         ),
-        vault.seal(token),
+        token,
         uuid4(),
         now + timedelta(seconds=30),
     )
@@ -391,7 +391,6 @@ async def test_worker_rechecks_session_before_running_executor(
         repository,
         JwtAuthenticator(identity_settings, transport=identity_transport(signing_keys, respond)),
         authorizer,
-        vault,
         executor,
     )
     assert await worker.execute(request_id)

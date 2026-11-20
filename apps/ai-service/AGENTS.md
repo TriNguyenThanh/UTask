@@ -23,8 +23,8 @@ quả cuối. Giữ inbox bền vững và cơ chế phục hồi, không chỉ 
 
 - Service dùng Python 3.12, FastAPI/Uvicorn, Pydantic v2, `pydantic-settings`,
   `uv`, Ruff và Pytest; có Dockerfile.
-- Đã có Google ADK/GenAI, Celery, HTTPX, PyJWT, Fernet, SQLAlchemy/Psycopg và
-  Alembic. Chưa có Kafka client/projection consumer.
+- Đã có Google ADK/GenAI, Celery, HTTPX, PyJWT, `cryptography` cho RSA/JWT,
+  SQLAlchemy/Psycopg và Alembic. Chưa có Kafka client/projection consumer.
 - Không ghi thêm công nghệ chỉ vì README hay thiết kế mục tiêu có nhắc tới nó.
 
 ## Phạm vi và đường dẫn

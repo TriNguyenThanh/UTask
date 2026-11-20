@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from cryptography.fernet import Fernet
 from google.adk.models import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.genai import types
@@ -17,7 +16,6 @@ from sqlalchemy.orm import sessionmaker
 
 from infrastructure.db.tables import Base
 from infrastructure.repositories import PostgresRequestRepository
-from infrastructure.security import FernetCredentialVault
 from models import BacklogGenerationRequest, BacklogInput
 from models.context import ContextDocument
 from models.security import Principal
@@ -44,11 +42,6 @@ def payload():
 @pytest.fixture
 def principal():
     return Principal("owner", "test-bearer")
-
-
-@pytest.fixture
-def vault():
-    return FernetCredentialVault(Fernet.generate_key().decode())
 
 
 @pytest.fixture

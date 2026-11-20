@@ -36,11 +36,6 @@ class Authorizer(Protocol):
     async def authorize(self, principal: Principal, request: CreateAiRequest) -> None: ...
 
 
-class CredentialVault(Protocol):
-    def seal(self, bearer: str) -> str: ...
-    def open(self, credential: str) -> str: ...
-
-
 class RequestExecutor(Protocol):
     async def execute(
         self, stored: StoredRequest, principal: Principal, charge: Charge

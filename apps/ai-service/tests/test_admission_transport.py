@@ -75,11 +75,11 @@ def test_existing_errors_keep_envelope_without_admission_retry_header(code, stat
     [(1, 2, "REQUEST_RATE_LIMIT"), (5, 1, "ACTIVE_REQUEST_LIMIT")],
 )
 async def test_post_limits_new_job_but_replay_and_polling_remain_available(
-    repository, payload, vault, rate, active, reason
+    repository, payload, rate, active, reason
 ):
     repository.requests_per_minute = rate
     repository.max_active_requests_per_user = active
-    service = AiApplicationService(repository, AllowAuthorizer(), vault, sync_timeout=0)
+    service = AiApplicationService(repository, AllowAuthorizer(), sync_timeout=0)
     app = create_app(application=service, authenticator=FakeAuthenticator())
     headers = {"Authorization": "Bearer owner", "Idempotency-Key": "first"}
     body = payload.model_dump(mode="json")

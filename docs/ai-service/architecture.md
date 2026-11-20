@@ -52,7 +52,7 @@ POST /api/ai/v1/requests
 
 Dispatcher → claim delivery có lease → Redis → Celery task(request_id)
   → Application worker claim queued → running + execution token + deadline
-  → giải mã credential → xác minh lại JWT/quyền
+  → đọc Bearer đã lưu → xác minh lại JWT/quyền
   → ADK ProposalWorkflow → LlmAgent → domain tool pool → REST adapter
   → kiểm tra output đúng intent/version → revise/retry trong budget
   → transaction: lưu ai_completion + xóa credential + pg_notify(request_id)
@@ -67,8 +67,8 @@ GET /api/ai/v1/requests/{request_id}
 
 **Đã triển khai:**
 
-1. `main.create_app` lắp repository PostgreSQL, JWT verifier, credential vault,
-   authorizer port và application. API không import/chạy ADK hoặc worker.
+1. `main.create_app` lắp repository PostgreSQL, JWT verifier, authorizer port
+   và application. API không import/chạy ADK hoặc worker.
 2. Application gọi authorizer trước khi enqueue. Backlog chưa có target vẫn
    cần identity hợp lệ. MOCK_TEST dùng fixture để kiểm tra target local; ngoài
    mock, AI-side Work client dựng POST theo contract, nhưng Work provider chưa
@@ -103,12 +103,14 @@ GET /api/ai/v1/requests/{request_id}
 5. Celery task chỉ nhận UUID và gọi application. Claim khóa request; chỉ
    `queued` được chuyển sang `running`. Job trùng/terminal không gọi LLM.
    Deadline bắt đầu từ lần claim, không được đặt lại khi task giao lại.
-6. Worker giải mã Bearer bằng Fernet, tải lại JWKS và xác minh JWT RS256/session
-   với Identity, rồi kiểm tra quyền trước khi chạy. `AI_IDENTITY_BASE_URL` mặc định
+6. Worker đọc Bearer nguyên bản từ credential trong PostgreSQL AI, tải lại JWKS
+   và xác minh JWT RS256/session với Identity, rồi kiểm tra quyền theo target trước
+   khi chạy. Redis chỉ nhận UUID request. `AI_IDENTITY_BASE_URL` mặc định
    `http://identity-service:8000`; `AI_IDENTITY_SERVICE_KEY` phải khớp entry
    `ai` trong `IDENTITY_SERVICE_KEYS` của Identity.
    Credential không xuất hiện trong task/prompt/log, được xóa khi bàn giao kết
-   quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Token hết hạn trong
+   quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Bearer được lưu nguyên bản
+   trong PostgreSQL AI; không cần khóa mã hóa Fernet riêng. Token hết hạn trong
    queue làm request thất bại; không giữ quyền cũ.
 7. Model/tool budget được trừ trong PostgreSQL trước lời gọi. Output token
    được tính theo usage; lần model tiếp theo chỉ được cấp phần cap còn lại.

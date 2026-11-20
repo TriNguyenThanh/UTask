@@ -14,7 +14,7 @@ from infrastructure.bootstrap import build_repository
 from infrastructure.context_factory import build_context_adapter
 from infrastructure.observability import bind_request_id
 from infrastructure.providers import AdkRequestExecutor, AdkRuntime
-from infrastructure.security import FernetCredentialVault, JwtAuthenticator
+from infrastructure.security import JwtAuthenticator
 
 from .celery_app import celery_app
 
@@ -27,14 +27,10 @@ async def execute_request(request_id: UUID):
     try:
         async with httpx.AsyncClient() as client:
             adapter = build_context_adapter(settings, client)
-            vault = FernetCredentialVault(
-                settings.credential_key.get_secret_value() if settings.credential_key else None
-            )
             worker = RequestWorker(
                 repository,
                 JwtAuthenticator(settings),
                 adapter,
-                vault,
                 AdkRequestExecutor(AdkRuntime(settings), adapter),
             )
             with bind_request_id(str(request_id)):

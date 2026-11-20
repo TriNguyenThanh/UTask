@@ -658,7 +658,6 @@ async def evaluate(mode: str, env: dict | None = None) -> dict:
                             "AI_WORK_SERVICE_KEY",
                             "AI_INTEGRATION_SERVICE_KEY",
                             "AI_LLM_API_KEY",
-                            "AI_CREDENTIAL_KEY",
                         )
                     ]
                     safe = not any(value and value in serialized for value in secrets)

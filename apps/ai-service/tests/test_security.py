@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from config import Settings, get_settings
 from errors import ServiceError
-from infrastructure.security import FernetCredentialVault, JwtAuthenticator
+from infrastructure.security import JwtAuthenticator
 
 
 @pytest.fixture(scope="module")
@@ -80,17 +80,6 @@ async def test_auth_without_configuration_fails_closed(keypair):
             transport=identity_transport({"keys": []}),
         ).authenticate("anything")
     assert error.value.code == "AUTH_UNAVAILABLE"
-
-
-def test_vault_encrypts_and_rejects_tampering(vault):
-    sealed = vault.seal("sensitive bearer")
-    assert "sensitive" not in sealed and vault.open(sealed) == "sensitive bearer"
-    with pytest.raises(ServiceError):
-        vault.open(sealed[:20] + ("A" if sealed[20] != "A" else "B") + sealed[21:])
-    with pytest.raises(ServiceError):
-        FernetCredentialVault(None).seal("token")
-    with pytest.raises(ServiceError):
-        FernetCredentialVault(None).open("token")
 
 
 @pytest.mark.parametrize(

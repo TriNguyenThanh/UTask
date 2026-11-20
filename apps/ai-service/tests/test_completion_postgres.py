@@ -198,8 +198,8 @@ def test_multiple_api_consumers_apply_failures_once(repository, payload):
         assert session.scalar(select(func.count()).select_from(DeadLetterRow)) == 8
 
 
-async def test_worker_notifies_and_api_lifespan_updates_database(repository, payload, vault):
-    service = AiApplicationService(repository, AllowAuthorizer(), vault, sync_timeout=0.001)
+async def test_worker_notifies_and_api_lifespan_updates_database(repository, payload):
+    service = AiApplicationService(repository, AllowAuthorizer(), sync_timeout=0.001)
     database_url = os.environ["TEST_DATABASE_URL"]
     listener = CompletionListener(database_url, service.accept_completions, reconcile_seconds=30)
     app = create_app(
@@ -221,7 +221,7 @@ async def test_worker_notifies_and_api_lifespan_updates_database(repository, pay
             )
             async with await AsyncConnection.connect(dsn, autocommit=True) as connection:
                 await connection.execute("LISTEN utask_ai_completed")
-                assert await worker(repository, vault).execute(UUID(queued["request_id"]))
+                assert await worker(repository).execute(UUID(queued["request_id"]))
                 async for notification in connection.notifies(timeout=1, stop_after=1):
                     assert notification.payload == queued["request_id"]
                     break
@@ -239,13 +239,11 @@ async def test_worker_notifies_and_api_lifespan_updates_database(repository, pay
             assert result["result"] == {"items": [], "warnings": []}
 
 
-async def test_api_recovers_completion_committed_before_listener_started(
-    repository, payload, vault
-):
-    stored = repository.enqueue(payload, "owner", "offline", vault.seal("owner"), datetime.now(UTC))
-    await worker(repository, vault).execute(stored.request_id)
+async def test_api_recovers_completion_committed_before_listener_started(repository, payload):
+    stored = repository.enqueue(payload, "owner", "offline", "owner", datetime.now(UTC))
+    await worker(repository).execute(stored.request_id)
     assert repository.get(stored.request_id).response.status == "running"
-    service = AiApplicationService(repository, AllowAuthorizer(), vault)
+    service = AiApplicationService(repository, AllowAuthorizer())
     accepted = asyncio.Event()
 
     async def accept():

@@ -75,7 +75,6 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credential PostgreSQL chung với Django trong Compose root; dùng để tạo URL khi không có `AI_DATABASE_URL` |
 | `AI_DB_PASSWORD` | Chỉ dùng cho PostgreSQL của Compose riêng tại `apps/ai-service/compose.yaml` |
 | `AI_BROKER_URL` | Redis broker; không dùng Redis làm result repository |
-| `AI_CREDENTIAL_KEY` | Khóa Fernet giống nhau cho API/worker; ciphertext xóa khi bàn giao kết quả hoặc terminal |
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
 | `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
 | `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
@@ -158,8 +157,8 @@ dispatcher → Redis/Celery → ADK → completion → API:
 Đây là smoke với fixture local, không là benchmark chất lượng hay cam kết
 latency. Không phải bằng chứng cho kiểm tra session Identity hoặc production.
 
-Secret `AI_CREDENTIAL_KEY`, `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY` nằm
-trong `.env` root. AI tải JWKS trực tiếp từ
+Secret `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY` nằm trong `.env` root.
+AI tải JWKS trực tiếp từ
 `{AI_IDENTITY_BASE_URL}/.well-known/jwks.json` mỗi lần xác thực; không dùng PEM,
 URL JWKS riêng hoặc cache khóa. AI chỉ chọn khóa có `kty=RSA`, `use` (mặc định
 `sig`) và `alg` (mặc định `RS256`) phù hợp; JWT có `kid` thì lọc theo `kid`,
@@ -173,13 +172,11 @@ trả trạng thái `503` nội bộ, rồi ánh xạ theo error envelope v1 th�
 `details.reason=AUTH_UNAVAILABLE`.
 Điền model/base URL và API key vào `.env` root; `infra/env/ai-service.env` chỉ
 ánh xạ các biến đó vào container.
-Sinh Fernet key rồi điền vào `.env` root:
+Bearer token được lưu nguyên bản trong cột credential của PostgreSQL AI để
+worker xác thực lại; token bị xóa khi bàn giao kết quả hoặc request vào trạng
+thái terminal. Không ghi token ra log/task.
 
-```sh
-uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-```
-
-Không commit `.env`, JWT private key hoặc API key.
+Không commit `.env`, JWT private key, Bearer token hoặc API key.
 
 ## Mock quyền/context để chạy local
 
@@ -341,13 +338,13 @@ lớn nằm tại [`apps/ai-service/.agent/PLANS.md`](../../apps/ai-service/.age
 
 ### Xác thực staging
 
-Compose staging truyền Identity service key và Fernet key cho toàn bộ process
-AI. Issuer/audience mặc định theo Identity; token mock local không dùng trong
+Compose staging truyền Identity service key cho các process AI cần gọi Identity.
+Issuer/audience mặc định theo Identity; token mock local không dùng trong
 staging. Mỗi xác thực tải JWKS từ Identity, lọc khóa RSA phù hợp và không cache
 kết quả. `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định nên Work key không bắt
 buộc; khi bật cờ, Compose phải cấp `AI_WORK_SERVICE_KEY` cho các process AI.
-Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực
-hoặc Fernet key không hợp lệ. Xem [cấu hình staging](../system/infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
+Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực. Xem
+[cấu hình staging](../system/infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
 
 ## Mở rộng thông báo
 
