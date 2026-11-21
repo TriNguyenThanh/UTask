@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **UTask-project-manager-for-education** (181 symbols, 210 relationships, 0 execution flows).
+This project is indexed by GitNexus as **UTask** (16548 symbols, 45180 relationships, 638 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -25,10 +25,10 @@ This project is indexed by GitNexus as **UTask-project-manager-for-education** (
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/UTask-project-manager-for-education/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/UTask-project-manager-for-education/clusters` | All functional areas |
-| `gitnexus://repo/UTask-project-manager-for-education/processes` | All execution flows |
-| `gitnexus://repo/UTask-project-manager-for-education/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/UTask/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/UTask/clusters` | All functional areas |
+| `gitnexus://repo/UTask/processes` | All execution flows |
+| `gitnexus://repo/UTask/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
