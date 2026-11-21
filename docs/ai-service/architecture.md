@@ -260,8 +260,37 @@ Xem [ERD](erd.md) và [code map](code-map.md).
 
 Đường chạy trên triển khai pipeline ADR-002. Phần **Chưa xác minh** là token
 production, provider REST Work, quota/evaluation LLM và tích hợp gateway.
-Kafka projection/event kết quả, specialist, SSE/WebSocket **Chưa triển khai**;
-retention terminal đã có lịch beat. Xem [retention](erd.md#retention-terminal).
+Kafka projection/event kết quả, specialist, chatbot hội thoại và SSE/WebSocket
+**Chưa triển khai**; retention terminal đã có lịch beat. Hướng phát triển
+chatbot và SSE nằm tại [workflow bounded agent](workflow.md#14-kiến-trúc-mục-tiêu).
+Xem [retention](erd.md#retention-terminal).
+
+### Chatbot agent và SSE: thiết kế mục tiêu
+
+Chatbot dùng lại `Application → ADK Workflow → LlmAgent → Context Tool Pool`;
+conversation/message là dữ liệu AI, còn quyền đọc Project/Task/Sprint và context
+vẫn do Work xác minh qua REST. Agent chỉ trả lời hoặc tạo proposal có cấu trúc;
+không tự áp dụng thay đổi nghiệp vụ. Conversation phải thuộc user đã xác thực,
+kiểm tra ownership ở mọi thao tác và áp dụng giới hạn request, model/tool budget
+và deadline hiện có. Chi tiết bounded autonomy nằm trong
+[workflow](workflow.md#6-bounded-autonomy).
+
+SSE là kênh một chiều từ AI API đến trình duyệt, dùng để gửi tiến độ an toàn và
+kết quả của request; POST tạo request và API domain vẫn xử lý command. SSE không
+thay Celery/Redis, REST lấy context hoặc cơ chế persistence/completion. Trước khi
+triển khai cần chốt event schema, quyền truy cập stream, event ID và cách resume
+sau reconnect, lưu/phục hồi sự kiện nếu cần không mất tiến độ, heartbeat/timeout,
+giới hạn kết nối và cấu hình Nginx không buffer. Không stream chain-of-thought,
+prompt nội bộ, Bearer hoặc raw context. Native `EventSource` không đặt được
+Authorization header tùy ý; client cần dùng streaming fetch hoặc cơ chế cookie
+đã được thiết kế, không đưa JWT vào query string.
+
+Hướng đơn giản là giữ POST tạo request; sau response `202`, trình duyệt mở SSE
+theo `request_id` đã xác thực, nhận progress/completion rồi đóng stream. Polling
+GET hiện tại tiếp tục là đường đọc trạng thái/fallback cho reconnect. Nếu cần
+replay event chính xác, chọn persistence/event log trước khi chốt contract;
+PostgreSQL NOTIFY hiện tại chỉ đánh thức listener completion, không phải event
+stream cho chatbot. Chưa có endpoint SSE, conversation schema hoặc event log.
 
 ### Request semantics
 
