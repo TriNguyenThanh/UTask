@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteObject } from "react-router-dom";
 
 import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
@@ -93,11 +93,23 @@ describe("home task deep links", () => {
 });
 
 describe("create team mutation", () => {
+  beforeEach(() => {
+    // Match the demo fixture's clock so its registration deadline stays in the future.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T08:30:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   async function submitTeamDialog(
     user: UserEvent,
     teamName: string,
   ) {
-    await user.click(screen.getByRole("button", { name: /Tạo nhóm mới/ }));
+    const createButton = screen.getByRole("button", { name: /Tạo nhóm mới/ });
+    expect(createButton).toBeEnabled();
+    await user.click(createButton);
     await user.type(await screen.findByLabelText("Tên nhóm"), teamName);
     await user.click(screen.getByRole("button", { name: "Tạo nhóm" }));
   }

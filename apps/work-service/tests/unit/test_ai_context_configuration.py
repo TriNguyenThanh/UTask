@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from common.service_permissions import valid_keys
+
 
 @pytest.mark.parametrize(
     "configured,expected", [("{}", "dict"), ("{bad-json", "NoneType"), ("[]", "list")]
@@ -40,12 +42,16 @@ def test_work_key_mapping_uses_existing_compose_env_files_and_private_gateway():
     mapping = (root / "infra/env/work-service.env").read_text("utf-8")
     assert "WORK_SERVICE_KEYS=${WORK_SERVICE_KEYS:-{}}" in mapping
     example = (root / ".env.example").read_text("utf-8")
-    raw = next(
-        line.split("=", 1)[1]
+    example_values = dict(
+        line.split("=", 1)
         for line in example.splitlines()
-        if line.startswith("WORK_SERVICE_KEYS=")
+        if line and not line.startswith("#") and "=" in line
     )
-    assert json.loads(raw.strip("'\"")) == {}
+    configured = json.loads(example_values["WORK_SERVICE_KEYS"].strip("'\""))
+    assert example_values["AI_WORK_SERVICE_AUTH_ENABLED"] == "true"
+    assert set(configured) == {"ai"}
+    assert valid_keys(configured["ai"])
+    assert configured["ai"] == [example_values["AI_WORK_SERVICE_KEY"].strip("'\"")]
     for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
         services = yaml.safe_load((root / filename).read_text("utf-8"))["services"]
         work = services["work-service"]
