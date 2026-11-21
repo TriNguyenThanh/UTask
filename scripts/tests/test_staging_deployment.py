@@ -47,7 +47,6 @@ class StagingDeploymentTests(unittest.TestCase):
         env.update(
             UTASK_IMAGE_PREFIX="test/utask",
             UTASK_IMAGE_TAG="test",
-            AI_CREDENTIAL_KEY="",
             AI_IDENTITY_SERVICE_KEY="",
         )
         result = subprocess.run(

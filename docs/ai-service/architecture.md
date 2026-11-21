@@ -46,7 +46,7 @@ trạng thái và lưu kết quả; adapter lắp ghép framework/provider bên 
 ```text
 POST /api/ai/v1/requests
   → Bearer JWT RS256 + session-status Identity + input validation
-  → Application → AI-side REST authorize client (Work contract planned)
+  → Application → AI-side REST authorize client → Work provider
   → transaction AI PostgreSQL: request queued + delivery job
   → API chờ persistence tối đa 10 giây → 200 hoặc 202 + Location
 
@@ -71,9 +71,9 @@ GET /api/ai/v1/requests/{request_id}
    và application. API không import/chạy ADK hoặc worker.
 2. Application gọi authorizer trước khi enqueue. Backlog chưa có target vẫn
    cần identity hợp lệ. MOCK_TEST dùng fixture để kiểm tra target local; ngoài
-   mock, AI-side Work client dựng POST theo contract, nhưng Work provider chưa
-   có source nên quyền/role thực tế **Chưa triển khai**. Không dùng projection
-   làm bằng chứng quyền.
+   mock, AI-side Work client gọi provider Work qua internal REST. Provider có
+   source/config/test; quyền runtime ở từng môi trường phải được nghiệm thu
+   riêng. Không dùng projection làm bằng chứng quyền.
    Khi provider trả lời, chỉ `success: true`, target/action đúng và
    `allowed: true` mới được client chấp nhận.
    JWT yêu cầu `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` là tùy chọn,
@@ -88,10 +88,11 @@ GET /api/ai/v1/requests/{request_id}
    là `503 AUTH_UNAVAILABLE` ở lớp nội bộ. Error envelope công khai v1 ánh xạ
    lỗi này thành `500 INTERNAL_ERROR` với `details.reason=AUTH_UNAVAILABLE`.
    Không cache kết quả active.
-   Work key là độc lập: `AI_WORK_SERVICE_AUTH_ENABLED=false` tạm thời bỏ riêng
-   `X-Service-Key` AI→Work; Bearer và authorize body target/intent vẫn giữ.
-   Khi bật, `AI_WORK_SERVICE_KEY` bắt buộc và được gửi. Identity key cùng
-   Integration key không bị cờ này ảnh hưởng.
+   Work key độc lập với key Identity/Integration. AI mặc định
+   `AI_WORK_SERVICE_AUTH_ENABLED=false`, nhưng Work provider luôn yêu cầu
+   `X-Service-Key`; tích hợp thật phải bật cờ và cấu hình
+   `AI_WORK_SERVICE_KEY` khớp caller `ai` của `WORK_SERVICE_KEYS`.
+   Bearer actor và authorize body target/intent luôn được gửi.
 3. Repository chuẩn hóa payload, tính SHA-256 và dùng unique `(user_id,
    idempotency_key)` cùng `INSERT ... ON CONFLICT`. Request và delivery được
    lưu trong cùng transaction. POST đồng thời cùng key dùng một request/job;
@@ -409,13 +410,11 @@ credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_contex
 `get_team_context`, `get_progress_context`, `get_development_context`.
 
 REST adapter dùng URL template từ cấu hình; AI-side Work authorize request là
-POST `{action: ai.analyze, intent}` với Bearer actor. Cờ
-`AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định chỉ bỏ header Work
-`X-Service-Key`; body, Bearer và yêu cầu authorize target/intent vẫn giữ.
-Khi cờ bật, `AI_WORK_SERVICE_KEY` là bắt buộc và được gửi. Chỉ envelope
+POST `{action: ai.analyze, intent}` với Bearer actor. Work bắt buộc header
+`X-Service-Key`; AI mặc định tắt gửi key, nên tích hợp Work thật phải bật
+`AI_WORK_SERVICE_AUTH_ENABLED=true` và cấp `AI_WORK_SERVICE_KEY`. Chỉ envelope
 `success: true`, `data` đúng target/action và `allowed: true` mới được AI client
-chấp nhận. Contract Work còn `planned`; Work provider chưa có source, nên không
-khẳng định endpoint hay kiểm tra role đã chạy runtime. Work context được client
+chấp nhận. Work context được client
 đọc theo GET `ContextDocument` trực tiếp, không bọc envelope. Adapter không
 theo redirect, có timeout và chặn response lớn hơn 65536 byte.
 GitHub GET gửi key Integration; Integration chịu trách nhiệm hỏi Work quyền
@@ -429,10 +428,9 @@ task decomposition cần task context, risk cần progress context. Chỉ gọi 
 hoặc development tool không thay thế dữ liệu thiết yếu. Agent vẫn tự chọn thứ
 tự lấy context và tool bổ sung.
 
-**Một phần:** AI-side adapter và test có source; Work boundary nằm trong
-[contract](../../contracts/api/work-ai-context-v1.yaml) ở trạng thái `planned`;
-provider Work **Chưa triển khai**. Integration provider đã có source; integration live
-**Chưa xác minh**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
+**Một phần:** AI-side adapter và Work provider có source/config/test; quyền
+runtime giữa service chỉ được nghiệm thu một phần. Integration provider đã có
+source; integration live **Chưa xác minh đầy đủ**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
 ngoài allowlist Work bị loại, không đưa tên/email/credential vào prompt.
 Tool GitHub chỉ xuất hiện khi risk Project, cờ bật và focus cho phép; Sprint
 không fetch GitHub và runtime tự thêm limitation, không dựa vào prompt.

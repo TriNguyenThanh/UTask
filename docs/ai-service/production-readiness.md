@@ -1,34 +1,34 @@
 # Điều kiện phát hành AI Service
 
-**Trạng thái: Một phần.** Source/test của adapter context, tool scope, retention
-và wiring phát hành đã có; không đồng nghĩa hệ thống đã chạy E2E với Work,
-Integration và LLM production. AI-side Work client có source; Work provider
-theo contract dưới đây **Chưa triển khai**.
+**Trạng thái: Một phần.** Source/config/test của AI context adapter, Work
+provider, Integration provider, tool scope, retention và wiring phát hành đã
+có. Mức nghiệm thu runtime giữa các service và LLM production chưa đầy đủ;
+không suy ra E2E hoàn chỉnh từ source/test hoặc healthcheck.
 Smoke LLM local ngày 15/10/2026 dùng context/quyền fixture, xem
 [checkpoint](checkpoint.md). Nguồn vị trí source là [code map](code-map.md).
 
 ## Boundary domain và quyền
 
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml) được
-[Work contract](../../contracts/api/work-service.yaml) tham chiếu và đánh dấu
-`planned`. Đội Work cần triển khai provider trước khi contract dùng được trên
-staging. AI-side client không chứng minh endpoint Work đã tồn tại. Không đọc
-database Work hoặc tự tạo endpoint thay thế.
-Chi tiết công việc, mapping và kiểm thử dành cho đội Work nằm trong
-[hướng dẫn triển khai provider Work](../project-service/ai-service-integration-guide.md).
+[Work contract](../../contracts/api/work-service.yaml) tham chiếu. Work
+authorize/context provider đã có source/config/test; kiểm thử và smoke staging
+đã xác minh một phần. Mức runtime và giới hạn kiểm chứng nằm trong
+[hướng dẫn Work–AI](../project-service/ai-service-integration-guide.md).
+Không đọc database Work hoặc tự tạo endpoint thay thế. Cấu hình đầy đủ các
+service nằm trong [hướng dẫn triển khai AI](deployment-and-service-integration.md).
 
 | Lời gọi | Credential và shape |
 | --- | --- |
-| Contract AI → Work POST `/api/v1/internal/ai/targets/{target_type}/{target_id}/authorize` (`planned`) | AI client gửi Bearer actor + body `{action: "ai.analyze", intent}`; chỉ gửi `X-Service-Key` khi `AI_WORK_SERVICE_AUTH_ENABLED=true`, khi đó cần `AI_WORK_SERVICE_KEY`; response contract `success/data` có target_type, target_id, action và allowed boolean |
-| Contract AI → Work GET `/api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}` (`planned`) | AI client gửi Bearer actor; key AI → Work chỉ khi cờ bật; `ContextDocument` trực tiếp theo contract. Chưa có Work provider source để xác minh kiểm quyền runtime |
-| AI → Integration GET `/api/v1/internal/projects/{project_id}/github/context` | Bearer actor + `AI_INTEGRATION_SERVICE_KEY`; Integration kiểm mapping/consent và gọi Work authorize `github.read` bằng key Integration → Work |
+| AI → Work POST `/api/v1/internal/ai/targets/{target_type}/{target_id}/authorize` | Work provider đã có source; Bearer actor + `X-Service-Key` caller `ai`; body `{action: "ai.analyze", intent}`; response envelope có target/action/allowed |
+| AI → Work GET `/api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}` | Work provider đã có source; Bearer actor + `X-Service-Key` caller `ai`; trả `ContextDocument` trực tiếp theo contract |
+| AI → Integration GET `/api/v1/internal/projects/{project_id}/github/context` | Provider có source; Bearer actor + `AI_INTEGRATION_SERVICE_KEY`; Integration kiểm mapping/consent và gọi Work authorize `github.read` bằng key Integration → Work |
 
-Theo luồng đã chốt, AI gửi authorize request cho target khi nhận request và
-khi worker thực thi; Work context được kiểm lại khi fetch. Hiện provider Work
-chưa có source nên các bước này **Chưa triển khai** phía Work, không xác nhận
-role authorization runtime. `AI_WORK_SERVICE_AUTH_ENABLED=false` tạm thời chỉ
-bỏ header Work `X-Service-Key`; Bearer và authorize body vẫn được gửi. Bật cờ
-thì cần Work key. Nhánh fetch GitHub không gọi thêm Work từ AI:
+Theo luồng hiện tại, AI gửi authorize request cho target khi nhận request và
+khi worker thực thi; Work context được kiểm lại khi fetch. Work bắt buộc cả
+Bearer và service key, nên khi dùng provider Work thật phải đặt
+`AI_WORK_SERVICE_AUTH_ENABLED=true` và cấu hình key khớp
+`WORK_SERVICE_KEYS.ai`. Nếu cờ `false`, AI không gửi service key và Work từ
+chối request. Nhánh fetch GitHub không gọi thêm Work từ AI:
 Integration sở hữu quyết định quyền GitHub hiện hành. Đó không phải bỏ bước
 authorize request AI. Work phải từ chối dùng AI key cho caller Integration.
 
@@ -50,8 +50,9 @@ runtime Identity/staging/production **Chưa xác minh**. Token/JWKS do
 project/team/progress cho mỗi target, thêm task:task; task ID không do agent
 chọn. Placeholder chỉ `{target_type}`, `{target_id}`. Khi bật GitHub, thêm
 project:github_activity URL Integration và key riêng. Staging/production
-thiếu mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. Work key chỉ cần
-khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; cờ mặc định `false`. Base URL
+thiếu mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. AI mặc định
+`AI_WORK_SERVICE_AUTH_ENABLED=false`; khi tích hợp Work thật, phải bật cờ và
+cấp key khớp Work vì provider luôn yêu cầu header này. Base URL
 provider LLM phải HTTPS ngoài development/test; URL nội bộ domain dùng cấu
 hình tĩnh HTTP/HTTPS theo network triển khai hiện có.
 
@@ -86,10 +87,10 @@ phát hành. Chưa nghiệm thu hiệu năng migration hoặc nhịp cleanup pro
 Compose root local/staging có `ai-service`, `ai-worker`, `ai-dispatcher`,
 `ai-beat`; Compose standalone có api/worker/dispatcher/beat. Một image/cấu hình
 cho bốn process; secret inject environment, không đặt vào env_file thường.
-Compose truyền `AI_WORK_SERVICE_AUTH_ENABLED`; mặc định tắt service key Work.
-Khi bật, phải cấp `AI_WORK_SERVICE_KEY` cho mọi process cần gọi Work. Khi tắt,
-chỉ header Work `X-Service-Key` bị bỏ; Bearer actor và yêu cầu authorize
-target/intent vẫn được gửi. Cờ không ảnh hưởng Identity hoặc Integration key.
+Compose truyền `AI_WORK_SERVICE_AUTH_ENABLED`. Giá trị mặc định code là
+`false`, nhưng tích hợp Work thật cần đặt `true` và cấp `AI_WORK_SERVICE_KEY`
+cho mọi process AI gọi Work. Khi tắt, AI bỏ header `X-Service-Key`; Work sẽ
+từ chối request. Cờ không ảnh hưởng Identity hoặc Integration key.
 Beat chỉ lập lịch, worker thực hiện cleanup. Chạy một scheduler cho lịch này
 là cấu hình Compose hiện tại, không phải quy tắc singleton worker của baseline.
 Nginx giữ URI `/api/ai/v1/...`, chặn internal Identity/Work/Integration;
@@ -170,8 +171,8 @@ deploy tiếp tục kiểm tra migration và health gateway theo CI/CD; không y
 
 ## Những phần còn phải nghiệm thu
 
-Work provider (contract còn planned) và fixture staging; JWT Identity/rotation
-key; allow/deny theo user/target; partial/stale/missing với Integration thật; gateway AI POST/GET;
+Nghiệm thu runtime Identity/JWT/key rotation; allow/deny theo user/target với
+Work thật; partial/stale/missing với Integration thật; gateway AI POST/GET;
 ba intent với model pin; quota/deadline/latency; retention trên volume thật và
 khôi phục sau lỗi. Test source, mock transport, PostgreSQL/Redis test và smoke
 LLM local cần được báo riêng. Chưa có bằng chứng cho phép kết luận production

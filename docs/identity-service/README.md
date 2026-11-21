@@ -202,6 +202,12 @@ Blacklist refresh không tự thu hồi access ở consumer chỉ kiểm chữ k
 giúp consumer thấy logout, đổi password/role, suspended/deleted hoặc replay sau commit.
 Private signing key chỉ ở Identity; service khác dùng public JWKS và caller key riêng.
 
+Với AI, Identity cần entry caller `ai` trong `IDENTITY_SERVICE_KEYS`; giá trị
+phải khớp `AI_IDENTITY_SERVICE_KEY`. AI dùng `IDENTITY_JWT_ISSUER` và
+`IDENTITY_JWT_AUDIENCE` để xác minh token, rồi gọi JWKS và session-status qua
+DNS nội bộ. Hướng dẫn ghép các biến và triển khai liên service nằm trong
+[cấu hình và triển khai AI Service](../ai-service/deployment-and-service-integration.md).
+
 Web nhận refresh qua cookie HttpOnly/Secure/SameSite=Lax, path `/api/auth`.
 Mutation dùng cookie phải qua CSRF/Origin của Django; cookie và body khác nhau trả400.
 Backend service không giữ refresh token thay người dùng.

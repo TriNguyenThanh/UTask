@@ -208,7 +208,7 @@ RELATES_TO/DUPLICATE kiểm scope nhưng không đi vào DAG. Delete/update/rest
 
 ### 2.6. Sequence 6 — User gọi nhóm AI, Work áp dụng backlog đã duyệt
 
-AI Service/AIDB do nhóm khác phụ trách, được vẽ như một hệ thống ngoài ranh giới Work. Không áp đặt schema AI, job nội bộ hoặc quyền truy cập từ một sơ đồ Work. Work chỉ chịu context export và mutation đã được user duyệt. API AI là hợp đồng cần nhóm AI cung cấp, chưa có source trong repo.
+AI Service/AIDB do nhóm khác phụ trách, được vẽ như một hệ thống ngoài ranh giới Work. Không áp đặt schema AI, job nội bộ hoặc quyền truy cập từ một sơ đồ Work. Work cung cấp context qua internal provider đã có source; Work chỉ áp dụng mutation sau khi user duyệt.
 
 ```mermaid
 sequenceDiagram

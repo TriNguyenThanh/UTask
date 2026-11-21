@@ -3,6 +3,9 @@
 Đây là bản bàn giao theo source, cấu hình và kiểm thử tại thời điểm checkpoint.
 Tài liệu kiến trúc chuẩn vẫn là [architecture](architecture.md), hợp đồng
 hành vi là [API v1](api.md), vị trí mã nguồn là [code map](code-map.md).
+Các trạng thái provider Work trong phần checkpoint phản ánh ngày 21/10/2026;
+hướng dẫn hiện hành để cấu hình và phát hành liên service là
+[cấu hình và triển khai AI](deployment-and-service-integration.md).
 
 ## Quyết định bổ sung — 22/10/2026
 

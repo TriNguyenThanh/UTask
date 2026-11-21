@@ -89,16 +89,17 @@ Staging tiếp tục chạy migration tuần tự trước khi cập nhật runt
 [quy trình deploy](ci-cd.md). Khi API staging khởi động, entrypoint chạy
 migration lần nữa; Django bỏ qua migration đã áp dụng.
 
-Integration và Notification có profile riêng; khai báo profile không khẳng định
-các service đó đã hoàn thiện hoặc được khởi động mặc định. AI Service cũng nằm
-trong profile `ai-service` và cần cấu hình credential riêng; xem
-[cấu hình AI](../../ai-service/README.md#cấu-hình). Các profile này không cần cho
-lệnh khởi động Identity–Classroom–Work.
+Integration và Notification có profile riêng; việc khai báo profile không có
+nghĩa service tự khởi động. AI Service nằm trong profile `ai-service`; khi
+kết nối Work thật, cấu hình caller key và URL map cho cả hai service. Xem
+[hướng dẫn cấu hình và triển khai AI](../../ai-service/deployment-and-service-integration.md).
+Các profile AI/Integration không cần cho lệnh khởi động Identity–Classroom–Work.
 
 ## Chạy riêng pipeline AI từ root
 
-Điền `AI_DB_NAME`, `AI_CREDENTIAL_KEY`, credential JWT và LLM trong `.env`
-theo [cấu hình AI](../../ai-service/README.md#cấu-hình). Password DB phải dùng được
+Điền `AI_DB_NAME`, key AI→Identity/Work, URL map Work và cấu hình LLM trong
+`.env` theo [hướng dẫn cấu hình AI](../../ai-service/deployment-and-service-integration.md).
+Password DB phải dùng được
 trong URL; nếu có ký tự đặc biệt, đặt `AI_DATABASE_URL` với password đã percent-encode.
 Từ repository root:
 

@@ -391,7 +391,7 @@ UC_ReturnBacklog ..> UC_CloseSprint : <<extend>>
 
 ### 2.6. Phân hệ 5: Work áp dụng kết quả AI (nội bộ AI ngoài phạm vi)
 
-User yêu cầu/xem/sửa đề xuất tại AI API thuộc nhóm AI; Work chỉ export context và apply đã duyệt. Không vẽ AI request/storage bên trong Work boundary. Các đường tích hợp là contract mục tiêu, chưa có source.
+User gửi yêu cầu/xem đề xuất qua AI API do nhóm AI sở hữu; Work export context qua provider nội bộ đã có source và chỉ apply thay đổi sau khi được duyệt. Không vẽ AI request/storage bên trong Work boundary.
 
 ```plantuml
 @startuml

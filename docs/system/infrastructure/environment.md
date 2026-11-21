@@ -129,12 +129,11 @@ Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
 gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
 không thay đổi nội dung sự kiện.
 
-AI Service nhận toàn bộ cấu hình từ `.env` root; `infra/env/ai-service.env`
-chỉ ánh xạ các biến vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
+AI Service nhận giá trị triển khai từ `.env` root; `infra/env/ai-service.env`
+ánh xạ biến thường vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
 chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
-không cần server/mock microservice hay launcher riêng. SDK nhận key từ Settings, không cần
-export secret ra terminal. Compose inject `AI_CREDENTIAL_KEY`, `AI_IDENTITY_SERVICE_KEY` và `AI_LLM_API_KEY`
-vào các process AI. Compose root dùng chung container `postgres` cho mọi service,
+không cần server/mock microservice hay launcher riêng. Secret được inject qua
+Compose, không export ra terminal. Compose root dùng chung container `postgres` cho mọi service,
 AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
 `POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
 `postgres` và broker sang Redis DB1, tránh `localhost` trong container.
@@ -375,7 +374,7 @@ URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết
 riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
 `AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
 tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
-`AI_CREDENTIAL_KEY` phải giống nhau cho các process. AI xác minh JWT như Work:
+AI xác minh JWT như Work:
 RS256, issuer mặc định `https://identity.utask.internal`, audience mặc định
 `utask-platform` (kế thừa `IDENTITY_JWT_ISSUER`/`IDENTITY_JWT_AUDIENCE` nếu
 không có override AI). AI luôn lấy JWKS từ `AI_IDENTITY_BASE_URL` cộng
@@ -388,11 +387,12 @@ AI_ENVIRONMENT=staging
 MOCK_TEST=false
 AI_JWT_ISSUER=https://identity.utask.internal
 AI_JWT_AUDIENCE=utask-platform
-AI_CREDENTIAL_KEY=<khóa Fernet hợp lệ>
 AI_IDENTITY_BASE_URL=http://identity-service:8000
 AI_IDENTITY_SERVICE_KEY=<secret khớp IDENTITY_SERVICE_KEYS.ai>
-AI_WORK_SERVICE_AUTH_ENABLED=false
-AI_WORK_SERVICE_KEY=
+AI_WORK_SERVICE_AUTH_ENABLED=true
+AI_WORK_SERVICE_KEY=<secret khớp WORK_SERVICE_KEYS.ai>
+AI_AUTHORIZATION_URLS=<đủ ba URL authorize của Work>
+AI_CONTEXT_URLS=<đủ mười URL context của Work>
 ```
 
 Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công khai là
@@ -400,20 +400,19 @@ Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công
 phiên tại Identity bằng service key riêng; không tự tạo secret hoặc ghi đè
 `.env` server.
 
-Tạm thời `AI_WORK_SERVICE_AUTH_ENABLED=false` chỉ tắt việc gửi service key
-AI→Work. Bearer của người dùng vẫn được chuyển tiếp và kiểm tra quyền domain
-vẫn bắt buộc. Giữ mapping `AI_WORK_SERVICE_KEY` để bật lại bằng
-`AI_WORK_SERVICE_AUTH_ENABLED=true` khi Work sẵn sàng; không dùng flag này
-để tắt JWT, kiểm tra phiên Identity hoặc kiểm tra quyền.
-Provider quyền/context AI phía Work **Chưa triển khai**; cấu hình này chưa
-chứng minh luồng tích hợp AI→Work hoạt động thật.
+Work provider hiện có source/config/test và bắt buộc cả Bearer actor lẫn service
+key caller `ai`. Vì vậy tích hợp thật phải bật
+`AI_WORK_SERVICE_AUTH_ENABLED=true`; key phải khớp `WORK_SERVICE_KEYS.ai`.
+Work vẫn tự kiểm tra quyền domain mỗi lần authorize/context; cờ này không tắt
+JWT, kiểm tra session Identity hoặc kiểm tra quyền.
 
 Settings của AI từ chối khởi động staging/production khi thiếu issuer,
-audience, key AI→Identity hoặc Fernet key không hợp lệ. API, worker,
+audience, key AI→Identity hoặc URL authorize/context bắt buộc. API, worker,
 dispatcher và beat dùng chung environment. Compose vẫn render được khi
 không bật AI mà thiếu secret; khi bật AI phải điền đủ trước khi chạy
 migration/khởi động. Kiểm thử mock và render Compose không thay thế kiểm
-tra phiên Identity hoặc quyền domain thật.
+tra phiên Identity hoặc quyền domain thật. Bảng URL/key và thứ tự rollout nằm
+trong [hướng dẫn cấu hình, triển khai AI](../../ai-service/deployment-and-service-integration.md).
 
 LLM cần model/base URL/key và REST adapter cần URL quyền/context thật. Xem [cấu hình AI](../../ai-service/README.md#cấu-hình).
 Đừng dùng endpoint proxy development trong staging nếu chưa chủ động cấu hình.
@@ -423,10 +422,12 @@ Xem [hướng dẫn evaluation AI](../../ai-service/production-readiness.md#eval
 
 Không truyền toàn bộ `.env` chung vào container. Đổi password `.env` không tự
 thay password role đã lưu trong volume PostgreSQL. Redis DB1 là broker AI;
-Redis DB0 dành cấu hình Identity. Đổi Compose không tự chuyển dữ liệu AI cũ
-từ volume `ai_database` hoặc stack standalone vào database chung. Giữ volume
-cũ để kiểm tra/backup; không chạy `down -v`. Nếu AI từng có dữ liệu, cần xuất
-và khôi phục có chủ đích trước khi sử dụng database đích.
+Redis DB0 dành cấu hình Identity. Compose hiện tại không khai báo hoặc mount
+volume `ai_database`; database AI nằm trong `postgres_data` chung với database
+riêng `ai_context_db`. Volume `ai_database` có thể còn sót từ Compose cũ và
+việc bỏ khai báo không tự xóa volume đó. Nếu AI từng có dữ liệu trong volume
+cũ hoặc stack standalone, giữ để kiểm tra/backup; không chạy `down -v`. Muốn
+dùng dữ liệu cũ thì cần xuất và khôi phục có chủ đích vào database đích.
 
 ## Notification Service
 

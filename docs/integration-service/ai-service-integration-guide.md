@@ -3,8 +3,11 @@
 **Trạng thái: Một phần.** Provider Integration và adapter AI đã có source/test
 cho `github_activity`, Bearer actor, service key riêng và typed response.
 E2E AI → Integration → Work/GitHub với credential staging **Chưa xác minh**;
-provider authorize Work còn **Chưa triển khai**. Contract chuẩn là
+provider authorize Work đã có source/config/test. Contract chuẩn là
 [Integration Service v1](../../contracts/api/integration-service-v1.yaml).
+
+Hướng dẫn end-to-end về cấu hình secret, URL map, Compose và rollout nằm trong
+[cấu hình và triển khai AI Service](../ai-service/deployment-and-service-integration.md).
 
 ## Phạm vi và luồng
 
@@ -42,8 +45,9 @@ từ mảng rỗng. Mỗi item hiện theo schema `GitHubActivityItem` trong con
 environment cho API/worker/dispatcher/beat, cùng image và cấu hình. Không ghi key vào
 `infra/env/ai-service.env`, log, lỗi trả client hoặc nội dung gửi model. Thêm
 `project:github_activity` vào `AI_CONTEXT_URLS` với URL nội bộ dạng
-`https://integration-service/api/v1/internal/projects/{target_id}/github/context`;
-adapter hiện thay `{target_id}` từ project đã validate. Không dùng placeholder
+`http://integration-service:8000/api/v1/internal/projects/{target_id}/github/context`;
+adapter hiện thay `{target_id}` từ project đã validate. Dùng host/port nội bộ
+đúng network môi trường; ví dụ trên là Compose root. Không dùng placeholder
 `{project_id}` vì adapter chưa hỗ trợ tên đó, và không hard-code host trong
 agent. URL domain nội bộ chấp nhận HTTP/HTTPS với host tĩnh; lựa chọn TLS theo
 network triển khai, không nhầm quy tắc HTTPS của LLM provider với HTTP nội bộ.
@@ -93,6 +97,12 @@ Unit test adapter cần bao phủ tối thiểu:
   stale không được dùng như dữ liệu hiện hành.
 - Lỗi biên: key/config thiếu, 5xx, timeout, JSON/schema/domain sai và payload
   vượt giới hạn được ánh xạ đúng; response/log không chứa service key hay token.
+
+Để bật context GitHub, cần `INTEGRATION_CONNECTIONS_ENABLED=true`,
+`INTEGRATION_AI_CONTEXT_ENABLED=true`, caller `ai` trong
+`INTEGRATION_SERVICE_KEYS` và key Integration→Work hợp lệ. GitHub App cần được
+cấu hình riêng; Work cần caller `integration` và luồng kết nối repository được
+bật nếu chưa có mapping. Xem bảng key end-to-end ở tài liệu cấu hình AI.
 
 Rollout theo thứ tự: đối chiếu schema response với contract hiện hành;
 cấu hình secret và URL cho các process AI ở staging; xác

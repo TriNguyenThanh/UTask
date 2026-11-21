@@ -46,11 +46,12 @@ API và worker dùng cùng `build_context_adapter()`. Context Tool Pool không
 biết nguồn là fixture hay REST; cả hai trả ContextDocument. Mỗi xác thực tải
 raw JWKS của Identity; JWT và session vẫn được xác minh trước API/worker.
 MOCK_TEST không bỏ qua xác thực.
-Vì Work chưa có, quyền domain trong mock được kiểm tra
-theo allowed_users của từng target, không dùng `allowed=true` cho mọi user.
-`AI_WORK_SERVICE_AUTH_ENABLED=false` chỉ bỏ header service key Work; Bearer và
-authorize theo target/intent vẫn giữ. Nếu bật cờ, cần `AI_WORK_SERVICE_KEY`;
-Identity và Integration service key không đổi.
+Mock kiểm tra quyền domain theo `allowed_users` của từng target, không dùng
+`allowed=true` cho mọi user; mock không gọi provider Work thật.
+`AI_WORK_SERVICE_AUTH_ENABLED=false` bỏ header service key Work, nên chỉ dùng
+cho chế độ không gọi Work thật. Khi `MOCK_TEST=false` và URL map trỏ tới Work,
+bật cờ và đặt `AI_WORK_SERVICE_KEY` khớp `WORK_SERVICE_KEYS.ai`. Identity và
+Integration service key không đổi.
 
 ## Chạy như AI Service bình thường
 

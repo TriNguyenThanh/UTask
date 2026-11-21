@@ -433,8 +433,9 @@ staging. Theo yêu cầu tiếp theo, điều kiện chặn HTTP đã được b
 staging local đã cập nhật; chưa chạy lại bốn workflow sau bản sửa HTTP.
 Xem [báo cáo runtime](ai-context-staging-validation-20261022.md).
 Chưa nghiệm thu mọi intent, GitHub trong AI, public TLS/VPS hoặc hosted CI.
-Một số tài liệu AI còn ghi provider Work chưa triển khai; bàn giao bằng chứng
-phía Work này để đội AI cập nhật trạng thái trong phạm vi tài liệu của họ.
+Hướng dẫn cấu hình hiện hành được tập trung tại
+[cấu hình và triển khai AI Service](../ai-service/deployment-and-service-integration.md);
+biên bản này chỉ giữ lịch sử triển khai và giới hạn smoke tại ngày thực hiện.
 
 GitNexus đã hỗ trợ truy vết quyền và impact receipt. Symbol mới chưa có trong
 index nên impact trả `UNKNOWN/not found`; không coi đó là bằng chứng không có

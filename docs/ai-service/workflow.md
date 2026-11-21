@@ -224,8 +224,8 @@ tương ứng. Source: [tool pool](../../apps/ai-service/src/context/tools.py).
 Adapter kiểm tra shape theo từng domain, kiểu dữ liệu/giới hạn lồng nhau và
 loại trường ngoài allowlist trước khi đưa Work context cho model; không trả
 PII như tên/email hay credential. GitHub shape bám contract Integration,
-tối đa 20 item mỗi loại và chỉ URL GitHub hợp lệ. Work provider vẫn
-**Chưa triển khai** dù boundary đã chốt; xem
+tối đa 20 item mỗi loại và chỉ URL GitHub hợp lệ. Work provider có
+source/config/test; mức runtime đã xác minh xem
 [production readiness](production-readiness.md#boundary-domain-và-quyền).
 
 Ví dụ:

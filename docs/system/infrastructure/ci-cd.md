@@ -523,8 +523,8 @@ thủ công. Migration chạy tới `head`; nếu không bật AI thì không ch
 cho AI. Không có chuyển dữ liệu tự động từ container AI PostgreSQL cũ hoặc
 Compose AI standalone; volume cũ phải được giữ lại để backup/chuyển dữ liệu có chủ đích.
 
-Trên VPS, điền password DB, khóa Fernet, JWT issuer/audience, URL Identity
-và key AI→Identity, URL REST quyền/context, model/base URL/API key
+Trên VPS, điền password DB, JWT issuer/audience, URL Identity và key
+AI→Identity/Work, đủ URL REST quyền/context của Work, model/base URL/API key
 trong `.env` server theo
 [biến môi trường](environment.md#cấu-hình-ai-trong-compose-root). Staging mặc
 định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; không dùng mock development
@@ -532,9 +532,12 @@ hoặc endpoint proxy local làm cấu hình staging mặc định.
 
 AI lấy JWKS trực tiếp từ `AI_IDENTITY_BASE_URL` cộng `/.well-known/jwks.json`
 như Work; không cấu hình PEM hay URL JWKS riêng.
-`AI_WORK_SERVICE_AUTH_ENABLED=false` tạm tắt service key AI→Work, vẫn giữ
-bearer và kiểm tra quyền domain. Provider quyền/context AI phía Work
-**Chưa triển khai**; chưa xác minh luồng tích hợp thật.
+Khi kết nối Work thật, cấu hình `AI_WORK_SERVICE_AUTH_ENABLED=true` và key
+khớp `WORK_SERVICE_KEYS.ai`; Work provider yêu cầu cả Bearer actor và service
+key. Tài liệu chi tiết về các service, URL map và rollout nằm trong
+[hướng dẫn cấu hình AI](../../ai-service/deployment-and-service-integration.md).
+Healthcheck chỉ chứng minh process healthy, không xác minh quyền/context hoặc
+LLM end-to-end.
 
 `--wait` kiểm tra health của API, Celery ping của worker và process liveness của
 dispatcher; kiểm tra liveness chưa chứng minh dispatcher đã phát job. Probe gateway

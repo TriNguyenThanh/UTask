@@ -2,14 +2,18 @@
 
 **Trạng thái: Một phần.** Pipeline API/PostgreSQL/dispatcher/Redis/Celery/ADK
 đã triển khai trong `apps/ai-service/`; xác minh chữ ký JWT và kiểm tra session
-qua Identity có source/test local. Identity/Work/Integration và LLM production
-**Chưa xác minh**;
+qua Identity có source/test local. Work provider authorize/context và
+Integration provider GitHub có source/config/test. Runtime liên service và LLM
+production mới được xác minh một phần hoặc chưa xác minh;
 Retention terminal đã có source, migration và lịch Celery beat; Kafka và
 specialist **Chưa triển khai**. Điều kiện phát hành và phần chưa xác minh nằm
 tại [mức sẵn sàng production](production-readiness.md).
 CI chạy deterministic evaluation; live evaluation là lệnh thủ công tùy chọn,
 không phải điều kiện deploy staging. Hướng dẫn và các biến `EVAL_AI_*` nằm tại
 [phần evaluation](production-readiness.md#evaluation-và-gate-phát-hành).
+
+Hướng dẫn chuẩn để cấu hình, chỉnh sửa contract và triển khai các service liên
+quan nằm tại [cấu hình và triển khai AI Service](deployment-and-service-integration.md).
 
 Đây là trang điều hướng cho tài liệu AI Service. Không coi các phần thiết kế
 API, event, provider hoặc agent là deployment production đã hoàn chỉnh chỉ
@@ -42,9 +46,9 @@ inbox khi bỏ lỡ tín hiệu. API đọc cùng persistence để client polli
 Kafka phục vụ sự kiện giữa service. Nguồn chi tiết là
 [pipeline trong kiến trúc AI](architecture.md) và quyết định tại
 [ADR-002](../system/adr/002-ai-request-pipeline.md). Pipeline source đã được kiểm thử
-với PostgreSQL, Redis và ADK fake model. Work AI contract còn `planned`, provider
-chưa có source nên quyền/role Work runtime chưa xác minh; giới hạn tích hợp nằm trong
-[code map](code-map.md).
+với PostgreSQL, Redis và ADK fake model. Work AI provider có source/config/test;
+runtime liên service đã được smoke một phần, xem
+[báo cáo Work–AI](../project-service/ai-context-staging-validation-20261022.md).
 
 Baseline nêu roadmap AI rộng hơn contract v1. Không coi ba intent dưới đây là
 thứ tự Phase 1–4 của roadmap hệ thống, hoặc tự thêm intent ngoài contract.
@@ -94,18 +98,18 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_LLM_API_KEY` | API key trong `.env` root, bắt buộc khi gọi LLM thật |
 
 URL template chỉ dùng `{target_type}` và `{target_id}` từ request đã validate.
-Các target là `project`, `task`, `sprint`; domain là `project`, `task`, `team`,
-`progress`, `github_activity`. Work boundary đã chốt tại
-[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
-[Work contract](../../contracts/api/work-service.yaml) tham chiếu và còn ở trạng thái
-`planned`; provider Work **Chưa triển khai**. AI-side adapter POST body
+Các target là `project`, `task`, `sprint`; domain Work là `project`, `task`,
+`team`, `progress`; domain `github_activity` đến từ Integration khi được bật.
+Work boundary được khai báo trong [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml),
+được [Work contract](../../contracts/api/work-service.yaml) tham chiếu. Provider
+Work có source/config/test; mức nghiệm thu runtime xem
+[điều kiện phát hành](production-readiness.md). AI-side adapter POST body
 `action: ai.analyze` và `intent`, kiểm tra envelope `success/data` cùng
 target/action/allowed; GET context nhận `ContextDocument` trực tiếp, tối đa
-65536 byte. Bearer actor luôn được gửi. Header Work `X-Service-Key` chỉ được
-gửi khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; mặc định `false` chỉ bỏ header đó,
-không bỏ yêu cầu authorize theo target/intent. Vì provider Work chưa có source,
-không thể kết luận role/target authorization đã chạy runtime. GitHub đi Integration;
-Integration tự hỏi Work quyền
+65536 byte. Bearer actor luôn được gửi. Work hiện bắt buộc cả Bearer và caller
+service key; cấu hình thật phải đặt `AI_WORK_SERVICE_AUTH_ENABLED=true` và
+đồng bộ key với `WORK_SERVICE_KEYS.ai`. Cờ mặc định `false` chỉ phù hợp khi
+không gọi Work provider thật. GitHub đi Integration; Integration tự hỏi Work quyền
 `github.read`, AI không gọi thêm Work cho lần đọc GitHub. Xem
 [boundary và cấu hình staging](production-readiness.md#boundary-domain-và-quyền).
 Thiếu cấu hình hoặc quyền/context lỗi thì từ chối; không fallback fixture.
@@ -187,9 +191,10 @@ fixture không xác nhận contract domain production.
 
 Compose AI độc lập và Compose root local/staging truyền
 `AI_IDENTITY_SERVICE_KEY` vào process AI. Compose cũng truyền
-`AI_WORK_SERVICE_AUTH_ENABLED`; mặc định `false` nên không cần
-`AI_WORK_SERVICE_KEY`. Nếu bật cờ, cấp key cho toàn bộ process AI. Việc cấu
-hình không xác nhận Work provider/runtime đã hoạt động.
+`AI_WORK_SERVICE_AUTH_ENABLED`; khi kết nối Work thật, đặt `true` và cấp
+`AI_WORK_SERVICE_KEY` cho toàn bộ process AI, khớp caller `ai` trong
+`WORK_SERVICE_KEYS` của Work. Hướng dẫn chi tiết và thứ tự triển khai nằm tại
+[cấu hình và triển khai AI Service](deployment-and-service-integration.md).
 
 ## Chạy từ Compose root
 
@@ -341,8 +346,8 @@ lớn nằm tại [`apps/ai-service/.agent/PLANS.md`](../../apps/ai-service/.age
 Compose staging truyền Identity service key cho các process AI cần gọi Identity.
 Issuer/audience mặc định theo Identity; token mock local không dùng trong
 staging. Mỗi xác thực tải JWKS từ Identity, lọc khóa RSA phù hợp và không cache
-kết quả. `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định nên Work key không bắt
-buộc; khi bật cờ, Compose phải cấp `AI_WORK_SERVICE_KEY` cho các process AI.
+JWKS. Khi gọi Work provider thật, đặt `AI_WORK_SERVICE_AUTH_ENABLED=true`
+và cấp `AI_WORK_SERVICE_KEY` cho các process AI; Work luôn yêu cầu service key.
 Settings từ chối khởi động staging/production nếu thiếu cấu hình xác thực. Xem
 [cấu hình staging](../system/infrastructure/environment.md#cấu-hình-ai-trong-compose-root).
 
