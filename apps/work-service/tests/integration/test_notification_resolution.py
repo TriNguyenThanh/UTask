@@ -9,8 +9,8 @@ from apps.collaboration.models import Comment, CommentMention
 from apps.messaging.models import OutboxEvent
 from apps.projects.models import ProjectMember, State
 from apps.tasks.models import Task, TaskAssignment
+from apps.tasks.queries import resolve_notification
 from apps.tasks.tasks import scan_deadlines
-from apps.tasks.views.notification_resolution import resolve_notification
 from tests.event_contracts import assert_event_contract
 from tests.fixtures.transactions import reject_outbox_event as reject_outbox_event
 

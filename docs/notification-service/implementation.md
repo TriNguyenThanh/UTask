@@ -10,10 +10,36 @@ Tài liệu này hướng dẫn các service phát sự kiện, Notification x�
 | Resolve quyền hiện tại qua Identity/Work, in-app, preference email, API public | Đã triển khai | Client và API trong `notifications/`; endpoint domain trong Identity và Work. |
 | Producer outbox cho ba event mail Identity và năm event Work | Đã triển khai | Schema chuẩn tại `contracts/events/`; contract tests producer trong từng service. |
 | Web Notification với API thật | Đã triển khai | Bật bằng `notifications` trong `VITE_REAL_SERVICES`; polling khi tab hiển thị. |
+| Identity/Work thật → Kafka → Notification → SMTP TLS kiểm thử | Đã triển khai và kiểm chứng local | [Smoke domain](../../scripts/smoke_notification_domains.py) đạt; reset/kích hoạt dùng link từ thư thực tế, giữ chính sách tạm đăng ký/import. |
 | Toàn tuyến Kafka qua service thật đến Gmail, staging/VPS | Chưa xác minh | Smoke dùng HTTP stub cho Identity/Work; Gmail đã ACK ba thư gửi SMTP trực tiếp, không đi qua Kafka/Notification. Không xem là nghiệm thu toàn tuyến. |
 | Producer/consumer cho service hoặc loại event mới ngoài Identity/Work | Chưa triển khai | Consumer chỉ nhận `--source identity|work`; không tự nhận topic/service mới. Cần triển khai có chủ đích theo checklist bên dưới. |
 
 Quy trình xử lý hiện tại: producer ghi outbox cùng transaction nghiệp vụ; publisher chuyển event lên topic; consumer validate và lưu inbox/quarantine rồi commit Kafka offset. Beat mỗi 5 giây gọi dispatcher không kèm tham số; dispatcher đọc các inbox/delivery ID từ PostgreSQL và xử lý trực tiếp trong task. Redis/Celery là cơ chế job nội bộ, không phải nơi giữ payload event hay token.
+
+## Chính sách tạm cần giữ
+
+Đăng ký mới vẫn tạo tài khoản `ACTIVE` và đánh dấu email đã xác minh ngay.
+Import sinh viên mới vẫn tạo `ACTIVE`, dùng email chuẩn hóa làm mật khẩu ban
+đầu và không phát thư kích hoạt. Tích hợp Notification không thay các chính
+sách tạm này. `identity.activation.requested` tiếp tục phục vụ tài khoản
+pending cũ; yêu cầu quên mật khẩu vẫn phát `identity.password_reset.requested`.
+Nguồn hành vi tại [đăng ký](../../apps/identity-service/authentication/serializers/registration.py)
+và [cấp sinh viên](../../apps/identity-service/accounts/services/provisioning.py).
+
+API Notification chia theo trách nhiệm: [views](../../apps/notification-service/notifications/views.py)
+nhận HTTP, [serializers](../../apps/notification-service/notifications/serializers.py)
+kiểm tra đầu vào, [queries](../../apps/notification-service/notifications/queries.py)
+đọc theo quyền hiện tại và [urls](../../apps/notification-service/notifications/urls.py)
+đăng ký route. Lỗi framework trả tiếng Việt qua
+[exception handler](../../apps/notification-service/notifications/exception_handler.py),
+giữ HTTP status, header và cấu trúc phản hồi. Resolver Work nằm tại
+[truy vấn Task](../../apps/work-service/apps/tasks/queries.py), view chỉ tiếp nhận
+yêu cầu và trả kết quả.
+
+Template text giữ nguyên URL và dấu `&` trong query string; không dùng HTML
+escaping cho thư `text/plain`. Template HTML vẫn escape nội dung và thuộc
+tính link. Hai phần MIME phải dẫn đến cùng thao tác reset/kích hoạt; không
+chỉ kiểm URL trước render mà bỏ qua nội dung thư thực tế.
 
 ## Trách nhiệm theo service
 

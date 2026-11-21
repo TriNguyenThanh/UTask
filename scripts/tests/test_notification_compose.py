@@ -39,6 +39,14 @@ class NotificationComposeTests(unittest.TestCase):
                     services["notification-migrate"]["command"],
                     ["python", "manage.py", "migrate", "--noinput"],
                 )
+                for name in ("notification-identity-consumer", "notification-work-consumer"):
+                    self.assertEqual(
+                        services[name]["depends_on"]["kafka"],
+                        {
+                            "condition": "service_healthy",
+                            "required": False,
+                        },
+                    )
 
     def test_all_processes_use_shared_database_credentials(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
@@ -81,12 +89,8 @@ class NotificationComposeTests(unittest.TestCase):
                             continue
                         environment = process["environment"]
                         self.assertEqual(environment["POSTGRES_USER"], "shared_user")
-                        self.assertEqual(
-                            environment["POSTGRES_PASSWORD"], "shared-test-only"
-                        )
-                        self.assertEqual(
-                            environment["DATABASE_NAME"], "notification_db"
-                        )
+                        self.assertEqual(environment["POSTGRES_PASSWORD"], "shared-test-only")
+                        self.assertEqual(environment["DATABASE_NAME"], "notification_db")
                         self.assertNotIn("NOTIFICATION_DB_USER", environment)
                         self.assertNotIn("NOTIFICATION_DB_PASSWORD", environment)
                     self.assertEqual(
@@ -106,7 +110,8 @@ class NotificationComposeTests(unittest.TestCase):
                     "#!/usr/bin/env python3\n"
                     "import json, os, sys\n"
                     "with open(os.environ['PSQL_CALLS'], 'a') as output:\n"
-                    "    output.write(json.dumps({'args':sys.argv[1:], 'sql':sys.stdin.read()})+'\\n')\n"
+                    "    output.write(json.dumps({'args':sys.argv[1:], "
+                    "'sql':sys.stdin.read()})+'\\n')\n"
                 )
                 psql.chmod(0o755)
                 calls = fixture / "calls.jsonl"

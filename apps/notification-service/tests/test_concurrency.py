@@ -7,7 +7,7 @@ from django.test import override_settings
 
 from notifications.models import DailyQuota, EmailDelivery
 from notifications.tasks import claim, deliver
-from tests.test_service import email_row
+from tests.fixtures.events import email_row
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

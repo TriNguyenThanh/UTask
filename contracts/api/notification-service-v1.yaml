@@ -3,7 +3,9 @@ info:
   title: UTask Notification Service
   version: 1.0.0
   description: API in-app và tùy chọn email. Bearer xác minh RS256 và phiên qua Identity;
-    quyền project kiểm tra qua Work trước trả nội dung.
+    quyền project kiểm tra qua Work trước trả nội dung. Lỗi framework dùng trường
+    detail bằng tiếng Việt, lỗi tùy chọn dùng trường tương ứng hoặc non_field_errors.
+    HTTP status và header WWW-Authenticate giữ theo giao thức.
 servers:
 - url: /api/notifications
 security:

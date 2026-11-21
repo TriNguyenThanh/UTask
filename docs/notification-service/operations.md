@@ -51,10 +51,13 @@ docker compose --profile notification-service up -d --build
 
 Migration chạy trước API/worker/Beat/consumer. `healthz` kiểm kết nối DB;
 healthcheck consumer/Beat chỉ kiểm process, không chứng minh đã gửi thư.
+Hai consumer chờ Kafka local hoàn tất chuẩn bị topic khi profile `kafka`
+được bật; dependency này không bắt buộc khi dùng broker bên ngoài.
 Staging dùng cùng profile với `docker-compose.staging.yml` và image release;
 CI/release discovery tự nhận service từ manifest, không cần matrix viết tay.
 
-Mặc định ba cờ đều tắt. Bật lần lượt, khởi động lại process sau đổi cấu hình:
+Mặc định ba cờ đều tắt. Bật lần lượt và recreate các container chịu ảnh hưởng
+sau đổi cấu hình; restart không nạp lại môi trường Compose:
 
 1. `NOTIFICATION_IDENTITY_ENABLED=true`: nhận mail Identity, kiểm inbox/expiry.
 2. `NOTIFICATION_EMAIL_ENABLED=true`: kiểm thư tới mailbox thử và kết quả SMTP.
@@ -109,3 +112,34 @@ trước mỗi lần chạy. SMTP fixture cấp chứng chỉ TLS tạm, không 
 Gmail thật: gửi một yêu cầu reset/kích hoạt tới user kiểm thử, xác nhận người
 nhận, link đúng frontend, token dùng được và không gửi lại khi Kafka giao trùng.
 Ghi kết quả Gmail/staging riêng; SMTP fixture không chứng minh khả năng gửi Gmail.
+
+## Nghiệm thu với Identity và Work thật
+
+[Smoke domain](../../scripts/smoke_notification_domains.py) dùng cấu hình root
+Compose được render từ `.env.example` và credential ngẫu nhiên, qua đúng ánh
+xạ `infra/env/`. Script không đọc `.env`/`.env.staging`, không gửi thư ra ngoài.
+Mỗi lần chạy tạo project Docker, database/volume và mạng riêng; cổng được Docker
+cấp trên loopback. Source worktree được mount chỉ đọc vào image kiểm thử.
+
+```bash
+docker build -t utask/identity-service:notification-verification apps/identity-service
+docker build -t utask/work-service:notification-verification apps/work-service
+docker build -t utask/notification-service:notification-verification apps/notification-service
+apps/notification-service/.venv/bin/python scripts/smoke_notification_domains.py
+```
+
+Trên Windows dùng `apps/notification-service/.venv/Scripts/python.exe`. Script
+thử API đăng ký/import và giữ chính sách tạm, giao việc, nhắc tên, nhắc hạn, chuyển
+trạng thái, preference, mark-read, chống lặp, thu hồi quyền, quên mật khẩu và
+kích hoạt tài khoản pending cũ. Liên kết trong thư SMTP TLS kiểm thử được dùng
+để gọi confirm thật; phiên cũ sau reset phải bị từ chối. Project/membership
+có sẵn và tài khoản pending cũ là fixture thuộc database service sở hữu,
+không phải nghiệm thu luồng tạo lớp/nhóm của Classroom. Phản hồi giảng viên,
+AI apply và `identity.student.imported` lịch sử có test contract/provider
+riêng; không suy chúng đã được smoke chỉ từ kết quả script này.
+
+Script dọn đúng project ngẫu nhiên của lần chạy trong `finally`. Khi Docker
+không phản hồi, dọn có thể chưa hoàn tất; giữ tên project in đầu lượt để kiểm
+tra sau khi Docker phục hồi. Không chạy `down -v` trên project đang có dữ liệu
+của người dùng để sửa lỗi kiểm thử. Kết quả script không thay nghiệm thu Gmail,
+Inbox, giao diện trình duyệt hoặc VPS/staging.

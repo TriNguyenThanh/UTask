@@ -7,7 +7,7 @@ from rest_framework.exceptions import APIException
 
 class DependencyUnavailable(APIException):
     status_code = 503
-    default_detail = "Dịch vụ phụ thuộc hiện không khả dụng."
+    default_detail = "Không thể tải thông báo lúc này."
 
 
 def request_json(method, url, **kwargs):

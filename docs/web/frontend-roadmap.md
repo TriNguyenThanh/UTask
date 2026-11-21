@@ -1,5 +1,12 @@
 # Lộ trình frontend (Frontend Roadmap): tích hợp Identity trước
 
+> Cập nhật 22/10/2026: phần khảo sát bên dưới là snapshot ngày 17/10, không
+> dùng để xác nhận trạng thái tích hợp hiện hành. Notification đã có backend,
+> producer Identity/Work và Web adapter trong source; xem
+> [hướng dẫn tích hợp](../notification-service/implementation.md) và
+> [bằng chứng, giới hạn nghiệm thu](../notification-service/verification.md).
+> Đăng ký/import vẫn giữ chính sách tạm, không tự bật lại mail kích hoạt.
+
 **Trạng thái tài liệu: Kế hoạch (Thiết kế mục tiêu).** Phần hiện trạng (§2–§4)
 đã đối chiếu với mã nguồn nhánh `dev`, HEAD `933f785` (merge PR #20
 `feat/web-kanban-dnd`), ngày 17/10/2026. Các đợt ở §5 **chưa được triển khai**.

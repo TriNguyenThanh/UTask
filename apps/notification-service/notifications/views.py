@@ -1,58 +1,14 @@
+"""HTTP endpoints for notifications, read state and email preferences."""
+
 from django.shortcuts import get_object_or_404
-from django.urls import path
-from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from notifications import clients
 from notifications.models import Notification, Preference
-
-
-class PreferencesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Preference
-        fields = ["assignment", "deadline", "mention", "feedback"]
-
-    def to_internal_value(self, data):
-        if (
-            not isinstance(data, dict)
-            or set(data) - set(self.fields)
-            or any(type(v) is not bool for v in data.values())
-        ):
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Các tùy chọn phải là boolean hợp lệ."]}
-            )
-        return super().to_internal_value(data)
-
-
-def visible(user_id, unread_only=False, read_filter=None):
-    items = []
-    query = Notification.objects.filter(user_id=user_id, inbox__status="processed").exclude(
-        inbox__envelope__has_key="redacted"
-    )
-    if read_filter is not None:
-        query = query.filter(read=read_filter)
-    if unread_only:
-        query = query.filter(read=False)
-    rows = list(query.select_related("inbox").order_by("-created_at", "-id"))
-    # Always resolve against Work before exposing any title, body or target.
-    for row, result in zip(rows, clients.resolve_many(rows, user_id), strict=True):
-        if result is not None:
-            items.append(
-                {
-                    "id": str(row.id),
-                    "category": "task-pr",
-                    "title": result["title"],
-                    "body": result["body"],
-                    "at": row.created_at.isoformat(),
-                    "read": row.read,
-                    "actionLabel": "Xem chi tiết" if result.get("target") else None,
-                    "target": result.get("target"),
-                }
-            )
-    return items
+from notifications.queries import visible
+from notifications.serializers import PreferencesSerializer
 
 
 class Listing(APIView):
@@ -112,14 +68,3 @@ class Health(APIView):
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
         return Response({"status": "ok"})
-
-
-urlpatterns = [
-    path("", Listing.as_view()),
-    path("unread-count", Unread.as_view()),
-    path("read-all", ReadAll.as_view()),
-    path("<uuid:notification_id>/read", MarkRead.as_view()),
-    path("preferences", Preferences.as_view()),
-    path("health", Health.as_view()),
-    path("healthz", Health.as_view()),
-]
