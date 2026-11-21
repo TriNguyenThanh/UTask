@@ -89,8 +89,24 @@ class Settings(BaseSettings):
     max_context_bytes: int = Field(default=65_536, ge=1024, le=65_536)
     context_max_age_seconds: int = Field(default=300, ge=1)
     # Ánh xạ URL theo contract Work/Integration; agent không nhận URL tùy ý.
-    authorization_urls: dict[str, str] = Field(default_factory=dict)
-    context_urls: dict[str, str] = Field(default_factory=dict)
+    authorization_urls: dict[str, str] = Field(
+        default_factory=lambda: {
+            target: (
+                "http://work-service:8000/api/v1/internal/ai/targets/"
+                "{target_type}/{target_id}/authorize"
+            )
+            for target in ("project", "task", "sprint")
+        }
+    )
+    context_urls: dict[str, str] = Field(
+        default_factory=lambda: {
+            pair: (
+                "http://work-service:8000/api/v1/internal/ai/targets/"
+                "{target_type}/{target_id}/contexts/" + pair.split(":")[1]
+            )
+            for pair in sorted(WORK_CONTEXT_PAIRS)
+        }
+    )
     work_service_key: SecretStr | None = None
     work_service_auth_enabled: bool = False
     integration_service_key: SecretStr | None = None

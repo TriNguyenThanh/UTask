@@ -331,7 +331,9 @@ không tái sử dụng key trên. `INTEGRATION_WORK_URL=http://work-service:800
 Các URL bên dưới dùng DNS nội bộ, không dùng prefix gateway `/api/work`.
 Gateway phải tiếp tục chặn route internal.
 
-Đội AI/infra cấu hình `AI_AUTHORIZATION_URLS` đủ ba target:
+`config.py` của AI đã khai báo map mặc định dưới đây, không cần sao chép vào
+`.env` khi dùng DNS Compose. Nếu host/port khác, đội AI/infra có thể ghi đè
+toàn bộ map bằng `AI_AUTHORIZATION_URLS`; biến rỗng giữ mặc định:
 
 ```json
 {
@@ -341,7 +343,8 @@ Gateway phải tiếp tục chặn route internal.
 }
 ```
 
-`AI_CONTEXT_URLS` cần đủ 10 cặp hỗ trợ:
+Map context mặc định trong `config.py` có đủ 10 cặp dưới đây. Override qua
+`AI_CONTEXT_URLS` phải giữ đủ các cặp này; `{}` không phải cách dùng mặc định:
 
 ```json
 {

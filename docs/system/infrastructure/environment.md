@@ -391,9 +391,15 @@ AI_IDENTITY_BASE_URL=http://identity-service:8000
 AI_IDENTITY_SERVICE_KEY=<secret khớp IDENTITY_SERVICE_KEYS.ai>
 AI_WORK_SERVICE_AUTH_ENABLED=true
 AI_WORK_SERVICE_KEY=<secret khớp WORK_SERVICE_KEYS.ai>
-AI_AUTHORIZATION_URLS=<đủ ba URL authorize của Work>
-AI_CONTEXT_URLS=<đủ mười URL context của Work>
 ```
+
+Hai map URL Work mặc định nằm trong `apps/ai-service/src/config.py`, dùng
+`work-service:8000`. Chỉ đặt `AI_AUTHORIZATION_URLS`/`AI_CONTEXT_URLS` khi cần
+override toàn bộ map; giá trị rỗng dùng mặc định, JSON `{}` ghi đè thành map
+rỗng và sẽ bị từ chối ở staging/production. Xóa hai biến khỏi `.env` cũ nếu
+muốn dùng mặc định mới. Mapping trong `infra/env/ai-service.env` chuyển override
+cho cả Compose local, staging và standalone; Compose staging không khai báo
+lặp hai map trong `environment`.
 
 Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công khai là
 `/api/auth/.well-known/jwks.json`; AI dùng URL nội bộ phía trên. AI kiểm tra

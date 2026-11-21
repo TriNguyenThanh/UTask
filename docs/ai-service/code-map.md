@@ -28,6 +28,8 @@ src/
 ## API
 
 - `config.py`: nạp ai-service.env + .env root, cờ môi trường/mock; cấu hình
+  mặc định ba URL authorize và 10 URL context Work qua DNS `work-service:8000`;
+  biến môi trường URL là override tùy chọn, giá trị rỗng dùng mặc định.
   `AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`) và
   `AI_IDENTITY_SERVICE_KEY`; `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định,
   chỉ bắt buộc Work key khi bật cờ. Cấm mock ngoài development/test; staging/

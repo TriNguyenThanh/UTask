@@ -90,8 +90,8 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_JWT_ISSUER`, `AI_JWT_AUDIENCE` | Issuer/audience dùng để xác minh JWT; mặc định theo Identity |
 | `AI_IDENTITY_BASE_URL` | Base URL nội bộ Identity; mặc định `http://identity-service:8000` |
 | `AI_IDENTITY_SERVICE_KEY` | Secret caller AI gửi qua `X-Service-Key` khi gọi session-status; phải khớp mục `ai` trong `IDENTITY_SERVICE_KEYS` của Identity |
-| `AI_AUTHORIZATION_URLS` | JSON map target type → URL kiểm tra quyền |
-| `AI_CONTEXT_URLS` | JSON map `target_type:domain` → URL lấy context |
+| `AI_AUTHORIZATION_URLS` | Override tùy chọn: JSON map target type → URL kiểm tra quyền; mặc định ba target Work trong `src/config.py` |
+| `AI_CONTEXT_URLS` | Override tùy chọn: JSON map `target_type:domain` → URL lấy context; mặc định 10 cặp Work trong `src/config.py` |
 | `AI_LLM_PROVIDER` | Chọn adapter `litellm` |
 | `AI_MODEL` | Model ID mà local proxy công bố; adapter tự thêm route LiteLLM `openai/` |
 | `AI_LLM_API_BASE` | URL endpoint tương thích OpenAI, ví dụ `https://provider.example/v1` |

@@ -662,14 +662,16 @@ class StagingDeploymentTests(unittest.TestCase):
             MOCK_TEST="",
         )
         for environment in ("", "production"):
-            for maps in ({}, {"work": "https://example.invalid/context"}):
+            for maps in (None, "", {}, {"work": "https://example.invalid/context"}):
                 env.update(AI_ENVIRONMENT=environment)
                 with self.subTest(maps=maps, environment=environment):
-                    if maps:
+                    if isinstance(maps, dict):
                         env.update(
                             AI_CONTEXT_URLS=json.dumps(maps),
                             AI_AUTHORIZATION_URLS=json.dumps(maps),
                         )
+                    elif maps == "":
+                        env.update(AI_CONTEXT_URLS="", AI_AUTHORIZATION_URLS="")
                     else:
                         env.pop("AI_CONTEXT_URLS", None)
                         env.pop("AI_AUTHORIZATION_URLS", None)
@@ -696,10 +698,12 @@ class StagingDeploymentTests(unittest.TestCase):
                     compose = json.loads(result.stdout)
                     for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat"):
                         runtime = compose["services"][name]["environment"]
-                        self.assertEqual(json.loads(runtime["AI_CONTEXT_URLS"]), maps)
-                        self.assertEqual(
-                            json.loads(runtime["AI_AUTHORIZATION_URLS"]), maps
-                        )
+                        for key in ("AI_CONTEXT_URLS", "AI_AUTHORIZATION_URLS"):
+                            if isinstance(maps, dict):
+                                self.assertEqual(json.loads(runtime[key]), maps)
+                            else:
+                                # Settings ignores empty values and builds defaults.
+                                self.assertEqual(runtime[key], "")
                         self.assertEqual(
                             runtime["AI_ENVIRONMENT"], environment or "staging"
                         )

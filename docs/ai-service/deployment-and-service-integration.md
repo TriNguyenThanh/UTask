@@ -41,8 +41,13 @@ Tạo `.env` từ [mẫu root](../../.env.example), nhưng không dùng giá tr�
 môi trường dùng chung. Root `.env` giữ giá trị triển khai và secret. Các file
 `infra/env/ai-service.env`, `work-service.env` và `integration-service.env`
 chỉ ánh xạ biến vào process tương ứng; Compose không truyền tự động mọi biến
-trong root `.env` vào mọi container. Staging Compose ánh xạ một số biến AI
-trực tiếp, gồm `AI_AUTHORIZATION_URLS` và `AI_CONTEXT_URLS`.
+trong root `.env` vào mọi container. Hai map URL Work mặc định được khai báo
+trong `apps/ai-service/src/config.py`, không cần điền trong `.env` khi dùng
+DNS Compose `work-service:8000`. File `infra/env/ai-service.env` chỉ chuyển
+override URL nếu được đặt; giá trị rỗng được Settings bỏ qua để dùng mặc định.
+Override JSON thay toàn bộ map, không ghép từng key với mặc định. Nếu `.env`
+cũ chứa hai biến này, bỏ chúng để dùng cấu hình trong code; `{}` là override
+rỗng tường minh và sẽ bị từ chối ở staging/production.
 
 Mỗi service API và worker cần cùng cấu hình xác thực/tích hợp của service đó.
 Compose hiện dùng chung `env_file` cho các process AI; Work và Integration
@@ -84,8 +89,8 @@ header mà Work bắt buộc, nên tích hợp thật phải bật cờ này:
 | AI: `AI_WORK_SERVICE_AUTH_ENABLED` | `true` |
 | AI: `AI_WORK_SERVICE_KEY` | Secret riêng AI→Work |
 | Work: `WORK_SERVICE_KEYS` | `ai: [<cùng secret>]`; không dùng chung key Integration |
-| AI: `AI_AUTHORIZATION_URLS` | Đủ `project`, `task`, `sprint` trỏ tới Work authorize URL |
-| AI: `AI_CONTEXT_URLS` | Đủ 10 cặp Work được hỗ trợ: project/team/progress cho project; task/project/team/progress cho task; project/team/progress cho sprint |
+| AI: `authorization_urls` trong `config.py` | Mặc định đủ `project`, `task`, `sprint`; `AI_AUTHORIZATION_URLS` chỉ cần khi ghi đè địa chỉ |
+| AI: `context_urls` trong `config.py` | Mặc định đủ 10 cặp Work; `AI_CONTEXT_URLS` chỉ cần khi ghi đè địa chỉ hoặc thêm GitHub |
 
 URL nội bộ mặc định dùng DNS Compose, ví dụ
 `http://work-service:8000/api/v1/internal/ai/targets/{target_type}/{target_id}/authorize`.

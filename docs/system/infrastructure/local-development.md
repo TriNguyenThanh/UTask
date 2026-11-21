@@ -97,8 +97,9 @@ Các profile AI/Integration không cần cho lệnh khởi động Identity–Cl
 
 ## Chạy riêng pipeline AI từ root
 
-Điền `AI_DB_NAME`, key AI→Identity/Work, URL map Work và cấu hình LLM trong
+Điền `AI_DB_NAME`, key AI→Identity/Work và cấu hình LLM trong
 `.env` theo [hướng dẫn cấu hình AI](../../ai-service/deployment-and-service-integration.md).
+URL map Work mặc định nằm trong `config.py`; chỉ override nếu địa chỉ Work khác.
 Password DB phải dùng được
 trong URL; nếu có ký tự đặc biệt, đặt `AI_DATABASE_URL` với password đã percent-encode.
 Từ repository root:

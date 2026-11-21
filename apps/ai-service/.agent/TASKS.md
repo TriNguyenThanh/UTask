@@ -14,6 +14,24 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-11-21 — Khai báo URL Work mặc định trong Settings
+
+- `src/config.py` tạo ba URL authorize và 10 URL context Work mặc định qua
+  `work-service:8000`; mỗi Settings có map riêng. Giữ validation và override
+  JSON qua biến môi trường; biến rỗng dùng mặc định, `{}` vẫn là override
+  rỗng tường minh và bị từ chối ở staging/production.
+- Bỏ JSON URL khỏi `.env.example` và ánh xạ lặp trong Compose staging;
+  `infra/env/ai-service.env` chỉ truyền override tùy chọn cho các process AI.
+  Đồng bộ hướng dẫn triển khai và cấu hình liên service.
+- Kiểm thử: AI suite **543 passed, 66 skipped** (không cấp PostgreSQL/Redis
+  integration trong lần chạy này), một cảnh báo experimental ADK; nhóm config/
+  context **157 passed**. Script CI **182 tests passed**. Ruff lint/format cho
+  source/test thay đổi, link file nội bộ trong 8 tài liệu và diff check đạt.
+  Dùng virtualenv tạm `/tmp/utask-ai-url-config-venv` qua uv do `.venv` cũ trỏ
+  tới interpreter không tồn tại; tắt dotenv developer trước collection.
+- Chưa deploy hoặc nghiệm thu Identity/Work/Integration/LLM thật. `.env` cũ có
+  URL override vẫn được ưu tiên; bỏ override nếu muốn dùng mặc định trong code.
+
 ### 2026-11-20 — Gỡ Fernet khỏi luồng Bearer giữa API và worker
 
 - `application/service.py` lưu Bearer nguyên bản vào `credential` hiện có;

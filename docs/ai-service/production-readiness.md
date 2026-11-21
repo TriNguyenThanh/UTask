@@ -46,9 +46,11 @@ là `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` tùy chọn. AI yêu cầu
 runtime Identity/staging/production **Chưa xác minh**. Token/JWKS do
 `setup_mock` tạo chỉ dành cho test, không dùng trong runtime.
 
-`AI_AUTHORIZATION_URLS` cần ba key project/task/sprint. `AI_CONTEXT_URLS` cần
-project/team/progress cho mỗi target, thêm task:task; task ID không do agent
-chọn. Placeholder chỉ `{target_type}`, `{target_id}`. Khi bật GitHub, thêm
+`config.py` mặc định khai báo đủ ba authorize URL project/task/sprint và 10
+context URL Work qua `work-service:8000`. `AI_AUTHORIZATION_URLS` và
+`AI_CONTEXT_URLS` chỉ là override tùy chọn, thay toàn bộ map; biến rỗng dùng
+mặc định, `{}` là map rỗng tường minh. Task ID không do agent chọn.
+Placeholder chỉ `{target_type}`, `{target_id}`. Khi bật GitHub, thêm
 project:github_activity URL Integration và key riêng. Staging/production
 thiếu mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. AI mặc định
 `AI_WORK_SERVICE_AUTH_ENABLED=false`; khi tích hợp Work thật, phải bật cờ và

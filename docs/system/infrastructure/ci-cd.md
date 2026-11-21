@@ -524,7 +524,7 @@ cho AI. Không có chuyển dữ liệu tự động từ container AI PostgreSQ
 Compose AI standalone; volume cũ phải được giữ lại để backup/chuyển dữ liệu có chủ đích.
 
 Trên VPS, điền password DB, JWT issuer/audience, URL Identity và key
-AI→Identity/Work, đủ URL REST quyền/context của Work, model/base URL/API key
+AI→Identity/Work, model/base URL/API key
 trong `.env` server theo
 [biến môi trường](environment.md#cấu-hình-ai-trong-compose-root). Staging mặc
 định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; không dùng mock development
