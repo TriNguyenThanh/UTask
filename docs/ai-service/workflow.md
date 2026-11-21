@@ -30,7 +30,7 @@ Nguyên tắc cốt lõi:
 
 ## 2. Kiến trúc tổng thể
 
-Thiết kế theo [baseline](../architecture/README.md), mục 4.6, 9–11 và 18.
+Thiết kế theo [baseline](../system/architecture-baseline.md), mục 4.6, 9–11 và 18.
 Source hiện theo các layer dưới đây; vị trí và kiểm thử ở [code map](code-map.md).
 
 ```text
@@ -55,12 +55,15 @@ completion và phát PostgreSQL NOTIFY; listener trong API tiếp nhận và ghi
 kết quả cuối vào persistence chung của AI để trả cho client. Consumer Kafka chạy
 ngoài agent loop; khi có use case/contract, consumer cập nhật projection hoặc
 tạo job qua cùng application/dispatcher. Xem nguồn chi tiết tại
-[pipeline AI](architecture.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
+[pipeline AI](architecture.md) và [ADR-002](../system/adr/002-ai-request-pipeline.md).
 
 API/worker có thể tách process/container, không bắt buộc singleton. MVP dùng
 polling và giữ ngưỡng chờ 10 giây của [API v1](api.md); luôn trả `202` hoặc
 SSE/WebSocket cần contract riêng và **Chưa triển khai**. Pipeline polling
 API/dispatcher/worker đã có trong source, dùng chung persistence của AI.
+Hướng mục tiêu chatbot hội thoại và SSE cho frontend được mô tả trong
+[kiến trúc AI](architecture.md#chatbot-agent-và-sse-thiết-kế-mục-tiêu); đây
+không phải trạng thái implementation hiện tại.
 
 ---
 
@@ -221,8 +224,8 @@ tương ứng. Source: [tool pool](../../apps/ai-service/src/context/tools.py).
 Adapter kiểm tra shape theo từng domain, kiểu dữ liệu/giới hạn lồng nhau và
 loại trường ngoài allowlist trước khi đưa Work context cho model; không trả
 PII như tên/email hay credential. GitHub shape bám contract Integration,
-tối đa 20 item mỗi loại và chỉ URL GitHub hợp lệ. Work provider vẫn
-**Chưa triển khai** dù boundary đã chốt; xem
+tối đa 20 item mỗi loại và chỉ URL GitHub hợp lệ. Work provider có
+source/config/test; mức runtime đã xác minh xem
 [production readiness](production-readiness.md#boundary-domain-và-quyền).
 
 Ví dụ:
@@ -354,8 +357,8 @@ offset hoặc replay. Không bắt LlmAgent consume/publish Kafka.
 Consumer không dùng Kafka để hỏi quyền hoặc lấy context đồng bộ. Khi tạo job,
 consumer phải bàn giao bền vững và chống trùng trước khi xác nhận xử lý event;
 retry/dead-letter không được làm mất job hoặc chạy AI ngoài budget. Chi tiết
-nằm trong [job nền](../infrastructure/background-jobs.md) và
-[Kafka/outbox](../infrastructure/kafka.md).
+nằm trong [job nền](../system/infrastructure/background-jobs.md) và
+[Kafka/outbox](../system/infrastructure/kafka.md).
 
 Sau khi lưu kết quả, AI có thể phát event theo baseline cho Notification.
 `ai.analysis.completed`/`ai.project.risk.detected` chưa có schema/topic được
@@ -751,6 +754,26 @@ Shared infrastructure không làm mất data ownership của từng microservice
 ---
 
 ## 14. Kiến trúc mục tiêu
+
+### Chatbot hội thoại và cập nhật qua SSE
+
+Chatbot tương lai dùng bounded agent hiện có làm nền: `LlmAgent` chọn domain
+tool từ Context Tool Pool, Work kiểm tra quyền và cung cấp context qua REST.
+AI giữ conversation/message trong phạm vi dữ liệu do AI sở hữu; mỗi lần đọc/
+ghi phải xác thực user và kiểm tra ownership. Agent trả lời hoặc đề xuất thay
+đổi; chỉ domain service áp dụng sau khi user xác nhận.
+
+Frontend tạo request bằng REST rồi mở SSE có xác thực để nhận trạng thái,
+progress đã lọc và kết quả cuối. SSE chỉ thay polling ở kênh cập nhật UI; Celery/
+Redis tiếp tục giao job, PostgreSQL giữ trạng thái bền vững, REST tiếp tục kiểm
+tra quyền/lấy context. Stream hỗ trợ event ID/reconnect nếu yêu cầu trải nghiệm
+cần replay; GET trạng thái hiện tại vẫn là fallback. Không gửi suy luận nội bộ,
+raw prompt, raw context hoặc credential vào event. Contract, persistence của
+conversation/event, retention, rate/concurrency limits, Nginx buffering và cách
+client xác thực stream phải được chốt trước triển khai.
+
+**Trạng thái: Thiết kế mục tiêu, chưa triển khai.** API v1 hiện hỗ trợ ba intent
+proposal và polling; chưa có chatbot conversation API, SSE endpoint hay event log.
 
 ```text
 AI API / Celery task

@@ -1,10 +1,9 @@
-"""JWT bất đối xứng và mã hóa credential dùng giữa API/worker."""
+"""Xác minh JWT bất đối xứng và session cho API/worker."""
 
 from uuid import UUID
 
 import httpx
 import jwt
-from cryptography.fernet import Fernet, InvalidToken
 
 from config import Settings
 from errors import failure
@@ -108,21 +107,3 @@ class JwtAuthenticator:
             return data["active"]
         except (httpx.HTTPError, ValueError) as error:
             raise failure("AUTH_UNAVAILABLE", 503, retryable=True) from error
-
-
-class FernetCredentialVault:
-    def __init__(self, key: str | None):
-        self.cipher = Fernet(key.encode()) if key else None
-
-    def seal(self, bearer: str) -> str:
-        if not self.cipher:
-            raise failure("AUTH_UNAVAILABLE")
-        return self.cipher.encrypt(bearer.encode()).decode()
-
-    def open(self, credential: str) -> str:
-        if not self.cipher:
-            raise failure("AUTH_UNAVAILABLE")
-        try:
-            return self.cipher.decrypt(credential.encode()).decode()
-        except InvalidToken as error:
-            raise failure("AUTHENTICATION_REQUIRED", 401) from error

@@ -14,7 +14,7 @@ from config import Settings, get_settings
 from infrastructure.bootstrap import build_repository
 from infrastructure.completions import CompletionListener
 from infrastructure.context_factory import build_context_adapter
-from infrastructure.security import FernetCredentialVault, JwtAuthenticator
+from infrastructure.security import JwtAuthenticator
 
 
 def create_app(
@@ -32,9 +32,6 @@ def create_app(
         application = AiApplicationService(
             repository,
             build_context_adapter(settings, client),
-            FernetCredentialVault(
-                settings.credential_key.get_secret_value() if settings.credential_key else None
-            ),
             settings.sync_timeout_seconds,
             settings.poll_interval_seconds,
         )

@@ -3,16 +3,28 @@
 Đây là bản bàn giao theo source, cấu hình và kiểm thử tại thời điểm checkpoint.
 Tài liệu kiến trúc chuẩn vẫn là [architecture](architecture.md), hợp đồng
 hành vi là [API v1](api.md), vị trí mã nguồn là [code map](code-map.md).
+Các trạng thái provider Work trong phần checkpoint phản ánh ngày 21/10/2026;
+hướng dẫn hiện hành để cấu hình và phát hành liên service là
+[cấu hình và triển khai AI](deployment-and-service-integration.md).
 
 ## Quyết định bổ sung — 22/10/2026
 
-**Sẽ làm:** gỡ cơ chế mã hóa Fernet của token giữa API và worker để đơn giản
-hóa luồng xử lý, theo yêu cầu người dùng. Khi thực hiện, bỏ
-`FernetCredentialVault` và yêu cầu `AI_CREDENTIAL_KEY`, cập nhật cấu hình,
-kiểm thử và cách xử lý job cũ đang chứa token mã hóa.
+**Cập nhật triển khai — 20/11/2026.**
 
-Checkpoint này chỉ ghi nhận việc cần làm; runtime vẫn dùng Fernet hiện tại.
-Việc gỡ Fernet không đồng nghĩa bỏ xác thực JWT/session hoặc quyền người dùng.
+**Đã triển khai trong source:** API lưu Bearer nguyên bản vào credential hiện có
+của PostgreSQL AI; worker đọc token đó để xác thực lại JWT RS256, session và
+quyền target. `FernetCredentialVault`, protocol `CredentialVault` và biến
+`AI_CREDENTIAL_KEY` đã được gỡ khỏi cấu hình/setup/evaluation/Compose riêng AI.
+Không đổi schema hay public API; Redis chỉ mang UUID request. Token bị xóa khi
+completion được bàn giao hoặc request vào trạng thái terminal.
+
+**Rollout:** xử lý hết request `queued`/`running` của phiên bản cũ trước khi
+chuyển API và worker cùng phiên bản; ciphertext cũ không tự chuyển đổi. Việc bỏ
+Fernet không bỏ xác thực JWT/session hay kiểm tra ownership/quyền target.
+Kiểm thử local: **598 tests passed** với PostgreSQL/Redis/Celery thật, fake LLM
+và HTTP Identity/domain giả; Ruff và Docker build đạt. Tích hợp production
+**Chưa xác minh**. Chi tiết kiểm tra nằm trong
+[task log](../../apps/ai-service/.agent/TASKS.md).
 
 ## Kết luận tại checkpoint
 

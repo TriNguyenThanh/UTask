@@ -4,8 +4,8 @@
 Các138 TC dưới đây được giữ để truy vết; tên đường API, cấu trúc token, bảng dữ liệu
 và nhãn Pass/Not Executed có thể thuộc thiết kế cũ. Không dùng bảng này để kết luận
 chức năng hiện tại chưa triển khai hoặc đã chạy. Nguồn chuẩn hiện tại là
-[đặc tả API](../architecture/Identity_Service_API_Specification.md) và
-[kiểm thử hiện hành](../architecture/Identity_Service_Test_Specification.md).
+[đặc tả API](api-specification.md) và
+[kiểm thử hiện hành](testing-specification.md).
 
 Các kết quả lịch sử không được nâng thành Pass theo số lượng pytest. Những mục
 không còn áp dụng cần được xem như lịch sử, không ép source trở lại thiết kế cũ.

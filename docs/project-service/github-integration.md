@@ -6,7 +6,7 @@ connect/confirm, receipt/replay, branch/commit, disconnect và recovery sau khi
 worker dừng. Luồng pytest trước đó vẫn dùng stub Identity/GitHub; không dùng
 kết quả mock làm bằng chứng provider thật. Chưa nghiệm thu PR thành công,
 mọi crash/race, VPS hoặc production. Các lỗi và giới hạn thực tế nằm trong
-[báo cáo HTTP staging local](../infrastructure/staging-http-validation-20261021.md).
+[báo cáo HTTP staging local](../system/infrastructure/staging-http-validation-20261021.md).
 
 ## Trách nhiệm và phần dùng lại
 
@@ -23,7 +23,7 @@ Chỉ thêm một model `GitHubConnectionOperation`; dùng lại Project barrier
 Activity/Outbox, receipt HTTP, Celery/Beat, Kafka config, `ConsumedEvent` và DLQ.
 Không có framework dispatcher hoặc hệ thống job mới.
 
-Hợp đồng provider theo [ADR-005](../adr/005-integration-work-ai-contracts.md),
+Hợp đồng provider theo [ADR-005](../system/adr/005-integration-work-ai-contracts.md),
 [guide wire](../integration-service/work-service-integration-guide.md),
 [OpenAPI Integration](../../contracts/api/integration-service-v1.yaml) và
 [event v1](../../contracts/events/integration.project.connection.changed.v1.json).

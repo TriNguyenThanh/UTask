@@ -55,7 +55,7 @@ không có query và **không có body**, kể cả `{}`. Dùng
 | 10. Đọc live | GET `GITHUB/installations?page=1&per_page=100`, rồi GET `GITHUB/installations/<ID>/repositories?page=1&per_page=100` | 200, `{items,next_page}`; theo các trang tới hết, thấy đúng installation/repository ID thử. Metadata local không thay bằng chứng quyền live. |
 
 Xem [Identity hiện hành](../identity-service/README.md#api-để-tích-hợp) và
-[đặc tả login](../architecture/Identity_Service_API_Specification.md#313-login-bằng-email-hoặc-username).
+[đặc tả login](../identity-service/api-specification.md#313-login-bằng-email-hoặc-username).
 Không xuất access/refresh, mật khẩu, cookie, code hoặc state vào log, screenshot
 chia sẻ, checkpoint hay lịch sử lệnh.
 

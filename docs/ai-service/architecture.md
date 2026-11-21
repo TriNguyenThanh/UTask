@@ -7,9 +7,9 @@ runtime với Identity/Work/Integration và LLM production **Chưa xác minh**. 
 provider mới có hợp đồng, **Chưa triển khai**. Retention terminal
 đã có source/migration/Celery beat; Kafka và specialist **Chưa triển khai**.
 
-Thiết kế theo [baseline](../architecture/README.md),
-[ADR-001](../adr/001-adopt-architecture-baseline.md) và
-[ADR-002](../adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
+Thiết kế theo [baseline](../system/architecture-baseline.md),
+[ADR-001](../system/adr/001-adopt-architecture-baseline.md) và
+[ADR-002](../system/adr/002-ai-request-pipeline.md). Hiện trạng được đối chiếu với
 source/test và cấu hình M3. Xem [mức sẵn sàng production](production-readiness.md),
 [code map](code-map.md), [API v1](api.md),
 [workflow](workflow.md), [ERD](erd.md) và [hướng dẫn chạy](README.md).
@@ -46,13 +46,13 @@ trạng thái và lưu kết quả; adapter lắp ghép framework/provider bên 
 ```text
 POST /api/ai/v1/requests
   → Bearer JWT RS256 + session-status Identity + input validation
-  → Application → AI-side REST authorize client (Work contract planned)
+  → Application → AI-side REST authorize client → Work provider
   → transaction AI PostgreSQL: request queued + delivery job
   → API chờ persistence tối đa 10 giây → 200 hoặc 202 + Location
 
 Dispatcher → claim delivery có lease → Redis → Celery task(request_id)
   → Application worker claim queued → running + execution token + deadline
-  → giải mã credential → xác minh lại JWT/quyền
+  → đọc Bearer đã lưu → xác minh lại JWT/quyền
   → ADK ProposalWorkflow → LlmAgent → domain tool pool → REST adapter
   → kiểm tra output đúng intent/version → revise/retry trong budget
   → transaction: lưu ai_completion + xóa credential + pg_notify(request_id)
@@ -67,13 +67,13 @@ GET /api/ai/v1/requests/{request_id}
 
 **Đã triển khai:**
 
-1. `main.create_app` lắp repository PostgreSQL, JWT verifier, credential vault,
-   authorizer port và application. API không import/chạy ADK hoặc worker.
+1. `main.create_app` lắp repository PostgreSQL, JWT verifier, authorizer port
+   và application. API không import/chạy ADK hoặc worker.
 2. Application gọi authorizer trước khi enqueue. Backlog chưa có target vẫn
    cần identity hợp lệ. MOCK_TEST dùng fixture để kiểm tra target local; ngoài
-   mock, AI-side Work client dựng POST theo contract, nhưng Work provider chưa
-   có source nên quyền/role thực tế **Chưa triển khai**. Không dùng projection
-   làm bằng chứng quyền.
+   mock, AI-side Work client gọi provider Work qua internal REST. Provider có
+   source/config/test; quyền runtime ở từng môi trường phải được nghiệm thu
+   riêng. Không dùng projection làm bằng chứng quyền.
    Khi provider trả lời, chỉ `success: true`, target/action đúng và
    `allowed: true` mới được client chấp nhận.
    JWT yêu cầu `exp`, `iss`, `aud`, `sub`, `token_type`; `iat` là tùy chọn,
@@ -88,10 +88,11 @@ GET /api/ai/v1/requests/{request_id}
    là `503 AUTH_UNAVAILABLE` ở lớp nội bộ. Error envelope công khai v1 ánh xạ
    lỗi này thành `500 INTERNAL_ERROR` với `details.reason=AUTH_UNAVAILABLE`.
    Không cache kết quả active.
-   Work key là độc lập: `AI_WORK_SERVICE_AUTH_ENABLED=false` tạm thời bỏ riêng
-   `X-Service-Key` AI→Work; Bearer và authorize body target/intent vẫn giữ.
-   Khi bật, `AI_WORK_SERVICE_KEY` bắt buộc và được gửi. Identity key cùng
-   Integration key không bị cờ này ảnh hưởng.
+   Work key độc lập với key Identity/Integration. AI mặc định
+   `AI_WORK_SERVICE_AUTH_ENABLED=false`, nhưng Work provider luôn yêu cầu
+   `X-Service-Key`; tích hợp thật phải bật cờ và cấu hình
+   `AI_WORK_SERVICE_KEY` khớp caller `ai` của `WORK_SERVICE_KEYS`.
+   Bearer actor và authorize body target/intent luôn được gửi.
 3. Repository chuẩn hóa payload, tính SHA-256 và dùng unique `(user_id,
    idempotency_key)` cùng `INSERT ... ON CONFLICT`. Request và delivery được
    lưu trong cùng transaction. POST đồng thời cùng key dùng một request/job;
@@ -103,12 +104,14 @@ GET /api/ai/v1/requests/{request_id}
 5. Celery task chỉ nhận UUID và gọi application. Claim khóa request; chỉ
    `queued` được chuyển sang `running`. Job trùng/terminal không gọi LLM.
    Deadline bắt đầu từ lần claim, không được đặt lại khi task giao lại.
-6. Worker giải mã Bearer bằng Fernet, tải lại JWKS và xác minh JWT RS256/session
-   với Identity, rồi kiểm tra quyền trước khi chạy. `AI_IDENTITY_BASE_URL` mặc định
+6. Worker đọc Bearer nguyên bản từ credential trong PostgreSQL AI, tải lại JWKS
+   và xác minh JWT RS256/session với Identity, rồi kiểm tra quyền theo target trước
+   khi chạy. Redis chỉ nhận UUID request. `AI_IDENTITY_BASE_URL` mặc định
    `http://identity-service:8000`; `AI_IDENTITY_SERVICE_KEY` phải khớp entry
    `ai` trong `IDENTITY_SERVICE_KEYS` của Identity.
    Credential không xuất hiện trong task/prompt/log, được xóa khi bàn giao kết
-   quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Token hết hạn trong
+   quả hoặc ở trạng thái cuối do timeout/dispatch lỗi. Bearer được lưu nguyên bản
+   trong PostgreSQL AI; không cần khóa mã hóa Fernet riêng. Token hết hạn trong
    queue làm request thất bại; không giữ quyền cũ.
 7. Model/tool budget được trừ trong PostgreSQL trước lời gọi. Output token
    được tính theo usage; lần model tiếp theo chỉ được cấp phần cap còn lại.
@@ -155,7 +158,7 @@ scheduler, conversation hoặc notification runtime trong thay đổi này.
 **Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
 Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
 và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
-[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+[ADR-002](../system/adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
 terminal result ở mục 3 của quyết định ban đầu.
 
 - Worker gọi `stage_completion`: khóa request, kiểm tra execution token,
@@ -218,7 +221,7 @@ scheduler, conversation hoặc notification runtime trong thay đổi này.
 **Đã triển khai trong source và kiểm thử local; production Chưa xác minh.**
 Theo yêu cầu cập nhật ngày 2026-10-08, process API nhận thông báo hoàn thành
 và ghi trạng thái/kết quả cuối. Cơ chế này bổ sung bước tiếp nhận vào pipeline
-[ADR-002](../adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
+[ADR-002](../system/adr/002-ai-request-pipeline.md), thay việc worker trực tiếp ghi
 terminal result ở mục 3 của quyết định ban đầu.
 
 - Worker gọi `stage_completion`: khóa request, kiểm tra execution token,
@@ -258,8 +261,37 @@ Xem [ERD](erd.md) và [code map](code-map.md).
 
 Đường chạy trên triển khai pipeline ADR-002. Phần **Chưa xác minh** là token
 production, provider REST Work, quota/evaluation LLM và tích hợp gateway.
-Kafka projection/event kết quả, specialist, SSE/WebSocket **Chưa triển khai**;
-retention terminal đã có lịch beat. Xem [retention](erd.md#retention-terminal).
+Kafka projection/event kết quả, specialist, chatbot hội thoại và SSE/WebSocket
+**Chưa triển khai**; retention terminal đã có lịch beat. Hướng phát triển
+chatbot và SSE nằm tại [workflow bounded agent](workflow.md#14-kiến-trúc-mục-tiêu).
+Xem [retention](erd.md#retention-terminal).
+
+### Chatbot agent và SSE: thiết kế mục tiêu
+
+Chatbot dùng lại `Application → ADK Workflow → LlmAgent → Context Tool Pool`;
+conversation/message là dữ liệu AI, còn quyền đọc Project/Task/Sprint và context
+vẫn do Work xác minh qua REST. Agent chỉ trả lời hoặc tạo proposal có cấu trúc;
+không tự áp dụng thay đổi nghiệp vụ. Conversation phải thuộc user đã xác thực,
+kiểm tra ownership ở mọi thao tác và áp dụng giới hạn request, model/tool budget
+và deadline hiện có. Chi tiết bounded autonomy nằm trong
+[workflow](workflow.md#6-bounded-autonomy).
+
+SSE là kênh một chiều từ AI API đến trình duyệt, dùng để gửi tiến độ an toàn và
+kết quả của request; POST tạo request và API domain vẫn xử lý command. SSE không
+thay Celery/Redis, REST lấy context hoặc cơ chế persistence/completion. Trước khi
+triển khai cần chốt event schema, quyền truy cập stream, event ID và cách resume
+sau reconnect, lưu/phục hồi sự kiện nếu cần không mất tiến độ, heartbeat/timeout,
+giới hạn kết nối và cấu hình Nginx không buffer. Không stream chain-of-thought,
+prompt nội bộ, Bearer hoặc raw context. Native `EventSource` không đặt được
+Authorization header tùy ý; client cần dùng streaming fetch hoặc cơ chế cookie
+đã được thiết kế, không đưa JWT vào query string.
+
+Hướng đơn giản là giữ POST tạo request; sau response `202`, trình duyệt mở SSE
+theo `request_id` đã xác thực, nhận progress/completion rồi đóng stream. Polling
+GET hiện tại tiếp tục là đường đọc trạng thái/fallback cho reconnect. Nếu cần
+replay event chính xác, chọn persistence/event log trước khi chốt contract;
+PostgreSQL NOTIFY hiện tại chỉ đánh thức listener completion, không phải event
+stream cho chatbot. Chưa có endpoint SSE, conversation schema hoặc event log.
 
 ### Request semantics
 
@@ -378,13 +410,11 @@ credential hoặc ID tùy ý từ agent: `get_task_context`, `get_project_contex
 `get_team_context`, `get_progress_context`, `get_development_context`.
 
 REST adapter dùng URL template từ cấu hình; AI-side Work authorize request là
-POST `{action: ai.analyze, intent}` với Bearer actor. Cờ
-`AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định chỉ bỏ header Work
-`X-Service-Key`; body, Bearer và yêu cầu authorize target/intent vẫn giữ.
-Khi cờ bật, `AI_WORK_SERVICE_KEY` là bắt buộc và được gửi. Chỉ envelope
+POST `{action: ai.analyze, intent}` với Bearer actor. Work bắt buộc header
+`X-Service-Key`; AI mặc định tắt gửi key, nên tích hợp Work thật phải bật
+`AI_WORK_SERVICE_AUTH_ENABLED=true` và cấp `AI_WORK_SERVICE_KEY`. Chỉ envelope
 `success: true`, `data` đúng target/action và `allowed: true` mới được AI client
-chấp nhận. Contract Work còn `planned`; Work provider chưa có source, nên không
-khẳng định endpoint hay kiểm tra role đã chạy runtime. Work context được client
+chấp nhận. Work context được client
 đọc theo GET `ContextDocument` trực tiếp, không bọc envelope. Adapter không
 theo redirect, có timeout và chặn response lớn hơn 65536 byte.
 GitHub GET gửi key Integration; Integration chịu trách nhiệm hỏi Work quyền
@@ -398,10 +428,9 @@ task decomposition cần task context, risk cần progress context. Chỉ gọi 
 hoặc development tool không thay thế dữ liệu thiết yếu. Agent vẫn tự chọn thứ
 tự lấy context và tool bổ sung.
 
-**Một phần:** AI-side adapter và test có source; Work boundary nằm trong
-[contract](../../contracts/api/work-ai-context-v1.yaml) ở trạng thái `planned`;
-provider Work **Chưa triển khai**. Integration provider đã có source; integration live
-**Chưa xác minh**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
+**Một phần:** AI-side adapter và Work provider có source/config/test; quyền
+runtime giữa service chỉ được nghiệm thu một phần. Integration provider đã có
+source; integration live **Chưa xác minh đầy đủ**. Shape dữ liệu lồng nhau được kiểm tra theo domain; trường
 ngoài allowlist Work bị loại, không đưa tên/email/credential vào prompt.
 Tool GitHub chỉ xuất hiện khi risk Project, cờ bật và focus cho phép; Sprint
 không fetch GitHub và runtime tự thêm limitation, không dựa vào prompt.

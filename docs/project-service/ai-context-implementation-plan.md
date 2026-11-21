@@ -17,8 +17,8 @@ và smoke service thật còn mở; không suy ra đã triển khai staging từ
 - [x] Giữ nguyên JSON contract AI; không thêm trường đơn vị ngoài schema team.
 - [x] Capacity là giờ/tuần; workload là story points còn lại, không quy đổi giữa hai đơn vị.
 - [x] Đọc lại toàn bộ [AGENTS.md](../../AGENTS.md), rule thư mục liên quan và [mục lục hệ thống](../system/README.md) trước triển khai.
-- [x] Đọc [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md), [cấu hình môi trường](../infrastructure/environment.md), [tài liệu Work](README.md).
-- [x] Đọc [guide Work–AI](ai-service-integration-guide.md), [contract context](../../contracts/api/work-ai-context-v1.yaml), [contract Work](../../contracts/api/work-service.yaml) và [ADR-005](../adr/005-integration-work-ai-contracts.md).
+- [x] Đọc [kiến trúc](../system/architecture.md), [quyền sở hữu dữ liệu](../system/data-ownership.md), [cấu hình môi trường](../system/infrastructure/environment.md), [tài liệu Work](README.md).
+- [x] Đọc [guide Work–AI](ai-service-integration-guide.md), [contract context](../../contracts/api/work-ai-context-v1.yaml), [contract Work](../../contracts/api/work-service.yaml) và [ADR-005](../system/adr/005-integration-work-ai-contracts.md).
 - [x] Kiểm tra worktree hiện tại, đọc source/config/tests thực tế; không ghi đè công việc có sẵn.
 - [x] Dùng skill Django và PostgreSQL phù hợp, GitNexus truy vết và impact trước khi sửa symbol hiện hữu. Kết quả graph phải được đối chiếu source.
 
@@ -433,8 +433,9 @@ staging. Theo yêu cầu tiếp theo, điều kiện chặn HTTP đã được b
 staging local đã cập nhật; chưa chạy lại bốn workflow sau bản sửa HTTP.
 Xem [báo cáo runtime](ai-context-staging-validation-20261022.md).
 Chưa nghiệm thu mọi intent, GitHub trong AI, public TLS/VPS hoặc hosted CI.
-Một số tài liệu AI còn ghi provider Work chưa triển khai; bàn giao bằng chứng
-phía Work này để đội AI cập nhật trạng thái trong phạm vi tài liệu của họ.
+Hướng dẫn cấu hình hiện hành được tập trung tại
+[cấu hình và triển khai AI Service](../ai-service/deployment-and-service-integration.md);
+biên bản này chỉ giữ lịch sử triển khai và giới hạn smoke tại ngày thực hiện.
 
 GitNexus đã hỗ trợ truy vết quyền và impact receipt. Symbol mới chưa có trong
 index nên impact trả `UNKNOWN/not found`; không coi đó là bằng chứng không có

@@ -1,45 +1,38 @@
 # Tài liệu hệ thống UTask
 
-Đọc [architecture baseline](../architecture/README.md) trước để biết nguồn
-quyết định công nghệ và phạm vi hệ thống. Thư mục này diễn giải các quyết định
-đó theo chủ đề; tài liệu service/hạ tầng giữ chi tiết tương ứng.
+Thư mục `system/` tập hợp tài liệu dùng chung cho nhiều service: kiến trúc nền,
+ranh giới và quyền sở hữu dữ liệu, giao tiếp, vận hành hạ tầng, quy trình phát
+triển và quyết định kiến trúc. Tài liệu mô tả thiết kế mục tiêu khi chưa có bằng
+chứng triển khai; hiện trạng phải được đối chiếu với source, cấu hình, hợp đồng
+và kiểm thử.
 
-Tài liệu kiến trúc mô tả **thiết kế mục tiêu**. Hiện trạng được ghi riêng khi
-đã đối chiếu source, cấu hình và kiểm thử; không suy ra một tính năng đã chạy
-từ baseline. AI Service hiện có bootstrap, xem [code map](../ai-service/code-map.md).
+## Nội dung dùng chung
 
-## Đọc theo chủ đề
+- [Architecture baseline](architecture-baseline.md): quyết định công nghệ và phạm vi mục tiêu.
+- [Kiến trúc và ranh giới service](architecture.md).
+- [Quyền sở hữu dữ liệu](data-ownership.md).
+- [Nghiệp vụ và quyền](business-and-permissions.md).
+- [Các luồng nghiệp vụ](workflows.md).
+- [Giao tiếp REST và Kafka](communication.md) và [danh mục sự kiện](kafka-events.md).
+- [Hạ tầng và phát triển local](infrastructure/README.md): môi trường, Kafka, Redis, job nền, lưu trữ và CI/CD.
+- [Hướng dẫn phát triển](development.md) và [thiết lập subagent Codex](subagents.md).
+- [Quyết định kiến trúc (ADR)](adr/README.md).
 
-- [Kiến trúc và ranh giới service](architecture.md)
-- [Các luồng nghiệp vụ](workflows.md)
-- [Nghiệp vụ và quyền Identity, Classroom, Work](business-and-permissions.md)
-- [Giao tiếp REST và Kafka](communication.md)
-- [Quyền sở hữu dữ liệu](data-ownership.md)
-- [Danh mục sự kiện Kafka](kafka-events.md)
-- [Hướng dẫn phát triển](development.md)
-- [Thiết lập và sử dụng subagent Codex](subagents.md)
-- [Identity Service](../identity-service/README.md)
-- [Work Service](../project-service/README.md)
-- [Classroom Service](../classroom-service/README.md)
-- [Integration Service](../integration-service/README.md)
-- [Notification Service](../notification-service/README.md)
-- [Checkpoint Notification 22/10/2026](../notification-service/checkpoint-2026-10-22.md)
-- [Tích hợp Notification cho các service](../notification-service/implementation.md)
-- [AI Service](../ai-service/README.md)
-- [Web](../web/README.md)
-- [Hạ tầng](../infrastructure/README.md)
-- [Job nền và worker](../infrastructure/background-jobs.md)
-- [Quyết định kiến trúc](../adr/README.md)
-- [Chuyển từ thiết kế cũ sang baseline](../adr/001-adopt-architecture-baseline.md)
+## Tài liệu theo service
+
+- [Identity](../identity-service/README.md) · [Classroom](../classroom-service/README.md) · [Work](../project-service/README.md)
+- [Integration](../integration-service/README.md) · [Notification](../notification-service/README.md)
+- [AI](../ai-service/README.md) · [Web](../web/README.md)
+
+Progress Service là tài liệu cũ đã chuyển về Work; xem [trang chuyển hướng](../progress-service/README.md).
 
 ## Quy ước trạng thái
 
 - **Đã triển khai**: đã xác minh trong mã nguồn và kiểm tra liên quan.
 - **Một phần**: chỉ một phần phạm vi đã được xác minh.
 - **Chưa triển khai**: đã kiểm tra và chưa có phần triển khai tương ứng.
-- **Thiết kế mục tiêu**: quyết định kiến trúc hoặc hành vi dự kiến; không khẳng
-  định mã nguồn đã có.
+- **Thiết kế mục tiêu**: quyết định kiến trúc hoặc hành vi dự kiến; không khẳng định mã nguồn đã có.
 - **Chưa xác minh**: chưa kiểm tra mã nguồn, cấu hình và hợp đồng để kết luận.
 
-Khi tài liệu cần nói về hiện trạng, người cập nhật phải kiểm tra mã nguồn, cấu
-hình, hợp đồng và kiểm thử. Nếu chưa kiểm tra, dùng **Chưa xác minh**.
+Khi tài liệu cần nói về hiện trạng, phải kiểm tra mã nguồn, cấu hình, hợp đồng
+và kiểm thử. Nếu chưa kiểm tra, dùng **Chưa xác minh**.

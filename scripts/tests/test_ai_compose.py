@@ -30,7 +30,6 @@ class AIComposeTests(unittest.TestCase):
             AI_JWT_AUDIENCE="",
             IDENTITY_JWT_ISSUER="",
             IDENTITY_JWT_AUDIENCE="",
-            AI_CREDENTIAL_KEY="fixture-credential-key",
             AI_IDENTITY_SERVICE_KEY="fixture-identity-service-key",
             AI_IDENTITY_BASE_URL="",
             AI_WORK_SERVICE_AUTH_ENABLED="",
@@ -114,9 +113,7 @@ class AIComposeTests(unittest.TestCase):
                                 runtime["AI_IDENTITY_SERVICE_KEY"],
                                 "fixture-identity-service-key",
                             )
-                            self.assertEqual(
-                                runtime["AI_CREDENTIAL_KEY"], "fixture-credential-key"
-                            )
+                            self.assertNotIn("AI_CREDENTIAL_KEY", runtime)
 
     def test_ci_runs_compose_checks_when_either_configuration_test_changes(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())

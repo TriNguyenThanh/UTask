@@ -2,7 +2,7 @@
 
 **Trạng thái: Thiết kế mục tiêu.** Tên dưới đây là ví dụ theo baseline mục
 9 và phạm vi service, không xác nhận producer/consumer đã chạy. Schema máy
-đọc được thuộc `contracts/events/`; xem [baseline](../architecture/README.md).
+đọc được thuộc `contracts/events/`; xem [baseline](architecture-baseline.md).
 
 | Sự kiện ví dụ                                                                                                | Service phát | Service nhận dự kiến                              | Mục đích                               |
 | ------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------- | -------------------------------------- |
@@ -31,7 +31,7 @@ Schema; AsyncAPI/Schema Registry/Avro/Protobuf chỉ thêm theo nhu cầu.
 
 Publish qua transactional outbox; consumer chống lặp theo `event_id`.
 Truyền trace ID để liên kết API, job và event. Xem
-[Kafka/outbox](../infrastructure/kafka.md).
+[Kafka/outbox](infrastructure/kafka.md).
 
 Kết nối repository của Project dùng contract
 [`integration.project.connection.changed.v1`](../../contracts/events/integration.project.connection.changed.v1.json).
@@ -39,7 +39,7 @@ Contract này **đã có producer outbox/publisher phía Integration**, mặc đ
 Work đã có consumer và test hai backend qua HTTP/PostgreSQL/Kafka riêng với
 GitHub/Identity stub; staging và GitHub live chưa nghiệm thu. Xem
 [hướng dẫn Work](../project-service/github-integration.md). Thứ tự, receipt và ranh giới với
-REST được chốt tại [ADR-005](../adr/005-integration-work-ai-contracts.md).
+REST được chốt tại [ADR-005](adr/005-integration-work-ai-contracts.md).
 
 ## Hợp đồng cũ cần đối chiếu
 

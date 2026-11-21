@@ -101,7 +101,7 @@ def test_alembic_schema_matches_models_and_downgrades(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_real_redis_celery_worker_runs_same_postgres_pipeline(
-    monkeypatch, repository, payload, principal, vault
+    monkeypatch, repository, payload, principal
 ):
     import asyncio
     import os
@@ -122,7 +122,6 @@ async def test_real_redis_celery_worker_runs_same_postgres_pipeline(
     monkeypatch.setitem(celery_app.conf, "broker_url", broker)
     monkeypatch.setattr(tasks, "build_repository", lambda settings: (repository, Mock()))
     monkeypatch.setattr(tasks, "JwtAuthenticator", lambda settings: FakeAuthenticator())
-    monkeypatch.setattr(tasks, "FernetCredentialVault", lambda key: vault)
     monkeypatch.setattr(
         tasks,
         "AdkRuntime",
@@ -137,7 +136,7 @@ async def test_real_redis_celery_worker_runs_same_postgres_pipeline(
         loglevel="WARNING",
         shutdown_timeout=10,
     ):
-        service = AiApplicationService(repository, AllowAuthorizer(), vault, sync_timeout=0.001)
+        service = AiApplicationService(repository, AllowAuthorizer(), sync_timeout=0.001)
         result = await service.create_request(
             payload, principal=principal, idempotency_key="celery"
         )

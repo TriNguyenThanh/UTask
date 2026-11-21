@@ -30,7 +30,7 @@ hay giảng viên của lớp).
 | HTML/asset thiết kế Teacher | **Không có.** Repo chỉ có [apps/web/index.html](../../apps/web/index.html); `.stitch-assets` nhắc trong README web không có trong repo. Bố cục ở §5 là **đề xuất** bám UI hiện có |
 | Backend trong HEAD | **Không có.** `apps/` chỉ có `web`; [docker-compose.yml](../../docker-compose.yml) và [nginx.conf](../../infra/nginx/nginx.conf) tham chiếu `identity-service`, `work-service`, `classroom-service`… nhưng thư mục không tồn tại |
 | `contracts/` | Chỉ có [api/README.md](../../contracts/api/README.md) và [events/README.md](../../contracts/events/README.md); không có hợp đồng máy đọc được |
-| Identity Service | Có ở `origin/main` (`apps/identity-service`, `docs/architecture/Identity_Service_API_Specification.md` v1.8, trạng thái tự ghi "Một phần") |
+| Identity Service | Có ở `origin/main` (`apps/identity-service`, `docs/identity-service/api-specification.md` v1.8, trạng thái tự ghi "Một phần") |
 | Classroom Service | Ở `origin/feat/classroom-service` chỉ có khung Django + `/healthz` (`config/urls.py`); tài liệu `docs/classroom-service/{data-model,objects,chuc-nang}.md` ghi "Thiết kế mục tiêu, cần review" |
 | Project/Work, Progress Service | Không có mã ở bất kỳ nhánh nào đã kiểm tra |
 | AI Service | `origin/feat/ai-service:contracts/api/ai-service-v1.yaml` ghi `x-utask-status: designed-not-implemented` |
@@ -563,7 +563,7 @@ tồn tại trong mock, **không** phải hợp đồng đã chốt và không �
 | `roles` trong `AuthUser`; `canUseTeacherSpace`, `defaultLandingPath`, `resolveLoginTarget` | Đã triển khai (frontend); nguồn `roles` là mock, auth thật **Chưa xác minh** | [auth/utils.ts](../../apps/web/src/features/auth/utils.ts) |
 | Guard `/teacher/*` và chuyển `/` theo tài khoản | Đã triển khai | [RequireTeacherSpace.tsx](../../apps/web/src/app/router/RequireTeacherSpace.tsx) |
 | Sidebar, top bar, layout Teacher; liên kết "Không gian giảng viên/sinh viên" cho tài khoản kép | Đã triển khai | [TeacherSidebar.tsx](../../apps/web/src/components/navigation/TeacherSidebar.tsx), [TeacherTopNavigation.tsx](../../apps/web/src/components/navigation/TeacherTopNavigation.tsx), [AuthenticatedLayout.tsx](../../apps/web/src/app/layouts/AuthenticatedLayout.tsx) |
-| T01 Home, T02 danh sách lớp, T04 tổng quan lớp, T05 sinh viên, T07 nhóm (chỉ đọc) | Đã triển khai trên dữ liệu Demo MSW | [features/teacher/](../../apps/web/src/features/teacher/) |
+| T01 Home, T02 danh sách lớp, T04 tổng quan lớp, T05 sinh viên, T07 nhóm (chỉ đọc) | Đã triển khai trên dữ liệu Demo MSW | [features/teacher/](../../apps/web/src/features/teacher) |
 | Query key theo user và lớp; xóa cache khi đăng nhập/đăng xuất; bỏ cache con của lớp mất quyền | Đã triển khai | [teacherFlowHooks.ts](../../apps/web/src/lib/query/teacherFlowHooks.ts), [AuthProvider.tsx](../../apps/web/src/features/auth/AuthProvider.tsx), [TeacherCourseLayout.tsx](../../apps/web/src/features/teacher/routes/TeacherCourseLayout.tsx) |
 | Sửa R2 (không lộ sự tồn tại) và R3 (phạm vi thông báo) | Demo MSW | [handlers/studentFlow.ts](../../apps/web/src/mocks/handlers/studentFlow.ts) |
 | T03 tạo lớp, T06 import, T08 chi tiết nhóm, T09 workspace Teacher, T10 cài đặt lớp | **Chưa triển khai** (đúng phạm vi: Phase 2/3) | — |

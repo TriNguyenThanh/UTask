@@ -1,5 +1,6 @@
 """Use case worker kiểm tra boundary bằng doubles, không cần PostgreSQL."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -14,7 +15,7 @@ from models import BacklogResult, ContextMetadata, RunningAiResponse, SucceededA
 
 
 @pytest.fixture
-def claimed(payload, vault):
+def claimed(payload):
     now = datetime.now(UTC)
     rid = uuid4()
     return StoredRequest(
@@ -28,14 +29,14 @@ def claimed(payload, vault):
             output_schema_version=payload.output_schema_version,
             created_at=now,
         ),
-        vault.seal("owner"),
+        "owner",
         uuid4(),
         now + timedelta(seconds=30),
     )
 
 
 @pytest.mark.parametrize("case", ["ok", "id", "intent", "version", "result", "not_response"])
-async def test_worker_validates_executor_output_before_persisting(claimed, vault, case):
+async def test_worker_validates_executor_output_before_persisting(claimed, case):
     response = SucceededAiResponse(
         request_id=claimed.request_id,
         intent=claimed.payload.intent,
@@ -58,8 +59,10 @@ async def test_worker_validates_executor_output_before_persisting(claimed, vault
         response = claimed.response
     repository = Mock(claim=Mock(return_value=claimed), stage_completion=Mock(return_value=True))
     executor = Mock(execute=AsyncMock(return_value=response))
-    worker = RequestWorker(repository, FakeAuthenticator(), AllowAuthorizer(), vault, executor)
+    authenticator = Mock(authenticate=AsyncMock(wraps=FakeAuthenticator().authenticate))
+    worker = RequestWorker(repository, authenticator, AllowAuthorizer(), executor)
     assert await worker.execute(claimed.request_id)
+    authenticator.authenticate.assert_awaited_once_with(claimed.credential)
     persisted = repository.stage_completion.call_args.args[2]
     assert persisted.status == ("succeeded" if case == "ok" else "failed")
     if case != "ok":
@@ -68,9 +71,26 @@ async def test_worker_validates_executor_output_before_persisting(claimed, vault
     repository.finish.assert_not_called()
 
 
+@pytest.mark.parametrize("credential", ["", "invalid-token", "gAAAA-old-ciphertext"])
+async def test_worker_rejects_invalid_stored_bearer_before_authorization(claimed, credential):
+    stored = replace(claimed, credential=credential)
+    repository = Mock(claim=Mock(return_value=stored), stage_completion=Mock(return_value=True))
+    authorizer = Mock(authorize=AsyncMock())
+    executor = Mock(execute=AsyncMock())
+    worker = RequestWorker(repository, FakeAuthenticator(), authorizer, executor)
+    assert await worker.execute(stored.request_id)
+    authorizer.authorize.assert_not_awaited()
+    executor.execute.assert_not_awaited()
+    response = repository.stage_completion.call_args.args[2]
+    assert response.status == "failed"
+    assert response.error.code == "AUTHENTICATION_REQUIRED"
+    if credential:
+        assert credential not in response.model_dump_json()
+
+
 @pytest.mark.parametrize("case", ["unclaimed", "identity", "budget", "permission"])
 async def test_worker_does_not_run_executor_without_claim_identity_permission_or_budget(
-    claimed, vault, case
+    claimed, case
 ):
     repository = Mock(
         claim=Mock(return_value=None if case == "unclaimed" else claimed),
@@ -88,7 +108,6 @@ async def test_worker_does_not_run_executor_without_claim_identity_permission_or
         repository,
         auth if case == "identity" else FakeAuthenticator(),
         authorizer if case == "permission" else AllowAuthorizer(),
-        vault,
         executor,
     )
     assert await worker.execute(claimed.request_id) == (case != "unclaimed")

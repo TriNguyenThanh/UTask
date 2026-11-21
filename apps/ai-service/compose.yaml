@@ -6,7 +6,6 @@ x-ai: &ai
   environment:
     AI_DATABASE_URL: postgresql+psycopg://ai_service:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in root .env}@database:5432/ai_context_db
     AI_BROKER_URL: redis://broker:6379/0
-    AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
     AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
     AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
     AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}

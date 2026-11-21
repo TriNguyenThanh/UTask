@@ -12,7 +12,6 @@ x-ai: &ai
   environment:
     AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${AI_DB_NAME:-ai_context_db}}
     AI_BROKER_URL: redis://redis:6379/1
-    AI_CREDENTIAL_KEY: ${AI_CREDENTIAL_KEY:-}
     AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
     AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}
     AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
@@ -572,7 +571,6 @@ services:
         condition: service_healthy
 
 volumes:
-  ai_database:
   postgres_data:
   redis_data:
   kafka_data:

@@ -1,8 +1,8 @@
 # Stack AI Service
 
 **Trạng thái: Một phần.** Runtime và dependencies pipeline đã có; integration
-production và evaluation LLM chưa xác minh. Theo [baseline](../architecture/README.md)
-và [ADR-002](../adr/002-ai-request-pipeline.md).
+production và evaluation LLM chưa xác minh. Theo [baseline](../system/architecture-baseline.md)
+và [ADR-002](../system/adr/002-ai-request-pipeline.md).
 
 | Layer | Đã triển khai |
 | --- | --- |
@@ -14,11 +14,13 @@ và [ADR-002](../adr/002-ai-request-pipeline.md).
 | Job | Celery + Redis broker; worker và dispatcher riêng |
 | Persistence | PostgreSQL riêng, SQLAlchemy + Psycopg, Alembic migration, completion inbox |
 | Thông báo nội bộ | PostgreSQL LISTEN/NOTIFY; listener API tiếp nhận kết quả worker |
-| Credential | Fernet từ cryptography; khóa cấu hình ngoài source |
+| Credential worker | Bearer lưu nguyên bản trong credential của PostgreSQL AI; xóa khi bàn giao/terminal |
 | Quality | uv/lock, Ruff, Pytest, fake ADK model, PostgreSQL/Redis integration |
 | Image | Dockerfile chung API/worker/dispatcher và migrations |
 
-Version cụ thể nằm trong `apps/ai-service/uv.lock`, không suy ra từ ví dụ SDK.
+Gói `cryptography` vẫn được giữ để hỗ trợ xác minh RSA/JWT; AI không còn dùng
+Fernet để lưu Bearer token. Version cụ thể nằm trong `apps/ai-service/uv.lock`,
+không suy ra từ ví dụ SDK.
 Kafka/projection/event publisher chưa có use case/contract runtime và không
 được thêm vào agent. Không thêm framework khác, vector DB hoặc HTTP tool tự do.
 

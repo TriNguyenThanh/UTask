@@ -11,11 +11,11 @@ from infrastructure.completions import CompletionListener
 
 
 @pytest.mark.parametrize("case", ["ok", "error"])
-async def test_application_accepts_completion_without_running_executor(vault, case):
+async def test_application_accepts_completion_without_running_executor(case):
     repository = Mock(accept_completions=Mock(return_value=2))
     if case == "error":
         repository.accept_completions.side_effect = RuntimeError("database unavailable")
-    application = AiApplicationService(repository, Mock(), vault)
+    application = AiApplicationService(repository, Mock())
     if case == "ok":
         assert await application.accept_completions(20) == 2
     else:

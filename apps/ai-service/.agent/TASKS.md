@@ -14,6 +14,53 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-11-21 — Khai báo URL Work mặc định trong Settings
+
+- `src/config.py` tạo ba URL authorize và 10 URL context Work mặc định qua
+  `work-service:8000`; mỗi Settings có map riêng. Giữ validation và override
+  JSON qua biến môi trường; biến rỗng dùng mặc định, `{}` vẫn là override
+  rỗng tường minh và bị từ chối ở staging/production.
+- Bỏ JSON URL khỏi `.env.example` và ánh xạ lặp trong Compose staging;
+  `infra/env/ai-service.env` chỉ truyền override tùy chọn cho các process AI.
+  Đồng bộ hướng dẫn triển khai và cấu hình liên service.
+- Kiểm thử: AI suite **543 passed, 66 skipped** (không cấp PostgreSQL/Redis
+  integration trong lần chạy này), một cảnh báo experimental ADK; nhóm config/
+  context **157 passed**. Script CI **182 tests passed**. Ruff lint/format cho
+  source/test thay đổi, link file nội bộ trong 8 tài liệu và diff check đạt.
+  Dùng virtualenv tạm `/tmp/utask-ai-url-config-venv` qua uv do `.venv` cũ trỏ
+  tới interpreter không tồn tại; tắt dotenv developer trước collection.
+- Chưa deploy hoặc nghiệm thu Identity/Work/Integration/LLM thật. `.env` cũ có
+  URL override vẫn được ưu tiên; bỏ override nếu muốn dùng mặc định trong code.
+
+### 2026-11-20 — Gỡ Fernet khỏi luồng Bearer giữa API và worker
+
+- `application/service.py` lưu Bearer nguyên bản vào `credential` hiện có;
+  `application/execution.py` xác thực trực tiếp token đã lưu. Bỏ protocol
+  `CredentialVault`, adapter `FernetCredentialVault` và wiring trong API/task.
+  Giữ xác minh JWT RS256/session, ownership, quyền target, budget và việc xóa
+  credential khi bàn giao completion hoặc terminal. Redis chỉ mang request ID.
+- Bỏ `credential_key`/validation Fernet trong Settings, tạo key trong setup
+  mock, tham chiếu evaluation và inject trong Compose riêng AI. Giữ
+  `cryptography` cho RSA/JWT; không đổi schema, migration hay API công khai.
+- Cập nhật unit/integration test theo constructor mới; kiểm Bearer đi nguyên
+  bản qua enqueue/authenticate, không lộ trong response/repr, từ chối token
+  sai/trống, session revoked và quyền bị thu hồi; kiểm credential bị xóa ngay
+  sau completion thành công hoặc thất bại. Đồng bộ tài liệu AI và rollout.
+- Kiểm tra: `uv sync --all-groups --locked`, Ruff lint/format **101 file**,
+  **598 tests passed** với PostgreSQL 17/Redis 7 tạm và Celery thật, Docker
+  build `utask/ai-no-fernet:verification` đạt. Một cảnh báo experimental ADK.
+  Dùng virtualenv `/tmp/utask-ai-fernet-venv` vì `.venv` cũ hỏng đường dẫn;
+  tắt nạp dotenv trước collection bằng `Settings.model_config['env_file']=()`
+  để tránh cấu hình staging/mock local ảnh hưởng test, không sửa `.env`.
+- GitNexus index cùng HEAD; impact báo HIGH/CRITICAL và một số lookup UNKNOWN
+  đã đối chiếu source/callsite. `detect_changes(scope=all)` hoàn chỉnh, không
+  báo partial/truncated; kết quả graph không thay thế kiểm thử tích hợp.
+- Chưa deploy hoặc gọi Identity/Work/LLM production. Trước rollout phải xử lý
+  hết request queued/running cũ rồi chuyển API và worker cùng phiên bản;
+  ciphertext cũ không tự chuyển đổi. Root Compose, `.env.example`, test hạ
+  tầng và tài liệu hệ thống còn tham chiếu biến cũ ngoài scope AI; runtime mới
+  bỏ qua biến này, cần dọn trong task hạ tầng riêng theo AGENTS của service.
+
 ### 2026-10-22 — Đồng bộ contract test với provider Work đã triển khai
 
 - `tests/test_work_context_contract.py` kiểm cả Bearer và caller key trên ba
@@ -807,8 +854,8 @@ Chưa có.
 
 ## Sẽ làm
 
-- Gỡ Fernet/token vault và yêu cầu `AI_CREDENTIAL_KEY` để đơn giản hóa API →
-  worker, theo [checkpoint 22/10/2026](../../../docs/ai-service/checkpoint.md).
+- Dọn `AI_CREDENTIAL_KEY` khỏi root Compose, `.env.example`, test hạ tầng và
+  tài liệu hệ thống trong phạm vi hạ tầng; AI runtime đã bỏ qua biến cũ.
 - Xác minh issuer và JWKS của Identity production.
 - Nghiệm thu REST quyền/context với Work provider triển khai theo contract
   đã chốt và Integration thật; consumer/mock test không thay E2E.

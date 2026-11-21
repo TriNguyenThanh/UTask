@@ -1,7 +1,7 @@
 # Giao tiếp giữa các service
 
 **Trạng thái: Thiết kế mục tiêu.** Theo baseline mục 2, 9–11 và 13–15; xem
-[nguồn baseline](../architecture/README.md).
+[nguồn baseline](architecture-baseline.md).
 
 ## REST, job nội bộ và sự kiện
 
@@ -28,7 +28,7 @@ riêng; số worker không được ấn định là singleton.
   internal API hoặc event GitHub đã chuẩn hóa. Hợp đồng REST nội bộ Work/AI
   hiện **đã triển khai phía provider**, flags mặc định tắt và Work/AI thật
   chưa nghiệm thu tích hợp; xem
-  [ADR-005](../adr/005-integration-work-ai-contracts.md).
+  [ADR-005](adr/005-integration-work-ai-contracts.md).
 - AI nhận ý định, lấy context qua domain tool/Context Layer có adapter internal
   REST API. Kiểm tra quyền trên target cũng gọi service sở hữu qua REST; không
   dùng Kafka hỏi–đáp cho permission/context. Nếu chưa xác minh được quyền thì
@@ -55,15 +55,15 @@ repository vào PostgreSQL của AI, API đọc persistence để trả cho clie
 Không cần event Kafka về API process để cập nhật kết quả. Kênh SSE/WebSocket
 nếu được bổ sung vẫn phải cho phép client đọc lại trạng thái qua API.
 Xem [pipeline AI](../ai-service/architecture.md) và
-[ADR-002](../adr/002-ai-request-pipeline.md).
+[ADR-002](adr/002-ai-request-pipeline.md).
 
 ## Tin cậy và xử lý lặp
 
 Domain service lưu thay đổi và outbox cùng transaction, publisher gửi Kafka
 sau commit; consumer phải xử lý an toàn khi nhận lại cùng `event_id`.
 Job cần timeout, retry có giới hạn và kiểm soát tác động lặp. Xem
-[Kafka/outbox](../infrastructure/kafka.md) và
-[job nền](../infrastructure/background-jobs.md).
+[Kafka/outbox](infrastructure/kafka.md) và
+[job nền](infrastructure/background-jobs.md).
 
 Với job AI, idempotency phải áp dụng ở cả bước nhận POST và worker khi nhận lại
 task. Ghi database và gửi Redis không phải transaction chung; cần bản ghi chờ

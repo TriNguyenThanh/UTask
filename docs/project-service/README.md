@@ -11,11 +11,15 @@ Tính năng mặc định tắt, chưa nghiệm thu GitHub live/staging; xem
 [kết nối GitHub của Work](github-integration.md).
 
 **Trạng thái: Thiết kế mục tiêu; hiện trạng mã nguồn nghiệp vụ chưa xác minh.**
-Theo [baseline](<../architecture/UTask_Architecture_Technology_Baseline (1).md>)
+Theo [baseline](<../system/architecture-baseline.md>)
 mục 4.2, Work là core service, dùng Python + Django + DRF và sở hữu `work_db`.
 
 Project Service là tên cũ của cùng phạm vi; giữ thư mục tài liệu này để không
 làm hỏng liên kết. Không tạo Project, Task, Sprint hoặc Comment Service riêng.
+
+Tài liệu cùng service: [đặc tả API](api-specification.md),
+[sơ đồ Work](diagram/README.md), [liên kết Classroom–Work](classroom-project-linking.md),
+[tích hợp Identity](identity-events.md) và [tích hợp GitHub](github-integration.md).
 
 ## Phạm vi
 
@@ -57,7 +61,7 @@ Thay đổi nghiệp vụ được lưu cùng outbox, publisher Celery gửi eve
 sau commit. Job nội bộ như deadline scan dùng Celery + Redis thuộc Work.
 AI proposal chỉ được áp dụng sau user xác nhận, kiểm tra quyền và business rule.
 Xem [giao tiếp](../system/communication.md) và
-[job nền](../infrastructure/background-jobs.md).
+[job nền](../system/infrastructure/background-jobs.md).
 
 ## Bàn giao tích hợp Notification
 

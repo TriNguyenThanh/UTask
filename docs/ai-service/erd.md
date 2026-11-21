@@ -24,7 +24,7 @@ erDiagram
         jsonb payload
         jsonb response
         text status
-        text credential "Fernet ciphertext; xóa khi bàn giao/terminal"
+        text credential "Bearer nguyên bản; xóa khi bàn giao/terminal"
         timestamptz created_at
         timestamptz terminal_at "NULL khi queued/running"
         timestamptz queue_expires_at
@@ -130,12 +130,14 @@ không còn bản ghi replay và GET request cũ trả không tìm thấy.
 
 ## Persistence phục vụ pipeline API/worker
 
-API, dispatcher, worker và beat dùng chung cấu hình AI; Redis chỉ là broker.
-Bearer cần cho reauthorization tại worker được mã hóa bằng khóa Fernet ngoài
-source, cùng khóa ở API/worker. JWT còn được kiểm tra issuer/audience/expiry
-sau giải mã. Ciphertext bị xóa khi bàn giao completion hoặc khi succeeded/failed,
-kể cả queue timeout, worker timeout và dispatch hết retry. Payload/result cần
-retention terminal như trên; completion được xóa khi API tiếp nhận. Xem
+API, dispatcher, worker và beat dùng chung cấu hình AI; Redis chỉ chứa UUID
+request làm broker. Bearer cần cho reauthorization được lưu nguyên bản trong
+cột `ai_request.credential` của PostgreSQL AI. Worker xác thực lại JWT
+issuer/audience/expiry, session và quyền target trước khi chạy. Không có lớp mã
+hóa Fernet hoặc khóa `AI_CREDENTIAL_KEY`. Credential bị xóa khi bàn giao
+completion hoặc khi succeeded/failed, kể cả queue timeout, worker timeout và
+dispatch hết retry. Payload/result cần retention terminal như trên; completion
+được xóa khi API tiếp nhận. Xem
 [cơ chế thông báo và phục hồi](architecture.md#bàn-giao-kết-quả-worker-cho-api).
 
 Worker chết không được chạy lại model trên request đang running; dispatcher
@@ -145,6 +147,13 @@ Application lifespan API/worker không tự tạo schema. Entrypoint container A
 chạy `alembic upgrade head` trước Uvicorn và dừng nếu migration lỗi; worker/
 dispatcher/beat chờ API healthy trong Compose. Lệnh worker/dispatcher/beat không tự
 migration; chạy từng process bằng `uv` vẫn cần bước Alembic thủ công.
+
+## Rollout thay đổi cách lưu credential
+
+Không đổi schema hoặc public API. Trước khi chuyển API và worker cùng phiên bản,
+hãy xử lý hết request `queued`/`running` của phiên bản cũ; ciphertext Fernet đã
+lưu không tự chuyển thành Bearer nguyên bản. Không để API/worker phiên bản cũ
+và mới cùng xử lý các request đang hoạt động.
 
 ## Quyết định cần chốt trước migration
 

@@ -3,7 +3,7 @@
 **Trạng thái: Thiết kế mục tiêu.** Theo baseline mục 8, mỗi service sở hữu dữ
 liệu gốc và database riêng. Có thể dùng chung PostgreSQL server/cluster,
 nhưng database user/credential phải riêng và chỉ có quyền trong phạm vi service.
-Xem [baseline](../architecture/README.md).
+Xem [baseline](architecture-baseline.md).
 
 | Database mục tiêu | Service sở hữu | Dữ liệu                                                                                             |
 | ----------------- | -------------- | --------------------------------------------------------------------------------------------------- |
@@ -20,7 +20,7 @@ khai theo baseline mới. Không tạo database Progress riêng cho tiến độ
 
 ## ID tham chiếu và dữ liệu đọc
 
-Theo [ADR-004](../adr/004-integration-github-account-ownership.md), Integration
+Theo [ADR-004](adr/004-integration-github-account-ownership.md), Integration
 sở hữu mapping tài khoản GitHub của user; Identity chỉ xác thực tài khoản
 UTask/phiên qua API hiện có. `GitHubAccount.user_id` là UUID logic, không FK tới
 Identity, không lấy mapping GitHub legacy/Profile làm nguồn đúng và không tự
@@ -70,7 +70,7 @@ toàn cluster.
 Identity/Work/Classroom vẫn dùng credential chung, còn thiếu so với baseline.
 AI dùng PostgreSQL riêng theo [cấu hình AI](../ai-service/README.md).
 Kiểm tra bootstrap M1 ở [Integration foundation](../integration-service/foundation.md);
-chưa xác minh database/role staging thực tế. Xem [biến môi trường](../infrastructure/environment.md).
+chưa xác minh database/role staging thực tế. Xem [biến môi trường](infrastructure/environment.md).
 
 ### Notification dùng credential chung theo yêu cầu hiện tại
 

@@ -14,7 +14,7 @@ smoke Docker local đã đạt trong các lượt kiểm tra tương ứng. Depl
   chưa xác minh.
 - [API](api.md): route và wire shape hiện có trong source.
 - [Scope và quyền](scope-access.md): ownership và ranh giới Work.
-- [ADR-004](../adr/004-integration-github-account-ownership.md): quyết định
+- [ADR-004](../system/adr/004-integration-github-account-ownership.md): quyết định
   ownership và vòng đời credential.
 
 ## Những điểm cần xác minh trước khi kết luận hoàn tất

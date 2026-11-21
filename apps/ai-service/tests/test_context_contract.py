@@ -369,7 +369,6 @@ def production_settings(**overrides):
         "jwt_issuer": "https://identity.utask.internal",
         "jwt_audience": "utask-platform",
         "identity_service_key": "test-identity-key",
-        "credential_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "work_service_key": "work-key",
         "authorization_urls": {
             target: "http://work/authorize/{target_type}/{target_id}"

@@ -11,7 +11,7 @@ from models import SucceededAiResponse
 from models.budget import BudgetKind
 from models.validation import validate_result
 
-from .ports import Authenticator, Authorizer, CredentialVault, RequestExecutor, RequestRepository
+from .ports import Authenticator, Authorizer, RequestExecutor, RequestRepository
 from .responses import failed_response
 
 
@@ -21,13 +21,11 @@ class RequestWorker:
         repository: RequestRepository,
         authenticator: Authenticator,
         authorizer: Authorizer,
-        vault: CredentialVault,
         executor: RequestExecutor,
     ):
         self.repository = repository
         self.authenticator = authenticator
         self.authorizer = authorizer
-        self.vault = vault
         self.executor = executor
 
     async def execute(self, request_id: UUID) -> bool:
@@ -52,9 +50,7 @@ class RequestWorker:
         try:
             remaining = (stored.deadline - datetime.now(UTC)).total_seconds()
             async with asyncio.timeout(max(0, remaining)):
-                principal = await self.authenticator.authenticate(
-                    self.vault.open(stored.credential)
-                )
+                principal = await self.authenticator.authenticate(stored.credential)
                 if principal.user_id != stored.user_id:
                     raise failure("AUTHENTICATION_REQUIRED", 401)
                 await self.authorizer.authorize(principal, stored.payload)

@@ -1,7 +1,7 @@
 # Kiến trúc UTask
 
 **Trạng thái: Thiết kế mục tiêu.** Tài liệu được cập nhật theo
-[architecture baseline](../architecture/README.md), mục 2–4 và 26–29.
+[architecture baseline](architecture-baseline.md), mục 2–4 và 26–29.
 Không xác nhận các service hoặc luồng nghiệp vụ đã chạy.
 
 ## Các thành phần
@@ -30,7 +30,7 @@ Hạ tầng: PostgreSQL · Kafka · Redis · Cloudflare R2 ở production
 | Notification | Bản ghi thông báo, người nhận, kênh và trạng thái gửi                                                                                 |
 | AI           | Yêu cầu, context phục vụ phân tích và kết quả đề xuất; không sở hữu dữ liệu nghiệp vụ gốc                                             |
 
-Theo [ADR-004](../adr/004-integration-github-account-ownership.md), mapping
+Theo [ADR-004](adr/004-integration-github-account-ownership.md), mapping
 GitHub cá nhân nằm ở Integration. Identity xác thực tài khoản UTask/phiên qua
 API hiện có; luồng Integration mới không phụ thuộc OAuth mapping legacy của Identity.
 
@@ -70,7 +70,7 @@ dispatcher giao job qua Redis, Celery worker chạy application/workflow và lư
 kết quả vào PostgreSQL của AI. API và worker dùng chung code nghiệp vụ và
 persistence của cùng service; client đọc kết quả qua API. Kafka consumer chỉ
 thêm khi có use case/event contract, chạy ngoài vòng suy luận. Quyết định tại
-[ADR-002](../adr/002-ai-request-pipeline.md); pipeline chi tiết tại
+[ADR-002](adr/002-ai-request-pipeline.md); pipeline chi tiết tại
 [kiến trúc AI](../ai-service/architecture.md). Đây là thiết kế mục tiêu,
 bootstrap chưa có các process/persistence này.
 
@@ -80,7 +80,7 @@ bootstrap chưa có các process/persistence này.
 - R2: lưu file production qua S3-compatible API; local dùng filesystem.
 
 Chi tiết nằm trong [giao tiếp](communication.md) và
-[hạ tầng](../infrastructure/README.md).
+[hạ tầng](infrastructure/README.md).
 
 ## Ranh giới phải giữ
 
@@ -103,7 +103,7 @@ service mesh hoặc realtime service riêng chỉ thêm khi có nhu cầu và qu
 
 ## Chuyển từ thiết kế cũ
 
-[ADR cập nhật baseline](../adr/001-adopt-architecture-baseline.md) ghi việc
+[ADR cập nhật baseline](adr/001-adopt-architecture-baseline.md) ghi việc
 thay Project/Progress bằng Work và cập nhật cách lấy context AI. Contract
 đã chốt được kiểm tra riêng; không tự đổi URL, producer hoặc envelope bằng
 cách thay tên trong tài liệu.

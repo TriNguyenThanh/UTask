@@ -1,7 +1,7 @@
 # Các luồng nghiệp vụ
 
 **Trạng thái: Thiết kế mục tiêu.** Các luồng theo
-[baseline](../architecture/README.md), không xác nhận đã tích hợp runtime.
+[baseline](architecture-baseline.md), không xác nhận đã tích hợp runtime.
 
 ## Đăng ký và đăng nhập
 
@@ -35,7 +35,7 @@ baseline ban đầu. Dashboard không cần AI để tính và hiển thị ch�
 
 ## GitHub
 
-Theo [ADR-004](../adr/004-integration-github-account-ownership.md), user liên
+Theo [ADR-004](adr/004-integration-github-account-ownership.md), user liên
 kết GitHub cá nhân trực tiếp qua Integration; mapping và credential thuộc
 Integration. Identity chỉ xác thực Bearer qua `GET /users/me` hiện có. Luồng
 OAuth/GitHub App bên dưới vẫn là thiết kế mục tiêu; hiện đã có lưu trữ mapping
@@ -78,7 +78,7 @@ và không cần phát event về API process để lưu kết quả. POST chờ
 thành công trả `200`, chưa xong trả `202`; workflow có hard timeout 30 giây.
 MVP dùng polling. Số worker/concurrency và SSE/WebSocket chưa chốt. Chi tiết
 nằm trong [pipeline AI](../ai-service/architecture.md),
-[API AI](../ai-service/api.md) và [ADR-002](../adr/002-ai-request-pipeline.md).
+[API AI](../ai-service/api.md) và [ADR-002](adr/002-ai-request-pipeline.md).
 
 Kafka consumer của AI có thể nhận event Work/Integration để cập nhật context
 hoặc tạo job qua application và dispatcher khi có use case/contract; agent

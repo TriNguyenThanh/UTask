@@ -16,19 +16,17 @@ from main import create_app
 from models import SucceededAiResponse
 
 
-def worker(repository, vault, responses=None, authorizer=None, executor=None):
+def worker(repository, responses=None, authorizer=None, executor=None):
     executor = executor or AdkRequestExecutor(
         AdkRuntime(Settings(), ScriptedModel(responses or ['{"items":[],"warnings":[]}'])),
         FakeGateway(),
     )
-    return RequestWorker(
-        repository, FakeAuthenticator(), authorizer or AllowAuthorizer(), vault, executor
-    )
+    return RequestWorker(repository, FakeAuthenticator(), authorizer or AllowAuthorizer(), executor)
 
 
 @pytest.mark.asyncio
-async def test_api_202_get_ownership_replay_conflict_and_worker_success(repository, payload, vault):
-    service = AiApplicationService(repository, AllowAuthorizer(), vault, sync_timeout=0.001)
+async def test_api_202_get_ownership_replay_conflict_and_worker_success(repository, payload):
+    service = AiApplicationService(repository, AllowAuthorizer(), sync_timeout=0.001)
     app = create_app(application=service, authenticator=FakeAuthenticator())
     headers = {"Authorization": "Bearer owner", "Idempotency-Key": "key"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -46,9 +44,11 @@ async def test_api_202_get_ownership_replay_conflict_and_worker_success(reposito
         )
         assert denied.status_code == 404
         rid = UUID(first.json()["request_id"])
-        assert await worker(repository, vault).execute(rid)
-        assert not await worker(repository, vault).execute(rid)
+        assert repository.get(rid).credential == "owner"
+        assert await worker(repository).execute(rid)
+        assert not await worker(repository).execute(rid)
         assert repository.get(rid).response.status == "running"
+        assert repository.get(rid).credential == ""
         assert await service.accept_completions() == 1
         done = await client.get(first.headers["Location"], headers=headers)
         assert done.json()["status"] == "succeeded"
@@ -66,17 +66,15 @@ async def test_api_202_get_ownership_replay_conflict_and_worker_success(reposito
 
 
 @pytest.mark.asyncio
-async def test_post_waits_for_worker_result_without_running_model(
-    repository, payload, principal, vault
-):
+async def test_post_waits_for_worker_result_without_running_model(repository, payload, principal):
     service = AiApplicationService(
-        repository, AllowAuthorizer(), vault, sync_timeout=1, poll_interval=0.005
+        repository, AllowAuthorizer(), sync_timeout=1, poll_interval=0.005
     )
 
     async def process():
         while not (deliveries := repository.deliveries(datetime.now(UTC))):
             await asyncio.sleep(0.001)
-        await worker(repository, vault).execute(deliveries[0].request_id)
+        await worker(repository).execute(deliveries[0].request_id)
         await service.accept_completions()
 
     background = asyncio.create_task(process())
@@ -86,12 +84,12 @@ async def test_post_waits_for_worker_result_without_running_model(
 
 
 @pytest.mark.asyncio
-async def test_permission_denial_prevents_enqueue(repository, payload, principal, vault):
+async def test_permission_denial_prevents_enqueue(repository, payload, principal):
     class Deny:
         async def authorize(self, principal, request):
             raise failure("TARGET_ACCESS_DENIED", 403)
 
-    service = AiApplicationService(repository, Deny(), vault, sync_timeout=0.001)
+    service = AiApplicationService(repository, Deny(), sync_timeout=0.001)
     with pytest.raises(ServiceError) as error:
         await service.create_request(payload, principal=principal, idempotency_key="key")
     assert error.value.code == "TARGET_ACCESS_DENIED"
@@ -100,9 +98,9 @@ async def test_permission_denial_prevents_enqueue(repository, payload, principal
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["schema", "permission", "identity", "exception", "timeout"])
-async def test_worker_failure_is_persisted_and_secret_deleted(repository, payload, vault, kind):
+async def test_worker_failure_is_persisted_and_secret_deleted(repository, payload, kind):
     bearer = "invalid" if kind == "identity" else "owner"
-    stored = repository.enqueue(payload, "owner", "key", vault.seal(bearer), datetime.now(UTC))
+    stored = repository.enqueue(payload, "owner", "key", bearer, datetime.now(UTC))
 
     class BadExecutor:
         async def execute(self, stored, principal, charge):
@@ -117,13 +115,13 @@ async def test_worker_failure_is_persisted_and_secret_deleted(repository, payloa
     executor = BadExecutor() if kind in {"exception", "timeout"} else None
     task = worker(
         repository,
-        vault,
         responses=["invalid", "invalid"],
         authorizer=Deny() if kind == "permission" else None,
         executor=executor,
     )
     await task.execute(stored.request_id)
     assert repository.get(stored.request_id).response.status == "running"
+    assert repository.get(stored.request_id).credential == ""
     repository.accept_completions()
     record = repository.get(stored.request_id)
     expected = {

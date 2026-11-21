@@ -7,7 +7,7 @@ Schema máy đọc được nằm tại
 
 Tài liệu này mô tả API mà client dùng để yêu cầu AI xử lý một ý định cụ thể.
 API chỉ nhận yêu cầu và trả bản phân tích hoặc proposal có cấu trúc. Theo
-[baseline](../architecture/README.md), AI lấy context qua internal API sau
+[baseline](../system/architecture-baseline.md), AI lấy context qua internal API sau
 Context Layer/domain tool; projection qua Kafka có thể bổ sung khi cần.
 Client không gửi toàn bộ dữ liệu nghiệp vụ; agent không tự gọi HTTP tùy ý,
 Kafka hoặc database service khác. Xem [kiến trúc](architecture.md).
@@ -54,11 +54,11 @@ API đọc AI DB để trả POST/GET response.
   bằng `access` và các claim bắt buộc `exp`, `iss`, `aud`, `sub`, `token_type`;
   `iat` là tùy chọn. Mỗi lần xác thực, AI tải JWKS từ Identity rồi xác minh
   session trực tiếp. Production **Chưa xác minh**.
-- Theo luồng đã chốt, AI-side client yêu cầu service sở hữu xác nhận quyền
-  target qua internal REST trước khi giao job. Work contract còn `planned` và
-  Work provider chưa có source nên quyền target/role runtime chưa xác minh.
-  Context được kiểm tra khi lấy; không dùng Kafka hỏi–đáp hoặc projection làm
-  bằng chứng quyền.
+- AI-side client yêu cầu service sở hữu xác nhận quyền target qua internal
+  REST trước khi giao job. Work provider authorize/context có source, contract
+  và test; runtime cần cấu hình đủ URL/key và được nghiệm thu riêng. Context
+  được kiểm tra khi lấy; không dùng Kafka hỏi–đáp hoặc projection làm bằng
+  chứng quyền.
 - Workflow kiểm tra request, chạy agent, kiểm tra structured output, revise hoặc
   retry trong giới hạn rồi lưu kết quả.
 - Agent chỉ được chọn các domain context tool. Agent không biết topic Kafka,
@@ -488,7 +488,7 @@ hạn.
 
 Luồng chi tiết và trách nhiệm retry/dead-letter là thiết kế tại
 [kiến trúc AI](architecture.md), được ghi nhận trong
-[ADR-002](../adr/002-ai-request-pipeline.md); không bổ sung status, endpoint
+[ADR-002](../system/adr/002-ai-request-pipeline.md); không bổ sung status, endpoint
 hoặc event schema mới vào contract v1.
 
 ## 11. Các quyết định contract v1
@@ -503,8 +503,8 @@ Contract v1 và boundary xác thực được diễn giải theo các quy tắc 
    nếu token có `kid`, và yêu cầu còn đúng một khóa. Không dùng PEM hoặc URL
    JWKS cấu hình riêng, không tin identity header từ client. Sau chữ ký, AI gọi
    Identity session-status; worker lặp lại xác minh chữ ký/session và gửi yêu
-   cầu authorize target/intent theo contract. Work provider chưa có source,
-   nên không xem quyền/role Work là đã kiểm tra runtime.
+   cầu authorize target/intent theo contract. Work provider có source/config/test;
+   quyền runtime vẫn cần được xác minh ở môi trường phát hành.
 2. `POST` chờ persistence tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
    `GET` để polling. Hard timeout của workflow là 30 giây.
 3. V1 chỉ hỗ trợ các status `queued`, `running`, `succeeded`, `failed`; không
@@ -551,22 +551,22 @@ response sai schema làm AI từ chối xử lý. Lỗi được ghi nhận là
 ánh xạ thành `500 INTERNAL_ERROR` với `details.reason=AUTH_UNAVAILABLE`. AI
 không dùng dữ liệu cache hay bỏ qua kiểm tra. Endpoint này là API nội bộ, không
 đi qua gateway công khai;
-việc tích hợp runtime/production **Chưa xác minh**.
+việc tích hợp runtime/production **Chưa xác minh đầy đủ**.
 
 ### Kiểm tra quyền qua Work
 
 AI-side adapter dựng POST theo contract Work với Bearer actor và body
-`{action: "ai.analyze", intent}`. Cờ `AI_WORK_SERVICE_AUTH_ENABLED` mặc định
-`false` chỉ bỏ header Work `X-Service-Key`; Bearer và kiểm tra authorize theo
-target/intent vẫn được gửi. Khi cờ là `true`, AI bắt buộc có và gửi
-`AI_WORK_SERVICE_KEY`. Cờ này không đổi `AI_IDENTITY_SERVICE_KEY` hoặc
-`AI_INTEGRATION_SERVICE_KEY`.
+`{action: "ai.analyze", intent}`. Work provider hiện bắt buộc Bearer và
+`X-Service-Key`. AI mặc định `AI_WORK_SERVICE_AUTH_ENABLED=false`; khi tích
+hợp Work thật phải bật cờ, cấp `AI_WORK_SERVICE_KEY` khớp caller `ai` trong
+`WORK_SERVICE_KEYS` và cấp giá trị cho mọi process AI. Cờ này không đổi
+`AI_IDENTITY_SERVICE_KEY` hoặc `AI_INTEGRATION_SERVICE_KEY`.
 
-[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml) còn ở trạng
-thái `planned`; AI-side client có source nhưng Work provider chưa có source.
-Vì vậy tài liệu mô tả contract, không khẳng định endpoint, kiểm tra role hoặc
-authorize target đã chạy runtime. Bật/tắt header cũng không tạo hoặc thay thế
-Work endpoint.
+[Work AI context v1](../../contracts/api/work-ai-context-v1.yaml) được Work
+contract tham chiếu; authorize/context provider có source/config/test và OpenAPI
+đánh dấu `implemented`. Điều đó không tự xác nhận runtime ở mọi môi trường:
+kiểm tra allow/deny và context bằng Work thật theo
+[hướng dẫn triển khai](deployment-and-service-integration.md).
 
 ## 12. Đối chiếu baseline và công việc chuyển đổi
 
@@ -577,12 +577,12 @@ giới hạn tích hợp:
 | Chủ đề        | Baseline / thiết kế mới                                            | Hợp đồng hoặc hiện trạng còn lại                                                            |
 | ------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | Xác thực      | Identity cấp JWT; các service xác thực token và kiểm tra quyền     | JWKS fetch/session client có source/test local; Identity runtime/production **Chưa xác minh** |
-| Context       | Internal API của Work qua adapter/domain tool                      | AI-side adapter có source; contract Work còn `planned`, Work provider **Chưa triển khai** |
+| Context       | Internal API của Work qua adapter/domain tool                      | AI adapter và Work provider có source/config/test; runtime liên service nghiệm thu một phần |
 | Job nội bộ    | Request + ý định giao job bền vững; dispatcher → Redis → worker AI | Đã có PostgreSQL/Celery/dispatcher, giữ ngưỡng chờ/polling v1 |
 | Event kết quả | Baseline nêu `ai.analysis.completed`, `ai.project.risk.detected`   | Chưa có event schema/topic/consumer; v1 chưa phát event                                     |
 | URL/version   | Nginx reverse proxy và API có version                              | Giữ `/api/ai/v1/requests`; ví dụ URL trong baseline không tự đổi route                      |
 
 Cơ chế luôn trả `202` hoặc SSE/WebSocket cần quyết định và cập nhật contract
 riêng. Sau `202`, polling dùng HTTP GET mới; Kafka không gửi response thứ hai
-trên request POST đã kết thúc. Xem [ADR-001](../adr/001-adopt-architecture-baseline.md).
-Pipeline job nền đã được chốt riêng trong [ADR-002](../adr/002-ai-request-pipeline.md).
+trên request POST đã kết thúc. Xem [ADR-001](../system/adr/001-adopt-architecture-baseline.md).
+Pipeline job nền đã được chốt riêng trong [ADR-002](../system/adr/002-ai-request-pipeline.md).

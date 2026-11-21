@@ -11,4 +11,4 @@ Progress riêng từ tài liệu cũ.
 
 Contract context cũ có producer `progress-service`; đó là khoảng trống chuyển
 đổi, không xác nhận runtime. Xem [danh mục sự kiện](../system/kafka-events.md)
-và [ADR cập nhật baseline](../adr/001-adopt-architecture-baseline.md).
+và [ADR cập nhật baseline](../system/adr/001-adopt-architecture-baseline.md).

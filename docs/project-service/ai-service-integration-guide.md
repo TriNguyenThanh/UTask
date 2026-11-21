@@ -12,26 +12,24 @@ Nguồn chuẩn cho path, schema và mã lỗi là
 [Work AI context v1](../../contracts/api/work-ai-context-v1.yaml), được
 [contract Work](../../contracts/api/work-service.yaml) tham chiếu. Khi có khác
 biệt, sửa đồng bộ contract, consumer, provider và test; không tự thêm trường
-vào response. Xem thêm [ADR-005](../adr/005-integration-work-ai-contracts.md)
+vào response. Xem thêm [ADR-005](../system/adr/005-integration-work-ai-contracts.md)
 và [điều kiện phát hành AI](../ai-service/production-readiness.md).
 
 Checklist triển khai, vị trí sửa và cách kiểm thử nằm trong
 [kế hoạch context Work–AI](ai-context-implementation-plan.md). Kế hoạch này ghi
 quyết định nghiệp vụ mới; các checkbox chưa hoàn tất không phải bằng chứng API đã có.
 
-## 1. Phạm vi và thứ tự thực hiện
+## 1. Phạm vi hiện tại và cách thay đổi
 
 Đội Work sở hữu endpoint, xác thực actor, quyền trên target, truy vấn và tính
 chỉ số. AI chỉ đọc context để tạo proposal; không được ghi Task/Project hoặc
 đọc trực tiếp Work DB. Chỉ Integration được gọi GitHub API.
 
-Thực hiện theo thứ tự:
-
-1. Giữ xác thực Bearer và service key bắt buộc theo provider Work đã triển khai.
-2. Triển khai POST authorize `ai.analyze`, gồm ma trận intent/target.
-3. Triển khai GET context, serializer allowlist, giới hạn kích thước và phiên bản.
-4. Triển khai POST authorize `github.read` dành riêng cho Integration.
-5. Chạy provider contract test và phối hợp smoke thật với AI/Integration.
+Provider hiện có ba endpoint: AI authorize `ai.analyze`, AI đọc context và
+Integration authorize `github.read`. Khi thay đổi endpoint hoặc dữ liệu, giữ
+thứ tự phối hợp sau: cập nhật contract; cập nhật provider/consumer; cập nhật
+contract test; cập nhật URL/key config; rồi xác minh runtime với service thật.
+Không xem source/test đơn lẻ là bằng chứng triển khai staging/production.
 
 Ba API này không thay thế luồng connect/disconnect repository, receipt,
 dispatcher hoặc consumer sự kiện. Nếu cần GitHub connected thật, triển khai
@@ -82,7 +80,7 @@ và tạo response. Serializer không đọc DB. Authorize Integration dùng
 được khai báo trực tiếp bằng extension `drf-spectacular`, không tạo proxy rồi
 ghi đè schema; chi tiết và kiểm chứng ở kế hoạch triển khai.
 
-## 3. API cần triển khai
+## 3. API hiện được triển khai
 
 ### 3.1. AI kiểm quyền target
 
@@ -305,6 +303,11 @@ Provider phải lọc PII/secret, không dựa hoàn toàn vào bộ lọc promp
 
 ## 6. Cấu hình phối hợp với AI và Integration
 
+Hướng dẫn cấu hình end-to-end, file Compose, Identity key, thứ tự rollout và
+giới hạn xác minh được tập trung tại
+[cấu hình và triển khai AI Service](../ai-service/deployment-and-service-integration.md).
+Phần dưới đây giữ contract và map chi tiết riêng của Work.
+
 `WORK_SERVICE_KEYS` **đã được Work đọc trong settings**, map caller sang danh
 sách key hiện tại/trước để xoay vòng. Default `{}` không cấp quyền cho AI.
 Map chỉ nhận `ai/integration`, mỗi caller 1–2 key hợp lệ, không dùng chung key.
@@ -328,7 +331,9 @@ không tái sử dụng key trên. `INTEGRATION_WORK_URL=http://work-service:800
 Các URL bên dưới dùng DNS nội bộ, không dùng prefix gateway `/api/work`.
 Gateway phải tiếp tục chặn route internal.
 
-Đội AI/infra cấu hình `AI_AUTHORIZATION_URLS` đủ ba target:
+`config.py` của AI đã khai báo map mặc định dưới đây, không cần sao chép vào
+`.env` khi dùng DNS Compose. Nếu host/port khác, đội AI/infra có thể ghi đè
+toàn bộ map bằng `AI_AUTHORIZATION_URLS`; biến rỗng giữ mặc định:
 
 ```json
 {
@@ -338,7 +343,8 @@ Gateway phải tiếp tục chặn route internal.
 }
 ```
 
-`AI_CONTEXT_URLS` cần đủ 10 cặp hỗ trợ:
+Map context mặc định trong `config.py` có đủ 10 cặp dưới đây. Override qua
+`AI_CONTEXT_URLS` phải giữ đủ các cặp này; `{}` không phải cách dùng mặc định:
 
 ```json
 {
