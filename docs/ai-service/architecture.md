@@ -309,7 +309,7 @@ trả `404`. GET không áp dụng proposal hoặc xác nhận quyền nghiệp 
 
 POST chờ persistence tối đa 10 giây. Nếu chưa kết thúc, trả queued envelope
 `202` với `Location`; GET có thể đã thấy `running`. Hết thời gian chờ POST
-không hủy worker. Workflow có deadline tối đa 30 giây, bao gồm xác minh lại
+không hủy worker. Workflow có deadline tối đa 300 giây (5 phút), bao gồm xác minh lại
 quyền, context, retry và revise. Thời gian queue riêng, mặc định 300 giây.
 
 | Thành phần | Trách nhiệm |

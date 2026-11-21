@@ -543,7 +543,7 @@ timeout              = cấu hình phù hợp
 ```
 
 Không cho agent loop vô hạn.
-Workflow có hard timeout 30 giây theo API v1, bao gồm revise/retry thực thi;
+Workflow có hard timeout tối đa 300 giây (5 phút) theo API v1, bao gồm revise/retry thực thi;
 retry task hoặc giao lại job không tự đặt lại budget đã dùng. Phân biệt retry
 lời gọi model, revise output và retry giao thông điệp; phối hợp các lớp để
 không nhân số lần gọi LLM. Quy tắc phục hồi và dead-letter nằm trong

@@ -707,10 +707,10 @@ components:
 
 x-utask-runtime:
   sync_timeout_seconds: 10
-  workflow_timeout_seconds: 30
+  workflow_timeout_seconds: 300
   long_request_behavior: |
     Nếu workflow không hoàn tất trong 10 giây, POST trả 202 với trạng thái queued
-    và client truy vấn lại bằng GET. Nếu workflow vượt hard timeout 30 giây,
+    và client truy vấn lại bằng GET. Nếu workflow vượt hard timeout 300 giây,
     request chuyển failed với WORKFLOW_TIMEOUT. Kafka không dùng cho
     request-response của client.
   bounded_agent_budget:

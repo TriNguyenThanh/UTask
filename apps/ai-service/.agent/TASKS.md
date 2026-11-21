@@ -14,6 +14,27 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-11-21 — Tăng thời hạn thực thi lên 5 phút và ánh xạ biến ngân sách
+
+- `src/config.py` cho phép và mặc định `workflow_timeout_seconds` bằng 300 giây;
+  `PostgresRequestRepository` dùng cùng mặc định.
+- Celery tính động `task_soft_time_limit` (+5 giây), `task_time_limit` (+10 giây)
+  và Redis `visibility_timeout` (+30 giây) theo `workflow_timeout_seconds`.
+- Ánh xạ `AI_MAX_MODEL_CALLS`, `AI_MAX_CONTEXT_TOOL_CALLS`, `AI_MAX_OUTPUT_TOKENS`,
+  `AI_WORKFLOW_TIMEOUT_SECONDS` từ `.env.example` qua `infra/env/ai-service.env`;
+  cập nhật `contracts/api/ai-service-v1.yaml` và tài liệu runtime AI. POST vẫn
+  chờ tối đa 10 giây; evaluation giữ gate riêng 30 giây.
+- Cập nhật `tests/test_jobs.py`, `tests/test_repository.py`,
+  `tests/test_retention_postgres.py`, `tests/test_security.py` và
+  `scripts/tests/test_ai_compose.py` trên nền bỏ Fernet và URL Work mặc định.
+- Kiểm tra trên Windows (không bật PostgreSQL/Redis integration): Ruff check &
+  format **101 file** đạt; `pytest` đạt **535 passed, 76 skipped, 1 deselected**
+  (`test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt` lỗi kiểm tra
+  quyền POSIX `0o600` trên Windows khi chạy đủ bộ); Compose tests:
+  `test_ai_compose.py` (**8 passed**) và 2 bài kiểm tra AI staging Compose
+  trong `test_staging_deployment.py` đạt. Chưa chạy lại PostgreSQL/Redis
+  integration tests, build image hoặc nghiệm thu LLM thật trên VPS.
+
 ### 2026-11-21 — Khai báo URL Work mặc định trong Settings
 
 - `src/config.py` tạo ba URL authorize và 10 URL context Work mặc định qua

@@ -79,7 +79,7 @@ class PostgresRequestRepository:
         sessions: sessionmaker,
         *,
         queue_timeout: float = 300,
-        workflow_timeout: float = 30,
+        workflow_timeout: float = 300,
         dispatch_lease: float = 10,
         redelivery: float = 15,
         max_dispatch_attempts: int = 8,

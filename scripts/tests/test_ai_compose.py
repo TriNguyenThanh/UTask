@@ -369,6 +369,10 @@ class AIComposeTests(unittest.TestCase):
             MOCK_TEST="",
             AI_WORK_SERVICE_KEY="fixture-work-key",
             AI_INTEGRATION_SERVICE_KEY="fixture-integration-key",
+            AI_MAX_MODEL_CALLS="12",
+            AI_MAX_CONTEXT_TOOL_CALLS="20",
+            AI_MAX_OUTPUT_TOKENS="200000",
+            AI_WORKFLOW_TIMEOUT_SECONDS="240",
         )
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=filename):
@@ -407,6 +411,10 @@ class AIComposeTests(unittest.TestCase):
                         "fixture-integration-key",
                     )
                     self.assertEqual(settings["AI_GITHUB_CONTEXT_ENABLED"], "false")
+                    self.assertEqual(settings["AI_MAX_MODEL_CALLS"], "12")
+                    self.assertEqual(settings["AI_MAX_CONTEXT_TOOL_CALLS"], "20")
+                    self.assertEqual(settings["AI_MAX_OUTPUT_TOKENS"], "200000")
+                    self.assertEqual(settings["AI_WORKFLOW_TIMEOUT_SECONDS"], "240")
                     self.assertEqual(settings["AI_TERMINAL_RETENTION_DAYS"], "30")
                     self.assertEqual(settings["AI_RETENTION_BATCH_SIZE"], "500")
                     self.assertEqual(settings["AI_RETENTION_INTERVAL_SECONDS"], "3600")

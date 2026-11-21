@@ -18,12 +18,12 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     broker_connection_timeout=3,
     broker_transport_options={
-        "visibility_timeout": 60,
+        "visibility_timeout": int(settings.workflow_timeout_seconds) + 30,
         "socket_timeout": 3,
         "socket_connect_timeout": 3,
     },
-    task_soft_time_limit=35,
-    task_time_limit=40,
+    task_soft_time_limit=settings.workflow_timeout_seconds + 5,
+    task_time_limit=settings.workflow_timeout_seconds + 10,
     task_default_queue="utask_ai",
     task_publish_retry=False,
     beat_schedule={

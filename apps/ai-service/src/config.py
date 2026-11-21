@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     identity_service_key: SecretStr | None = None
     model: str | None = Field(default=None, min_length=1, pattern=r"^\S+$")
     sync_timeout_seconds: float = Field(default=10, gt=0, le=10)
-    workflow_timeout_seconds: float = Field(default=30, gt=0, le=30)
+    workflow_timeout_seconds: float = Field(default=300, gt=0, le=300)
     poll_interval_seconds: float = Field(default=0.1, gt=0)
     completion_reconcile_seconds: float = Field(default=5, gt=0)
     terminal_retention_days: int = Field(default=30, gt=0)
