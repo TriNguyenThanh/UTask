@@ -85,7 +85,10 @@ def test_queue_and_worker_expiry_delete_secret_and_fence_late_result(repository,
     now = datetime.now(UTC)
     stored = enqueue(repository, payload)
     running = repository.claim(stored.request_id, now)
-    future = now + timedelta(seconds=31)
+    assert repository.expire(now + timedelta(seconds=31)) == 0
+    assert repository.get(stored.request_id).response.status == "running"
+    assert running.deadline == now + timedelta(seconds=300)
+    future = running.deadline + timedelta(seconds=1)
     assert repository.expire(future) == 1
     response = failed_response(payload, stored.request_id, now, now, failure("INTERNAL_ERROR", 500))
     assert not repository.stage_completion(

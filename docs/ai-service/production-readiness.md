@@ -151,7 +151,8 @@ Các biến `EVAL_AI_*` và `EVAL_EXPECTED_MODEL` chỉ cần cho lần chạy l
 Case lỗi không được coi là đã kiểm chứng nếu các fixture quyền/target tương
 ứng chưa được provision. Không dùng target sản xuất của người dùng để tạo
 fixture lỗi; tài khoản, dữ liệu và credential test tách khỏi runtime thông
-thường. Không tăng deadline 30 giây để che lỗi provider/model.
+thường. Runtime cho phép tối đa 300 giây; gate evaluation riêng vẫn giới hạn
+30 giây, không dùng việc tăng deadline runtime để thay bằng chứng provider/model đạt gate.
 Ví dụ cấu trúc ghi đè là `{"backlog-denied":"<UUID fixture không có quyền>"}`;
 thay placeholder bằng UUID hợp lệ trên staging, không phải giá trị chạy ngay.
 Ví dụ expectation một case: `{"risk-project":{"scenario":"available",

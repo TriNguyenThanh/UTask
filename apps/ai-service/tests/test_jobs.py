@@ -18,6 +18,13 @@ def test_celery_configuration_and_publish_id_only(monkeypatch):
     assert celery_app.conf.task_acks_late
     assert celery_app.conf.task_reject_on_worker_lost
     assert celery_app.conf.task_ignore_result
+    timeout = get_settings().workflow_timeout_seconds
+    assert celery_app.conf.task_soft_time_limit == timeout + 5
+    assert celery_app.conf.task_time_limit == timeout + 10
+    assert (
+        celery_app.conf.broker_transport_options["visibility_timeout"]
+        > celery_app.conf.task_time_limit
+    )
     assert celery_app.backend.as_uri() == "disabled://"
     send = Mock()
     monkeypatch.setattr(celery_app, "send_task", send)

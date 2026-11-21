@@ -506,7 +506,7 @@ Contract v1 và boundary xác thực được diễn giải theo các quy tắc 
    cầu authorize target/intent theo contract. Work provider có source/config/test;
    quyền runtime vẫn cần được xác minh ở môi trường phát hành.
 2. `POST` chờ persistence tối đa 10 giây. Nếu chưa xong, trả `202` và client dùng
-   `GET` để polling. Hard timeout của workflow là 30 giây.
+   `GET` để polling. Hard timeout của workflow tối đa 300 giây (5 phút).
 3. V1 chỉ hỗ trợ các status `queued`, `running`, `succeeded`, `failed`; không
    có endpoint liệt kê lịch sử.
 4. `input` có giới hạn kích thước và số phần tử theo từng intent trong OpenAPI;

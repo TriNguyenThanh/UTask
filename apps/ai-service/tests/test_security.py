@@ -90,12 +90,22 @@ async def test_auth_without_configuration_fails_closed(keypair):
         {"identity_base_url": "https://identity/{target_id}"},
         {"identity_base_url": "file:///etc/passwd"},
         {"sync_timeout_seconds": 11},
-        {"workflow_timeout_seconds": 31},
+        {"workflow_timeout_seconds": 0},
+        {"workflow_timeout_seconds": 301},
     ],
 )
 def test_settings_disallow_unsafe_or_unsupported_configuration(kwargs):
     with pytest.raises(ValidationError):
         Settings(**kwargs)
+
+
+@pytest.mark.parametrize("seconds", [31, 300])
+def test_workflow_timeout_accepts_up_to_five_minutes(seconds):
+    assert Settings(_env_file=None).workflow_timeout_seconds == 300
+    assert (
+        Settings(_env_file=None, workflow_timeout_seconds=seconds).workflow_timeout_seconds
+        == seconds
+    )
 
 
 def test_settings_are_cached(monkeypatch):

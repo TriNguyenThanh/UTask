@@ -180,7 +180,7 @@ def test_all_terminal_paths_stamp_once(repository, payload, path):
     if path in {"success", "failed", "invalid", "worker"}:
         running = repository.claim(stored.request_id, now)
         if path == "worker":
-            expected = now + timedelta(seconds=31)
+            expected = running.deadline + timedelta(seconds=1)
             repository.expire(expected)
         else:
             response = (

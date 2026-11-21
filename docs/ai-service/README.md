@@ -82,6 +82,10 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_COMPLETION_RECONCILE_SECONDS` | Khoảng phục hồi completion inbox và thử lại listener; mặc định 5 giây |
 | `AI_REQUESTS_PER_MINUTE` | Số request mới tối đa/user trong 60 giây; mặc định 5 |
 | `AI_MAX_ACTIVE_REQUESTS_PER_USER` | Số request queued/running tối đa/user; mặc định 2 |
+| `AI_MAX_MODEL_CALLS` | Số lần gọi model tối đa trong một yêu cầu, gồm gọi lại và sửa kết quả; mặc định 4 |
+| `AI_MAX_CONTEXT_TOOL_CALLS` | Số lần gọi công cụ lấy context tối đa trong một yêu cầu; mặc định 5 |
+| `AI_MAX_OUTPUT_TOKENS` | Tổng token đầu ra của các lần gọi model trong một yêu cầu; mặc định 4000 |
+| `AI_WORKFLOW_TIMEOUT_SECONDS` | Thời hạn thực thi từ khi worker nhận xử lý; mặc định và tối đa 300 giây (5 phút) |
 | `AI_WORK_SERVICE_AUTH_ENABLED` | Mặc định `false`; tạm thời bỏ riêng header `X-Service-Key` khi AI gọi Work. Bearer actor và yêu cầu authorize theo target/intent vẫn được gửi |
 | `AI_WORK_SERVICE_KEY` | Chỉ bắt buộc và chỉ gửi khi `AI_WORK_SERVICE_AUTH_ENABLED=true`; secret AI → Work, inject qua environment |
 | `AI_INTEGRATION_SERVICE_KEY` | Secret AI → Integration; không bị ảnh hưởng bởi cờ Work |
@@ -96,6 +100,16 @@ có ưu tiên cao nhất. Compose chỉ inject các secret AI cần dùng. Các 
 | `AI_MODEL` | Model ID mà local proxy công bố; adapter tự thêm route LiteLLM `openai/` |
 | `AI_LLM_API_BASE` | URL endpoint tương thích OpenAI, ví dụ `https://provider.example/v1` |
 | `AI_LLM_API_KEY` | API key trong `.env` root, bắt buộc khi gọi LLM thật |
+
+Ba biến ngân sách `AI_MAX_MODEL_CALLS`, `AI_MAX_CONTEXT_TOOL_CALLS` và
+`AI_MAX_OUTPUT_TOKENS` đi từ `.env` qua `infra/env/ai-service.env` vào cả API,
+worker, dispatcher và beat. Có thể tăng theo nhu cầu, ví dụ lần lượt `12`,
+`20`, `128000`, rồi recreate các process AI. Model/proxy phải hỗ trợ mức
+`max_tokens` được gửi lên vì adapter hiện dùng phần ngân sách còn lại làm
+giới hạn đầu ra cho mỗi lần gọi. Thời hạn thực thi mặc định là 300 giây (5 phút);
+tăng ngân sách không kéo dài thời hạn này. Nếu provider không trả usage (số
+token đã dùng), adapter hiện tính toàn bộ phần token còn được phép là đã dùng;
+tăng token không khắc phục việc thiếu usage.
 
 URL template chỉ dùng `{target_type}` và `{target_id}` từ request đã validate.
 Các target là `project`, `task`, `sprint`; domain Work là `project`, `task`,
