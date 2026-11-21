@@ -24,7 +24,7 @@ class NotificationAuthentication(BaseAuthentication):
         try:
             parts = get_authorization_header(request).split()
         except UnicodeError as exc:
-            raise AuthenticationFailed("Authorization không hợp lệ.") from exc
+            raise AuthenticationFailed("Thông tin xác thực không hợp lệ.") from exc
         if not parts:
             return None
         if len(parts) != 2 or parts[0].lower() != b"bearer" or len(parts[1]) > 8192:

@@ -1,7 +1,8 @@
-{{ title }}
+{% autoescape off %}{{ title }}
 
 {{ body }}
 {% if url %}
 {{ url }}
 {% endif %}
 UTask
+{% endautoescape %}

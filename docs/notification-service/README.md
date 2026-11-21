@@ -1,6 +1,7 @@
 # Notification Service
 
-**Trạng thái: Đã triển khai và smoke runtime local đạt; SMTP Gmail thật đã ACK thư thử. Staging và luồng nghiệp vụ đầy đủ qua Gmail chưa nghiệm thu.**
+**Trạng thái: Đã triển khai và kiểm chứng tích hợp local với Identity/Work thật;
+SMTP Gmail từng ACK thư thử riêng. Staging và toàn tuyến qua Gmail chưa nghiệm thu.**
 Service Django/DRF sở hữu inbox Kafka, thông báo in-app, tùy chọn email và trạng
 thái giao thư trong PostgreSQL riêng. Redis/Celery chuyển job nội bộ; Kafka
 chỉ truyền sự kiện giữa service. GitHub/AI và Web Push chưa thuộc phạm vi này.
@@ -88,6 +89,9 @@ Unit/integration test thuộc service; test producer và quyền nằm tại Ide
 Work. [Smoke runtime](../../scripts/smoke_notification_service.py) chạy Kafka,
 PostgreSQL, Redis, Celery, API và SMTP STARTTLS thật trong môi trường kiểm thử;
 Identity/Work HTTP là stub, không thay nghiệm thu hai domain service thật.
+Lượt [smoke domain](../../scripts/smoke_notification_domains.py) bổ sung đã chạy
+Identity/Work HTTP thật qua outbox/Kafka đến Notification và SMTP TLS kiểm thử;
+link reset/kích hoạt từ thư dùng được. Không xem SMTP fixture là Gmail.
 SMTP Gmail thật đã xác nhận nhận ba thư thử được người dùng cho phép; chưa xác
 minh thư tới Inbox hay link Identity qua Gmail. Xem
 [kết quả kiểm chứng](verification.md) và [runbook](operations.md).

@@ -19,7 +19,7 @@ from notifications import clients
 from notifications.authentication import NotificationAuthentication
 from notifications.models import EmailDelivery, Inbox, Quarantine
 from notifications.services import IDENTITY_EVENTS, WORK_EVENTS, persist
-from tests.test_service import email_row, encrypted_mail, event
+from tests.fixtures.events import email_row, encrypted_mail, event
 
 pytestmark = pytest.mark.django_db
 

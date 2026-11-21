@@ -480,6 +480,11 @@ services:
 
   notification-identity-consumer:
     <<: *notification_runtime
+    depends_on: &notification_consumer_dependencies
+      <<: *notification_dependencies
+      kafka:
+        condition: service_healthy
+        required: false
     command: ["python", "manage.py", "consume_notifications", "--source", "identity"]
     x-deploy: *notification_worker
     healthcheck: &notification_consumer_health
@@ -490,6 +495,7 @@ services:
 
   notification-work-consumer:
     <<: *notification_runtime
+    depends_on: *notification_consumer_dependencies
     command: ["python", "manage.py", "consume_notifications", "--source", "work"]
     x-deploy: *notification_worker
     healthcheck: *notification_consumer_health

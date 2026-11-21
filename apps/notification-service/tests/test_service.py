@@ -1,11 +1,9 @@
 import base64
-import json
 from datetime import timedelta
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -23,36 +21,9 @@ from notifications.models import (
 )
 from notifications.services import persist, process_inbox
 from notifications.tasks import claim, cleanup, deliver, dispatch
+from tests.fixtures.events import email_row, encrypted_mail, event
 
 pytestmark = pytest.mark.django_db
-
-
-def event(source="work", event_type="task.assigned", **data):
-    project_id = str(uuid4())
-    payload = {
-        "event_id": str(uuid4()),
-        "event_type": event_type,
-        "event_version": 1,
-        "aggregate_id": str(uuid4()),
-        "trace_id": str(uuid4()),
-        "occurred_at": timezone.now().isoformat(),
-        "producer": source + "-service",
-        "data": {
-            "recipient_ids": [str(uuid4())],
-            "task_id": str(uuid4()),
-            "actor_user_id": str(uuid4()),
-            **data,
-        },
-    }
-    if source == "work":
-        payload.update(project_id=project_id, entity_version=1, project_sequence=1)
-        if event_type == "task.transitioned":
-            payload["data"].update(
-                id=str(uuid4()), project_id=project_id, state_id=str(uuid4()), version=1
-            )
-    else:
-        payload["aggregate_type"] = "user"
-    return payload
 
 
 def test_inbox_dedupe_collision_and_invalid():
@@ -130,31 +101,6 @@ def test_api_owner_scope_preferences_and_fail_closed():
     assert client.get("/preferences").status_code == 200
 
 
-def encrypted_mail(event_type="identity.activation.requested", plain=None):
-    key, nonce = b"k" * 32, b"n" * 12
-    user_id = str(uuid4())
-    payload = event("identity", event_type, user_id=user_id, email="old@example.com")
-    payload["data"].pop("recipient_ids")
-    payload["data"].pop("task_id")
-    payload["data"].pop("actor_user_id")
-    expires = (timezone.now() + timedelta(hours=1)).isoformat()
-    aad = json.dumps(
-        [payload["event_id"], event_type, user_id, expires], separators=(",", ":")
-    ).encode()
-    payload["data"].update(
-        expires_at=expires,
-        secret={
-            "key_id": "k1",
-            "expires_at": expires,
-            "nonce": base64.b64encode(nonce).decode(),
-            "ciphertext": base64.b64encode(
-                AESGCM(key).encrypt(nonce, json.dumps(plain or {"key": "secret+key"}).encode(), aad)
-            ).decode(),
-        },
-    )
-    return payload
-
-
 @override_settings(
     NOTIFICATION_MAIL_KEYS={"k1": base64.b64encode(b"k" * 32).decode()},
     NOTIFICATION_FRONTEND_URL="https://web.test",
@@ -175,12 +121,6 @@ def test_crypto_aad_routes_and_expiry():
     ).isoformat()
     with pytest.raises(PermanentFailure):
         identity_content(reset)
-
-
-def email_row():
-    row = persist("identity", encrypted_mail())
-    process_inbox(row.pk)
-    return EmailDelivery.objects.get(inbox=row)
 
 
 def test_claim_lease_fencing_recovery_and_unknown():
@@ -358,6 +298,21 @@ def test_target_urls_are_fixed_routes_and_html_escaped():
     assert "<script>" not in rendered and "&lt;img&gt;" in rendered
 
 
+def test_plain_text_reset_link_preserves_query_parameters_and_html_escapes():
+    from urllib.parse import parse_qs, urlsplit
+
+    from django.template.loader import render_to_string
+
+    url = "https://app.test/auth/reset?uid=test-user&token=test-token"
+    context = {"title": "Đặt lại mật khẩu", "body": "<test>", "url": url}
+    plain = render_to_string("mail/v1/notification.txt", context)
+    link = next(line for line in plain.splitlines() if line.startswith("https://"))
+    assert parse_qs(urlsplit(link).query) == {"uid": ["test-user"], "token": ["test-token"]}
+    html = render_to_string("mail/v1/notification.html", context)
+    assert "&amp;token=" in html
+    assert "&lt;test&gt;" in html
+
+
 def test_current_mailbox_must_match_and_work_access_revoked():
     row = email_row()
     with (
@@ -407,3 +362,48 @@ def test_health_read_filter_and_validation():
         assert client.get("/?read=false").data["count"] == 1
         assert client.get("/?read=invalid").status_code == 400
         assert client.get("/unread-count").data["count"] == 1
+
+
+def test_public_validation_and_dependency_messages_are_vietnamese():
+    client = APIClient()
+    anonymous = client.get("/")
+    assert anonymous.status_code == 401
+    assert str(anonymous.data["detail"]) == "Bạn cần đăng nhập để xem thông báo."
+    assert anonymous["WWW-Authenticate"] == "Bearer"
+    assert anonymous.data["detail"].code == "not_authenticated"
+    owner = uuid4()
+    client.force_authenticate(Actor(owner))
+    invalid = client.patch("/preferences", {"mention": "yes"}, format="json")
+    assert invalid.status_code == 400
+    assert "Mỗi tùy chọn phải là true hoặc false." in str(invalid.data)
+    valid = client.patch("/preferences", {"mention": False}, format="json")
+    assert valid.status_code == 200 and valid.data["mention"] is False
+    row = persist("work", event())
+    row.status = "processed"
+    row.save()
+    Notification.objects.create(inbox=row, user_id=owner)
+    with patch("notifications.clients.resolve_many", side_effect=clients.DependencyUnavailable):
+        failed = client.get("/")
+    assert failed.status_code == 503
+    assert str(failed.data["detail"]) == "Không thể tải thông báo lúc này."
+
+
+@pytest.mark.parametrize(
+    "method,path,body,content_type,status,fragment",
+    [
+        ("get", "/?page=invalid", None, None, 404, "Không tìm thấy"),
+        ("delete", "/preferences", None, None, 405, "không được hỗ trợ"),
+        ("patch", "/preferences", "{", "application/json", 400, "định dạng JSON"),
+        ("patch", "/preferences", "test", "text/plain", 415, "định dạng JSON"),
+    ],
+)
+def test_framework_failures_preserve_status_with_vietnamese_detail(
+    method, path, body, content_type, status, fragment
+):
+    client = APIClient()
+    client.force_authenticate(Actor(uuid4()))
+    kwargs = {"data": body, "content_type": content_type} if content_type else {}
+    with patch("notifications.clients.resolve_many", return_value=[]):
+        response = getattr(client, method)(path, **kwargs)
+    assert response.status_code == status
+    assert fragment in str(response.data["detail"])

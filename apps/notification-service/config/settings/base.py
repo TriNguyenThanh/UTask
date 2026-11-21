@@ -13,6 +13,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 USE_TZ = True
 TIME_ZONE = "UTC"
+LANGUAGE_CODE = "vi"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": {
@@ -30,6 +31,7 @@ DATABASES = {
     }
 }
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "notifications.exception_handler.exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": ["notifications.authentication.NotificationAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "UNAUTHENTICATED_USER": None,

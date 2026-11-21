@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from notifications.models import EmailDelivery, Inbox
 from notifications.services import persist
-from tests.test_service import event
+from tests.fixtures.events import event
 
 
 @pytest.mark.django_db
