@@ -1,8 +1,10 @@
+from datetime import date
 from uuid import uuid4
 
 import pytest
+from django.utils import timezone
 
-from apps.courses.models import Course
+from apps.courses.models import ClassSection, ClassTeacher, Course, Enrollment
 from apps.messaging.models import IdempotencyRecord
 
 pytestmark = [pytest.mark.integration, pytest.mark.django_db(transaction=True)]
@@ -55,8 +57,10 @@ def test_course_admin_create_update_archive_and_student_denied(
         ).status_code
         == 403
     )
-    listing = client_for(actors["leader"]).get("/courses/")
-    assert listing.status_code == 200 and listing.json()["data"][0]["id"] == pk
+    actor_listing = client.get("/courses/")
+    assert actor_listing.status_code == 200 and actor_listing.json()["data"][0]["id"] == pk
+    student_listing = client_for(actors["leader"]).get("/courses/")
+    assert student_listing.status_code == 200 and student_listing.json()["data"] == []
 
 
 @pytest.mark.parametrize("operation", ["create", "update", "archive"])
@@ -203,15 +207,131 @@ def test_former_admin_cannot_replay_unowned_course_command(
     assert IdempotencyRecord.objects.count() == 1
 
 
-@pytest.mark.parametrize("actor_name", ["teacher", "admin", "leader"])
-def test_authenticated_roles_can_list_course_creator(client_for, actors, actor_name):
-    course = Course.objects.create(code="CS", name="Tin học", created_by_id=actors["teacher"])
+@pytest.mark.parametrize(
+    "actor_name,extra_roles",
+    [
+        ("teacher", None),
+        ("admin", None),
+        ("teacher", ["TEACHER", "STUDENT"]),
+    ],
+)
+def test_teacher_and_admin_list_all_courses_with_creator(
+    client_for, actors, identity, actor_name, extra_roles
+):
+    if extra_roles is not None:
+        identity["roles"][str(actors[actor_name])] = extra_roles
+    owned = Course.objects.create(code="CS101", name="Tin học", created_by_id=actors["teacher"])
+    legacy = Course.objects.create(code="CS102", name="Môn cũ", created_by_id=None)
+    archived = Course.objects.create(
+        code="CS103",
+        name="Môn lưu trữ",
+        created_by_id=actors["admin"],
+        archived_at=timezone.now(),
+    )
 
     response = client_for(actors[actor_name]).get("/courses/")
 
     assert response.status_code == 200
-    assert response.json()["data"][0]["id"] == str(course.pk)
-    assert response.json()["data"][0]["created_by_id"] == str(actors["teacher"])
+    rows = response.json()["data"]
+    assert [row["id"] for row in rows] == [str(owned.pk), str(legacy.pk), str(archived.pk)]
+    assert rows[0]["created_by_id"] == str(actors["teacher"])
+    assert rows[1]["created_by_id"] is None
+    assert rows[2]["created_by_id"] == str(actors["admin"])
+
+
+def test_student_lists_only_distinct_courses_of_active_enrolled_classes(client_for, actors):
+    now = timezone.now()
+    enrolled = Course.objects.create(
+        code="CS101", name="Nhập môn lập trình", created_by_id=actors["teacher"]
+    )
+    archived_enrolled = Course.objects.create(
+        code="CS102",
+        name="Cấu trúc dữ liệu",
+        created_by_id=actors["teacher"],
+        archived_at=now,
+    )
+    left_course = Course.objects.create(
+        code="CS103", name="Môn đã rời", created_by_id=actors["teacher"]
+    )
+    removed_course = Course.objects.create(
+        code="CS104", name="Môn bị loại", created_by_id=actors["teacher"]
+    )
+    other_student_course = Course.objects.create(
+        code="CS105", name="Môn lớp khác", created_by_id=actors["admin"]
+    )
+    orphan_course = Course.objects.create(
+        code="CS106", name="Môn chưa mở lớp", created_by_id=actors["admin"]
+    )
+
+    def make_section(course, code, status="OPEN"):
+        return ClassSection.objects.create(
+            course=course,
+            code=code,
+            name=f"Lớp {code}",
+            term="2026",
+            starts_on=date(2026, 1, 1),
+            ends_on=date(2026, 12, 31),
+            status=status,
+        )
+
+    section_a = make_section(enrolled, "CS101-A", status="OPEN")
+    section_b = make_section(enrolled, "CS101-B", status="CLOSED")
+    archived_section = make_section(archived_enrolled, "CS102-A", status="ARCHIVED")
+    left_section = make_section(left_course, "CS103-A")
+    removed_section = make_section(removed_course, "CS104-A")
+    other_section = make_section(other_student_course, "CS105-A")
+
+    Enrollment.objects.create(class_section=section_a, user_id=actors["leader"], status="ACTIVE")
+    Enrollment.objects.create(class_section=section_b, user_id=actors["leader"], status="ACTIVE")
+    Enrollment.objects.create(
+        class_section=archived_section, user_id=actors["leader"], status="ACTIVE"
+    )
+    Enrollment.objects.create(
+        class_section=left_section, user_id=actors["leader"], status="LEFT", left_at=now
+    )
+    Enrollment.objects.create(
+        class_section=removed_section, user_id=actors["leader"], status="REMOVED", left_at=now
+    )
+    Enrollment.objects.create(
+        class_section=other_section, user_id=actors["member"], status="ACTIVE"
+    )
+    # Former teacher assignment without global TEACHER role must not expose courses to STUDENT.
+    ClassTeacher.objects.create(
+        class_section=other_section, user_id=actors["leader"], role="PRIMARY", status="ACTIVE"
+    )
+
+    student_response = client_for(actors["leader"]).get("/courses/")
+    assert student_response.status_code == 200
+    student_rows = student_response.json()["data"]
+    assert [row["id"] for row in student_rows] == [str(enrolled.pk), str(archived_enrolled.pk)]
+    assert student_rows[0]["created_by_id"] == str(actors["teacher"])
+
+    outsider_response = client_for(actors["outsider"]).get("/courses/")
+    assert outsider_response.status_code == 200
+    assert outsider_response.json()["data"] == []
+
+    expected_all = [
+        str(enrolled.pk),
+        str(archived_enrolled.pk),
+        str(left_course.pk),
+        str(removed_course.pk),
+        str(other_student_course.pk),
+        str(orphan_course.pk),
+    ]
+    for actor_name in ("teacher", "admin"):
+        response = client_for(actors[actor_name]).get("/courses/")
+        assert response.status_code == 200
+        assert [row["id"] for row in response.json()["data"]] == expected_all
+
+
+def test_user_without_recognized_role_cannot_list_courses(client_for, actors, identity):
+    Course.objects.create(code="CS", name="Tin học", created_by_id=actors["teacher"])
+    identity["roles"][str(actors["outsider"])] = []
+
+    response = client_for(actors["outsider"]).get("/courses/")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "PERMISSION_DENIED"
 
 
 def test_unauthenticated_user_cannot_list_courses(client_for, actors):
