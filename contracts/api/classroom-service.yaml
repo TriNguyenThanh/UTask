@@ -1275,6 +1275,8 @@ paths:
   /courses/:
     get:
       operationId: courses_retrieve
+      description: Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động;
+        Giảng viên và Quản trị viên hệ thống xem toàn bộ danh mục môn học.
       tags:
       - courses
       security:

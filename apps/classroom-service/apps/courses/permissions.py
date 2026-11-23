@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.courses.models import ClassSection, ClassTeacher, Enrollment
+from apps.courses.models import ClassSection, ClassTeacher, Course, Enrollment
 from common.errors import ClassroomError
 from infrastructure.identity import IdentityClient
 
@@ -54,6 +54,18 @@ def require_manage(request, section, *, teacher_only=False):
         teacher_only or "SYSTEM_ADMIN" not in actor_roles(request)
     ):
         raise ClassroomError("PERMISSION_DENIED", "Bạn không có quyền quản lý lớp học này.", 403)
+
+
+def visible_courses(request):
+    require_role(request, "STUDENT", "TEACHER", "SYSTEM_ADMIN")
+    qs = Course.objects.all()
+    if actor_roles(request).intersection({"TEACHER", "SYSTEM_ADMIN"}):
+        return qs
+    enrolled_courses = Enrollment.objects.filter(
+        user_id=request.user.id,
+        status="ACTIVE",
+    ).values("class_section__course_id")
+    return qs.filter(pk__in=enrolled_courses)
 
 
 def visible_classes(request):
