@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.groups.models import GroupProjectLink, StudyGroup
 from apps.groups.serializers.members import MemberSerializer
+from apps.groups.serializers.validators import SkillsListField
 from common.serializers import StrictInputSerializer
 
 
@@ -42,6 +43,11 @@ class GroupCreateSerializer(StrictInputSerializer):
     class_id = serializers.UUIDField()
     name = serializers.CharField(max_length=200)
     leader_id = serializers.UUIDField(required=False)
+    is_recruiting = serializers.BooleanField(required=False, default=False)
+    recruitment_note = serializers.CharField(
+        max_length=1000, allow_blank=True, required=False, default=""
+    )
+    needed_skills = SkillsListField(required=False, default=list)
 
 
 class GroupPatchSerializer(StrictInputSerializer):
@@ -49,6 +55,9 @@ class GroupPatchSerializer(StrictInputSerializer):
     name = serializers.CharField(max_length=200, required=False)
     status = serializers.ChoiceField(choices=["ACTIVE", "ARCHIVED"], required=False)
     reason = serializers.CharField(min_length=1, max_length=500, required=False)
+    is_recruiting = serializers.BooleanField(required=False)
+    recruitment_note = serializers.CharField(max_length=1000, allow_blank=True, required=False)
+    needed_skills = SkillsListField(required=False)
 
     def validate(self, attrs):
         if attrs.get("status") == "ARCHIVED" and not str(attrs.get("reason") or "").strip():

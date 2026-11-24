@@ -7,10 +7,20 @@ from apps.groups.serializers.members import (
     AdjustmentResultSerializer,
     MemberLeaveSerializer,
     MemberRemoveSerializer,
+    MemberResponsibilityPatchSerializer,
+    MemberSelfPatchSerializer,
+    MemberSerializer,
     MemberTargetSerializer,
     TeacherAdjustmentSerializer,
 )
-from apps.groups.services.members import adjust_member, change_member, join_group
+from apps.groups.services.members import (
+    adjust_member,
+    change_member,
+    join_group,
+    update_member_responsibility,
+    update_my_member_profile,
+)
+from common.responses import success_response
 from config.api_documentation import ERRORS, envelope_schema
 
 KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True)
@@ -108,3 +118,45 @@ class TeacherAdjustmentView(APIView):
         serializer = TeacherAdjustmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return adjust_member(request, class_id, serializer.validated_data)
+
+
+class GroupMemberMeView(APIView):
+    @extend_schema(
+        operation_id="groups_members_me_partial_update",
+        request=MemberSelfPatchSerializer,
+        description=(
+            "Thành viên đang hoạt động tự cập nhật danh sách kỹ năng (tối đa 10 mục) "
+            "và/hoặc vai trò đảm nhiệm chuyên môn trong nhóm khi lớp mở và nhóm đang hoạt động."
+        ),
+        responses={
+            200: envelope_schema("GroupMemberProfileUpdatedEnvelope", MemberSerializer),
+            **ERRORS,
+        },
+    )
+    def patch(self, request, group_id):
+        serializer = MemberSelfPatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = update_my_member_profile(request, group_id, serializer.validated_data)
+        return success_response(data, message="Đã cập nhật kỹ năng và vai trò đảm nhiệm của bạn.")
+
+
+class GroupMemberDetailView(APIView):
+    @extend_schema(
+        operation_id="groups_members_responsibility_partial_update",
+        request=MemberResponsibilityPatchSerializer,
+        description=(
+            "Trưởng nhóm phân công hoặc cập nhật vai trò đảm nhiệm chuyên môn (responsibility) "
+            "cho thành viên đang hoạt động trong nhóm."
+        ),
+        responses={
+            200: envelope_schema("GroupMemberResponsibilityUpdatedEnvelope", MemberSerializer),
+            **ERRORS,
+        },
+    )
+    def patch(self, request, group_id, user_id):
+        serializer = MemberResponsibilityPatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = update_member_responsibility(request, group_id, user_id, serializer.validated_data)
+        return success_response(
+            data, message="Đã cập nhật vai trò đảm nhiệm chuyên môn của thành viên."
+        )

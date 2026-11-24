@@ -1,5 +1,7 @@
+from django.db.models import Q
+
 from apps.courses.permissions import actor_roles, require_manage
-from apps.groups.models import StudyGroup
+from apps.groups.models import GroupJoinRequest, GroupMember, GroupTopicProposal, StudyGroup
 from apps.groups.permissions import require_group_read
 from apps.messaging.filters import ActivityFilter
 from apps.messaging.models import Activity
@@ -15,7 +17,21 @@ def class_activities(request, section, group_id=None):
 
         group = get_object_or_404(StudyGroup, pk=group_id, class_section=section)
         require_group_read(group, request.user, roles=actor_roles(request), admin_allowed=True)
-        qs = qs.filter(subject_type="StudyGroup", subject_id=group_id)
+        qs = qs.filter(
+            Q(subject_type="StudyGroup", subject_id=group_id)
+            | Q(
+                subject_type="GroupMember",
+                subject_id__in=GroupMember.objects.filter(group_id=group_id).values("pk"),
+            )
+            | Q(
+                subject_type="GroupJoinRequest",
+                subject_id__in=GroupJoinRequest.objects.filter(group_id=group_id).values("pk"),
+            )
+            | Q(
+                subject_type="GroupTopicProposal",
+                subject_id__in=GroupTopicProposal.objects.filter(group_id=group_id).values("pk"),
+            )
+        )
     else:
         require_manage(request, section)
     qs, filters = apply_filterset(ActivityFilter, request.query_params, qs)

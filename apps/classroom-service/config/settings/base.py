@@ -80,6 +80,24 @@ SPECTACULAR_SETTINGS = {
         "MemberFactStatusEnum": [("ACTIVE", "ACTIVE"), ("LEFT", "LEFT"), ("REMOVED", "REMOVED")],
         "TeacherRoleEnum": [("PRIMARY", "PRIMARY"), ("CO_TEACHER", "CO_TEACHER")],
         "MemberFactRoleEnum": [("LEADER", "LEADER"), ("MEMBER", "MEMBER")],
+        "JoinRequestStatusEnum": [
+            ("PENDING", "PENDING"),
+            ("APPROVED", "APPROVED"),
+            ("REJECTED", "REJECTED"),
+            ("CANCELLED", "CANCELLED"),
+        ],
+        "TopicProposalStatusEnum": [
+            ("DRAFT", "DRAFT"),
+            ("PENDING", "PENDING"),
+            ("APPROVED", "APPROVED"),
+            ("REVISION_REQUESTED", "REVISION_REQUESTED"),
+            ("REJECTED", "REJECTED"),
+        ],
+        "TopicReviewDecisionEnum": [
+            ("APPROVED", "APPROVED"),
+            ("REVISION_REQUESTED", "REVISION_REQUESTED"),
+            ("REJECTED", "REJECTED"),
+        ],
     },
 }
 IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")

@@ -28,6 +28,7 @@ class ClassSection(models.Model):
     status = models.CharField(max_length=20, default="OPEN")
     grouping_phase = models.CharField(max_length=20, default="FORMING")
     grouping_locked_at = models.DateTimeField(null=True)
+    formation_deadline = models.DateTimeField(null=True, blank=True)
     group_min_size = models.PositiveIntegerField(default=1)
     group_max_size = models.PositiveIntegerField(default=6)
     join_code_hash = models.CharField(max_length=64, null=True)

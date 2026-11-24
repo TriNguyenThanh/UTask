@@ -58,6 +58,13 @@ def test_internal_schema_describes_caller_key_and_bearer_requirements(api_schema
         ("post", "/groups/{group_id}/remove-member/"),
         ("post", "/groups/{group_id}/transfer-leader/"),
         ("post", "/classes/{class_id}/adjust-member/"),
+        ("patch", "/groups/{group_id}/members/me/"),
+        ("patch", "/groups/{group_id}/members/{user_id}/"),
+        ("post", "/groups/{group_id}/join-requests/{request_id}/approve/"),
+        ("post", "/groups/{group_id}/join-requests/{request_id}/reject/"),
+        ("post", "/groups/{group_id}/join-requests/{request_id}/cancel/"),
+        ("post", "/groups/{group_id}/topic/submit/"),
+        ("post", "/groups/{group_id}/topic/review/"),
     ],
 )
 def test_mutation_schema_declares_only_implemented_success_status(api_schema, method, path):
@@ -112,3 +119,73 @@ def test_my_group_response_validates_against_generated_contract(
         format_checker=jsonschema.FormatChecker(),
     )
     validator.validate(response.json())
+
+
+@pytest.mark.django_db
+def test_recruitment_join_request_and_topic_endpoints_validate_against_contract(
+    group, actors, client_for, post_command, api_schema
+):
+    group.is_recruiting = True
+    group.recruitment_note = "Cần thêm thành viên"
+    group.needed_skills = ["Python"]
+    group.save(update_fields=["is_recruiting", "recruitment_note", "needed_skills"])
+
+    outsider = client_for(actors["outsider"])
+    leader = client_for(actors["leader"])
+    created_req = post_command(
+        outsider, f"/groups/{group.pk}/join-requests/", {"message": "Xin tham gia"}
+    )
+    assert created_req.status_code == 201
+
+    checks = [
+        (
+            outsider.get(f"/classes/{group.class_section_id}/open-groups/"),
+            "/classes/{class_id}/open-groups/",
+            "get",
+            "200",
+        ),
+        (
+            outsider.get(f"/classes/{group.class_section_id}/unassigned-students/"),
+            "/classes/{class_id}/unassigned-students/",
+            "get",
+            "200",
+        ),
+        (
+            outsider.get(f"/classes/{group.class_section_id}/my-join-requests/"),
+            "/classes/{class_id}/my-join-requests/",
+            "get",
+            "200",
+        ),
+        (
+            leader.get(f"/groups/{group.pk}/join-requests/"),
+            "/groups/{group_id}/join-requests/",
+            "get",
+            "200",
+        ),
+        (
+            leader.get(f"/groups/{group.pk}/topic/"),
+            "/groups/{group_id}/topic/",
+            "get",
+            "200",
+        ),
+        (
+            leader.put(
+                f"/groups/{group.pk}/topic/",
+                {"title": "Đề tài thử nghiệm", "summary": "Tóm tắt thử nghiệm"},
+                format="json",
+            ),
+            "/groups/{group_id}/topic/",
+            "put",
+            "201",
+        ),
+    ]
+    for response, template, method, status_code in checks:
+        assert response.status_code == int(status_code)
+        reference = api_schema["paths"][template][method]["responses"][status_code]["content"][
+            "application/json"
+        ]["schema"]
+        validator = jsonschema.Draft202012Validator(
+            {**reference, "components": api_schema["components"]},
+            format_checker=jsonschema.FormatChecker(),
+        )
+        validator.validate(response.json())

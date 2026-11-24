@@ -288,6 +288,14 @@ def exit_class(request, class_id, enrollment_id, payload):
         enrollment.status = "LEFT" if own else "REMOVED"
         enrollment.left_at = timezone.now()
         enrollment.save(update_fields=["status", "left_at"])
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=request.user.id,
+            note="Sinh viên đã kết thúc ghi danh trong lớp học.",
+            class_section=section,
+            enrollment=enrollment,
+        )
         record_activity(
             enrollment,
             request.user.id,

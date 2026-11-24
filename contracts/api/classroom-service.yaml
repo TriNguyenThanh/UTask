@@ -1098,6 +1098,186 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/my-join-requests/:
+    get:
+      operationId: classes_my_join_requests_list
+      description: Sinh viên đang ghi danh hoạt động xem các yêu cầu gia nhập nhóm
+        của mình.
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - CANCELLED
+          - PENDING
+          - REJECTED
+        description: Lọc theo trạng thái yêu cầu gia nhập.
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyClassJoinRequestsEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /classes/{class_id}/open-groups/:
+    get:
+      operationId: classes_open_groups_list
+      description: Danh sách các nhóm đang hoạt động, mở tuyển thành viên và còn chỗ
+        trống trong lớp. Khả dụng cho sinh viên đang ghi danh hoạt động, giảng viên
+        phụ trách hoặc Quản trị viên hệ thống. Hồ sơ trưởng nhóm chỉ chiếu 4 trường
+        tối giản theo chính sách bảo mật.
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm theo tên nhóm hoặc ghi chú tuyển.
+      - in: query
+        name: skill
+        schema:
+          type: string
+        description: Lọc theo kỹ năng cần tuyển (không phân biệt hoa thường).
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassOpenGroupsEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/{class_id}/state/:
     post:
       operationId: classes_state_create
@@ -1441,6 +1621,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClassTeacherViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /classes/{class_id}/unassigned-students/:
+    get:
+      operationId: classes_unassigned_students_list
+      description: Danh sách sinh viên đang ghi danh hoạt động nhưng chưa thuộc nhóm
+        hoạt động nào trong lớp. Chỉ trả 4 trường tối giản {user_id, display_name,
+        student_id, avatar_url}; không lộ lịch sử ghi danh hay trạng thái LEFT/REMOVED.
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassUnassignedStudentsEnvelope'
           description: ''
         '400':
           content:
@@ -2597,6 +2857,433 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /groups/{group_id}/join-requests/:
+    get:
+      operationId: groups_join_requests_list
+      description: Trưởng nhóm, giảng viên phụ trách lớp hoặc Quản trị viên hệ thống
+        xem danh sách yêu cầu gia nhập của nhóm.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - CANCELLED
+          - PENDING
+          - REJECTED
+        description: Lọc theo trạng thái yêu cầu gia nhập.
+      tags:
+      - groups
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupJoinRequestListEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+    post:
+      operationId: groups_join_requests_create
+      description: Sinh viên đang ghi danh hoạt động, chưa có nhóm trong lớp gửi yêu
+        cầu gia nhập nhóm đang mở tuyển và còn chỗ. Mỗi sinh viên chỉ được có tối
+        đa 1 yêu cầu đang chờ duyệt trong cùng một lớp.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequestCreate'
+      security:
+      - ClassroomBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupJoinRequestCreatedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/join-requests/{request_id}/approve/:
+    post:
+      operationId: groups_join_requests_approve
+      description: Trưởng nhóm, giảng viên phụ trách hoặc Quản trị viên hệ thống phê
+        duyệt yêu cầu gia nhập nhóm; thêm sinh viên vào nhóm, ghi nhận lịch sử và
+        phát sự kiện đồng bộ.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequestReview'
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupJoinRequestApprovedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/join-requests/{request_id}/cancel/:
+    post:
+      operationId: groups_join_requests_cancel
+      description: Sinh viên tự hủy yêu cầu gia nhập nhóm đang chờ duyệt do chính
+        mình tạo.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupJoinRequestCancelledEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/join-requests/{request_id}/reject/:
+    post:
+      operationId: groups_join_requests_reject
+      description: Trưởng nhóm, giảng viên phụ trách hoặc Quản trị viên hệ thống từ
+        chối yêu cầu gia nhập nhóm đang chờ duyệt.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequestReview'
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupJoinRequestRejectedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /groups/{group_id}/leave/:
     post:
       operationId: groups_leave_create
@@ -2763,6 +3450,165 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /groups/{group_id}/members/{user_id}/:
+    patch:
+      operationId: groups_members_responsibility_partial_update
+      description: Trưởng nhóm phân công hoặc cập nhật vai trò đảm nhiệm chuyên môn
+        (responsibility) cho thành viên đang hoạt động trong nhóm.
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMemberResponsibilityPatch'
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMemberResponsibilityUpdatedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/members/me/:
+    patch:
+      operationId: groups_members_me_partial_update
+      description: Thành viên đang hoạt động tự cập nhật danh sách kỹ năng (tối đa
+        10 mục) và/hoặc vai trò đảm nhiệm chuyên môn trong nhóm khi lớp mở và nhóm
+        đang hoạt động.
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMemberSelfPatch'
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMemberProfileUpdatedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /groups/{group_id}/projects/:
     get:
       operationId: groups_projects_retrieve
@@ -2878,6 +3724,327 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GroupRemoveViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/topic/:
+    get:
+      operationId: groups_topic_retrieve
+      description: Thành viên đang hoạt động của nhóm, giảng viên phụ trách lớp hoặc
+        Quản trị viên hệ thống xem đề xuất đề tài của nhóm; trả data=null (HTTP 200)
+        nếu nhóm chưa tạo.
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupTopicRetrieveEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+    put:
+      operationId: groups_topic_upsert
+      description: Trưởng nhóm tạo mới bản nháp đề tài (HTTP 201) hoặc chỉnh sửa đề
+        tài khi ở trạng thái DRAFT, REVISION_REQUESTED hoặc REJECTED (HTTP 200, bắt
+        buộc gửi version khớp; sau khi chỉnh sửa đề tài chuyển về DRAFT để gửi duyệt
+        lại).
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicProposalUpsert'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupTopicUpdatedEnvelope'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupTopicCreatedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/topic/review/:
+    post:
+      operationId: groups_topic_review
+      description: Giảng viên phụ trách lớp xét duyệt đề tài đang ở trạng thái PENDING
+        (APPROVED, REVISION_REQUESTED hoặc REJECTED; bắt buộc nhập feedback khi yêu
+        cầu chỉnh sửa hoặc từ chối).
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicReview'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupTopicReviewedEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /groups/{group_id}/topic/submit/:
+    post:
+      operationId: groups_topic_submit
+      description: Trưởng nhóm gửi bản nháp đề tài (DRAFT) sang trạng thái chờ duyệt
+        (PENDING) khi lớp học đang mở và nhóm đang hoạt động.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicSubmit'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupTopicSubmittedEnvelope'
           description: ''
         '400':
           content:
@@ -3684,6 +4851,11 @@ components:
           - string
           - 'null'
           format: date-time
+        formation_deadline:
+          type:
+          - string
+          - 'null'
+          format: date-time
         group_min_size:
           type: integer
           maximum: 2147483647
@@ -3968,6 +5140,11 @@ components:
           type: integer
           minimum: 1
           default: 6
+        formation_deadline:
+          type:
+          - string
+          - 'null'
+          format: date-time
         primary_teacher_id:
           type: string
           format: uuid
@@ -4043,6 +5220,33 @@ components:
           - 'null'
           items:
             $ref: '#/components/schemas/Class'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ClassOpenGroupsEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/OpenGroup'
         meta:
           oneOf:
           - $ref: '#/components/schemas/ListMeta'
@@ -4251,6 +5455,33 @@ components:
           - object
           - 'null'
           additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ClassUnassignedStudentsEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/UnassignedStudent'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
         error:
           oneOf:
           - $ref: '#/components/schemas/APIError'
@@ -4803,6 +6034,11 @@ components:
         status:
           type: string
           maxLength: 20
+        is_recruiting:
+          type: boolean
+        recruitment_note:
+          type: string
+        needed_skills: {}
         invite_expires_at:
           type:
           - string
@@ -4895,6 +6131,19 @@ components:
         leader_id:
           type: string
           format: uuid
+        is_recruiting:
+          type: boolean
+          default: false
+        recruitment_note:
+          type: string
+          default: ''
+          maxLength: 1000
+        needed_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
       required:
       - class_id
       - name
@@ -4934,6 +6183,204 @@ components:
         data:
           oneOf:
           - $ref: '#/components/schemas/Group'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupJoinRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        group_id:
+          type: string
+          format: uuid
+          readOnly: true
+        group_name:
+          type: string
+          readOnly: true
+        enrollment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+        requester_profile:
+          oneOf:
+          - $ref: '#/components/schemas/MinimalProfile'
+          - type: 'null'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/JoinRequestStatusEnum'
+          readOnly: true
+        message:
+          type: string
+          maxLength: 500
+        review_note:
+          type: string
+          maxLength: 500
+        reviewed_by_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - class_section_id
+      - enrollment_id
+      - group_id
+      - group_name
+      - id
+      - requester_profile
+      - status
+      - updated_at
+      - user_id
+    GroupJoinRequestApprovedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupJoinRequest'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupJoinRequestCancelledEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupJoinRequest'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupJoinRequestCreatedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupJoinRequest'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupJoinRequestListEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/GroupJoinRequest'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupJoinRequestRejectedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/GroupJoinRequest'
           - type: 'null'
         meta:
           type:
@@ -5019,6 +6466,58 @@ components:
           oneOf:
           - $ref: '#/components/schemas/ListMeta'
           - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupMemberProfileUpdatedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Member'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupMemberResponsibilityUpdatedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Member'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
         error:
           oneOf:
           - $ref: '#/components/schemas/APIError'
@@ -5168,6 +6667,136 @@ components:
       description: |-
         * `ACTIVE` - ACTIVE
         * `ARCHIVED` - ARCHIVED
+    GroupTopicCreatedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TopicProposal'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupTopicRetrieveEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TopicProposal'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupTopicReviewedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TopicProposal'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupTopicSubmittedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TopicProposal'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    GroupTopicUpdatedEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TopicProposal'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     GroupTransferViewResponse:
       type: object
       properties:
@@ -5236,6 +6865,32 @@ components:
           maxLength: 100
       required:
       - code
+    JoinRequestCreate:
+      type: object
+      properties:
+        message:
+          type: string
+          default: ''
+          maxLength: 500
+    JoinRequestReview:
+      type: object
+      properties:
+        review_note:
+          type: string
+          default: ''
+          maxLength: 500
+    JoinRequestStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `APPROVED` - APPROVED
+        * `REJECTED` - REJECTED
+        * `CANCELLED` - CANCELLED
     ListMeta:
       type: object
       properties:
@@ -5267,6 +6922,10 @@ components:
         status:
           type: string
           maxLength: 20
+        skills: {}
+        responsibility:
+          type: string
+          maxLength: 200
         joined_at:
           type: string
           format: date-time
@@ -5420,6 +7079,33 @@ components:
       - message
       - meta
       - success
+    MinimalProfile:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        student_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        avatar_url:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+      required:
+      - avatar_url
+      - display_name
+      - student_id
+      - user_id
     MyClassGroupViewResponse:
       type: object
       properties:
@@ -5436,6 +7122,33 @@ components:
           - object
           - 'null'
           additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    MyClassJoinRequestsEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/GroupJoinRequest'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
         error:
           oneOf:
           - $ref: '#/components/schemas/APIError'
@@ -5478,6 +7191,11 @@ components:
         status:
           type: string
           maxLength: 20
+        is_recruiting:
+          type: boolean
+        recruitment_note:
+          type: string
+        needed_skills: {}
         invite_expires_at:
           type:
           - string
@@ -5507,6 +7225,53 @@ components:
       - my_role
       - name
       - updated_at
+    NullEnum:
+      type: 'null'
+    OpenGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        member_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        max_size:
+          type: integer
+          minimum: 1
+          readOnly: true
+        leader_profile:
+          oneOf:
+          - $ref: '#/components/schemas/MinimalProfile'
+          - type: 'null'
+          readOnly: true
+        recruitment_note:
+          type: string
+          readOnly: true
+        needed_skills:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        my_request_status:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/JoinRequestStatusEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - id
+      - leader_profile
+      - max_size
+      - member_count
+      - my_request_status
+      - name
+      - needed_skills
+      - recruitment_note
     Pagination:
       type: object
       properties:
@@ -5556,6 +7321,11 @@ components:
         group_max_size:
           type: integer
           minimum: 1
+        formation_deadline:
+          type:
+          - string
+          - 'null'
+          format: date-time
     PatchedCoursePatch:
       type: object
       properties:
@@ -5580,6 +7350,35 @@ components:
           type: string
           maxLength: 500
           minLength: 1
+        is_recruiting:
+          type: boolean
+        recruitment_note:
+          type: string
+          maxLength: 1000
+        needed_skills:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
+    PatchedMemberResponsibilityPatch:
+      type: object
+      properties:
+        responsibility:
+          type: string
+          maxLength: 200
+    PatchedMemberSelfPatch:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
+        responsibility:
+          type: string
+          maxLength: 200
     ProjectLink:
       type: object
       properties:
@@ -5862,6 +7661,169 @@ components:
       description: |-
         * `ACTIVE` - ACTIVE
         * `LEFT` - LEFT
+    TopicProposal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        class_section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        group_id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        summary:
+          type: string
+        objectives:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TopicProposalStatusEnum'
+          readOnly: true
+        teacher_feedback:
+          type: string
+        submitted_by_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reviewed_by_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        version:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - class_section_id
+      - group_id
+      - id
+      - status
+      - summary
+      - title
+      - updated_at
+    TopicProposalStatusEnum:
+      enum:
+      - DRAFT
+      - PENDING
+      - APPROVED
+      - REVISION_REQUESTED
+      - REJECTED
+      type: string
+      description: |-
+        * `DRAFT` - DRAFT
+        * `PENDING` - PENDING
+        * `APPROVED` - APPROVED
+        * `REVISION_REQUESTED` - REVISION_REQUESTED
+        * `REJECTED` - REJECTED
+    TopicProposalUpsert:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+        summary:
+          type: string
+          maxLength: 5000
+          minLength: 1
+        objectives:
+          type: string
+          default: ''
+          maxLength: 5000
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - summary
+      - title
+    TopicReview:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/TopicReviewDecisionEnum'
+        feedback:
+          type: string
+          default: ''
+          maxLength: 5000
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - decision
+      - version
+    TopicReviewDecisionEnum:
+      enum:
+      - APPROVED
+      - REVISION_REQUESTED
+      - REJECTED
+      type: string
+      description: |-
+        * `APPROVED` - APPROVED
+        * `REVISION_REQUESTED` - REVISION_REQUESTED
+        * `REJECTED` - REJECTED
+    TopicSubmit:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - version
+    UnassignedStudent:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        student_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        avatar_url:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+      required:
+      - avatar_url
+      - display_name
+      - student_id
+      - user_id
   securitySchemes:
     ClassroomBearer:
       type: http

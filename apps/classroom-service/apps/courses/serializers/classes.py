@@ -109,6 +109,7 @@ class ClassInputSerializer(StrictInputSerializer):
     ends_on = serializers.DateField()
     group_min_size = serializers.IntegerField(min_value=1, default=1)
     group_max_size = serializers.IntegerField(min_value=1, default=6)
+    formation_deadline = serializers.DateTimeField(required=False, allow_null=True)
     primary_teacher_id = serializers.UUIDField(required=False)
 
     def validate_code(self, value):
@@ -131,6 +132,7 @@ class ClassPatchSerializer(StrictInputSerializer):
     ends_on = serializers.DateField(required=False)
     group_min_size = serializers.IntegerField(min_value=1, required=False)
     group_max_size = serializers.IntegerField(min_value=1, required=False)
+    formation_deadline = serializers.DateTimeField(required=False, allow_null=True)
 
 
 class VersionSerializer(StrictInputSerializer):

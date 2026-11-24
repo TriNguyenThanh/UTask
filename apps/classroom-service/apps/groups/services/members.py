@@ -18,8 +18,11 @@ from apps.groups.permissions import (
     require_group_read,
     require_leader,
 )
+from apps.groups.queries.profiles import fetch_user_profiles
 from apps.groups.serializers.groups import GroupSerializer
+from apps.groups.serializers.members import MemberSerializer
 from apps.groups.services.groups import check_group_version, lock_group, publish_membership
+from apps.messaging.services.audit import record_activity
 from apps.messaging.services.receipts import (
     begin_receipt,
     finish_receipt,
@@ -73,6 +76,14 @@ def join_group(request, payload):
             )
         require_capacity(section, group)
         GroupMember.objects.create(class_section=section, group=group, enrollment=enrollment)
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=request.user.id,
+            note="Sinh viên đã tham gia nhóm bằng mã mời.",
+            class_section=section,
+            enrollment=enrollment,
+        )
         publish_membership(section, group, request.user.id, "group.member.joined")
         return finish_receipt(
             receipt,
@@ -134,17 +145,27 @@ def end_membership(
         membership.left_at = max(timezone.now(), membership.joined_at)
         membership.save(update_fields=["status", "left_at"])
         group.status = "ARCHIVED"
+        group.is_recruiting = False
         group.invite_code_hash = None
         group.invite_expires_at = None
         group.source_version += 1
         group.save(
             update_fields=[
                 "status",
+                "is_recruiting",
                 "invite_code_hash",
                 "invite_expires_at",
                 "source_version",
                 "updated_at",
             ]
+        )
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=actor_id,
+            note="Nhóm học tập đã được giải thể.",
+            class_section=section,
+            group=group,
         )
         publish_membership(
             section, group, actor_id, "group.dissolved", reason=reason, increment=False
@@ -300,6 +321,14 @@ def adjust_member(request, class_id, payload):
             )
         if target:
             GroupMember.objects.create(class_section=section, group=target, enrollment=enrollment)
+            from apps.groups.services.join_requests import cancel_pending_join_requests
+
+            cancel_pending_join_requests(
+                actor_id=request.user.id,
+                note="Giảng viên đã điều chỉnh sinh viên vào nhóm học tập.",
+                class_section=section,
+                enrollment=enrollment,
+            )
             publish_membership(
                 section, target, request.user.id, "group.member.assigned", reason=payload["reason"]
             )
@@ -308,3 +337,77 @@ def adjust_member(request, class_id, payload):
             {"user_id": str(enrollment.user_id), "group_id": str(target.pk) if target else None},
             message="Đã cập nhật nhóm của sinh viên và giữ lịch sử tham gia.",
         )
+
+
+def update_my_member_profile(request, group_id, payload):
+    actor_roles(request)
+    with transaction.atomic():
+        section, group = lock_group(group_id)
+        member = active_member(group, request.user)
+        if member is None:
+            raise ClassroomError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
+        require_open(section)
+        if group.status != "ACTIVE":
+            raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        member = (
+            GroupMember.objects.select_for_update().select_related("enrollment").get(pk=member.pk)
+        )
+        old_values = {}
+        new_values = {}
+        update_fields = []
+        if "skills" in payload:
+            old_values["skills"] = list(member.skills or [])
+            member.skills = payload["skills"]
+            new_values["skills"] = list(member.skills)
+            update_fields.append("skills")
+        if "responsibility" in payload:
+            old_values["responsibility"] = member.responsibility
+            member.responsibility = payload["responsibility"]
+            new_values["responsibility"] = member.responsibility
+            update_fields.append("responsibility")
+        if update_fields:
+            member.save(update_fields=update_fields)
+            record_activity(
+                member,
+                request.user.id,
+                "group.member.profile.updated",
+                old=old_values,
+                new=new_values,
+            )
+    profiles = fetch_user_profiles(request, [member.enrollment.user_id])
+    member.profile = profiles.get(str(member.enrollment.user_id), {})
+    return MemberSerializer(member).data
+
+
+def update_member_responsibility(request, group_id, target_user_id, payload):
+    roles = actor_roles(request)
+    with transaction.atomic():
+        section, group = lock_group(group_id)
+        require_group_read(group, request.user, roles=roles)
+        require_leader(group, request.user, roles=roles)
+        require_open(section)
+        if group.status != "ACTIVE":
+            raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        member = get_object_or_404(
+            GroupMember.objects.select_for_update().select_related("enrollment"),
+            group=group,
+            enrollment__user_id=target_user_id,
+            enrollment__status="ACTIVE",
+            status="ACTIVE",
+        )
+        old_value = member.responsibility
+        member.responsibility = payload["responsibility"]
+        member.save(update_fields=["responsibility"])
+        record_activity(
+            member,
+            request.user.id,
+            "group.member.responsibility.updated",
+            old={"responsibility": old_value},
+            new={
+                "responsibility": member.responsibility,
+                "user_id": str(target_user_id),
+            },
+        )
+    profiles = fetch_user_profiles(request, [member.enrollment.user_id])
+    member.profile = profiles.get(str(member.enrollment.user_id), {})
+    return MemberSerializer(member).data

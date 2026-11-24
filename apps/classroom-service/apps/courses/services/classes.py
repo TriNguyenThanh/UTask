@@ -151,6 +151,14 @@ def change_class(request, class_id, payload, *, action="update"):
             if section.status == "ARCHIVED" and payload["status"] != "ARCHIVED":
                 raise ClassroomError("CLASS_ARCHIVED", "Lớp đã lưu trữ không thể mở lại.", 409)
             section.status = payload["status"]
+            if payload["status"] in {"CLOSED", "ARCHIVED"}:
+                from apps.groups.services.join_requests import cancel_pending_join_requests
+
+                cancel_pending_join_requests(
+                    actor_id=request.user.id,
+                    note="Lớp học đã đóng hoặc lưu trữ.",
+                    class_section=section,
+                )
         elif action == "lock-grouping":
             if section.grouping_phase == "LOCKED":
                 return finish_receipt(
@@ -205,6 +213,13 @@ def change_class(request, class_id, payload, *, action="update"):
                     )
             section.grouping_phase = "LOCKED"
             section.grouping_locked_at = section.grouping_locked_at or timezone.now()
+            from apps.groups.services.join_requests import cancel_pending_join_requests
+
+            cancel_pending_join_requests(
+                actor_id=request.user.id,
+                note="Lớp học đã chốt giai đoạn lập nhóm.",
+                class_section=section,
+            )
         elif action == "unlock-grouping":
             if section.grouping_phase == "FORMING":
                 return finish_receipt(

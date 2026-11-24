@@ -7,10 +7,12 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
-from apps.courses.models import Enrollment
-from apps.groups.models import GroupMember, StudyGroup
+from apps.courses.models import ClassTeacher, Enrollment
+from apps.groups.models import GroupJoinRequest, GroupMember, GroupTopicProposal, StudyGroup
+from apps.groups.services.join_requests import approve_join_request, create_join_request
 from apps.groups.services.members import change_member, join_group
-from apps.messaging.models import IdempotencyRecord, OutboxEvent
+from apps.groups.services.topics import review_group_topic
+from apps.messaging.models import Activity, IdempotencyRecord, OutboxEvent
 from common.access_codes import code_hash
 from common.errors import ClassroomError
 
@@ -103,3 +105,143 @@ def test_concurrent_leader_transfers_keep_exactly_one_leader(group, actors, comm
         results = list(pool.map(attempt, [1, 2]))
     assert sorted(map(str, results)) == ["200", "VERSION_CONFLICT"]
     assert GroupMember.objects.filter(group=group, status="ACTIVE", role="LEADER").count() == 1
+
+
+@pytest.mark.postgres
+def test_concurrent_join_request_approvals_cannot_exceed_group_max_size(
+    group, actors, command_request
+):
+    section = group.class_section
+    group.is_recruiting = True
+    group.save(update_fields=["is_recruiting"])
+    extra_user = uuid4()
+    enr1 = Enrollment.objects.get(class_section=section, user_id=actors["outsider"])
+    enr2 = Enrollment.objects.create(class_section=section, user_id=extra_user)
+    req1 = GroupJoinRequest.objects.create(
+        class_section=section, group=group, enrollment=enr1, user_id=actors["outsider"]
+    )
+    req2 = GroupJoinRequest.objects.create(
+        class_section=section, group=group, enrollment=enr2, user_id=extra_user
+    )
+    barrier = Barrier(2)
+
+    def attempt(req_id):
+        close_old_connections()
+        request = command_request(
+            actors["leader"], f"/groups/{group.pk}/join-requests/{req_id}/approve/"
+        )
+        barrier.wait(timeout=10)
+        try:
+            return approve_join_request(request, group.pk, req_id, {"review_note": ""}).status_code
+        except ClassroomError as error:
+            return error.code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(attempt, [req1.pk, req2.pk]))
+    assert sorted(map(str, results)) == ["200", "GROUP_FULL"]
+    assert GroupMember.objects.filter(group=group, status="ACTIVE").count() == 3
+    statuses = sorted(GroupJoinRequest.objects.filter(group=group).values_list("status", flat=True))
+    assert statuses == ["APPROVED", "PENDING"]
+    assert OutboxEvent.objects.filter(event_type="classroom.group.membership.changed").count() == 1
+
+
+@pytest.mark.postgres
+def test_concurrent_join_request_creates_enforce_single_pending_per_class(
+    group, actors, command_request
+):
+    section = group.class_section
+    group.is_recruiting = True
+    group.save(update_fields=["is_recruiting"])
+    lead_b = uuid4()
+    enr_b = Enrollment.objects.create(class_section=section, user_id=lead_b)
+    group_b = StudyGroup.objects.create(
+        class_section=section, name="Nhóm Cạnh Tranh", is_recruiting=True
+    )
+    GroupMember.objects.create(
+        class_section=section, group=group_b, enrollment=enr_b, role="LEADER"
+    )
+    barrier = Barrier(2)
+
+    def attempt(target_group_id):
+        close_old_connections()
+        request = command_request(actors["outsider"], f"/groups/{target_group_id}/join-requests/")
+        barrier.wait(timeout=10)
+        try:
+            return create_join_request(request, target_group_id, {"message": "Xin vào"}).status_code
+        except ClassroomError as error:
+            return error.code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(attempt, [group.pk, group_b.pk]))
+    assert sorted(map(str, results)) == ["201", "PENDING_JOIN_REQUEST_EXISTS"]
+    assert (
+        GroupJoinRequest.objects.filter(
+            class_section=section, user_id=actors["outsider"], status="PENDING"
+        ).count()
+        == 1
+    )
+
+
+@pytest.mark.postgres
+def test_concurrent_topic_reviews_allow_only_one_decision(group, actors, command_request):
+    section = group.class_section
+    co_teacher = uuid4()
+    ClassTeacher.objects.create(
+        class_section=section, user_id=co_teacher, role="CO_TEACHER", status="ACTIVE"
+    )
+    proposal = GroupTopicProposal.objects.create(
+        class_section=section,
+        group=group,
+        title="Đề tài đồng thời",
+        summary="Kiểm tra khóa lạc quan khi 2 giảng viên duyệt cùng lúc",
+        status="PENDING",
+        submitted_by_user_id=actors["leader"],
+        submitted_at=timezone.now(),
+        version=2,
+    )
+    barrier = Barrier(2)
+
+    def attempt(item):
+        teacher_id, decision, feedback = item
+        close_old_connections()
+        request = command_request(
+            teacher_id, f"/groups/{group.pk}/topic/review/", roles=("TEACHER",)
+        )
+        barrier.wait(timeout=10)
+        try:
+            return review_group_topic(
+                request,
+                group.pk,
+                {"decision": decision, "feedback": feedback, "version": 2},
+            ).status_code
+        except ClassroomError as error:
+            return error.code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                attempt,
+                [
+                    (actors["teacher"], "APPROVED", "Đạt"),
+                    (co_teacher, "REVISION_REQUESTED", "Cần sửa"),
+                ],
+            )
+        )
+    assert sorted(map(str, results)) == ["200", "VERSION_CONFLICT"]
+    proposal.refresh_from_db()
+    assert proposal.version == 3
+    assert proposal.status in {"APPROVED", "REVISION_REQUESTED"}
+    assert (
+        Activity.objects.filter(
+            subject_type="GroupTopicProposal",
+            subject_id=proposal.pk,
+            verb="group.topic.reviewed",
+        ).count()
+        == 1
+    )

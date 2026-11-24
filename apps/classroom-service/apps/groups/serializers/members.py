@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.groups.models import GroupMember
+from apps.groups.serializers.validators import SkillsListField
 from common.serializers import StrictInputSerializer
 
 
@@ -17,10 +18,30 @@ class MemberSerializer(serializers.ModelSerializer):
             "enrollment_id",
             "role",
             "status",
+            "skills",
+            "responsibility",
             "joined_at",
             "left_at",
             "profile",
         ]
+
+
+class MemberSelfPatchSerializer(StrictInputSerializer):
+    skills = SkillsListField(required=False)
+    responsibility = serializers.CharField(
+        max_length=200, allow_blank=True, trim_whitespace=True, required=False
+    )
+
+    def validate(self, attrs):
+        if "skills" not in attrs and "responsibility" not in attrs:
+            raise serializers.ValidationError(
+                "Cần cung cấp ít nhất một thông tin để cập nhật (kỹ năng hoặc vai trò đảm nhiệm)."
+            )
+        return attrs
+
+
+class MemberResponsibilityPatchSerializer(StrictInputSerializer):
+    responsibility = serializers.CharField(max_length=200, allow_blank=True, trim_whitespace=True)
 
 
 class MemberCommandSerializer(StrictInputSerializer):
