@@ -7,7 +7,11 @@ import pytest
 from django.http import Http404
 
 from apps.courses.models import Course
-from apps.courses.serializers.courses import CourseInputSerializer, CourseSerializer
+from apps.courses.serializers.courses import (
+    CourseInputSerializer,
+    CoursePatchSerializer,
+    CourseSerializer,
+)
 from apps.courses.services import courses
 from common.errors import ClassroomError
 
@@ -118,3 +122,11 @@ def test_course_input_rejects_caller_supplied_creator():
 
     assert not serializer.is_valid()
     assert "created_by_id" in serializer.errors
+
+
+def test_course_patch_serializer_allows_partial_and_rejects_empty():
+    assert CoursePatchSerializer(data={"name": "Môn mới"}).is_valid()
+    code_only = CoursePatchSerializer(data={"code": " cs101 "})
+    assert code_only.is_valid() and code_only.validated_data == {"code": "CS101"}
+    empty = CoursePatchSerializer(data={})
+    assert not empty.is_valid()

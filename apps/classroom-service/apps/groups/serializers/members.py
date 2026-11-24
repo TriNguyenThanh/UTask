@@ -25,18 +25,27 @@ class MemberSerializer(serializers.ModelSerializer):
 
 class MemberCommandSerializer(StrictInputSerializer):
     version = serializers.IntegerField(min_value=1)
-    reason = serializers.CharField(max_length=500)
+    reason = serializers.CharField(min_length=1, max_length=500)
+
+
+class MemberLeaveSerializer(MemberCommandSerializer):
+    dissolve_if_sole_member = serializers.BooleanField(required=False)
 
 
 class MemberTargetSerializer(MemberCommandSerializer):
     user_id = serializers.UUIDField()
 
 
+class MemberRemoveSerializer(MemberTargetSerializer):
+    dissolve_if_sole_member = serializers.BooleanField(required=False)
+
+
 class TeacherAdjustmentSerializer(StrictInputSerializer):
     user_id = serializers.UUIDField()
     target_group_id = serializers.UUIDField(allow_null=True)
     successor_user_id = serializers.UUIDField(required=False)
-    reason = serializers.CharField(max_length=500)
+    dissolve_if_sole_member = serializers.BooleanField(required=False)
+    reason = serializers.CharField(min_length=1, max_length=500)
 
 
 class AdjustmentResultSerializer(serializers.Serializer):

@@ -5,7 +5,8 @@ from apps.courses.serializers.enrollments import JoinCodeSerializer
 from apps.groups.serializers.groups import GroupSerializer
 from apps.groups.serializers.members import (
     AdjustmentResultSerializer,
-    MemberCommandSerializer,
+    MemberLeaveSerializer,
+    MemberRemoveSerializer,
     MemberTargetSerializer,
     TeacherAdjustmentSerializer,
 )
@@ -32,7 +33,12 @@ class GroupJoinView(APIView):
 
 class GroupLeaveView(APIView):
     @extend_schema(
-        request=MemberCommandSerializer,
+        request=MemberLeaveSerializer,
+        description=(
+            "Thành viên tự rời nhóm khi lớp mở và chưa chốt nhóm. Trưởng nhóm còn thành viên khác "
+            "cần chuyển quyền trước; nếu là thành viên duy nhất của nhóm thì gửi "
+            "dissolve_if_sole_member=true để xác nhận giải thể nhóm."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("GroupLeaveViewResponse", GroupSerializer),
@@ -40,18 +46,19 @@ class GroupLeaveView(APIView):
         },
     )
     def post(self, request, group_id):
-        serializer = MemberCommandSerializer(data=request.data)
+        serializer = MemberLeaveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return change_member(request, group_id, serializer.validated_data, action="leave")
 
 
 class GroupRemoveView(APIView):
     @extend_schema(
-        request=MemberTargetSerializer,
+        request=MemberRemoveSerializer,
         description=(
-            "Trưởng nhóm, Teacher đang phụ trách hoặc Admin được loại thành viên thường; "
-            "lớp phải mở, kể cả sau khi chốt nhóm. "
-            "Trưởng nhóm phải có người kế nhiệm trước khi bị loại."
+            "Trưởng nhóm, Teacher đang phụ trách hoặc Admin được loại thành viên khỏi nhóm; "
+            "lớp phải mở, kể cả sau khi chốt nhóm. Nếu loại trưởng nhóm và còn thành viên khác "
+            "thì cần chuyển quyền trước; nếu là thành viên duy nhất thì gửi "
+            "dissolve_if_sole_member=true để giải thể nhóm."
         ),
         parameters=[KEY],
         responses={
@@ -60,7 +67,7 @@ class GroupRemoveView(APIView):
         },
     )
     def post(self, request, group_id):
-        serializer = MemberTargetSerializer(data=request.data)
+        serializer = MemberRemoveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return change_member(request, group_id, serializer.validated_data, action="remove-member")
 
@@ -68,6 +75,10 @@ class GroupRemoveView(APIView):
 class GroupTransferView(APIView):
     @extend_schema(
         request=MemberTargetSerializer,
+        description=(
+            "Trưởng nhóm hiện tại, Giảng viên phụ trách lớp hoặc Quản trị viên hệ thống "
+            "được chuyển quyền trưởng nhóm sang thành viên đang hoạt động của nhóm; lớp phải mở."
+        ),
         parameters=[KEY],
         responses={
             200: envelope_schema("GroupTransferViewResponse", GroupSerializer),

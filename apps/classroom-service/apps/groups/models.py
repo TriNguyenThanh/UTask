@@ -35,7 +35,11 @@ class StudyGroup(models.Model):
         indexes = [
             models.Index(
                 fields=["class_section", "created_at", "id"], name="ix_study_groups_class_list"
-            )
+            ),
+            models.Index(
+                fields=["class_section", "status", "created_at", "id"],
+                name="ix_study_groups_class_status",
+            ),
         ]
 
 

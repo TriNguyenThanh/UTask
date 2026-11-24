@@ -7,6 +7,7 @@ from apps.groups.views.groups import (
     GroupListView,
     GroupMembersView,
     GroupProjectsView,
+    MyClassGroupView,
 )
 from apps.groups.views.members import (
     GroupJoinView,
@@ -34,6 +35,7 @@ urlpatterns = [
     path("groups/<uuid:group_id>/remove-member/", GroupRemoveView.as_view()),
     path("groups/<uuid:group_id>/transfer-leader/", GroupTransferView.as_view()),
     path("classes/<uuid:class_id>/groups/", ClassGroupsView.as_view()),
+    path("classes/<uuid:class_id>/my-group/", MyClassGroupView.as_view()),
     path("classes/<uuid:class_id>/adjust-member/", TeacherAdjustmentView.as_view()),
     path("internal/groups/<uuid:group_id>/snapshot/", GroupSnapshotView.as_view()),
     path("internal/groups/<uuid:group_id>/recovery-snapshot/", RecoverySnapshotView.as_view()),

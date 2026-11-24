@@ -67,7 +67,12 @@ class ClassSection(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=["course", "starts_on", "id"], name="ix_class_sections_course")
+            models.Index(fields=["course", "starts_on", "id"], name="ix_class_sections_course"),
+            models.Index(
+                fields=["status", "grouping_phase", "created_at", "id"],
+                name="ix_class_sections_filter",
+            ),
+            models.Index(fields=["term", "created_at", "id"], name="ix_class_sections_term"),
         ]
 
 
@@ -134,5 +139,9 @@ class Enrollment(models.Model):
                 fields=["user_id", "class_section"],
                 condition=Q(status="ACTIVE"),
                 name="ix_enrollments_active_scope",
-            )
+            ),
+            models.Index(
+                fields=["class_section", "status", "enrolled_at", "id"],
+                name="ix_enrollments_class_status",
+            ),
         ]

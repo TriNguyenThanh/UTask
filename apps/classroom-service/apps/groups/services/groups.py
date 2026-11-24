@@ -138,8 +138,45 @@ def update_group(request, group_id, payload):
         check_group_version(group, payload["version"])
         if group.status == "ARCHIVED":
             raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        archiving = payload.get("status") == "ARCHIVED"
+        if archiving:
+            reason = str(payload.get("reason") or "").strip()
+            if not reason:
+                raise ClassroomError(
+                    "VALIDATION_ERROR",
+                    "Cần nêu lý do khi lưu trữ nhóm học tập.",
+                    400,
+                    details=[
+                        {"field": "reason", "issue": "Trường này là bắt buộc khi lưu trữ nhóm."}
+                    ],
+                )
+            active_members = list(
+                GroupMember.objects.select_for_update()
+                .filter(group=group, status="ACTIVE")
+                .order_by("id")
+            )
+            if active_members:
+                left_at = max(timezone.now(), max(member.joined_at for member in active_members))
+                GroupMember.objects.filter(pk__in=[member.pk for member in active_members]).update(
+                    status="REMOVED", left_at=left_at
+                )
+            if "name" in payload:
+                group.name = payload["name"]
+            group.status = "ARCHIVED"
+            group.invite_code_hash = None
+            group.invite_expires_at = None
+            group.source_version += 1
+            group.save()
+            publish_membership(
+                section, group, request.user.id, "group.archived", reason=reason, increment=False
+            )
+            return finish_receipt(
+                receipt,
+                GroupSerializer(group).data,
+                message="Đã lưu trữ nhóm học tập và giải phóng các thành viên.",
+            )
         for key, value in payload.items():
-            if key != "version":
+            if key not in {"version", "reason"}:
                 setattr(group, key, value)
         group.source_version += 1
         group.save()

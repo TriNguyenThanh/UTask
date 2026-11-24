@@ -34,7 +34,9 @@ def test_grouping_lock_allows_remove_but_rejects_self_leave(
 ):
     section = group.class_section
     locked = post_command(
-        client_for(actors["teacher"]), f"/classes/{section.pk}/lock-grouping/", {"version": 1}
+        client_for(actors["teacher"]),
+        f"/classes/{section.pk}/lock-grouping/",
+        {"version": 1, "force": True},
     )
     assert locked.status_code == 200
     leave = {"version": 1, "reason": "Xin rời"}

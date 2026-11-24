@@ -25,13 +25,22 @@ def membership_snapshot(group):
             "status": row.status,
         }
     members = sorted(latest.values(), key=lambda row: row["user_id"])
-    if sum(row["role"] == "LEADER" and row["status"] == "ACTIVE" for row in members) != 1:
+    active = [row for row in members if row["status"] == "ACTIVE"]
+    if group.status == "ARCHIVED":
+        if active:
+            raise ClassroomError(
+                "GROUP_LEADER_CONFLICT",
+                "Nhóm đã lưu trữ không được còn thành viên đang hoạt động.",
+                409,
+            )
+    elif sum(row["role"] == "LEADER" for row in active) != 1:
         raise ClassroomError(
             "GROUP_LEADER_CONFLICT", "Nhóm cần có đúng một trưởng nhóm đang hoạt động.", 409
         )
     return {
         "group_id": str(group.pk),
         "class_id": str(group.class_section_id),
+        "group_status": group.status,
         "source_version": group.source_version,
         "members": members,
     }
@@ -41,12 +50,10 @@ def group_snapshot(group_id, actor=None, *, roles=()):
     group_class = get_object_or_404(StudyGroup.objects.only("class_section_id"), pk=group_id)
     with transaction.atomic():
         section = lock_class(group_class.class_section_id)
-        group = get_object_or_404(
-            StudyGroup.objects.select_for_update(),
-            pk=group_id,
-            class_section=section,
-            status="ACTIVE",
-        )
+        filters = {"pk": group_id, "class_section": section}
+        if actor is not None:
+            filters["status"] = "ACTIVE"
+        group = get_object_or_404(StudyGroup.objects.select_for_update(), **filters)
         if actor is not None:
             require_group_read(group, actor, roles=roles)
         require_open(section)

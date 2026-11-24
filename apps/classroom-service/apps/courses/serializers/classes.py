@@ -1,13 +1,103 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.courses.models import ClassSection, ClassTeacher
 from common.serializers import StrictInputSerializer
 
 
+class CourseSummarySerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
 class ClassSerializer(serializers.ModelSerializer):
+    course_summary = CourseSummarySerializer(source="course", read_only=True)
+    enrolled_count = serializers.SerializerMethodField()
+    active_group_count = serializers.SerializerMethodField()
+    primary_teacher_id = serializers.SerializerMethodField()
+    my_group_id = serializers.SerializerMethodField()
+    my_group_name = serializers.SerializerMethodField()
+
     class Meta:
         model = ClassSection
         exclude = ["join_code_hash"]
+
+    @extend_schema_field(serializers.IntegerField(min_value=0))
+    def get_enrolled_count(self, obj):
+        if hasattr(obj, "_enrolled_count"):
+            return obj._enrolled_count
+        return obj.enrollments.filter(status="ACTIVE").count()
+
+    @extend_schema_field(serializers.IntegerField(min_value=0))
+    def get_active_group_count(self, obj):
+        if hasattr(obj, "_active_group_count"):
+            return obj._active_group_count
+        return obj.groups.filter(status="ACTIVE").count()
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_primary_teacher_id(self, obj):
+        if hasattr(obj, "_primary_teacher_id"):
+            value = obj._primary_teacher_id
+            return str(value) if value is not None else None
+        teacher = (
+            obj.teachers.filter(status="ACTIVE", role="PRIMARY")
+            .order_by("assigned_at", "id")
+            .values_list("user_id", flat=True)
+            .first()
+        )
+        if teacher is None:
+            teacher = (
+                obj.teachers.filter(status="ACTIVE")
+                .order_by("assigned_at", "id")
+                .values_list("user_id", flat=True)
+                .first()
+            )
+        return str(teacher) if teacher is not None else None
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_my_group_id(self, obj):
+        if hasattr(obj, "_my_group_id"):
+            value = obj._my_group_id
+            return str(value) if value is not None else None
+        actor_id = self.context.get("actor_id")
+        if not actor_id:
+            return None
+        from apps.groups.models import GroupMember
+
+        group_id = (
+            GroupMember.objects.filter(
+                class_section_id=obj.pk,
+                enrollment__user_id=actor_id,
+                enrollment__status="ACTIVE",
+                status="ACTIVE",
+                group__status="ACTIVE",
+            )
+            .values_list("group_id", flat=True)
+            .first()
+        )
+        return str(group_id) if group_id is not None else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_my_group_name(self, obj):
+        if hasattr(obj, "_my_group_name"):
+            return obj._my_group_name
+        actor_id = self.context.get("actor_id")
+        if not actor_id:
+            return None
+        from apps.groups.models import GroupMember
+
+        return (
+            GroupMember.objects.filter(
+                class_section_id=obj.pk,
+                enrollment__user_id=actor_id,
+                enrollment__status="ACTIVE",
+                status="ACTIVE",
+                group__status="ACTIVE",
+            )
+            .values_list("group__name", flat=True)
+            .first()
+        )
 
 
 class ClassInputSerializer(StrictInputSerializer):
@@ -45,6 +135,14 @@ class ClassPatchSerializer(StrictInputSerializer):
 
 class VersionSerializer(StrictInputSerializer):
     version = serializers.IntegerField(min_value=1)
+
+
+class ClassGroupingLockSerializer(VersionSerializer):
+    force = serializers.BooleanField(required=False)
+
+
+class ClassGroupingUnlockSerializer(VersionSerializer):
+    reason = serializers.CharField(min_length=1, max_length=500)
 
 
 class ClassStateSerializer(VersionSerializer):

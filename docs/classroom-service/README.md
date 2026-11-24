@@ -78,12 +78,14 @@ Các quyết định chính:
   thành viên thường; Giảng viên được phân/chuyển/loại trong đúng lớp với lý do,
   lịch sử, giới hạn tối đa và quy tắc giữ Trưởng nhóm.
 - Admin hệ thống giữ các quyền đã chọn trong bảng quyền chuẩn.
-  Phần bổ sung được chốt lần này gồm LH10 loại ghi danh người khác, LH13 chốt
+  Phần bổ sung được chốt gồm LH10 loại ghi danh người khác, LH13 chốt
   lập nhóm, LH15 điều chỉnh thành viên; NH01 xem mọi nhóm, NH02 tạo
-  nhóm thay cho Leader được chỉ định, NH03/NH04/NH09/NH12 lần lượt xem chi tiết,
-  sửa nhóm, loại thành viên và xem lịch sử. Với NH03, sinh viên chỉ xem nhóm
-  đang là thành viên ACTIVE của chính mình. Các API NH05/NH07/NH10/NH11 không
-  có nhánh Admin. Admin không vì thế có quyền đọc toàn bộ nội dung Work.
+  nhóm thay cho Leader được chỉ định, NH03/NH04/NH07/NH09/NH10/NH11/NH12
+  lần lượt xem chi tiết, sửa nhóm, xem thành viên, loại thành viên, chuyển
+  trưởng nhóm, xem metadata liên kết nhóm–dự án và xem lịch sử. Với NH03,
+  sinh viên chỉ xem nhóm đang là thành viên ACTIVE của chính mình. API NH05
+  (mã mời nhóm) vẫn chỉ dành cho Trưởng nhóm. Admin không vì thế có quyền
+  đọc toàn bộ nội dung dự án Work.
 - Classroom gọi API Identity đã có để cấp/tìm tài khoản khi thêm danh sách sinh viên;
   không đọc hoặc ghi `identity_db`.
 - Work lấy snapshot/scope cần phản hồi qua REST và nhận membership event qua
@@ -122,15 +124,15 @@ từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
-| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin quản lý mọi môn |
-| Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động |
-| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; Admin có các quyền trạng thái/phân công được đánh dấu trong bảng chuẩn, gồm LH13 |
+| Môn | `courses/`, `courses/{id}/` (GET/PATCH partial), `courses/{id}/archive/`, `courses/{id}/unarchive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng/mở lại môn do mình tạo; Admin quản lý mọi môn |
+| Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động; cập nhật lớp yêu cầu lớp đang `OPEN` |
+| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `unlock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; `lock-grouping/` kiểm tra SV chưa có nhóm & nhóm thiếu `group_min_size` trừ khi gửi `force=true`; `unlock-grouping/` mở khóa lại khi lớp `OPEN` |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
-| Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm sinh viên |
-| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/` | NH01 Admin xem mọi nhóm; NH02 Teacher/Admin tạo thay Leader đang ghi danh; NH03 Student chỉ xem nhóm mình đang là thành viên ACTIVE |
-| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `leave/`, `remove-member/`, `transfer-leader/` | Admin không có quyền NH05/NH07/NH10; NH09 cho phép Admin loại thành viên |
+| Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/`, `enrollments/{eid}/exit/`, `enrollments/{eid}/reactivate/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm/khôi phục sinh viên (`reactivate/` hoặc `reactivate_inactive=true`); cấp/tắt mã yêu cầu lớp đang `OPEN` |
+| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/`, `classes/{id}/my-group/` | NH01 Admin xem mọi nhóm; NH02 Teacher/Admin tạo thay Leader đang ghi danh; NH03 Student xem nhóm mình đang là thành viên ACTIVE (`my-group/` trả `data=null` nếu chưa vào nhóm); `PATCH /groups/{id}/` với `status=ARCHIVED` bắt buộc `reason`, giải phóng thành viên và phát Kafka |
+| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `leave/`, `remove-member/`, `transfer-leader/` | Admin không có quyền NH05; Admin có quyền NH07, NH09 và NH10; trưởng nhóm duy nhất cần `dissolve_if_sole_member=true` để giải thể nhóm an toàn |
 | Điều chỉnh P1 | `classes/{id}/adjust-member/` | Teacher đang được phân công hoặc Admin; có lý do và xử lý kế nhiệm Leader |
-| Liên kết | `groups/{id}/projects/` | Thành viên đúng nhóm hoặc giảng viên đúng lớp |
+| Liên kết | `groups/{id}/projects/` | Thành viên đúng nhóm, giảng viên đúng lớp hoặc Admin (chỉ metadata liên kết) |
 | Lịch sử | `classes/{id}/activities/`, `groups/{id}/activities/` | Giảng viên đúng lớp hoặc Admin; thành viên chỉ xem lịch sử đúng nhóm |
 
 Chi tiết các lựa chọn đã duyệt và phần để lại nằm tại

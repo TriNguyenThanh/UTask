@@ -98,15 +98,60 @@ def transfer_leader(group, successor_user_id):
         successor.save(update_fields=["role"])
 
 
-def end_membership(section, group, membership, actor_id, status, reason):
+def end_membership(
+    section, group, membership, actor_id, status, reason, *, dissolve_if_sole_member=False
+):
     if membership.role == "LEADER":
-        raise ClassroomError(
-            "LEADER_SUCCESSOR_REQUIRED",
-            "Hãy chuyển quyền trưởng nhóm trước khi rời hoặc loại thành viên này.",
-            409,
+        other_active = (
+            GroupMember.objects.filter(group=group, status="ACTIVE")
+            .exclude(pk=membership.pk)
+            .exists()
         )
+        if other_active:
+            raise ClassroomError(
+                "LEADER_SUCCESSOR_REQUIRED",
+                "Hãy chuyển quyền trưởng nhóm trước khi rời hoặc loại thành viên này.",
+                409,
+            )
+        if not dissolve_if_sole_member:
+            raise ClassroomError(
+                "SOLE_LEADER_DISSOLVE_REQUIRED",
+                (
+                    "Trưởng nhóm hiện là thành viên duy nhất còn hoạt động trong nhóm. "
+                    "Vui lòng xác nhận giải thể nhóm nếu muốn tiếp tục."
+                ),
+                409,
+                details=[
+                    {
+                        "field": "dissolve_if_sole_member",
+                        "issue": (
+                            "Cần xác nhận giải thể nhóm khi trưởng nhóm là thành viên duy nhất."
+                        ),
+                    }
+                ],
+            )
+        membership.status = status
+        membership.left_at = max(timezone.now(), membership.joined_at)
+        membership.save(update_fields=["status", "left_at"])
+        group.status = "ARCHIVED"
+        group.invite_code_hash = None
+        group.invite_expires_at = None
+        group.source_version += 1
+        group.save(
+            update_fields=[
+                "status",
+                "invite_code_hash",
+                "invite_expires_at",
+                "source_version",
+                "updated_at",
+            ]
+        )
+        publish_membership(
+            section, group, actor_id, "group.dissolved", reason=reason, increment=False
+        )
+        return
     membership.status = status
-    membership.left_at = timezone.now()
+    membership.left_at = max(timezone.now(), membership.joined_at)
     membership.save(update_fields=["status", "left_at"])
     publish_membership(section, group, actor_id, "group.member." + status.lower(), reason=reason)
 
@@ -115,8 +160,9 @@ def change_member(request, group_id, payload, *, action):
     actor_roles(request)
     with transaction.atomic():
         section, group = lock_group(group_id)
+        admin_allowed = action in {"remove-member", "transfer-leader"}
         require_group_read(
-            group, request.user, roles=actor_roles(request), admin_allowed=action == "remove-member"
+            group, request.user, roles=actor_roles(request), admin_allowed=admin_allowed
         )
         if action in {"remove-member", "transfer-leader"}:
             require_leader(
@@ -124,7 +170,7 @@ def change_member(request, group_id, payload, *, action):
                 request.user,
                 teacher_allowed=True,
                 roles=actor_roles(request),
-                admin_allowed=action == "remove-member",
+                admin_allowed=admin_allowed,
             )
         elif active_member(group, request.user) is None:
             raise ClassroomError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
@@ -165,6 +211,7 @@ def change_member(request, group_id, payload, *, action):
                 request.user.id,
                 "LEFT" if action == "leave" else "REMOVED",
                 payload["reason"],
+                dissolve_if_sole_member=bool(payload.get("dissolve_if_sole_member", False)),
             )
         return finish_receipt(
             receipt,
@@ -225,16 +272,32 @@ def adjust_member(request, class_id, payload):
             if source.status != "ACTIVE":
                 raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
             if current.role == "LEADER":
-                if (
-                    "successor_user_id" not in payload
-                    or payload["successor_user_id"] == enrollment.user_id
-                ):
-                    raise ClassroomError(
-                        "LEADER_SUCCESSOR_REQUIRED", "Hãy chọn trưởng nhóm kế nhiệm hợp lệ.", 409
-                    )
-                transfer_leader(source, payload["successor_user_id"])
-                current.refresh_from_db()
-            end_membership(section, source, current, request.user.id, "REMOVED", payload["reason"])
+                other_active = (
+                    GroupMember.objects.filter(group=source, status="ACTIVE")
+                    .exclude(pk=current.pk)
+                    .exists()
+                )
+                if other_active:
+                    if (
+                        "successor_user_id" not in payload
+                        or payload["successor_user_id"] == enrollment.user_id
+                    ):
+                        raise ClassroomError(
+                            "LEADER_SUCCESSOR_REQUIRED",
+                            "Hãy chọn trưởng nhóm kế nhiệm hợp lệ.",
+                            409,
+                        )
+                    transfer_leader(source, payload["successor_user_id"])
+                    current.refresh_from_db()
+            end_membership(
+                section,
+                source,
+                current,
+                request.user.id,
+                "REMOVED",
+                payload["reason"],
+                dissolve_if_sole_member=bool(payload.get("dissolve_if_sole_member", False)),
+            )
         if target:
             GroupMember.objects.create(class_section=section, group=target, enrollment=enrollment)
             publish_membership(

@@ -59,6 +59,14 @@
     "data"
   ],
   "$defs": {
+    "GroupStatusEnum": {
+      "enum": [
+        "ACTIVE",
+        "ARCHIVED"
+      ],
+      "type": "string",
+      "description": "* `ACTIVE` - ACTIVE\n* `ARCHIVED` - ARCHIVED"
+    },
     "MemberFact": {
       "type": "object",
       "properties": {
@@ -106,6 +114,14 @@
         "class_id": {
           "type": "string",
           "format": "uuid"
+        },
+        "group_status": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/GroupStatusEnum"
+            }
+          ],
+          "default": "ACTIVE"
         },
         "source_version": {
           "type": "integer",

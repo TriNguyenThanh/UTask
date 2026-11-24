@@ -255,3 +255,51 @@ def test_admin_class_create_replay_does_not_reverify_assigned_teacher(
     response = create_class(request, payload)
     identity["profiles"][str(assigned)]["account_status"] = "SUSPENDED"
     assert create_class(request, payload).data == response.data
+
+
+@pytest.mark.parametrize("closed_status", ["CLOSED", "ARCHIVED"])
+def test_non_open_class_rejects_update_lock_teacher_and_join_code(
+    section, actors, command_request, monkeypatch, closed_status
+):
+    section.status = closed_status
+    section.save(update_fields=["status"])
+    identity_calls = []
+
+    def fail_if_called(*args, **kwargs):
+        identity_calls.append(args)
+        raise AssertionError("IdentityClient.users must not be called for non-open class")
+
+    monkeypatch.setattr(IdentityClient, "users", fail_if_called)
+
+    def teacher(path):
+        return command_request(actors["teacher"], path, roles=("TEACHER",))
+
+    with pytest.raises(ClassroomError) as update_err:
+        change_class(teacher("/update/"), section.pk, {"version": 1, "name": "Không được phép"})
+    assert update_err.value.status_code == 409 and update_err.value.code == "CLASS_NOT_OPEN"
+
+    with pytest.raises(ClassroomError) as lock_err:
+        change_class(teacher("/lock/"), section.pk, {"version": 1}, action="lock-grouping")
+    assert lock_err.value.status_code == 409 and lock_err.value.code == "CLASS_NOT_OPEN"
+
+    with pytest.raises(ClassroomError) as teacher_err:
+        change_class(
+            teacher("/teacher/"),
+            section.pk,
+            {"version": 1, "user_id": uuid4(), "role": "CO_TEACHER", "status": "ACTIVE"},
+            action="teacher",
+        )
+    assert teacher_err.value.status_code == 409 and teacher_err.value.code == "CLASS_NOT_OPEN"
+    assert identity_calls == []
+
+    with pytest.raises(ClassroomError) as code_err:
+        issue_class_code(teacher("/code/"), section.pk, {"version": 1, "enabled": True})
+    assert code_err.value.status_code == 409 and code_err.value.code == "CLASS_NOT_OPEN"
+
+    section.refresh_from_db()
+    assert section.version == 1
+    if closed_status == "CLOSED":
+        reopened = change_class(
+            teacher("/state/"), section.pk, {"version": 1, "status": "OPEN"}, action="state"
+        )
+        assert reopened.status_code == 200 and reopened.data["data"]["status"] == "OPEN"

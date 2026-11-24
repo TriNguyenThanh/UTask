@@ -6,6 +6,8 @@ from apps.courses.models import ClassSection
 from apps.courses.queries.classes import class_detail, class_teachers, list_classes
 from apps.courses.serializers.classes import (
     AccessCodeSerializer,
+    ClassGroupingLockSerializer,
+    ClassGroupingUnlockSerializer,
     ClassInputSerializer,
     ClassPatchSerializer,
     ClassSerializer,
@@ -13,7 +15,6 @@ from apps.courses.serializers.classes import (
     CodeInputSerializer,
     TeacherInputSerializer,
     TeacherSerializer,
-    VersionSerializer,
 )
 from apps.courses.services.classes import change_class, create_class, issue_class_code
 from common.responses import success_response
@@ -25,7 +26,21 @@ KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required
 class ClassListView(APIView):
     @extend_schema(
         operation_id="classes_list",
-        parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
+        parameters=[
+            *LIST_PARAMETERS,
+            STATUS_PARAMETER,
+            OpenApiParameter(
+                "search", str, description="Tìm theo mã/tên lớp, học kỳ hoặc môn học."
+            ),
+            OpenApiParameter("course_id", str, description="Lọc theo UUID môn học."),
+            OpenApiParameter("term", str, description="Lọc theo học kỳ."),
+            OpenApiParameter(
+                "grouping_phase",
+                str,
+                enum=["FORMING", "LOCKED"],
+                description="Lọc theo giai đoạn chia nhóm.",
+            ),
+        ],
         responses={
             200: envelope_schema("ClassList", ClassSerializer, many=True, paginated=True),
             **ERRORS,
@@ -82,10 +97,11 @@ class ClassStateView(APIView):
 
 class ClassGroupingLockView(APIView):
     @extend_schema(
-        request=VersionSerializer,
+        request=ClassGroupingLockSerializer,
         description=(
             "Teacher có global role TEACHER và phân công ACTIVE, hoặc Admin, được chốt nhóm; "
-            "PRIMARY và CO_TEACHER có quyền ngang nhau."
+            "PRIMARY và CO_TEACHER có quyền ngang nhau. Mặc định kiểm tra sinh viên chưa có nhóm "
+            "và nhóm chưa đủ group_min_size (409 GROUPING_PRECONDITIONS_UNMET) trừ khi force=true."
         ),
         parameters=[KEY],
         responses={
@@ -94,9 +110,28 @@ class ClassGroupingLockView(APIView):
         },
     )
     def post(self, request, class_id):
-        serializer = VersionSerializer(data=request.data)
+        serializer = ClassGroupingLockSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return change_class(request, class_id, serializer.validated_data, action="lock-grouping")
+
+
+class ClassGroupingUnlockView(APIView):
+    @extend_schema(
+        request=ClassGroupingUnlockSerializer,
+        description=(
+            "Giảng viên phụ trách lớp hoặc Quản trị viên hệ thống mở khóa lại giai đoạn lập nhóm "
+            "khi lớp đang mở; cần cung cấp phiên bản hiện tại và lý do."
+        ),
+        parameters=[KEY],
+        responses={
+            200: envelope_schema("ClassGroupingUnlockViewResponse", ClassSerializer),
+            **ERRORS,
+        },
+    )
+    def post(self, request, class_id):
+        serializer = ClassGroupingUnlockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return change_class(request, class_id, serializer.validated_data, action="unlock-grouping")
 
 
 class ClassTeacherView(APIView):

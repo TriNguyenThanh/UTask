@@ -9,12 +9,14 @@ from apps.groups.queries.groups import (
     group_members,
     group_projects,
     list_groups,
+    my_class_group,
     visible_groups,
 )
 from apps.groups.serializers.groups import (
     GroupCreateSerializer,
     GroupPatchSerializer,
     GroupSerializer,
+    MyGroupSerializer,
     ProjectLinkSerializer,
 )
 from apps.groups.serializers.members import MemberSerializer
@@ -32,7 +34,11 @@ class GroupListView(APIView):
             "Sinh viên thấy nhóm trong lớp đang ghi danh; "
             "Teacher đang phụ trách thấy nhóm trong lớp; Admin thấy mọi nhóm."
         ),
-        parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
+        parameters=[
+            *LIST_PARAMETERS,
+            STATUS_PARAMETER,
+            OpenApiParameter("search", str, description="Tìm kiếm nhóm theo tên."),
+        ],
         responses={
             200: envelope_schema("GroupList", GroupSerializer, many=True, paginated=True),
             **ERRORS,
@@ -72,8 +78,9 @@ class GroupDetailView(APIView):
     @extend_schema(
         request=GroupPatchSerializer,
         description=(
-            "Trưởng nhóm, Teacher đang phụ trách hoặc Admin; "
-            "lớp mở, nhóm hoạt động và đúng phiên bản."
+            "Trưởng nhóm, Teacher phụ trách hoặc Admin; lớp mở, nhóm hoạt động và đúng phiên bản. "
+            "Khi chuyển status=ARCHIVED bắt buộc truyền reason; toàn bộ thành viên ACTIVE sẽ được "
+            "giải phóng và phát sự kiện cập nhật thành viên."
         ),
         parameters=[KEY],
         responses={200: envelope_schema("GroupUpdated", GroupSerializer), **ERRORS},
@@ -86,7 +93,11 @@ class GroupDetailView(APIView):
 
 class ClassGroupsView(APIView):
     @extend_schema(
-        parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
+        parameters=[
+            *LIST_PARAMETERS,
+            STATUS_PARAMETER,
+            OpenApiParameter("search", str, description="Tìm kiếm nhóm trong lớp theo tên."),
+        ],
         responses={
             200: envelope_schema(
                 "ClassGroupsViewResponse", GroupSerializer, many=True, paginated=True
@@ -99,8 +110,36 @@ class ClassGroupsView(APIView):
         return success_response(data, meta=meta, message="Đã lấy danh sách nhóm trong lớp học.")
 
 
+class MyClassGroupView(APIView):
+    @extend_schema(
+        operation_id="classes_my_group_retrieve",
+        description=(
+            "Sinh viên đang ghi danh hoạt động trong lớp lấy thông tin nhóm hiện tại của mình "
+            "kèm thành viên hoạt động; trả về data=null (HTTP 200) nếu chưa tham gia nhóm."
+        ),
+        responses={
+            200: envelope_schema("MyClassGroupViewResponse", MyGroupSerializer),
+            **ERRORS,
+        },
+    )
+    def get(self, request, class_id):
+        data = my_class_group(request, get_object_or_404(ClassSection, pk=class_id))
+        return success_response(
+            data,
+            message=(
+                "Đã lấy thông tin nhóm hiện tại của bạn trong lớp học."
+                if data is not None
+                else "Bạn chưa tham gia nhóm nào trong lớp học này."
+            ),
+        )
+
+
 class GroupMembersView(APIView):
     @extend_schema(
+        description=(
+            "Thành viên đang hoạt động của đúng nhóm, Giảng viên phụ trách lớp hoặc "
+            "Quản trị viên hệ thống."
+        ),
         parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
         responses={
             200: envelope_schema(
@@ -118,6 +157,11 @@ class GroupMembersView(APIView):
 
 class GroupProjectsView(APIView):
     @extend_schema(
+        description=(
+            "Thành viên đang hoạt động của đúng nhóm, Giảng viên phụ trách lớp hoặc "
+            "Quản trị viên hệ thống (chỉ trả metadata liên kết nhóm–dự án, "
+            "không tự cấp quyền đọc nội dung dự án)."
+        ),
         parameters=LIST_PARAMETERS,
         responses={
             200: envelope_schema(

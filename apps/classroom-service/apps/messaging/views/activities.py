@@ -12,9 +12,21 @@ from config.api_documentation import ERRORS, LIST_PARAMETERS, envelope_schema
 KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True)
 
 
+ACTIVITY_FILTER_PARAMETERS = [
+    OpenApiParameter("verb", str, description="Lọc theo mã hành động (ví dụ: group.created)."),
+    OpenApiParameter("actor_user_id", str, description="Lọc theo UUID người thực hiện."),
+    OpenApiParameter(
+        "created_from", str, description="Lọc các bản ghi từ thời điểm ISO-8601 trở đi."
+    ),
+    OpenApiParameter(
+        "created_to", str, description="Lọc các bản ghi đến thời điểm ISO-8601 trở về trước."
+    ),
+]
+
+
 class ClassActivityView(APIView):
     @extend_schema(
-        parameters=LIST_PARAMETERS,
+        parameters=[*LIST_PARAMETERS, *ACTIVITY_FILTER_PARAMETERS],
         responses={
             200: envelope_schema(
                 "ClassActivityViewResponse", ActivitySerializer, many=True, paginated=True
@@ -29,7 +41,7 @@ class ClassActivityView(APIView):
 
 class GroupActivityView(APIView):
     @extend_schema(
-        parameters=LIST_PARAMETERS,
+        parameters=[*LIST_PARAMETERS, *ACTIVITY_FILTER_PARAMETERS],
         responses={
             200: envelope_schema(
                 "GroupActivityViewResponse", ActivitySerializer, many=True, paginated=True

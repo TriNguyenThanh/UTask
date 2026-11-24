@@ -8,17 +8,40 @@ paths:
       operationId: classes_list
       parameters:
       - in: query
+        name: course_id
+        schema:
+          type: string
+        description: Lọc theo UUID môn học.
+      - in: query
         name: cursor
         schema:
           type: string
+      - in: query
+        name: grouping_phase
+        schema:
+          type: string
+          enum:
+          - FORMING
+          - LOCKED
+        description: Lọc theo giai đoạn chia nhóm.
       - in: query
         name: page_size
         schema:
           type: integer
       - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm theo mã/tên lớp, học kỳ hoặc môn học.
+      - in: query
         name: status
         schema:
           type: string
+      - in: query
+        name: term
+        schema:
+          type: string
+        description: Lọc theo học kỳ.
       tags:
       - classes
       security:
@@ -302,12 +325,27 @@ paths:
     get:
       operationId: classes_activities_retrieve
       parameters:
+      - in: query
+        name: actor_user_id
+        schema:
+          type: string
+        description: Lọc theo UUID người thực hiện.
       - in: path
         name: class_id
         schema:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: created_from
+        schema:
+          type: string
+        description: Lọc các bản ghi từ thời điểm ISO-8601 trở đi.
+      - in: query
+        name: created_to
+        schema:
+          type: string
+        description: Lọc các bản ghi đến thời điểm ISO-8601 trở về trước.
       - in: query
         name: cursor
         schema:
@@ -316,6 +354,11 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: verb
+        schema:
+          type: string
+        description: 'Lọc theo mã hành động (ví dụ: group.created).'
       tags:
       - classes
       security:
@@ -461,6 +504,9 @@ paths:
   /classes/{class_id}/enrollments/:
     get:
       operationId: classes_enrollments_retrieve
+      description: Giảng viên phụ trách hoặc Quản trị viên hệ thống xem danh sách
+        ghi danh của lớp. Để tìm theo tên, email hoặc MSSV, tra cứu trước qua GET
+        /api/auth/users/search rồi lọc bằng tham số user_id.
       parameters:
       - in: path
         name: class_id
@@ -473,6 +519,14 @@ paths:
         schema:
           type: string
       - in: query
+        name: has_group
+        schema:
+          type: string
+          enum:
+          - 'false'
+          - 'true'
+        description: Lọc sinh viên đã có nhóm hoạt động hay chưa.
+      - in: query
         name: page_size
         schema:
           type: integer
@@ -480,6 +534,11 @@ paths:
         name: status
         schema:
           type: string
+      - in: query
+        name: user_id
+        schema:
+          type: string
+        description: Lọc theo UUID người dùng.
       tags:
       - classes
       security:
@@ -543,8 +602,9 @@ paths:
     post:
       operationId: classes_enrollments_exit_create
       description: Sinh viên tự rời lớp theo điều kiện hiện tại; Teacher đang phụ
-        trách hoặc Admin được loại sinh viên. Trưởng nhóm phải có người kế nhiệm trước
-        khi kết thúc thành viên nhóm.
+        trách hoặc Admin được loại sinh viên. Nếu là trưởng nhóm và còn thành viên
+        khác thì cần chuyển quyền trước; nếu là thành viên duy nhất của nhóm thì cần
+        gửi dissolve_if_sole_member=true để giải thể nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -628,6 +688,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/enrollments/{enrollment_id}/reactivate/:
+    post:
+      operationId: classes_enrollments_reactivate_create
+      description: Giảng viên phụ trách lớp hoặc Quản trị viên hệ thống khôi phục
+        ghi danh đã rời/loại trở lại trạng thái ACTIVE khi lớp đang mở.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: enrollment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentReactivate'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentReactivateViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/{class_id}/groups/:
     get:
       operationId: classes_groups_retrieve
@@ -646,6 +794,11 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm kiếm nhóm trong lớp theo tên.
       - in: query
         name: status
         schema:
@@ -793,7 +946,9 @@ paths:
     post:
       operationId: classes_lock_grouping_create
       description: Teacher có global role TEACHER và phân công ACTIVE, hoặc Admin,
-        được chốt nhóm; PRIMARY và CO_TEACHER có quyền ngang nhau.
+        được chốt nhóm; PRIMARY và CO_TEACHER có quyền ngang nhau. Mặc định kiểm tra
+        sinh viên chưa có nhóm và nhóm chưa đủ group_min_size (409 GROUPING_PRECONDITIONS_UNMET)
+        trừ khi force=true.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -812,7 +967,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Version'
+              $ref: '#/components/schemas/ClassGroupingLock'
         required: true
       security:
       - ClassroomBearer: []
@@ -822,6 +977,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClassGroupingLockViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+  /classes/{class_id}/my-group/:
+    get:
+      operationId: classes_my_group_retrieve
+      description: Sinh viên đang ghi danh hoạt động trong lớp lấy thông tin nhóm
+        hiện tại của mình kèm thành viên hoạt động; trả về data=null (HTTP 200) nếu
+        chưa tham gia nhóm.
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyClassGroupViewResponse'
           description: ''
         '400':
           content:
@@ -1192,6 +1419,89 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/unlock-grouping/:
+    post:
+      operationId: classes_unlock_grouping_create
+      description: Giảng viên phụ trách lớp hoặc Quản trị viên hệ thống mở khóa lại
+        giai đoạn lập nhóm khi lớp đang mở; cần cung cấp phiên bản hiện tại và lý
+        do.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassGroupingUnlock'
+        required: true
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassGroupingUnlockViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/join/:
     post:
       operationId: classes_join_create
@@ -1274,9 +1584,24 @@ paths:
           description: ''
   /courses/:
     get:
-      operationId: courses_retrieve
+      operationId: courses_list
       description: Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động;
         Giảng viên và Quản trị viên hệ thống xem toàn bộ danh mục môn học.
+      parameters:
+      - in: query
+        name: archived
+        schema:
+          type: string
+          enum:
+          - all
+          - 'false'
+          - 'true'
+        description: Lọc trạng thái lưu trữ môn học.
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm kiếm theo mã hoặc tên môn học.
       tags:
       - courses
       security:
@@ -1411,6 +1736,76 @@ paths:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
   /courses/{course_id}/:
+    get:
+      operationId: courses_retrieve
+      description: Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động;
+        Giảng viên và Quản trị viên hệ thống xem chi tiết mọi môn học.
+      parameters:
+      - in: path
+        name: course_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - courses
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
     patch:
       operationId: courses_partial_update
       description: Giảng viên được sửa môn học do mình tạo; Quản trị viên hệ thống
@@ -1433,7 +1828,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedCourseInput'
+              $ref: '#/components/schemas/PatchedCoursePatch'
       security:
       - ClassroomBearer: []
       responses:
@@ -1567,6 +1962,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /courses/{course_id}/unarchive/:
+    post:
+      operationId: courses_unarchive_create
+      description: Giảng viên được mở lại môn học do mình tạo; Quản trị viên hệ thống
+        được mở lại mọi môn học.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: course_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - courses
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseUnarchiveViewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /groups/:
     get:
       operationId: groups_list
@@ -1581,6 +2052,11 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm kiếm nhóm theo tên.
       - in: query
         name: status
         schema:
@@ -1794,8 +2270,9 @@ paths:
           description: ''
     patch:
       operationId: groups_partial_update
-      description: Trưởng nhóm, Teacher đang phụ trách hoặc Admin; lớp mở, nhóm hoạt
-        động và đúng phiên bản.
+      description: Trưởng nhóm, Teacher phụ trách hoặc Admin; lớp mở, nhóm hoạt động
+        và đúng phiên bản. Khi chuyển status=ARCHIVED bắt buộc truyền reason; toàn
+        bộ thành viên ACTIVE sẽ được giải phóng và phát sự kiện cập nhật thành viên.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1877,6 +2354,21 @@ paths:
       operationId: groups_activities_retrieve
       parameters:
       - in: query
+        name: actor_user_id
+        schema:
+          type: string
+        description: Lọc theo UUID người thực hiện.
+      - in: query
+        name: created_from
+        schema:
+          type: string
+        description: Lọc các bản ghi từ thời điểm ISO-8601 trở đi.
+      - in: query
+        name: created_to
+        schema:
+          type: string
+        description: Lọc các bản ghi đến thời điểm ISO-8601 trở về trước.
+      - in: query
         name: cursor
         schema:
           type: string
@@ -1890,6 +2382,11 @@ paths:
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: verb
+        schema:
+          type: string
+        description: 'Lọc theo mã hành động (ví dụ: group.created).'
       tags:
       - groups
       security:
@@ -2032,6 +2529,9 @@ paths:
   /groups/{group_id}/leave/:
     post:
       operationId: groups_leave_create
+      description: Thành viên tự rời nhóm khi lớp mở và chưa chốt nhóm. Trưởng nhóm
+        còn thành viên khác cần chuyển quyền trước; nếu là thành viên duy nhất của
+        nhóm thì gửi dissolve_if_sole_member=true để xác nhận giải thể nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2050,7 +2550,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MemberCommand'
+              $ref: '#/components/schemas/MemberLeave'
         required: true
       security:
       - ClassroomBearer: []
@@ -2112,6 +2612,8 @@ paths:
   /groups/{group_id}/members/:
     get:
       operationId: groups_members_retrieve
+      description: Thành viên đang hoạt động của đúng nhóm, Giảng viên phụ trách lớp
+        hoặc Quản trị viên hệ thống.
       parameters:
       - in: query
         name: cursor
@@ -2193,6 +2695,9 @@ paths:
   /groups/{group_id}/projects/:
     get:
       operationId: groups_projects_retrieve
+      description: Thành viên đang hoạt động của đúng nhóm, Giảng viên phụ trách lớp
+        hoặc Quản trị viên hệ thống (chỉ trả metadata liên kết nhóm–dự án, không tự
+        cấp quyền đọc nội dung dự án).
       parameters:
       - in: query
         name: cursor
@@ -2271,8 +2776,9 @@ paths:
     post:
       operationId: groups_remove_member_create
       description: Trưởng nhóm, Teacher đang phụ trách hoặc Admin được loại thành
-        viên thường; lớp phải mở, kể cả sau khi chốt nhóm. Trưởng nhóm phải có người
-        kế nhiệm trước khi bị loại.
+        viên khỏi nhóm; lớp phải mở, kể cả sau khi chốt nhóm. Nếu loại trưởng nhóm
+        và còn thành viên khác thì cần chuyển quyền trước; nếu là thành viên duy nhất
+        thì gửi dissolve_if_sole_member=true để giải thể nhóm.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2291,7 +2797,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MemberTarget'
+              $ref: '#/components/schemas/MemberRemove'
         required: true
       security:
       - ClassroomBearer: []
@@ -2353,6 +2859,9 @@ paths:
   /groups/{group_id}/transfer-leader/:
     post:
       operationId: groups_transfer_leader_create
+      description: Trưởng nhóm hiện tại, Giảng viên phụ trách lớp hoặc Quản trị viên
+        hệ thống được chuyển quyền trưởng nhóm sang thành viên đang hoạt động của
+        nhóm; lớp phải mở.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2933,16 +3442,31 @@ components:
         subject_id:
           type: string
           format: uuid
-        changes: {}
+        changes:
+          allOf:
+          - $ref: '#/components/schemas/ActivityChanges'
+          readOnly: true
         created_at:
           type: string
           format: date-time
       required:
+      - changes
       - class_section_id
       - id
       - subject_id
       - subject_type
       - verb
+    ActivityChanges:
+      type: object
+      properties:
+        old:
+          oneOf:
+          - {}
+          - type: 'null'
+        new:
+          oneOf:
+          - {}
+          - type: 'null'
     AdjustmentResult:
       type: object
       properties:
@@ -2963,6 +3487,35 @@ components:
         id:
           type: string
           format: uuid
+          readOnly: true
+        course_summary:
+          allOf:
+          - $ref: '#/components/schemas/CourseSummary'
+          readOnly: true
+        enrolled_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        active_group_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        primary_teacher_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        my_group_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        my_group_name:
+          type:
+          - string
+          - 'null'
           readOnly: true
         code:
           type: string
@@ -3024,11 +3577,17 @@ components:
           type: string
           format: uuid
       required:
+      - active_group_count
       - code
       - course
+      - course_summary
       - ends_on
+      - enrolled_count
       - id
+      - my_group_id
+      - my_group_name
       - name
+      - primary_teacher_id
       - starts_on
       - term
       - updated_at
@@ -3137,7 +3696,56 @@ components:
       - message
       - meta
       - success
+    ClassGroupingLock:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        force:
+          type: boolean
+      required:
+      - version
     ClassGroupingLockViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Class'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ClassGroupingUnlock:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+      required:
+      - reason
+      - version
+    ClassGroupingUnlockViewResponse:
       type: object
       properties:
         success:
@@ -3315,20 +3923,10 @@ components:
           type: integer
           minimum: 1
         status:
-          $ref: '#/components/schemas/ClassStateStatusEnum'
+          $ref: '#/components/schemas/ClassStatusEnum'
       required:
       - status
       - version
-    ClassStateStatusEnum:
-      enum:
-      - OPEN
-      - CLOSED
-      - ARCHIVED
-      type: string
-      description: |-
-        * `OPEN` - OPEN
-        * `CLOSED` - CLOSED
-        * `ARCHIVED` - ARCHIVED
     ClassStateViewResponse:
       type: object
       properties:
@@ -3355,6 +3953,16 @@ components:
       - message
       - meta
       - success
+    ClassStatusEnum:
+      enum:
+      - OPEN
+      - CLOSED
+      - ARCHIVED
+      type: string
+      description: |-
+        * `OPEN` - OPEN
+        * `CLOSED` - CLOSED
+        * `ARCHIVED` - ARCHIVED
     ClassTeacherList:
       type: object
       properties:
@@ -3552,6 +4160,32 @@ components:
       - message
       - meta
       - success
+    CourseDetail:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Course'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     CourseInput:
       type: object
       properties:
@@ -3577,6 +4211,49 @@ components:
           - 'null'
           items:
             $ref: '#/components/schemas/Course'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    CourseSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - id
+      - name
+    CourseUnarchiveViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Course'
+          - type: 'null'
         meta:
           type:
           - object
@@ -3661,6 +4338,9 @@ components:
         reason:
           type: string
           maxLength: 500
+          minLength: 1
+        dissolve_if_sole_member:
+          type: boolean
       required:
       - reason
     EnrollmentExitViewResponse:
@@ -3716,6 +4396,41 @@ components:
       - message
       - meta
       - success
+    EnrollmentReactivate:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+      required:
+      - reason
+    EnrollmentReactivateViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/Enrollment'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     EnrollmentSummary:
       type: object
       properties:
@@ -3724,6 +4439,8 @@ components:
         enrolled:
           type: integer
         already_enrolled:
+          type: integer
+        reactivated:
           type: integer
         failed:
           type: integer
@@ -3743,6 +4460,7 @@ components:
       - existing_accounts
       - failed
       - flagged
+      - reactivated
       - total_records
     ErrorDetail:
       type: object
@@ -3824,6 +4542,16 @@ components:
           type: string
           format: uuid
           readOnly: true
+        member_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        leader_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
         name:
           type: string
           maxLength: 200
@@ -3853,6 +4581,8 @@ components:
       required:
       - class_section
       - id
+      - leader_id
+      - member_count
       - name
       - updated_at
     GroupActivityViewResponse:
@@ -4081,14 +4811,6 @@ components:
       - message
       - meta
       - success
-    GroupPatchStatusEnum:
-      enum:
-      - ACTIVE
-      - ARCHIVED
-      type: string
-      description: |-
-        * `ACTIVE` - ACTIVE
-        * `ARCHIVED` - ARCHIVED
     GroupProjectsViewResponse:
       type: object
       properties:
@@ -4151,6 +4873,10 @@ components:
         class_id:
           type: string
           format: uuid
+        group_status:
+          allOf:
+          - $ref: '#/components/schemas/GroupStatusEnum'
+          default: ACTIVE
         source_version:
           type: integer
           minimum: 1
@@ -4189,6 +4915,14 @@ components:
       - message
       - meta
       - success
+    GroupStatusEnum:
+      enum:
+      - ACTIVE
+      - ARCHIVED
+      type: string
+      description: |-
+        * `ACTIVE` - ACTIVE
+        * `ARCHIVED` - ARCHIVED
     GroupTransferViewResponse:
       type: object
       properties:
@@ -4298,18 +5032,6 @@ components:
       - id
       - profile
       - user_id
-    MemberCommand:
-      type: object
-      properties:
-        version:
-          type: integer
-          minimum: 1
-        reason:
-          type: string
-          maxLength: 500
-      required:
-      - reason
-      - version
     MemberFact:
       type: object
       properties:
@@ -4342,6 +5064,40 @@ components:
         * `ACTIVE` - ACTIVE
         * `LEFT` - LEFT
         * `REMOVED` - REMOVED
+    MemberLeave:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+        dissolve_if_sole_member:
+          type: boolean
+      required:
+      - reason
+      - version
+    MemberRemove:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+        user_id:
+          type: string
+          format: uuid
+        dissolve_if_sole_member:
+          type: boolean
+      required:
+      - reason
+      - user_id
+      - version
     MemberTarget:
       type: object
       properties:
@@ -4351,6 +5107,7 @@ components:
         reason:
           type: string
           maxLength: 500
+          minLength: 1
         user_id:
           type: string
           format: uuid
@@ -4410,6 +5167,93 @@ components:
       - message
       - meta
       - success
+    MyClassGroupViewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/MyGroup'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    MyGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        member_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        leader_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        my_role:
+          allOf:
+          - $ref: '#/components/schemas/MemberFactRoleEnum'
+          readOnly: true
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          maxLength: 20
+        invite_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        source_version:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        class_section:
+          type: string
+          format: uuid
+      required:
+      - class_section
+      - id
+      - leader_id
+      - member_count
+      - members
+      - my_role
+      - name
+      - updated_at
     Pagination:
       type: object
       properties:
@@ -4459,7 +5303,7 @@ components:
         group_max_size:
           type: integer
           minimum: 1
-    PatchedCourseInput:
+    PatchedCoursePatch:
       type: object
       properties:
         code:
@@ -4478,7 +5322,11 @@ components:
           type: string
           maxLength: 200
         status:
-          $ref: '#/components/schemas/GroupPatchStatusEnum'
+          $ref: '#/components/schemas/GroupStatusEnum'
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
     ProjectLink:
       type: object
       properties:
@@ -4541,6 +5389,8 @@ components:
             additionalProperties: {}
           maxItems: 100
           minItems: 1
+        reactivate_inactive:
+          type: boolean
       required:
       - students
     StudentListResult:
@@ -4623,9 +5473,12 @@ components:
         successor_user_id:
           type: string
           format: uuid
+        dissolve_if_sole_member:
+          type: boolean
         reason:
           type: string
           maxLength: 500
+          minLength: 1
       required:
       - reason
       - target_group_id
@@ -4703,16 +5556,16 @@ components:
           format: uuid
         role:
           allOf:
-          - $ref: '#/components/schemas/TeacherInputRoleEnum'
+          - $ref: '#/components/schemas/TeacherRoleEnum'
           default: CO_TEACHER
         status:
           allOf:
-          - $ref: '#/components/schemas/TeacherInputStatusEnum'
+          - $ref: '#/components/schemas/TeacherStatusEnum'
           default: ACTIVE
       required:
       - user_id
       - version
-    TeacherInputRoleEnum:
+    TeacherRoleEnum:
       enum:
       - PRIMARY
       - CO_TEACHER
@@ -4720,7 +5573,7 @@ components:
       description: |-
         * `PRIMARY` - PRIMARY
         * `CO_TEACHER` - CO_TEACHER
-    TeacherInputStatusEnum:
+    TeacherStatusEnum:
       enum:
       - ACTIVE
       - LEFT
@@ -4728,14 +5581,6 @@ components:
       description: |-
         * `ACTIVE` - ACTIVE
         * `LEFT` - LEFT
-    Version:
-      type: object
-      properties:
-        version:
-          type: integer
-          minimum: 1
-      required:
-      - version
   securitySchemes:
     ClassroomBearer:
       type: http

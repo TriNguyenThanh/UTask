@@ -191,8 +191,8 @@ def test_teacher_history_requires_current_teacher_or_admin_role(monkeypatch, rol
     "query,admin_allowed",
     [
         (group_queries.group_detail, True),
-        (group_queries.group_members, False),
-        (group_queries.group_projects, False),
+        (group_queries.group_members, True),
+        (group_queries.group_projects, True),
     ],
 )
 @pytest.mark.parametrize("allowed", [False, True])

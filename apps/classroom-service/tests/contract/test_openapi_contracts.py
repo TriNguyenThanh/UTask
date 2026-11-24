@@ -42,13 +42,16 @@ def test_internal_schema_describes_caller_key_and_bearer_requirements(api_schema
     [
         ("patch", "/courses/{course_id}/"),
         ("post", "/courses/{course_id}/archive/"),
+        ("post", "/courses/{course_id}/unarchive/"),
         ("patch", "/classes/{class_id}/"),
         ("post", "/classes/{class_id}/state/"),
         ("post", "/classes/{class_id}/lock-grouping/"),
+        ("post", "/classes/{class_id}/unlock-grouping/"),
         ("post", "/classes/{class_id}/teachers/assign/"),
         ("post", "/classes/{class_id}/join-code/"),
         ("post", "/classes/{class_id}/students/"),
         ("post", "/classes/{class_id}/enrollments/{enrollment_id}/exit/"),
+        ("post", "/classes/{class_id}/enrollments/{enrollment_id}/reactivate/"),
         ("patch", "/groups/{group_id}/"),
         ("post", "/groups/{group_id}/invite-code/"),
         ("post", "/groups/{group_id}/leave/"),
@@ -87,6 +90,23 @@ def test_list_responses_validate_against_generated_contract(
     reference = api_schema["paths"][template]["get"]["responses"]["200"]["content"][
         "application/json"
     ]["schema"]
+    validator = jsonschema.Draft202012Validator(
+        {**reference, "components": api_schema["components"]},
+        format_checker=jsonschema.FormatChecker(),
+    )
+    validator.validate(response.json())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("actor_key", ["outsider", "leader"])
+def test_my_group_response_validates_against_generated_contract(
+    group, actors, client_for, api_schema, actor_key
+):
+    response = client_for(actors[actor_key]).get(f"/classes/{group.class_section_id}/my-group/")
+    assert response.status_code == 200
+    reference = api_schema["paths"]["/classes/{class_id}/my-group/"]["get"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]
     validator = jsonschema.Draft202012Validator(
         {**reference, "components": api_schema["components"]},
         format_checker=jsonschema.FormatChecker(),

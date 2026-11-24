@@ -49,3 +49,12 @@ def test_authentication_refuses_missing_revoked_and_wrong_token(
     assert client.get("/classes/").status_code == 401
     client.credentials(HTTP_AUTHORIZATION="bEaReR " + token(actors["leader"]))
     assert client.get("/classes/").status_code == 200
+
+
+@pytest.mark.parametrize("authorization", ["Bearer invalid-jwt", "Bearer", "Basic bad"])
+def test_docs_and_openapi_ignore_invalid_authorization_header(identity, authorization):
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=authorization)
+    assert client.get("/docs/").status_code == 200
+    assert client.get("/openapi/", HTTP_ACCEPT="application/json").status_code == 200
+    assert identity["calls"] == []
