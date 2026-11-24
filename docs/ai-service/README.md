@@ -126,8 +126,8 @@ root qua `infra/env/database.env`; URL ứng dụng phải khớp các giá tr�
 
 Các biến AI dùng chung đi từ `.env` qua `infra/env/ai-service.env` vào API,
 worker, dispatcher và beat. Ba biến ngân sách `AI_MAX_MODEL_CALLS`,
-`AI_MAX_CONTEXT_TOOL_CALLS` và `AI_MAX_OUTPUT_TOKENS` có thể tăng theo nhu cầu,
-ví dụ lần lượt `12`,
+`AI_MAX_CONTEXT_TOOL_CALLS` và `AI_MAX_OUTPUT_TOKENS` đi qua mapping chung này;
+có thể tăng theo nhu cầu, ví dụ lần lượt `12`,
 `20`, `128000`, rồi recreate các process AI. Model/proxy phải hỗ trợ mức
 `max_tokens` được gửi lên vì adapter hiện dùng phần ngân sách còn lại làm
 giới hạn đầu ra cho mỗi lần gọi. Thời hạn thực thi mặc định là 300 giây (5 phút);
