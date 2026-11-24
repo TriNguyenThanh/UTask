@@ -969,6 +969,9 @@ paths:
   /projects/{project_id}/ai-actions/apply/:
     post:
       operationId: projects_ai_actions_apply_create
+      description: 'Áp dụng nhóm thay đổi điều phối từ đề xuất AI. Lưu ý: intent risk_analysis
+        v1 chưa cung cấp hành động có cấu trúc; loại ACTION được hoãn sang AI v2 theo
+        DG5.'
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2064,6 +2067,85 @@ paths:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
         '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+  /projects/{project_id}/github/activity/:
+    get:
+      operationId: projects_github_activity_retrieve
+      description: Lấy hoạt động GitHub gần nhất (nhánh, commit, Pull Request, issue)
+        của kho mã nguồn đang kết nối với dự án kèm danh sách linked_task_ids đã xác
+        nhận. Khả dụng cho thành viên đang hoạt động của dự án và giảng viên phụ trách
+        lớp; trả ngay trạng thái DISCONNECTED/PENDING nếu dự án chưa hoàn tất kết nối.
+      parameters:
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectGitHubActivityEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -8643,6 +8725,159 @@ components:
           items:
             $ref: '#/components/schemas/TaskGitHubLinkSummary'
           readOnly: true
+    GitHubActivityStatusEnum:
+      enum:
+      - DISCONNECTED
+      - PENDING
+      - CONNECTED
+      - PARTIAL
+      - STALE
+      - REAUTH_REQUIRED
+      type: string
+      description: '* `DISCONNECTED` - DISCONNECTED
+
+        * `PENDING` - PENDING
+
+        * `CONNECTED` - CONNECTED
+
+        * `PARTIAL` - PARTIAL
+
+        * `STALE` - STALE
+
+        * `REAUTH_REQUIRED` - REAUTH_REQUIRED'
+    GitHubBranch:
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+        sha:
+          type: string
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        linked_task_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+      required:
+      - linked_task_ids
+      - name
+      - sha
+      - url
+    GitHubCommit:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        linked_task_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+      required:
+      - id
+      - linked_task_ids
+      - occurred_at
+      - title
+      - url
+    GitHubIssue:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/GitHubIssueStateEnum'
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - occurred_at
+      - status
+      - title
+      - url
+    GitHubIssueStateEnum:
+      enum:
+      - OPEN
+      - CLOSED
+      type: string
+      description: '* `OPEN` - OPEN
+
+        * `CLOSED` - CLOSED'
+    GitHubPullRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/GitHubPullRequestStateEnum'
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        linked_task_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+      required:
+      - id
+      - linked_task_ids
+      - occurred_at
+      - status
+      - title
+      - url
+    GitHubPullRequestStateEnum:
+      enum:
+      - OPEN
+      - MERGED
+      - CLOSED
+      type: string
+      description: '* `OPEN` - OPEN
+
+        * `MERGED` - MERGED
+
+        * `CLOSED` - CLOSED'
     GitHubLink:
       type: object
       properties:
@@ -10476,6 +10711,115 @@ components:
         data:
           oneOf:
           - $ref: '#/components/schemas/Project'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ProjectGitHubActivity:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/GitHubActivityStatusEnum'
+          readOnly: true
+        repo_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        repo_owner:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        repo_name:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        default_branch:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        connection_generation:
+          type: integer
+          minimum: 0
+          readOnly: true
+        open_pull_requests_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitHubBranch'
+          readOnly: true
+        commits:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitHubCommit'
+          readOnly: true
+        pull_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitHubPullRequest'
+          readOnly: true
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitHubIssue'
+          readOnly: true
+        synced_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          readOnly: true
+        cached:
+          type: boolean
+          readOnly: true
+      required:
+      - branches
+      - cached
+      - commits
+      - connection_generation
+      - default_branch
+      - issues
+      - open_pull_requests_count
+      - project_id
+      - pull_requests
+      - repo_id
+      - repo_name
+      - repo_owner
+      - status
+      - synced_at
+    ProjectGitHubActivityEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/ProjectGitHubActivity'
           - type: 'null'
         meta:
           type:

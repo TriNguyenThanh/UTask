@@ -33,7 +33,13 @@ class BacklogApplyView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
         scope = receipt_scope(request, key)
-        proof = verified_proof(request.user, project.pk, payload, scope)
+        proof = verified_proof(
+            request.user,
+            project.pk,
+            payload,
+            scope,
+            bearer=request.headers.get("Authorization", ""),
+        )
         return apply_tasks(request.user, project.pk, payload, scope, proof)
 
 
@@ -65,7 +71,14 @@ class SubtaskApplyView(GenericAPIView):
                     "acceptance_criteria",
                 },
             )
-        proof = verified_proof(request.user, parent.project_id, payload, scope, parent_id=parent.pk)
+        proof = verified_proof(
+            request.user,
+            parent.project_id,
+            payload,
+            scope,
+            parent_id=parent.pk,
+            bearer=request.headers.get("Authorization", ""),
+        )
         return apply_tasks(
             request.user, parent.project_id, payload, scope, proof, parent_id=parent.pk
         )
@@ -87,7 +100,13 @@ class ActionApplyView(GenericAPIView):
     serializer_class = ActionApplySerializer
 
     @extend_schema(
-        request=ActionApplySerializer, parameters=[KEY_PARAMETER], responses={200: APPLY, **ERRORS}
+        request=ActionApplySerializer,
+        description=(
+            "Áp dụng nhóm thay đổi điều phối từ đề xuất AI. Lưu ý: intent risk_analysis v1 "
+            "chưa cung cấp hành động có cấu trúc; loại ACTION được hoãn sang AI v2 theo DG5."
+        ),
+        parameters=[KEY_PARAMETER],
+        responses={200: APPLY, **ERRORS},
     )
     def post(self, request, project_id):
         project = visible_project(request.user, project_id, for_write=True)
@@ -97,5 +116,11 @@ class ActionApplyView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
         scope = receipt_scope(request, key)
-        proof = verified_action_proof(request.user, project.pk, payload, scope)
+        proof = verified_action_proof(
+            request.user,
+            project.pk,
+            payload,
+            scope,
+            bearer=request.headers.get("Authorization", ""),
+        )
         return apply_actions(request.user, project.pk, payload, scope, proof)

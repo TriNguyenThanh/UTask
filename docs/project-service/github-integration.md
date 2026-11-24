@@ -36,6 +36,7 @@ Qua gateway, các đường công khai dưới đây có prefix `/api/work`.
 | Method/path | Quyền và hành vi |
 | --- | --- |
 | GET `/projects/{project_id}/github/repository/` | Quyền đọc Project hiện có; chỉ đọc Work, không gọi provider. |
+| GET `/projects/{project_id}/github/activity/` | Thành viên ACTIVE hoặc giảng viên phụ trách lớp; trả ngay `DISCONNECTED`/`PENDING` từ `work_db` nếu chưa kết nối; khi `CONNECTED` gọi `RemoteIntegration.fetch_project_activity()` có cache Redis theo `(project_id, connection_generation)` (chỉ cache `CONNECTED`/`PARTIAL`) và luôn gộp `linked_task_ids` đã `CONFIRMED` từ `work_db`. |
 | POST cùng path | Leader ACTIVE trên Project còn ghi được; body `github_repo_id` là chuỗi số nguyên dương, `operation_id`, `expected_connection_generation`. |
 | DELETE cùng path | Leader ACTIVE; body `operation_id`, `expected_connection_generation`; không gỡ GitHub App của Project khác. |
 | POST `/tasks/{task_id}/github-links/` | Thành viên ACTIVE có quyền ghi; gửi `link_type` và `github_ref_id`, metadata lấy từ Integration. |
@@ -137,8 +138,7 @@ Trả đúng `applied`, `project_id`, `operation_id`, `generation`, `status=PEND
 không phải projection mới nhất. Không có/chưa chấp nhận trả 404. Không nhận
 query/body. Gateway chặn `/api/work/api/v1/internal` và mọi path con bằng 404.
 
-Command `consume_integration` đọc topic `utask.integration.events`. Envelope
-Integration dùng `payload`, không phải `data` của Work/Identity/Classroom.
+Command `consume_integration` đọc topic `utask.integration.events` và định tuyến theo `event_type` cho 3 sự kiện hợp đồng: `integration.project.connection.changed`, `integration.github.account.changed` (đồng bộ `ProjectMember.is_github_verified` qua `apply_account_fact`) và `integration.github.reference.detected` (giải mã `task_code` và gọi `ingest_reference` tạo ứng viên `PENDING`, bỏ qua an toàn mã task/generation không khớp). Envelope Integration dùng `payload`, không phải `data` của Work/Identity/Classroom.
 Chống lặp theo event ID/hash, kiểm producer/schema/binding và operation đã được
 Work chấp nhận trước khi áp dụng. Receipt event commit cùng mutation; offset
 chỉ commit sau đó hoặc sau DLQ ACK. Lỗi tạm thời thử lại tối đa 5 lần, sau đó
@@ -158,6 +158,7 @@ mapping hay tài liệu.
 | --- | --- |
 | `WORK_INTEGRATION_ADAPTER` | `infrastructure.integration.UnavailableIntegration`; chọn `infrastructure.integration.RemoteIntegration` khi môi trường sẵn sàng. |
 | `WORK_GITHUB_CONNECTION_ENABLED` | `false`; bật nhận connect/disconnect mới. |
+| `WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS` | `45`; thời gian lưu cache Redis (giây, giới hạn `0..300`) cho hoạt động GitHub trạng thái `CONNECTED`/`PARTIAL`. |
 | `WORK_INTEGRATION_BASE_URL` | `http://integration-service:8000`; origin nội bộ, không có path/query/credential. |
 | `WORK_INTEGRATION_SERVICE_KEY` | Key outbound Work→Integration, khớp caller `work` trong `INTEGRATION_SERVICE_KEYS` phía Integration. |
 | `WORK_INTEGRATION_INBOUND_KEYS` | JSON list 1–2 key hiện tại/trước của Integration→Work; mặc định `[]`. Key hiện hành khớp `INTEGRATION_WORK_SERVICE_KEY` phía Integration. |
