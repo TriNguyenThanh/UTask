@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.collaboration.views.activities import ActivityListView
+from apps.collaboration.views.activities import ActivityListView, ProjectActivityListView
 from apps.collaboration.views.attachments import (
     AttachmentDeleteView,
     AttachmentDownloadView,
@@ -15,6 +15,7 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/comments/", CommentListView.as_view()),
     path("projects/<uuid:project_id>/comments/", CommentListView.as_view()),
     path("tasks/<uuid:task_id>/activities/", ActivityListView.as_view()),
+    path("projects/<uuid:project_id>/activities/", ProjectActivityListView.as_view()),
 ]
 for prefix in ["tasks/<uuid:task_id>/", "projects/<uuid:project_id>/"]:
     urlpatterns += [

@@ -8,6 +8,7 @@ pytestmark = [pytest.mark.postgres, pytest.mark.django_db(transaction=True)]
 def test_group_project_migration_preserves_identifier_and_guards_unsafe_rollback():
     previous = [("projects", "0001_initial")]
     current = [("projects", "0002_multiple_group_projects")]
+    latest = MigrationExecutor(connection).loader.graph.leaf_nodes()
 
     def migrate(target):
         executor = MigrationExecutor(connection)
@@ -51,4 +52,4 @@ def test_group_project_migration_preserves_identifier_and_guards_unsafe_rollback
         migrate(previous)
         assert constraints()["uq_one_primary_project_per_group"]["unique"]
     finally:
-        migrate(current)
+        migrate(latest)

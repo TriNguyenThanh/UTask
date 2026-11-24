@@ -17,6 +17,13 @@ class Activity(models.Model):
     label = models.ForeignKey("tasks.Label", null=True, on_delete=models.PROTECT)
     comment = models.ForeignKey("collaboration.Comment", null=True, on_delete=models.PROTECT)
     sprint = models.ForeignKey("sprints.Sprint", null=True, on_delete=models.PROTECT)
+    scope_project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        db_index=False,
+        on_delete=models.PROTECT,
+        related_name="scoped_activities",
+    )
     actor_user_id = models.UUIDField(null=True)
     verb = models.CharField(max_length=100)
     field = models.CharField(max_length=100, null=True)
@@ -110,6 +117,12 @@ class Activity(models.Model):
                 ),
                 name="chk_activity_subject",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["scope_project", "-created_at", "-id"],
+                name="ix_activity_scope_project_time",
+            ),
         ]
 
 

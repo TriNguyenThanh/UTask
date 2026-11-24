@@ -32,6 +32,11 @@ thành; không phụ thuộc LLM. AI phân tích/giải thích hoặc đề xu�
 không quyết định giá trị chỉ số. Chỉ số, cửa sổ tính và xử lý dữ liệu thiếu
 cần đặc tả và test trước khi công bố API.
 
+**Bổ sung Đợt 3 đã triển khai trong mã nguồn (kiểm thử local trên PostgreSQL 16; chưa xác minh staging):**
+- Tổng hợp cá nhân xuyên dự án trong `work_db`: `GET /me/tasks/` và `GET /me/overview/` (`work-metrics-v1`).
+- Giám sát dự án theo lớp cho giảng viên với tín hiệu rủi ro tất định (xác minh phạm vi từ Classroom internal API, fail-closed `503`): `GET /teacher/oversight/projects/` (dựa trên `Project.last_activity_at` cập nhật tự động qua `record_activities`).
+- Làm giàu thẻ `/projects/{id}/kanban/` (19 trường, 5 bộ lọc mới gồm `include_subtasks` mặc định `false`), mở `GET /projects/{id}/activities/` (chỉ mục `Activity.scope_project`) và lọc `?is_teacher_feedback=true|false` cho bình luận. Hợp đồng chuẩn cập nhật tại [Work contract](../../contracts/api/work-service.yaml).
+
 ## Giao tiếp
 
 Classroom sở hữu Group/GroupMember; Work sở hữu Project/ProjectMember.

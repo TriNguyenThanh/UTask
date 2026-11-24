@@ -32,6 +32,7 @@ class Project(models.Model):
     github_repo_id = models.CharField(max_length=100, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    last_activity_at = models.DateTimeField(null=True)
     archived_at = models.DateTimeField(null=True)
     deleted_at = models.DateTimeField(null=True)
 

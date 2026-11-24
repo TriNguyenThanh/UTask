@@ -4,11 +4,11 @@ info:
   version: '1.5'
 paths:
   /api/v1/internal/ai/targets/{target_type}/{target_id}/authorize:
-    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1authorize'
+    $ref: ./work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1authorize
   /api/v1/internal/ai/targets/{target_type}/{target_id}/contexts/{domain}:
-    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1contexts~1{domain}'
+    $ref: ./work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1ai~1targets~1{target_type}~1{target_id}~1contexts~1{domain}
   /api/v1/internal/integration/projects/{project_id}/authorize:
-    $ref: './work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1integration~1projects~1{project_id}~1authorize'
+    $ref: ./work-ai-context-v1.yaml#/paths/~1api~1v1~1internal~1integration~1projects~1{project_id}~1authorize
   /api/v1/internal/integration/projects/{project_id}/github/operations/{operation_id}:
     get:
       operationId: internal_integration_github_receipt
@@ -348,6 +348,203 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
+  /me/overview/:
+    get:
+      operationId: me_overview_retrieve
+      description: 'Tổng hợp cá nhân xuyên dự án cho màn hình Công việc của tôi: bộ
+        đếm công việc đang mở, danh sách dự án đang tham gia kèm chu kỳ hiện tại và
+        tiến độ work-metrics-v1, cùng tối đa 20 công việc sắp tới hạn.'
+      tags:
+      - me
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyOverviewEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+  /me/tasks/:
+    get:
+      operationId: me_tasks_list
+      description: Danh sách công việc xuyên dự án được gán cho người dùng hiện tại
+        trên các dự án đang hoạt động mà người dùng là thành viên ACTIVE (truy vấn
+        nội bộ trong work_db).
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Con trỏ phân trang.
+      - in: query
+        name: due_bucket
+        schema:
+          type: string
+          enum:
+          - no_due
+          - overdue
+          - this_week
+          - today
+          - upcoming
+        description: 'Nhóm hạn theo ngày nghiệp vụ Asia/Ho_Chi_Minh: overdue (< hôm
+          nay), today (hôm nay), this_week (7 ngày tới tính từ hôm nay), upcoming
+          (sau 7 ngày), no_due (chưa đặt hạn).'
+      - in: query
+        name: include_completed
+        schema:
+          type: boolean
+        description: Bao gồm công việc ở trạng thái COMPLETED/CANCELLED (mặc định
+          false).
+      - in: query
+        name: is_blocked
+        schema:
+          type: boolean
+        description: Lọc công việc đang bị chặn.
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -due_date
+          - -updated_at
+          - due_date
+          - priority
+          - updated_at
+        description: Sắp xếp (mặc định due_date; hỗ trợ due_date, -due_date, priority,
+          updated_at).
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Số bản ghi mỗi trang (1..100, mặc định 20).
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - HIGH
+          - LOW
+          - MEDIUM
+          - URGENT
+        description: Lọc mức ưu tiên.
+      - in: query
+        name: project_id
+        schema:
+          type: string
+        description: Lọc theo UUID dự án.
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Tìm theo tiêu đề, mô tả hoặc mã công việc.
+      tags:
+      - me
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyTasksEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
   /projects/:
     get:
       operationId: projects_list
@@ -605,6 +802,121 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+  /projects/{project_id}/activities/:
+    get:
+      operationId: projects_activities_list
+      description: Nhật ký hoạt động cấp dự án bao gồm toàn bộ 8 loại đối tượng thuộc
+        dự án, làm giàu thông tin người thực hiện theo lô từ UserProjection.
+      parameters:
+      - in: query
+        name: actor_user_id
+        schema:
+          type: string
+        description: Lọc theo UUID người thực hiện.
+      - in: query
+        name: created_from
+        schema:
+          type: string
+        description: Lọc từ thời điểm ISO-8601 (bao gồm).
+      - in: query
+        name: created_to
+        schema:
+          type: string
+        description: Lọc đến thời điểm ISO-8601 (bao gồm).
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Con trỏ phân trang.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Số bản ghi mỗi trang (1..100, mặc định 20).
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: subject_type
+        schema:
+          type: string
+          enum:
+          - COMMENT
+          - EPIC
+          - LABEL
+          - PROJECT
+          - PROJECT_MEMBER
+          - SPRINT
+          - STATE
+          - TASK
+        description: Lọc theo loại đối tượng trong nhật ký dự án.
+      - in: query
+        name: verb
+        schema:
+          type: string
+        description: Lọc theo hành động (ví dụ created, updated).
+      tags:
+      - projects
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectActivitiesEnvelope'
           description: ''
         '400':
           content:
@@ -1058,6 +1370,87 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
+  /projects/{project_id}/attachments/presigned-url/:
+    post:
+      operationId: projects_attachments_presigned_url_create
+      parameters:
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+        required: true
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
   /projects/{project_id}/attachments/{attachment_id}/:
     delete:
       operationId: projects_attachments_destroy
@@ -1208,87 +1601,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
-  /projects/{project_id}/attachments/presigned-url/:
-    post:
-      operationId: projects_attachments_presigned_url_create
-      parameters:
-      - in: path
-        name: project_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - projects
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-        required: true
-      security:
-      - WorkBearer: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PresignEnvelope'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
   /projects/{project_id}/comments/:
     get:
       operationId: projects_comments_retrieve
@@ -1297,6 +1609,11 @@ paths:
         name: cursor
         schema:
           type: string
+      - in: query
+        name: is_teacher_feedback
+        schema:
+          type: boolean
+        description: Lọc chỉ phản hồi giảng viên (true) hoặc bình luận thường (false).
       - in: query
         name: page_size
         schema:
@@ -2010,9 +2327,21 @@ paths:
         schema:
           type: string
       - in: query
+        name: epic_id
+        schema:
+          type: string
+      - in: query
+        name: include_subtasks
+        schema:
+          type: boolean
+      - in: query
         name: is_blocked
         schema:
           type: boolean
+      - in: query
+        name: label_id
+        schema:
+          type: string
       - in: query
         name: limit_per_column
         schema:
@@ -2028,7 +2357,15 @@ paths:
           format: uuid
         required: true
       - in: query
+        name: search
+        schema:
+          type: string
+      - in: query
         name: sprint_id
+        schema:
+          type: string
+      - in: query
+        name: type
         schema:
           type: string
       tags:
@@ -2103,9 +2440,21 @@ paths:
         schema:
           type: string
       - in: query
+        name: epic_id
+        schema:
+          type: string
+      - in: query
+        name: include_subtasks
+        schema:
+          type: boolean
+      - in: query
         name: is_blocked
         schema:
           type: boolean
+      - in: query
+        name: label_id
+        schema:
+          type: string
       - in: query
         name: page_size
         schema:
@@ -2121,6 +2470,10 @@ paths:
           format: uuid
         required: true
       - in: query
+        name: search
+        schema:
+          type: string
+      - in: query
         name: sprint_id
         schema:
           type: string
@@ -2130,6 +2483,10 @@ paths:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: type
+        schema:
+          type: string
       tags:
       - projects
       security:
@@ -4966,6 +5323,87 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
+  /tasks/{task_id}/attachments/presigned-url/:
+    post:
+      operationId: tasks_attachments_presigned_url_create
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PresignInput'
+        required: true
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
   /tasks/{task_id}/attachments/{attachment_id}/:
     delete:
       operationId: tasks_attachments_destroy
@@ -5116,87 +5554,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
-  /tasks/{task_id}/attachments/presigned-url/:
-    post:
-      operationId: tasks_attachments_presigned_url_create
-      parameters:
-      - in: path
-        name: task_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - tasks
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PresignInput'
-        required: true
-      security:
-      - WorkBearer: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PresignEnvelope'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkErrorEnvelope'
-          description: ''
   /tasks/{task_id}/block/:
     patch:
       operationId: tasks_block_partial_update
@@ -5285,6 +5642,11 @@ paths:
         name: cursor
         schema:
           type: string
+      - in: query
+        name: is_teacher_feedback
+        schema:
+          type: boolean
+        description: Lọc chỉ phản hồi giảng viên (true) hoặc bình luận thường (false).
       - in: query
         name: page_size
         schema:
@@ -6233,6 +6595,96 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkErrorEnvelope'
           description: ''
+  /teacher/oversight/projects/:
+    get:
+      operationId: teacher_oversight_projects_list
+      description: Giám sát tiến độ và tín hiệu rủi ro tất định (work-metrics-v1)
+        theo lô các dự án nhóm mà giảng viên đang phụ trách. Quyền giảng viên luôn
+        được xác minh từ Classroom Service (fail-closed 503 CLASSROOM_UNAVAILABLE
+        nếu Classroom gián đoạn).
+      parameters:
+      - in: query
+        name: class_id
+        schema:
+          type: string
+        description: Lọc theo mã lớp học phần.
+      - in: query
+        name: classroom_group_ids
+        schema:
+          type: string
+        description: Danh sách tối đa 100 mã nhóm học tập (ngăn cách bằng dấu phẩy
+          hoặc lặp tham số). Luôn được giao với tập nhóm giảng viên thực sự phụ trách
+          từ Classroom Service.
+      - in: query
+        name: inactive_days
+        schema:
+          type: integer
+        description: Ngưỡng số ngày không hoạt động để phát tín hiệu (1..90, mặc định
+          7).
+      - in: query
+        name: include_archived
+        schema:
+          type: boolean
+        description: Bao gồm các dự án đã lưu trữ (mặc định false).
+      tags:
+      - teacher
+      security:
+      - WorkBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherOversightEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkErrorEnvelope'
+          description: ''
 components:
   schemas:
     APIError:
@@ -6272,6 +6724,33 @@ components:
       - context_version
       - item_id
       - proposal_id
+    ActiveSprintBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        start_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+        end_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+      required:
+      - end_date
+      - id
+      - name
+      - start_date
     ActivitiesEnvelope:
       type: object
       properties:
@@ -6582,10 +7061,11 @@ components:
       - CONFIRMED
       - EXPIRED
       type: string
-      description: |-
-        * `PENDING` - Pending
+      description: '* `PENDING` - Pending
+
         * `CONFIRMED` - Confirmed
-        * `EXPIRED` - Expired
+
+        * `EXPIRED` - Expired'
     AttachmentsEnvelope:
       type: object
       properties:
@@ -6709,10 +7189,11 @@ components:
       - BUG
       - STORY
       type: string
-      description: |-
-        * `TASK` - TASK
+      description: '* `TASK` - TASK
+
         * `BUG` - BUG
-        * `STORY` - STORY
+
+        * `STORY` - STORY'
     Board:
       type: object
       properties:
@@ -6745,17 +7226,115 @@ components:
           type: string
         title:
           type: string
+        type:
+          $ref: '#/components/schemas/WorkTaskTypeEnum'
+        priority:
+          $ref: '#/components/schemas/WorkPriorityEnum'
+        story_points:
+          type:
+          - integer
+          - 'null'
+        due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+        is_blocked:
+          type: boolean
+        blocked_reason:
+          type:
+          - string
+          - 'null'
+        epic_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        parent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
         sort_order:
           type: number
           format: double
         version:
           type: integer
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardCardAssignee'
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardCardLabel'
+        subtasks_count:
+          type: integer
+          minimum: 0
+        comments_count:
+          type: integer
+          minimum: 0
+        attachments_count:
+          type: integer
+          minimum: 0
+        has_pull_request:
+          type: boolean
       required:
+      - assignees
+      - attachments_count
+      - blocked_reason
       - code
+      - comments_count
+      - due_date
+      - epic_id
+      - has_pull_request
       - id
+      - is_blocked
+      - labels
+      - parent_id
+      - priority
       - sort_order
+      - story_points
+      - subtasks_count
       - title
+      - type
       - version
+    BoardCardAssignee:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        avatar_url:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+      required:
+      - avatar_url
+      - display_name
+      - user_id
+    BoardCardLabel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+      required:
+      - color
+      - id
+      - name
     BoardColumn:
       type: object
       properties:
@@ -6979,6 +7558,20 @@ components:
           format: uuid
       required:
       - expected_version
+    CodeEnum:
+      enum:
+      - OVERDUE_TASKS
+      - BLOCKED_TASKS
+      - NO_RECENT_ACTIVITY
+      - BEHIND_SPRINT_SCHEDULE
+      type: string
+      description: '* `OVERDUE_TASKS` - OVERDUE_TASKS
+
+        * `BLOCKED_TASKS` - BLOCKED_TASKS
+
+        * `NO_RECENT_ACTIVITY` - NO_RECENT_ACTIVITY
+
+        * `BEHIND_SPRINT_SCHEDULE` - BEHIND_SPRINT_SCHEDULE'
     Comment:
       type: object
       properties:
@@ -7136,14 +7729,106 @@ components:
       - text/plain
       - application/json
       type: string
-      description: |-
-        * `image/jpeg` - image/jpeg
+      description: '* `image/jpeg` - image/jpeg
+
         * `image/png` - image/png
+
         * `image/webp` - image/webp
+
         * `application/pdf` - application/pdf
+
         * `application/zip` - application/zip
+
         * `text/plain` - text/plain
-        * `application/json` - application/json
+
+        * `application/json` - application/json'
+    ContextDocument:
+      type: object
+      properties:
+        domain:
+          $ref: '#/components/schemas/DomainEnum'
+        as_of:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ContextDocumentStatusEnum'
+        source_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+        data:
+          type: object
+          additionalProperties: {}
+        warning:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+      required:
+      - as_of
+      - data
+      - domain
+      - source_version
+      - status
+      - warning
+      additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            status:
+              enum:
+              - available
+              - partial
+        then:
+          oneOf:
+          - properties:
+              domain:
+                const: project
+              data:
+                $ref: '#/components/schemas/ProjectContext'
+          - properties:
+              domain:
+                const: task
+              data:
+                $ref: '#/components/schemas/TaskContext'
+          - properties:
+              domain:
+                const: team
+              data:
+                $ref: '#/components/schemas/TeamContext'
+          - properties:
+              domain:
+                const: progress
+              data:
+                $ref: '#/components/schemas/ProgressContext'
+      - if:
+          properties:
+            status:
+              const: partial
+        then:
+          properties:
+            warning:
+              type: string
+              minLength: 1
+              maxLength: 500
+    ContextDocumentStatusEnum:
+      enum:
+      - available
+      - partial
+      - missing
+      - stale
+      - unavailable
+      type: string
+      description: '* `available` - available
+
+        * `partial` - partial
+
+        * `missing` - missing
+
+        * `stale` - stale
+
+        * `unavailable` - unavailable'
     CreateProject:
       type: object
       properties:
@@ -7559,6 +8244,20 @@ components:
       - related_task_code
       - related_task_id
       - relation_type
+    DomainEnum:
+      enum:
+      - project
+      - task
+      - team
+      - progress
+      type: string
+      description: '* `project` - project
+
+        * `task` - task
+
+        * `team` - team
+
+        * `progress` - progress'
     Download:
       type: object
       properties:
@@ -7709,11 +8408,13 @@ components:
       - COMPLETED
       - CANCELLED
       type: string
-      description: |-
-        * `PLANNED` - Planned
+      description: '* `PLANNED` - Planned
+
         * `IN_PROGRESS` - In Progress
+
         * `COMPLETED` - Completed
-        * `CANCELLED` - Cancelled
+
+        * `CANCELLED` - Cancelled'
     EpicsEnvelope:
       type: object
       properties:
@@ -8138,13 +8839,80 @@ components:
       - COMPLETED
       - CANCELLED
       type: string
-      description: |-
-        * `BACKLOG` - Backlog
+      description: '* `BACKLOG` - Backlog
+
         * `UNSTARTED` - Unstarted
+
         * `STARTED` - Started
+
         * `REVIEW` - Review
+
         * `COMPLETED` - Completed
-        * `CANCELLED` - Cancelled
+
+        * `CANCELLED` - Cancelled'
+    IntegrationAuthorizeEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/IntegrationAuthorizeResult'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    IntegrationAuthorizeInput:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/IntegrationAuthorizeInputActionEnum'
+      required:
+      - action
+    IntegrationAuthorizeInputActionEnum:
+      enum:
+      - github.read
+      type: string
+      description: '* `github.read` - github.read'
+    IntegrationAuthorizeResult:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        allowed:
+          type: boolean
+      required:
+      - action
+      - allowed
+      - project_id
+    IntentEnum:
+      enum:
+      - backlog_generation
+      - task_decomposition
+      - risk_analysis
+      type: string
+      description: '* `backlog_generation` - backlog_generation
+
+        * `task_decomposition` - task_decomposition
+
+        * `risk_analysis` - risk_analysis'
     KindEnum:
       enum:
       - SET_DEADLINE
@@ -8152,11 +8920,13 @@ components:
       - SET_ASSIGNEES
       - SPRINT_SCOPE
       type: string
-      description: |-
-        * `SET_DEADLINE` - SET_DEADLINE
+      description: '* `SET_DEADLINE` - SET_DEADLINE
+
         * `SET_PRIORITY` - SET_PRIORITY
+
         * `SET_ASSIGNEES` - SET_ASSIGNEES
-        * `SPRINT_SCOPE` - SPRINT_SCOPE
+
+        * `SPRINT_SCOPE` - SPRINT_SCOPE'
     Label:
       type: object
       properties:
@@ -8270,7 +9040,8 @@ components:
           $ref: '#/components/schemas/LinkTypeEnum'
         github_ref_id:
           type: string
-          description: Với COMMIT, mã thay đổi GitHub phải gồm 7–40 ký tự 0–9, a–f hoặc A–F.
+          description: Với COMMIT, mã thay đổi GitHub phải gồm 7–40 ký tự 0–9, a–f
+            hoặc A–F.
           maxLength: 300
       required:
       - github_ref_id
@@ -8281,10 +9052,11 @@ components:
       - COMMIT
       - PULL_REQUEST
       type: string
-      description: |-
-        * `BRANCH` - Branch
+      description: '* `BRANCH` - Branch
+
         * `COMMIT` - Commit
-        * `PULL_REQUEST` - Pull Request
+
+        * `PULL_REQUEST` - Pull Request'
     ListMeta:
       type: object
       properties:
@@ -8426,10 +9198,11 @@ components:
       - LEFT
       - REMOVED
       type: string
-      description: |-
-        * `ACTIVE` - Active
+      description: '* `ACTIVE` - Active
+
         * `LEFT` - Left
-        * `REMOVED` - Removed
+
+        * `REMOVED` - Removed'
     MetricTotals:
       type: object
       properties:
@@ -8484,6 +9257,621 @@ components:
       - task_count
       - unestimated_count
       - work_item_count
+    MyOverview:
+      type: object
+      properties:
+        business_date:
+          type: string
+          format: date
+          readOnly: true
+        formula_version:
+          type: string
+          readOnly: true
+        task_counts:
+          allOf:
+          - $ref: '#/components/schemas/MyOverviewTaskCounts'
+          readOnly: true
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyOverviewProject'
+          readOnly: true
+        upcoming_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyTask'
+          readOnly: true
+      required:
+      - business_date
+      - formula_version
+      - projects
+      - task_counts
+      - upcoming_tasks
+    MyOverviewEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/MyOverview'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    MyOverviewProject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        identifier:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        classroom_class_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        classroom_group_id:
+          type: string
+          readOnly: true
+        my_role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        last_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          readOnly: true
+        active_sprint:
+          oneOf:
+          - $ref: '#/components/schemas/ActiveSprintBrief'
+          - type: 'null'
+          readOnly: true
+        progress:
+          allOf:
+          - $ref: '#/components/schemas/MyOverviewProjectProgress'
+          readOnly: true
+      required:
+      - active_sprint
+      - classroom_class_id
+      - classroom_group_id
+      - id
+      - identifier
+      - last_activity_at
+      - my_role
+      - name
+      - progress
+    MyOverviewProjectProgress:
+      type: object
+      properties:
+        work_item_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completed_work_item_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completion_percent:
+          type:
+          - number
+          - 'null'
+          format: double
+          exclusiveMaximum: 100000
+          exclusiveMinimum: -100000
+          readOnly: true
+        overdue_task_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        blocked_task_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        known_estimate_points:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completed_estimate_points:
+          type: integer
+          minimum: 0
+          readOnly: true
+      required:
+      - blocked_task_count
+      - completed_estimate_points
+      - completed_work_item_count
+      - completion_percent
+      - known_estimate_points
+      - overdue_task_count
+      - work_item_count
+    MyOverviewTaskCounts:
+      type: object
+      properties:
+        total_open:
+          type: integer
+          minimum: 0
+          readOnly: true
+        overdue:
+          type: integer
+          minimum: 0
+          readOnly: true
+        due_today:
+          type: integer
+          minimum: 0
+          readOnly: true
+        due_this_week:
+          type: integer
+          minimum: 0
+          readOnly: true
+        no_due:
+          type: integer
+          minimum: 0
+          readOnly: true
+        blocked:
+          type: integer
+          minimum: 0
+          readOnly: true
+      required:
+      - blocked
+      - due_this_week
+      - due_today
+      - no_due
+      - overdue
+      - total_open
+    MyTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/WorkTaskTypeEnum'
+          readOnly: true
+        priority:
+          allOf:
+          - $ref: '#/components/schemas/WorkPriorityEnum'
+          readOnly: true
+        story_points:
+          type:
+          - integer
+          - 'null'
+          readOnly: true
+        due_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+        is_blocked:
+          type: boolean
+          readOnly: true
+        blocked_reason:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        parent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        epic_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          readOnly: true
+        project:
+          allOf:
+          - $ref: '#/components/schemas/MyTaskProject'
+          readOnly: true
+        state:
+          allOf:
+          - $ref: '#/components/schemas/MyTaskState'
+          readOnly: true
+        sprint:
+          oneOf:
+          - $ref: '#/components/schemas/MyTaskSprint'
+          - type: 'null'
+          readOnly: true
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyTaskLabel'
+          readOnly: true
+      required:
+      - blocked_reason
+      - code
+      - completed_at
+      - created_at
+      - due_date
+      - epic_id
+      - id
+      - is_blocked
+      - labels
+      - parent_id
+      - priority
+      - project
+      - sprint
+      - state
+      - story_points
+      - title
+      - type
+      - updated_at
+      - version
+    MyTaskLabel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+      required:
+      - color
+      - id
+      - name
+    MyTaskProject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        identifier:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        classroom_class_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        classroom_group_id:
+          type: string
+          readOnly: true
+      required:
+      - classroom_class_id
+      - classroom_group_id
+      - id
+      - identifier
+      - name
+    MyTaskSprint:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        end_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+      required:
+      - end_date
+      - id
+      - name
+    MyTaskState:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+        group:
+          type: string
+          readOnly: true
+      required:
+      - color
+      - group
+      - id
+      - name
+    MyTasksEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/MyTask'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    OversightActiveSprint:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        start_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+        end_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          readOnly: true
+        total_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completed_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+      required:
+      - completed_tasks
+      - end_date
+      - id
+      - name
+      - start_date
+      - total_tasks
+    OversightProgress:
+      type: object
+      properties:
+        total_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completed_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completion_rate:
+          type:
+          - number
+          - 'null'
+          format: double
+          exclusiveMaximum: 100000
+          exclusiveMinimum: -100000
+          readOnly: true
+        total_points:
+          type: integer
+          minimum: 0
+          readOnly: true
+        completed_points:
+          type: integer
+          minimum: 0
+          readOnly: true
+      required:
+      - completed_points
+      - completed_tasks
+      - completion_rate
+      - total_points
+      - total_tasks
+    OversightProject:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          readOnly: true
+        identifier:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        classroom_class_id:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        classroom_group_id:
+          type: string
+          readOnly: true
+        archived_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          readOnly: true
+        progress:
+          allOf:
+          - $ref: '#/components/schemas/OversightProgress'
+          readOnly: true
+        overdue_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        blocked_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        unassigned_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        last_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          readOnly: true
+        active_sprint:
+          oneOf:
+          - $ref: '#/components/schemas/OversightActiveSprint'
+          - type: 'null'
+          readOnly: true
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/OversightSignal'
+          readOnly: true
+      required:
+      - active_sprint
+      - archived_at
+      - blocked_count
+      - classroom_class_id
+      - classroom_group_id
+      - identifier
+      - last_activity_at
+      - name
+      - overdue_count
+      - progress
+      - project_id
+      - signals
+      - unassigned_count
+    OversightSignal:
+      type: object
+      properties:
+        code:
+          allOf:
+          - $ref: '#/components/schemas/CodeEnum'
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/SeverityEnum'
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - message
+      - severity
+    OversightSummary:
+      type: object
+      properties:
+        formula_version:
+          type: string
+          readOnly: true
+        business_date:
+          type: string
+          format: date
+          readOnly: true
+        inactive_days:
+          type: integer
+          minimum: 1
+          readOnly: true
+        total_projects:
+          type: integer
+          minimum: 0
+          readOnly: true
+        projects_with_signals:
+          type: integer
+          minimum: 0
+          readOnly: true
+        total_overdue_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+        total_blocked_tasks:
+          type: integer
+          minimum: 0
+          readOnly: true
+        inactive_projects:
+          type: integer
+          minimum: 0
+          readOnly: true
+        average_completion_rate:
+          type:
+          - number
+          - 'null'
+          format: double
+          exclusiveMaximum: 100000
+          exclusiveMinimum: -100000
+          readOnly: true
+      required:
+      - average_completion_rate
+      - business_date
+      - formula_version
+      - inactive_days
+      - inactive_projects
+      - projects_with_signals
+      - total_blocked_tasks
+      - total_overdue_tasks
+      - total_projects
     Pagination:
       type: object
       properties:
@@ -8804,6 +10192,58 @@ components:
       - snapshot_version
       - sprint_id
       - totals
+    ProgressContext:
+      type: object
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressMetric'
+          maxItems: 100
+        blocked_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+          maxItems: 100
+        completed_tasks:
+          type: integer
+          minimum: 0
+        total_tasks:
+          type: integer
+          minimum: 0
+        as_of:
+          type: string
+          format: date-time
+      required:
+      - as_of
+      - blocked_tasks
+      - completed_tasks
+      - metrics
+      - total_tasks
+      additionalProperties: false
+    ProgressMetric:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        value:
+          type:
+          - number
+          - 'null'
+          format: double
+        unit:
+          type: string
+          maxLength: 100
+        observed_at:
+          type: string
+          format: date-time
+      required:
+      - name
+      - observed_at
+      - unit
+      - value
+      additionalProperties: false
     Project:
       type: object
       properties:
@@ -8895,6 +10335,137 @@ components:
       - identifier
       - name
       - updated_at
+    ProjectActivitiesEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProjectActivity'
+        meta:
+          oneOf:
+          - $ref: '#/components/schemas/ListMeta'
+          - type: 'null'
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    ProjectActivity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject_type:
+          allOf:
+          - $ref: '#/components/schemas/SubjectTypeEnum'
+          readOnly: true
+        subject_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        actor_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        actor_display_name:
+          type: string
+          readOnly: true
+        actor_avatar_url:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        verb:
+          type: string
+          readOnly: true
+        field:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        old_value:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        new_value:
+          type:
+          - string
+          - 'null'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_avatar_url
+      - actor_display_name
+      - actor_user_id
+      - created_at
+      - field
+      - id
+      - new_value
+      - old_value
+      - subject_id
+      - subject_type
+      - verb
+    ProjectContext:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        goals:
+          type: string
+          maxLength: 4000
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskSummary'
+          maxItems: 100
+        sprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/SprintSummary'
+          maxItems: 100
+      required:
+      - deadline
+      - description
+      - goals
+      - id
+      - name
+      - sprints
+      - tasks
+      additionalProperties: false
     ProjectEnvelope:
       type: object
       properties:
@@ -9046,11 +10617,13 @@ components:
       - DUPLICATE
       - RELATES_TO
       type: string
-      description: |-
-        * `BLOCKS` - BLOCKS
+      description: '* `BLOCKS` - BLOCKS
+
         * `BLOCKED_BY` - BLOCKED_BY
+
         * `DUPLICATE` - DUPLICATE
-        * `RELATES_TO` - RELATES_TO
+
+        * `RELATES_TO` - RELATES_TO'
     Repository:
       type: object
       properties:
@@ -9174,9 +10747,9 @@ components:
       - LEADER
       - MEMBER
       type: string
-      description: |-
-        * `LEADER` - Leader
-        * `MEMBER` - Member
+      description: '* `LEADER` - Leader
+
+        * `MEMBER` - Member'
     Scope:
       type: object
       properties:
@@ -9204,9 +10777,9 @@ components:
       - ADD
       - REMOVE
       type: string
-      description: |-
-        * `ADD` - ADD
-        * `REMOVE` - REMOVE
+      description: '* `ADD` - ADD
+
+        * `REMOVE` - REMOVE'
     ScopeEnum:
       enum:
       - ACTIVE_TASKS
@@ -9283,6 +10856,17 @@ components:
       - task_count
       - unestimated_count
       - work_item_count
+    SeverityEnum:
+      enum:
+      - HIGH
+      - MEDIUM
+      - LOW
+      type: string
+      description: '* `HIGH` - HIGH
+
+        * `MEDIUM` - MEDIUM
+
+        * `LOW` - LOW'
     Sprint:
       type: object
       properties:
@@ -9485,10 +11069,44 @@ components:
       - ACTIVE
       - COMPLETED
       type: string
-      description: |-
-        * `DRAFT` - Draft
+      description: '* `DRAFT` - Draft
+
         * `ACTIVE` - Active
-        * `COMPLETED` - Completed
+
+        * `COMPLETED` - Completed'
+    SprintSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 200
+        status:
+          $ref: '#/components/schemas/SprintSummaryStatusEnum'
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+      required:
+      - deadline
+      - id
+      - name
+      - status
+      additionalProperties: false
+    SprintSummaryStatusEnum:
+      enum:
+      - DRAFT
+      - ACTIVE
+      - COMPLETED
+      type: string
+      description: '* `DRAFT` - DRAFT
+
+        * `ACTIVE` - ACTIVE
+
+        * `COMPLETED` - COMPLETED'
     StartSprint:
       type: object
       properties:
@@ -9603,6 +11221,32 @@ components:
       - message
       - meta
       - success
+    SubjectTypeEnum:
+      enum:
+      - PROJECT
+      - PROJECT_MEMBER
+      - STATE
+      - TASK
+      - EPIC
+      - LABEL
+      - COMMENT
+      - SPRINT
+      type: string
+      description: '* `PROJECT` - PROJECT
+
+        * `PROJECT_MEMBER` - PROJECT_MEMBER
+
+        * `STATE` - STATE
+
+        * `TASK` - TASK
+
+        * `EPIC` - EPIC
+
+        * `LABEL` - LABEL
+
+        * `COMMENT` - COMMENT
+
+        * `SPRINT` - SPRINT'
     Subtask:
       type: object
       properties:
@@ -9901,6 +11545,59 @@ components:
       - type
       - updated_at
       - version
+    TaskContext:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 300
+        status:
+          type: string
+          maxLength: 100
+        priority:
+          type: string
+          maxLength: 100
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+        estimate_points:
+          type:
+          - number
+          - 'null'
+          format: double
+          minimum: 0
+        project_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 4000
+        dependencies:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 100
+        acceptance_criteria:
+          type: string
+          maxLength: 4000
+      required:
+      - acceptance_criteria
+      - deadline
+      - dependencies
+      - description
+      - estimate_points
+      - id
+      - priority
+      - project_id
+      - status
+      - title
+      additionalProperties: false
     TaskEnvelope:
       type: object
       properties:
@@ -10027,6 +11724,40 @@ components:
       - message
       - meta
       - success
+    TaskSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 300
+        status:
+          type: string
+          maxLength: 100
+        priority:
+          type: string
+          maxLength: 100
+        deadline:
+          type:
+          - string
+          - 'null'
+          format: date
+        estimate_points:
+          type:
+          - number
+          - 'null'
+          format: double
+          minimum: 0
+      required:
+      - deadline
+      - estimate_points
+      - id
+      - priority
+      - status
+      - title
+      additionalProperties: false
     TaskVersion:
       type: object
       properties:
@@ -10035,11 +11766,92 @@ components:
           minimum: 1
       required:
       - expected_version
+    TeacherOversight:
+      type: object
+      properties:
+        summary:
+          allOf:
+          - $ref: '#/components/schemas/OversightSummary'
+          readOnly: true
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/OversightProject'
+          readOnly: true
+      required:
+      - projects
+      - summary
+    TeacherOversightEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/TeacherOversight'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     TeacherScopeEnum:
       enum:
       - UNAVAILABLE
       type: string
       description: '* `UNAVAILABLE` - UNAVAILABLE'
+    TeamContext:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMemberContext'
+          maxItems: 100
+        capacity:
+          type: number
+          format: double
+          minimum: 0
+        workload:
+          type: number
+          format: double
+          minimum: 0
+      required:
+      - capacity
+      - members
+      - workload
+      additionalProperties: false
+    TeamMemberContext:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        capacity:
+          type: number
+          format: double
+          minimum: 0
+        workload:
+          type: number
+          format: double
+          minimum: 0
+      required:
+      - capacity
+      - user_id
+      - workload
+      additionalProperties: false
     TransitionEnvelope:
       type: object
       properties:
@@ -10108,6 +11920,29 @@ components:
           minimum: 0
       required:
       - expected_version
+    WorkErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: 'null'
+          readOnly: true
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          $ref: '#/components/schemas/APIError'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     WorkGitHubOperationReceipt:
       type: object
       properties:
@@ -10186,29 +12021,11 @@ components:
       - message
       - meta
       - success
-    WorkErrorEnvelope:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        data:
-          type: 'null'
-          readOnly: true
-        meta:
-          type:
-          - object
-          - 'null'
-          additionalProperties: {}
-        error:
-          $ref: '#/components/schemas/APIError'
-      required:
-      - data
-      - error
-      - message
-      - meta
-      - success
+    WorkGitHubOperationReceiptStatusEnum:
+      enum:
+      - PENDING
+      type: string
+      description: '* `PENDING` - PENDING'
     WorkPriorityEnum:
       enum:
       - LOW
@@ -10216,21 +12033,24 @@ components:
       - HIGH
       - URGENT
       type: string
-      description: |-
-        * `LOW` - Low
+      description: '* `LOW` - Low
+
         * `MEDIUM` - Medium
+
         * `HIGH` - High
-        * `URGENT` - Urgent
+
+        * `URGENT` - Urgent'
     WorkTaskSourceEnum:
       enum:
       - MANUAL
       - AI_BACKLOG
       - AI_DECOMPOSED
       type: string
-      description: |-
-        * `MANUAL` - Manual
+      description: '* `MANUAL` - Manual
+
         * `AI_BACKLOG` - Ai Backlog
-        * `AI_DECOMPOSED` - Ai Decomposed
+
+        * `AI_DECOMPOSED` - Ai Decomposed'
     WorkTaskTypeEnum:
       enum:
       - TASK
@@ -10238,11 +12058,13 @@ components:
       - STORY
       - SUBTASK
       type: string
-      description: |-
-        * `TASK` - Task
+      description: '* `TASK` - Task
+
         * `BUG` - Bug
+
         * `STORY` - Story
-        * `SUBTASK` - Subtask
+
+        * `SUBTASK` - Subtask'
     WorkflowTask:
       type: object
       properties:
@@ -10427,9 +12249,8 @@ components:
       type: apiKey
       in: header
       name: X-Service-Key
-      description: >-
-        Key riêng Integration→Work, nhận diện caller integration. Không dùng
-        key AI→Work hoặc Work→Integration; không đưa secret vào log/response.
+      description: Key riêng Integration→Work, nhận diện caller integration. Không
+        dùng key AI→Work hoặc Work→Integration; không đưa secret vào log/response.
     WorkBearer:
       type: http
       scheme: bearer

@@ -206,6 +206,9 @@ class TaskAssignment(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["task", "user_id"], name="unique_task_assignment")
         ]
+        indexes = [
+            models.Index(fields=["user_id", "task"], name="ix_task_assignment_user"),
+        ]
 
 
 class TaskLabel(models.Model):

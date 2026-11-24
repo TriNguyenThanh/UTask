@@ -16,9 +16,11 @@ from apps.tasks.views.metadata import (
     LabelListView,
     TaskLabelsView,
 )
+from apps.tasks.views.my_work import MyTasksView
 from apps.tasks.views.tasks import TaskDetailView, TaskLifecycleView, TaskListCreateView
 
 urlpatterns = [
+    path("me/tasks/", MyTasksView.as_view(), name="my-tasks"),
     path("projects/<uuid:project_id>/tasks/", TaskListCreateView.as_view()),
     path("tasks/<uuid:task_id>/", TaskDetailView.as_view()),
     *[

@@ -29,8 +29,29 @@ def test_board_and_column_select_only_card_cursor_and_grouping_fields(
     assert data["total_columns"] == 5 and data["total_tasks"] == 8
     assert page.json()["data"]["column_total_tasks"] == column["column_total_tasks"] == 4
     assert page.json()["data"]["tasks"][0]["id"] != column["tasks"][0]["id"]
+    expected_card_keys = {
+        "id",
+        "code",
+        "title",
+        "type",
+        "priority",
+        "story_points",
+        "due_date",
+        "is_blocked",
+        "blocked_reason",
+        "epic_id",
+        "parent_id",
+        "sort_order",
+        "version",
+        "assignees",
+        "labels",
+        "subtasks_count",
+        "comments_count",
+        "attachments_count",
+        "has_pull_request",
+    }
     for card in [*column["tasks"], *page.json()["data"]["tasks"]]:
-        assert set(card) == {"id", "code", "title", "sort_order", "version"}
+        assert set(card) == expected_card_keys
     selects = [q["sql"] for q in queries if 'FROM "tasks"' in q["sql"]]
     assert selects
     assert all(

@@ -179,6 +179,7 @@ SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "EpicStatusEnum": "apps.tasks.models.Epic.Status",
     "AttachmentStatusEnum": "apps.collaboration.models.Attachment.Status",
     "MemberStatusEnum": "apps.projects.models.ProjectMember.Status",
+    "RoleEnum": "apps.projects.models.ProjectMember.Role",
     "ScopeActionEnum": ["ADD", "REMOVE"],
 }
 
