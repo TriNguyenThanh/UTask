@@ -1258,6 +1258,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /classes/{class_id}/summary/:
+    get:
+      operationId: classes_summary_retrieve
+      description: Tổng hợp số liệu vận hành của một lớp học từ classroom_db cho giảng
+        viên phụ trách đang hoạt động hoặc Quản trị viên hệ thống.
+      parameters:
+      - in: path
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - classes
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassSummaryEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
   /classes/{class_id}/teachers/:
     get:
       operationId: classes_teachers_retrieve
@@ -3381,6 +3452,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClassroomErrorEnvelope'
           description: ''
+  /teacher/classes/summary/:
+    get:
+      operationId: teacher_classes_summary_list
+      description: Tổng hợp số liệu vận hành theo lô cho các lớp học mà giảng viên
+        đang phụ trách (hoặc toàn bộ lớp đối với Quản trị viên hệ thống), kèm danh
+        sách group_ids để gọi tiếp API giám sát dự án bên Work Service.
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - teacher
+      security:
+      - ClassroomBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherClassesSummaryEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassroomErrorEnvelope'
+          description: ''
 components:
   schemas:
     APIError:
@@ -3963,6 +4104,110 @@ components:
         * `OPEN` - OPEN
         * `CLOSED` - CLOSED
         * `ARCHIVED` - ARCHIVED
+    ClassSummary:
+      type: object
+      properties:
+        class_id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        term:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ClassStatusEnum'
+          readOnly: true
+        grouping_phase:
+          allOf:
+          - $ref: '#/components/schemas/GroupingPhaseEnum'
+          readOnly: true
+        group_min_size:
+          type: integer
+          minimum: 1
+          readOnly: true
+        group_max_size:
+          type: integer
+          minimum: 1
+          readOnly: true
+        course_summary:
+          allOf:
+          - $ref: '#/components/schemas/CourseSummary'
+          readOnly: true
+        enrolled_active_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        active_group_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        students_without_team_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        groups_below_min_size_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        groups_without_project_count:
+          type: integer
+          minimum: 0
+          readOnly: true
+        group_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+      required:
+      - active_group_count
+      - class_id
+      - code
+      - course_summary
+      - enrolled_active_count
+      - group_ids
+      - group_max_size
+      - group_min_size
+      - grouping_phase
+      - groups_below_min_size_count
+      - groups_without_project_count
+      - name
+      - status
+      - students_without_team_count
+      - term
+    ClassSummaryEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          oneOf:
+          - $ref: '#/components/schemas/ClassSummary'
+          - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
     ClassTeacherList:
       type: object
       properties:
@@ -4975,6 +5220,14 @@ components:
       - message
       - meta
       - success
+    GroupingPhaseEnum:
+      enum:
+      - FORMING
+      - LOCKED
+      type: string
+      description: |-
+        * `FORMING` - FORMING
+        * `LOCKED` - LOCKED
     JoinCode:
       type: object
       properties:
@@ -5494,6 +5747,34 @@ components:
           oneOf:
           - $ref: '#/components/schemas/AdjustmentResult'
           - type: 'null'
+        meta:
+          type:
+          - object
+          - 'null'
+          additionalProperties: {}
+        error:
+          oneOf:
+          - $ref: '#/components/schemas/APIError'
+          - type: 'null'
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    TeacherClassesSummaryEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ClassSummary'
         meta:
           type:
           - object

@@ -172,3 +172,21 @@ class TeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassTeacher
         fields = ["id", "user_id", "role", "status", "assigned_at", "left_at"]
+
+
+class ClassSummarySerializer(serializers.Serializer):
+    class_id = serializers.UUIDField(read_only=True)
+    code = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    term = serializers.CharField(read_only=True)
+    status = serializers.ChoiceField(choices=["OPEN", "CLOSED", "ARCHIVED"], read_only=True)
+    grouping_phase = serializers.ChoiceField(choices=["FORMING", "LOCKED"], read_only=True)
+    group_min_size = serializers.IntegerField(min_value=1, read_only=True)
+    group_max_size = serializers.IntegerField(min_value=1, read_only=True)
+    course_summary = CourseSummarySerializer(read_only=True)
+    enrolled_active_count = serializers.IntegerField(min_value=0, read_only=True)
+    active_group_count = serializers.IntegerField(min_value=0, read_only=True)
+    students_without_team_count = serializers.IntegerField(min_value=0, read_only=True)
+    groups_below_min_size_count = serializers.IntegerField(min_value=0, read_only=True)
+    groups_without_project_count = serializers.IntegerField(min_value=0, read_only=True)
+    group_ids = serializers.ListField(child=serializers.UUIDField(), read_only=True)

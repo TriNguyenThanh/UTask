@@ -125,7 +125,7 @@ từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
 | Môn | `courses/`, `courses/{id}/` (GET/PATCH partial), `courses/{id}/archive/`, `courses/{id}/unarchive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng/mở lại môn do mình tạo; Admin quản lý mọi môn |
-| Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động; cập nhật lớp yêu cầu lớp đang `OPEN` |
+| Lớp | `classes/`, `classes/{id}/`, `classes/{id}/summary/`, `teacher/classes/summary/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động; cập nhật lớp yêu cầu lớp đang `OPEN`; thống kê tổng hợp lớp (`summary/`) chỉ cho Giảng viên phụ trách `ACTIVE` hoặc Admin |
 | Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `unlock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; `lock-grouping/` kiểm tra SV chưa có nhóm & nhóm thiếu `group_min_size` trừ khi gửi `force=true`; `unlock-grouping/` mở khóa lại khi lớp `OPEN` |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
 | Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/`, `enrollments/{eid}/exit/`, `enrollments/{eid}/reactivate/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm/khôi phục sinh viên (`reactivate/` hoặc `reactivate_inactive=true`); cấp/tắt mã yêu cầu lớp đang `OPEN` |

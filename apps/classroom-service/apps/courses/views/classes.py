@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from apps.courses.models import ClassSection
 from apps.courses.queries.classes import class_detail, class_teachers, list_classes
+from apps.courses.queries.summary import class_summary, teacher_classes_summary
 from apps.courses.serializers.classes import (
     AccessCodeSerializer,
     ClassGroupingLockSerializer,
@@ -12,6 +13,7 @@ from apps.courses.serializers.classes import (
     ClassPatchSerializer,
     ClassSerializer,
     ClassStateSerializer,
+    ClassSummarySerializer,
     CodeInputSerializer,
     TeacherInputSerializer,
     TeacherSerializer,
@@ -176,3 +178,46 @@ class ClassTeachersView(APIView):
         section = get_object_or_404(ClassSection, pk=class_id)
         data, meta = class_teachers(request, section)
         return success_response(data, meta=meta, message="Đã lấy danh sách giảng viên phụ trách.")
+
+
+class ClassSummaryView(APIView):
+    @extend_schema(
+        operation_id="classes_summary_retrieve",
+        description=(
+            "Tổng hợp số liệu vận hành của một lớp học từ classroom_db cho giảng viên "
+            "phụ trách đang hoạt động hoặc Quản trị viên hệ thống."
+        ),
+        responses={
+            200: envelope_schema("ClassSummaryEnvelope", ClassSummarySerializer),
+            **ERRORS,
+        },
+    )
+    def get(self, request, class_id):
+        section = get_object_or_404(ClassSection, pk=class_id)
+        return success_response(
+            class_summary(request, section),
+            message="Đã lấy thống kê tổng hợp lớp học.",
+        )
+
+
+class TeacherClassesSummaryView(APIView):
+    @extend_schema(
+        operation_id="teacher_classes_summary_list",
+        description=(
+            "Tổng hợp số liệu vận hành theo lô cho các lớp học mà giảng viên đang phụ trách "
+            "(hoặc toàn bộ lớp đối với Quản trị viên hệ thống), kèm danh sách group_ids để "
+            "gọi tiếp API giám sát dự án bên Work Service."
+        ),
+        parameters=[STATUS_PARAMETER],
+        responses={
+            200: envelope_schema(
+                "TeacherClassesSummaryEnvelope", ClassSummarySerializer, many=True
+            ),
+            **ERRORS,
+        },
+    )
+    def get(self, request):
+        return success_response(
+            teacher_classes_summary(request),
+            message="Đã lấy thống kê tổng hợp các lớp học phụ trách.",
+        )

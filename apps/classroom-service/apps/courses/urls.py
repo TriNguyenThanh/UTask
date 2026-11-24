@@ -7,8 +7,10 @@ from apps.courses.views.classes import (
     ClassGroupingUnlockView,
     ClassListView,
     ClassStateView,
+    ClassSummaryView,
     ClassTeachersView,
     ClassTeacherView,
+    TeacherClassesSummaryView,
 )
 from apps.courses.views.courses import (
     CourseArchiveView,
@@ -32,6 +34,8 @@ urlpatterns = [
     path("classes/", ClassListView.as_view()),
     path("classes/join/", ClassJoinView.as_view()),
     path("classes/<uuid:class_id>/", ClassDetailView.as_view()),
+    path("classes/<uuid:class_id>/summary/", ClassSummaryView.as_view()),
+    path("teacher/classes/summary/", TeacherClassesSummaryView.as_view()),
     path("classes/<uuid:class_id>/state/", ClassStateView.as_view()),
     path("classes/<uuid:class_id>/lock-grouping/", ClassGroupingLockView.as_view()),
     path("classes/<uuid:class_id>/unlock-grouping/", ClassGroupingUnlockView.as_view()),
