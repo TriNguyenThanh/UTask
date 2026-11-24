@@ -106,17 +106,26 @@ def test_environment_flags_and_secret_error_redaction(tmp_path, monkeypatch):
     assert "sensitive-key" not in str(error.value)
 
 
-async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
+@pytest.mark.parametrize("legacy_db_password", [None, "legacy-db-password"])
+async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path, legacy_db_password):
     from infrastructure.security import JwtAuthenticator
 
     (tmp_path / ".env").write_text(
         "AI_LLM_API_KEY=existing-key\nGOOGLE_API_KEY=legacy-key\nOTHER_SECRET=keep\n"
+        "POSTGRES_PASSWORD=existing-db-password\n"
+        + (f"AI_DB_PASSWORD={legacy_db_password}\n" if legacy_db_password else "")
     )
+    config = tmp_path / "infra/env/ai-service.env"
+    config.parent.mkdir(parents=True)
+    mapping = "AI_ENVIRONMENT=${AI_ENVIRONMENT:-development}\nMOCK_TEST=${MOCK_TEST:-false}\n"
+    config.write_text(mapping)
     prepare_mock_environment(tmp_path)
     before = dotenv_values(tmp_path / ".env")
     assert "AI_CREDENTIAL_KEY" not in before
-    config = tmp_path / "infra/env/ai-service.env"
-    settings = Settings(_env_file=(config, tmp_path / ".env"), identity_service_key="test-key")
+    assert before.get("AI_DB_PASSWORD") == legacy_db_password
+    settings = Settings(_env_file=tmp_path / ".env", identity_service_key="test-key")
+    assert settings.mock_test
+    assert settings.jwt_issuer == "utask-local-mock"
     token_path = tmp_path / ".env.mock/mock-owner.jwt"
     assert (
         await JwtAuthenticator(
@@ -140,14 +149,14 @@ async def test_setup_and_refresh_preserve_secrets_and_issue_valid_jwt(tmp_path):
     for key in [
         "AI_LLM_API_KEY",
         "GOOGLE_API_KEY",
-        "AI_DB_PASSWORD",
+        "POSTGRES_PASSWORD",
         "OTHER_SECRET",
     ]:
         assert before[key] == after[key]
     assert "AI_CREDENTIAL_KEY" not in after
+    assert after.get("AI_DB_PASSWORD") == legacy_db_password
     assert before_jwks != (tmp_path / ".env.mock/jwks.json").read_text()
-    assert "AI_MOCK_DOMAIN_URL" not in dotenv_values(config)
-    assert "GOOGLE_API_KEY" not in dotenv_values(config)
+    assert config.read_text() == mapping
     assert (tmp_path / ".env").stat().st_mode & 0o777 == 0o600
     assert (tmp_path / ".env.mock").stat().st_mode & 0o777 == 0o700
     assert all(path.stat().st_mode & 0o777 == 0o600 for path in (tmp_path / ".env.mock").iterdir())
@@ -161,17 +170,16 @@ def test_setup_rejects_invalid_expiry_without_writing(tmp_path, hours):
 
 
 def test_setup_does_not_modify_production_or_existing_public_key(tmp_path):
-    config = tmp_path / "infra/env/ai-service.env"
-    config.parent.mkdir(parents=True)
-    config.write_text("AI_ENVIRONMENT=production\n")
+    config = tmp_path / ".env"
+    config.write_text("AI_ENVIRONMENT=production\nOTHER_SECRET=keep\n")
     with pytest.raises(ValidationError):
         prepare_mock_environment(tmp_path)
-    assert not (tmp_path / ".env").exists()
-    config.write_text("AI_ENVIRONMENT=development\n")
-    (tmp_path / ".env").write_text("AI_JWT_PUBLIC_KEY=existing\n")
+    assert config.read_text() == "AI_ENVIRONMENT=production\nOTHER_SECRET=keep\n"
+    assert not (tmp_path / ".env.mock").exists()
+    config.write_text("AI_ENVIRONMENT=development\nAI_JWT_PUBLIC_KEY=existing\n")
     with pytest.raises(FileExistsError):
         prepare_mock_environment(tmp_path)
-    assert (tmp_path / ".env").read_text() == "AI_JWT_PUBLIC_KEY=existing\n"
+    assert config.read_text() == "AI_ENVIRONMENT=development\nAI_JWT_PUBLIC_KEY=existing\n"
 
 
 def test_setup_cli_uses_repo_root_and_protects_existing_keys(tmp_path, monkeypatch, capsys):
@@ -200,18 +208,16 @@ def test_setup_cli_uses_repo_root_and_protects_existing_keys(tmp_path, monkeypat
     ],
 )
 def test_deployed_environments_reject_missing_auth_configuration(environment, overrides):
-    from test_context_contract import production_settings
-
     with pytest.raises(ValidationError):
-        production_settings(environment=environment, **overrides)
+        Settings(**({"environment": environment, "identity_service_key": "test-key"} | overrides))
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_deployed_environments_accept_complete_auth_configuration(environment, monkeypatch):
-    from test_context_contract import production_settings
-
     monkeypatch.delenv("AI_CREDENTIAL_KEY", raising=False)
-    settings = production_settings(environment=environment, work_service_key=None)
+    settings = Settings(
+        environment=environment, identity_service_key="test-key", work_service_key=None
+    )
     assert "credential_key" not in type(settings).model_fields
     assert settings.environment == environment
     assert settings.jwt_issuer == "https://identity.utask.internal"

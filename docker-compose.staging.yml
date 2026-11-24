@@ -21,17 +21,38 @@ x-work-runtime: &work_runtime
     redis:
       condition: service_healthy
 
-x-identity-publisher: &identity_publisher
-  profiles: [identity-service]
+# Classroom API and workers share the release image, env mappings and volumes.
+x-classroom-runtime: &classroom_runtime
+  profiles: [classroom-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/classroom-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/classroom-service.env
+  volumes: *kafka_certificates
+  depends_on: &classroom_dependencies
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+# Identity API and publisher share one release image and env mappings.
+x-identity-runtime: &identity_runtime
   image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/identity-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
   restart: unless-stopped
-  x-deploy:
-    role: worker
-    application: identity-service
   env_file:
     - ./infra/env/database.env
     - ./infra/env/django.env
     - ./infra/env/identity-service.env
+
+x-identity-publisher: &identity_publisher
+  <<: *identity_runtime
+  profiles: [identity-service]
+  x-deploy:
+    role: worker
+    application: identity-service
   volumes:
     - type: bind
       source: ${IDENTITY_JWT_PRIVATE_KEY_HOST_PATH:?Set the RSA private key path on the staging server}
@@ -52,6 +73,57 @@ x-identity-publisher: &identity_publisher
     timeout: 5s
     retries: 6
     start_period: 15s
+
+# Integration API, migration and workers share one release image and env mappings.
+x-integration-runtime: &integration_runtime
+  profiles: [integration-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/django.env
+    - ./infra/env/integration-service.env
+  volumes: *kafka_certificates
+
+x-integration-environment: &integration_environment
+  INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
+
+x-integration-dependencies: &integration_dependencies
+  integration-migrate:
+    condition: service_completed_successfully
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+# Notification API and background processes share image, env and dependencies.
+x-notification-runtime: &notification_runtime
+  profiles: [notification-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/notification-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/notification-service.env
+  volumes: *kafka_certificates
+  depends_on: &notification_dependencies
+    notification-migrate:
+      condition: service_completed_successfully
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  x-deploy:
+    gateway_health_path: /api/notifications/healthz
+  x-ci:
+    test_env:
+      NOTIFICATION_TEST_DB_USER: utask_ci
+      NOTIFICATION_TEST_DB_PASSWORD: ci-only-postgres-password
+      NOTIFICATION_TEST_DB_NAME: notification_test
+      TEST_DATABASE_NAME: notification_test
+      NOTIFICATION_TEST_DB_HOST: 127.0.0.1
+      NOTIFICATION_TEST_DB_PORT: "5432"
 
 services:
 
@@ -104,18 +176,13 @@ services:
       start_period: 15s
 
   identity-service:
+    <<: *identity_runtime
     x-deploy:
       gateway_health_path: /api/auth/healthz
     x-ci:
       test_env:
         IDENTITY_TEST_DB_NAME: test_identity_ci
         IDENTITY_TEST_REDIS_URL: redis://127.0.0.1:6379/15
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/identity-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    restart: unless-stopped
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/identity-service.env
     environment:
       IDENTITY_REDIS_URL: ${IDENTITY_REDIS_URL:-redis://redis:6379/0}
       IDENTITY_INTEGRATION_URL: ${IDENTITY_INTEGRATION_URL:-http://integration-service:8000}
@@ -206,7 +273,7 @@ services:
       start_period: 15s
 
   classroom-service:
-    profiles: [classroom-service]
+    <<: *classroom_runtime
     x-deploy:
       gateway_health_path: /api/classroom/healthz
     x-ci:
@@ -217,40 +284,16 @@ services:
         CLASSROOM_TEST_DB_PASSWORD: ci-only-postgres-password
         CLASSROOM_TEST_DB_HOST: "127.0.0.1"
         CLASSROOM_TEST_DB_PORT: "5432"
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/classroom-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/classroom-service.env
-    volumes: *kafka_certificates
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck: *django_healthcheck
 
   classroom-publisher:
-    profiles: [classroom-service]
+    <<: *classroom_runtime
     x-deploy:
       role: worker
       application: classroom-service
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/classroom-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
     command: ["celery", "-A", "config", "worker", "-Q", "classroom-publisher", "--concurrency=1"]
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/classroom-service.env
-    volumes: *kafka_certificates
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *classroom_dependencies
       kafka:
         condition: service_healthy
         required: false
@@ -262,24 +305,13 @@ services:
       start_period: 15s
 
   classroom-beat:
-    profiles: [classroom-service]
+    <<: *classroom_runtime
     x-deploy:
       role: worker
       application: classroom-service
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/classroom-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
     command: ["celery", "-A", "config", "beat", "--pidfile=/tmp/classroom-beat.pid"]
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/classroom-service.env
-    volumes: *kafka_certificates
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *classroom_dependencies
     healthcheck:
       test: ["CMD", "python", "-c", "import os; from pathlib import Path; from config.celery import app; os.kill(int(Path('/tmp/classroom-beat.pid').read_text()), 0); app.connection_for_write().ensure_connection(max_retries=0, timeout=3)"]
       interval: 15s
@@ -288,24 +320,13 @@ services:
       start_period: 15s
 
   classroom-work-consumer:
-    profiles: [classroom-service]
+    <<: *classroom_runtime
     x-deploy:
       role: worker
       application: classroom-service
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/classroom-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
     command: ["python", "manage.py", "consume_work"]
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/classroom-service.env
-    volumes: *kafka_certificates
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *classroom_dependencies
       kafka:
         condition: service_healthy
         required: false
@@ -317,8 +338,7 @@ services:
       start_period: 15s
 
   integration-service:
-    profiles: [integration-service]
-    init: true
+    <<: *integration_runtime
     x-deploy:
       gateway_health_path: /api/integrations/healthz
     x-ci:
@@ -330,65 +350,36 @@ services:
         INTEGRATION_TEST_DB_HOST: 127.0.0.1
         INTEGRATION_TEST_DB_PORT: "5432"
         INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    restart: unless-stopped
-    env_file:
-      - ./infra/env/django.env
-      - ./infra/env/integration-service.env
-    volumes: *kafka_certificates
-    environment:
-      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
-      integration-migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *integration_dependencies
+    environment:
+      <<: *integration_environment
     healthcheck: *django_healthcheck
 
   integration-migrate:
-    profiles: [integration-service]
+    <<: *integration_runtime
     x-deploy:
       role: migration
       application: integration-service
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
     restart: "no"
     command: ["python", "manage.py", "migrate", "--noinput"]
-    env_file:
-      - ./infra/env/django.env
-      - ./infra/env/integration-service.env
-    volumes: *kafka_certificates
     depends_on:
       postgres:
         condition: service_healthy
 
   integration-worker:
-    profiles: [integration-service]
+    <<: *integration_runtime
     x-deploy: &integration_worker
       role: worker
       application: integration-service
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
     command: ["celery", "-A", "config", "worker", "-Q", "integration", "--concurrency=1"]
-    env_file:
-      - ./infra/env/django.env
-      - ./infra/env/integration-service.env
-    volumes: *kafka_certificates
-    environment:
-      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
-      integration-migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *integration_dependencies
       kafka:
         condition: service_healthy
         required: false
+    environment:
+      <<: *integration_environment
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
       interval: 15s
@@ -396,48 +387,21 @@ services:
       retries: 6
 
   integration-beat:
-    profiles: [integration-service]
+    <<: *integration_runtime
     x-deploy: *integration_worker
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
     command: ["celery", "-A", "config", "beat", "--pidfile=/tmp/integration-beat.pid", "--schedule=/tmp/integration-celerybeat"]
-    env_file:
-      - ./infra/env/django.env
-      - ./infra/env/integration-service.env
-    volumes: *kafka_certificates
-    environment:
-      INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
     depends_on:
-      integration-migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *integration_dependencies
+    environment:
+      <<: *integration_environment
     healthcheck:
       test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/integration-beat.pid').read_text()), 0); Path('/tmp').is_dir()"]
       interval: 15s
       timeout: 10s
       retries: 6
 
-  notification-service: &notification_runtime
-    profiles: [notification-service]
-    image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/notification-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
-    init: true
-    restart: unless-stopped
-    env_file:
-      - ./infra/env/database.env
-      - ./infra/env/django.env
-      - ./infra/env/notification-service.env
-    volumes: *kafka_certificates
-    depends_on: &notification_dependencies
-      notification-migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+  notification-service:
+    <<: *notification_runtime
     healthcheck: *django_healthcheck
     x-deploy:
       gateway_health_path: /api/notifications/healthz
@@ -521,23 +485,6 @@ services:
     restart: unless-stopped
     env_file: &ai_env_files
       - ./infra/env/ai-service.env
-    environment: &ai_environment
-      AI_ENVIRONMENT: ${AI_ENVIRONMENT:-staging}
-      MOCK_TEST: ${MOCK_TEST:-false}
-      AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${AI_DB_NAME:-ai_context_db}}
-      AI_BROKER_URL: ${AI_BROKER_URL:-redis://redis:6379/1}
-      AI_JWT_ISSUER: ${AI_JWT_ISSUER:-${IDENTITY_JWT_ISSUER:-https://identity.utask.internal}}
-      AI_JWT_AUDIENCE: ${AI_JWT_AUDIENCE:-${IDENTITY_JWT_AUDIENCE:-utask-platform}}
-      AI_JWT_ALGORITHM: ${AI_JWT_ALGORITHM:-RS256}
-      AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
-      AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}
-      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-litellm}
-      AI_MODEL: ${AI_MODEL:-}
-      AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
-      AI_WORK_SERVICE_AUTH_ENABLED: ${AI_WORK_SERVICE_AUTH_ENABLED:-false}
-      AI_WORK_SERVICE_KEY: ${AI_WORK_SERVICE_KEY:-}
-      AI_INTEGRATION_SERVICE_KEY: ${AI_INTEGRATION_SERVICE_KEY:-}
-      AI_LLM_API_BASE: ${AI_LLM_API_BASE:-}
     volumes: &ai_volumes
       - ./datasets:/app/datasets:ro
     depends_on: &ai_dependencies
@@ -556,7 +503,6 @@ services:
     image: *ai_image
     restart: unless-stopped
     env_file: *ai_env_files
-    environment: *ai_environment
     volumes: *ai_volumes
     command: ["celery", "-A", "jobs.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=${AI_WORKER_CONCURRENCY:-2}"]
     depends_on:
@@ -577,7 +523,6 @@ services:
     image: *ai_image
     restart: unless-stopped
     env_file: *ai_env_files
-    environment: *ai_environment
     volumes: *ai_volumes
     command: ["python", "-m", "jobs.dispatcher"]
     depends_on:
@@ -599,7 +544,6 @@ services:
     image: *ai_image
     restart: unless-stopped
     env_file: *ai_env_files
-    environment: *ai_environment
     volumes: *ai_volumes
     command: ["celery", "-A", "jobs.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/ai-beat-schedule", "--pidfile=/tmp/ai-beat.pid"]
     depends_on:

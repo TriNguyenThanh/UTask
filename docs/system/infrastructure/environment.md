@@ -129,15 +129,38 @@ Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
 gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
 không thay đổi nội dung sự kiện.
 
-AI Service nhận giá trị triển khai từ `.env` root; `infra/env/ai-service.env`
-ánh xạ biến thường vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
-chỉ development/test được bật mock; dữ liệu mẫu được đọc ngay tại adapter,
-không cần server/mock microservice hay launcher riêng. Secret được inject qua
-Compose, không export ra terminal. Compose root dùng chung container `postgres` cho mọi service,
-AI nhận database riêng qua `AI_DB_NAME` (mặc định `ai_context_db`), cùng
-`POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn lại. URL DB trỏ sang
-`postgres` và broker sang Redis DB1, tránh `localhost` trong container.
-CI/CD tiếp tục dùng `infra/env/*.env`, không upload `.env` root. Xem
+AI Service dùng `.env` root làm nguồn giá trị runtime, gồm cả secret; tạo file
+này theo [mẫu root](../../../.env.example), không đưa giá trị thật vào Git.
+`infra/env/ai-service.env` là mapping chung cho các process AI trong Compose:
+nó ánh xạ biến thường lẫn placeholder secret `${TEN_BIEN:-}` vào container,
+không phải nơi lưu giá trị runtime riêng. Mọi process AI dùng mapping này.
+Mapping mặc định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false` và yêu cầu
+`AI_DATABASE_URL` cùng `AI_BROKER_URL` từ `.env` root hoặc process environment;
+nó không tự tạo URL theo topology. `.env.example` chủ động khai báo
+`AI_ENVIRONMENT=development`, `MOCK_TEST=true` và URL database/broker của stack
+root local. Staging phải đặt rõ `AI_ENVIRONMENT=staging`, `MOCK_TEST=false` cùng
+URL staging. PostgreSQL standalone nhận riêng
+[`database.env`](../../../infra/env/database.env).
+Compose nội suy mapping từ `.env` root; vì vậy giá trị đã khai báo trong `.env`
+thay mặc định mapping. Python chạy trên host cũng cần URL DB/broker dùng địa chỉ
+truy cập được từ host, không dùng DNS nội bộ Docker.
+
+`AI_WORKER_CONCURRENCY` chỉ nội suy tham số `--concurrency` của worker Compose
+(mặc định 2), còn `AI_HTTP_PORT` chỉ nội suy cổng host standalone; cả hai không
+được truyền vào environment runtime. Giá trị runtime thực tế trên máy staging
+chưa được xác minh. Dữ liệu mẫu được đọc ngay tại adapter; không cần
+server/mock microservice hay launcher riêng. Compose root dùng chung container
+`postgres` cho mọi service, AI nhận database riêng qua `AI_DB_NAME` (mặc định
+`ai_context_db`), cùng `POSTGRES_USER`/`POSTGRES_PASSWORD` như các service còn
+lại. `AI_DB_NAME` dùng để bootstrap database AI trong PostgreSQL root và phải
+khớp database trong `AI_DATABASE_URL`; khi đổi tên phải cập nhật cả hai. URL
+trong `.env.example` trỏ tới `postgres:5432` và Redis DB1 cho stack root.
+Standalone cần cấu hình `AI_DATABASE_URL` trỏ `database:5432/<POSTGRES_DB>`
+và `AI_BROKER_URL=redis://broker:6379/0`; password phải percent-encode trong
+URL, còn `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` cấp cho PostgreSQL
+standalone qua `infra/env/database.env`. Khi dùng volume cũ, giữ nguyên các giá
+trị PostgreSQL đã khởi tạo. CI/CD tiếp tục dùng
+`infra/env/*.env`, không upload `.env` root. Xem
 [cấu hình AI](../../ai-service/README.md#cấu-hình) và
 [mock data](../../ai-service/mock-data.md).
 
@@ -360,24 +383,43 @@ chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
 
-Local giữ cờ và biến thường trong `infra/env/ai-service.env`. Staging mặc định
-`AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; dùng giá trị cấu hình staging trong
-`.env` server theo các override được khai báo ở Compose. Không bật mock ở staging.
+`.env` root giữ giá trị local/staging của AI, gồm cả secret; mapping chung ở
+`infra/env/ai-service.env` ánh xạ biến runtime chung và placeholder secret vào
+mọi process AI trong Compose. Mọi stack AI chỉ dùng mapping chung này;
+PostgreSQL standalone dùng thêm `database.env`. Mapping mặc định
+`AI_ENVIRONMENT=staging`, `MOCK_TEST=false` và yêu cầu
+`AI_DATABASE_URL` cùng `AI_BROKER_URL` từ `.env` root hoặc process environment.
+`.env.example` đặt rõ `AI_ENVIRONMENT=development`, `MOCK_TEST=true` và URL
+database/broker root local. Khi triển khai staging, phải cấu hình
+`AI_ENVIRONMENT=staging`, `MOCK_TEST=false` cùng URL database/broker staging.
+Giá trị có sẵn trong `.env` được Compose ưu tiên khi nội suy mapping. Runtime
+staging chưa được xác minh. `AI_WORKER_CONCURRENCY` chỉ nội suy tham số worker
+(mặc định 2), còn `AI_HTTP_PORT` chỉ nội suy cổng host standalone; hai giá trị
+không vào environment runtime.
 
 Root Compose chỉ có một container PostgreSQL 16 (`postgres`), với các database
 riêng cho từng service. AI dùng `AI_DB_NAME=ai_context_db`; tên này được truyền
 qua `infra/env/postgres.env` cho script khởi tạo database. Không còn container
-`ai-postgres` trong Compose local/staging. `AI_DB_PASSWORD` chỉ còn phục vụ
-Compose standalone của AI, không được dùng để khởi động stack root.
+`ai-postgres` trong Compose local/staging. PostgreSQL standalone dùng chung
+`POSTGRES_USER`, `POSTGRES_PASSWORD` và `POSTGRES_DB` từ `.env` root qua
+`infra/env/database.env`; khi volume đã có dữ liệu, các giá trị này phải giữ
+khớp với cấu hình đã dùng để khởi tạo.
 
-URL mặc định của AI dùng `POSTGRES_USER`/`POSTGRES_PASSWORD` để kết nối database
-riêng trên `postgres:5432`. Nếu mật khẩu chứa ký tự đặc biệt trong URL, điền
-`AI_DATABASE_URL` với đúng mật khẩu PostgreSQL chung đã percent-encode; vẫn trỏ
-tới database của AI trên `postgres`, không dùng lại URL `ai-postgres` cũ.
+`AI_DATABASE_URL` và `AI_BROKER_URL` là bắt buộc; mapping không tự dựng URL
+theo topology. `.env.example` khai báo URL root local với PostgreSQL chung tại
+`postgres:5432/${AI_DB_NAME}` và Redis DB1. Tên database phải trùng
+`AI_DB_NAME` dùng để bootstrap; khi đổi tên phải cập nhật URL. Password có ký tự
+đặc biệt phải percent-encode trong URL. Standalone cần URL PostgreSQL tới
+`database:5432/<POSTGRES_DB>` với user/password khớp `POSTGRES_USER` và
+`POSTGRES_PASSWORD`, cùng URL Redis `redis://broker:6379/0`.
+Python chạy trên host cần URL dùng
+địa chỉ host truy cập được, không dùng hostname nội bộ Docker.
 AI xác minh JWT như Work:
 RS256, issuer mặc định `https://identity.utask.internal`, audience mặc định
-`utask-platform` (kế thừa `IDENTITY_JWT_ISSUER`/`IDENTITY_JWT_AUDIENCE` nếu
-không có override AI). AI luôn lấy JWKS từ `AI_IDENTITY_BASE_URL` cộng
+`utask-platform`. Host Settings đọc `.env` root; container nhận các giá trị
+qua mapping Compose. Nếu không có `AI_JWT_ISSUER`/`AI_JWT_AUDIENCE`, Settings
+có thể dùng alias `IDENTITY_JWT_ISSUER`/`IDENTITY_JWT_AUDIENCE`; biến process
+được ưu tiên hơn file. AI luôn lấy JWKS từ `AI_IDENTITY_BASE_URL` cộng
 `/.well-known/jwks.json`; không nhận PEM hoặc URL JWKS riêng.
 
 Cấu hình xác thực trong `.env` trên server staging:
@@ -385,6 +427,8 @@ Cấu hình xác thực trong `.env` trên server staging:
 ```dotenv
 AI_ENVIRONMENT=staging
 MOCK_TEST=false
+AI_DATABASE_URL=<URL PostgreSQL của môi trường staging>
+AI_BROKER_URL=<URL Redis của môi trường staging>
 AI_JWT_ISSUER=https://identity.utask.internal
 AI_JWT_AUDIENCE=utask-platform
 AI_IDENTITY_BASE_URL=http://identity-service:8000
@@ -397,9 +441,8 @@ Hai map URL Work mặc định nằm trong `apps/ai-service/src/config.py`, dùn
 `work-service:8000`. Chỉ đặt `AI_AUTHORIZATION_URLS`/`AI_CONTEXT_URLS` khi cần
 override toàn bộ map; giá trị rỗng dùng mặc định, JSON `{}` ghi đè thành map
 rỗng và sẽ bị từ chối ở staging/production. Xóa hai biến khỏi `.env` cũ nếu
-muốn dùng mặc định mới. Mapping trong `infra/env/ai-service.env` chuyển override
-cho cả Compose local, staging và standalone; Compose staging không khai báo
-lặp hai map trong `environment`.
+muốn dùng mặc định mới. Mapping chung trong `infra/env/ai-service.env` chuyển
+hai override này cho root local, staging và standalone.
 
 Identity giữ khóa RSA và công bố JWKS. Qua gateway, đường dẫn công khai là
 `/api/auth/.well-known/jwks.json`; AI dùng URL nội bộ phía trên. AI kiểm tra
