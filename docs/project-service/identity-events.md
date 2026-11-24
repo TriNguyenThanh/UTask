@@ -14,10 +14,11 @@ Nguồn: [consumer](../../apps/work-service/apps/messaging/consumer.py),
 - `identity.user.created`, `identity.user.updated`: kiểm envelope và payload hồ sơ;
   ghi receipt chống trùng và `UserProjection` trong cùng transaction. Event cũ không
   ghi đè dữ liệu mới; cùng ID nhưng payload khác bị từ chối. Chỉ commit Kafka sau DB.
-- Chín loại đã chốt ngoài projection: `identity.user.activated`,
+- Mười loại đã chốt ngoài projection: `identity.user.activated`,
   `identity.user.status_changed`, `identity.user.role_assigned`,
   `identity.user.role_revoked`, `identity.activation.requested`,
   `identity.student.imported`, `identity.password_reset.requested`,
+  `identity.email_change.requested`,
   `identity.oauth.github_linked`, `identity.oauth.github_unlinked`.
   Work kiểm envelope v1 (producer, loại, UUID/event-user binding, thời gian có múi giờ),
   rồi commit offset; không ghi profile/receipt hoặc giải mã mail. Consumer sở hữu mail

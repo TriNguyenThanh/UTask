@@ -24,6 +24,7 @@ pytestmark = pytest.mark.unit
         "identity.activation.requested",
         "identity.student.imported",
         "identity.password_reset.requested",
+        "identity.email_change.requested",
         "identity.oauth.github_linked",
         "identity.oauth.github_unlinked",
     ],
