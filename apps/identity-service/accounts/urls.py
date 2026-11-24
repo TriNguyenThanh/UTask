@@ -7,10 +7,11 @@ from accounts.views.internal import (
     InternalActivationResendView,
     ProvisionStudentsView,
 )
-from accounts.views.profiles import BatchUsersView, CurrentUserView, PublicUserView
+from accounts.views.profiles import BatchUsersView, CurrentUserView, PublicUserView, UserSearchView
 
 urlpatterns = [
     path("users/me", CurrentUserView.as_view(), name="identity-current-user"),
+    path("users/search", UserSearchView.as_view(), name="identity-users-search"),
     path("users/batch", BatchUsersView.as_view(), name="identity-users-batch"),
     path("users/<uuid:user_id>", PublicUserView.as_view(), name="identity-public-user"),
     path("admin/users", AdminUsersView.as_view(), name="identity-admin-users"),

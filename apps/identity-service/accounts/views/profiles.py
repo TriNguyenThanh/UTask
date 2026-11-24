@@ -1,28 +1,31 @@
 from dj_rest_auth.views import UserDetailsView
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
-from rest_framework import serializers
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework.generics import GenericAPIView, RetrieveAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from accounts.models import GlobalRoleCode
+from accounts.permissions import ClassroomActorPermission
 from accounts.serializers.commands import BatchUsersSerializer, ProfilePatchSerializer
-from accounts.serializers.profiles import PublicUserSerializer
-from accounts.services.profiles import public_users, update_profile
+from accounts.serializers.profiles import (
+    CurrentUserSerializer,
+    PublicUserSerializer,
+    UserSearchQuerySerializer,
+    UserSearchSerializer,
+)
+from accounts.services.profiles import public_users, search_active_users, update_profile
 
 
 @extend_schema_view(
     patch=extend_schema(
         request=ProfilePatchSerializer,
-        responses=inline_serializer(
-            "ProfilePatchData",
-            fields={
-                "display_name": serializers.CharField(),
-                "student_id": serializers.CharField(allow_null=True),
-                "phone_number": serializers.CharField(allow_null=True),
-                "bio": serializers.CharField(allow_null=True),
-                "preferences": serializers.DictField(),
-            },
-        ),
+        responses=CurrentUserSerializer,
     )
 )
 class CurrentUserView(UserDetailsView):
@@ -36,15 +39,8 @@ class CurrentUserView(UserDetailsView):
         serializer = ProfilePatchSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         profile = update_profile(request, serializer.validated_data)
-        return Response(
-            {
-                "display_name": profile.display_name,
-                "student_id": profile.user.student_id,
-                "phone_number": profile.phone_number,
-                "bio": profile.bio,
-                "preferences": profile.preferences,
-            }
-        )
+        user = public_users().get(pk=profile.user_id)
+        return Response(CurrentUserSerializer(user).data)
 
 
 class PublicUserView(RetrieveAPIView):
@@ -77,4 +73,55 @@ class BatchUsersView(GenericAPIView):
         data = PublicUserSerializer([found[i] for i in ids if i in found], many=True).data
         response = Response({"users": data})
         response.identity_meta = {"total": len(data)}
+        return response
+
+
+@extend_schema_view(
+    get=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "q",
+                str,
+                required=True,
+                description=(
+                    "Từ khóa tìm kiếm (tối thiểu 2 ký tự) theo email, tên đăng nhập, "
+                    "MSSV hoặc tên hiển thị."
+                ),
+            ),
+            OpenApiParameter(
+                "role",
+                str,
+                required=False,
+                enum=list(GlobalRoleCode.values),
+                description="Lọc theo vai trò toàn cục (TEACHER, STUDENT, SYSTEM_ADMIN).",
+            ),
+            OpenApiParameter(
+                "limit",
+                int,
+                required=False,
+                description="Số kết quả tối đa (mặc định 10, tối đa 20).",
+            ),
+        ],
+        responses=inline_serializer(
+            "UserSearchResults",
+            fields={"users": UserSearchSerializer(many=True)},
+        ),
+    )
+)
+class UserSearchView(GenericAPIView):
+    permission_classes = [IsAuthenticated, ClassroomActorPermission]
+    serializer_class = UserSearchSerializer
+    throttle_scope = "user_search"
+    success_message = "Tìm kiếm người dùng thành công."
+
+    def get(self, request):
+        query_serializer = UserSearchQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        q = query_serializer.validated_data["q"]
+        role = query_serializer.validated_data.get("role")
+        limit = query_serializer.validated_data.get("limit", 10)
+        rows = search_active_users(q, role=role, limit=limit)
+        data = UserSearchSerializer(rows, many=True).data
+        response = Response({"users": data})
+        response.identity_meta = {"total": len(data), "limit": limit}
         return response

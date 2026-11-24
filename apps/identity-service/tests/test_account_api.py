@@ -35,13 +35,23 @@ def test_profile_update_trigger_event_and_noop(authenticated_account):
         "first_name": "An",
         "last_name": "Nguyễn",
         "student_id": " sv-2026-001 ",
+        "academic_year": "K2026",
+        "faculty": "CNTT",
+        "timezone": "Asia/Ho_Chi_Minh",
         "bio": "Django",
         "preferences": {"theme": "system"},
     }
     response = client.patch("/users/me", changes, format="json")
     assert response.status_code == 200
-    assert response.json()["data"]["display_name"] == "Nguyễn An"
-    assert response.json()["data"]["student_id"] == "SV-2026-001"
+    patch_data = response.json()["data"]
+    assert patch_data["display_name"] == "Nguyễn An"
+    assert patch_data["student_id"] == "SV-2026-001"
+    assert patch_data["first_name"] == "An"
+    assert patch_data["last_name"] == "Nguyễn"
+    assert patch_data["academic_year"] == "K2026"
+    assert patch_data["faculty"] == "CNTT"
+    assert patch_data["timezone"] == "Asia/Ho_Chi_Minh"
+    assert patch_data == client.get("/users/me").json()["data"]
     user.refresh_from_db()
     assert user.student_id == "SV-2026-001"
     event = OutboxEvent.objects.get(event_type="identity.user.updated")
@@ -153,6 +163,23 @@ def test_admin_cannot_revoke_own_admin_role(authenticated_account):
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "CANNOT_REVOKE_OWN_ADMIN_ROLE"
     assert admin.global_role_assignments.filter(role__code="SYSTEM_ADMIN").exists()
+    assert not OutboxEvent.objects.filter(aggregate_id=admin.pk).exists()
+    assert client.get("/users/me").status_code == 200
+
+
+def test_admin_cannot_suspend_own_account(authenticated_account):
+    admin, client = authenticated_account(global_role_code="SYSTEM_ADMIN")
+
+    response = client.patch(
+        f"/admin/users/{admin.pk}/status",
+        {"status": "SUSPENDED", "reason": "self-suspend attempt"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "CANNOT_SUSPEND_SELF"
+    admin.refresh_from_db()
+    assert admin.account_status == "ACTIVE"
     assert not OutboxEvent.objects.filter(aggregate_id=admin.pk).exists()
     assert client.get("/users/me").status_code == 200
 
@@ -297,3 +324,93 @@ def test_batch_rejects_invalid_identifiers_and_size(user_ids, authenticated_acco
     response = client.post("/users/batch", {"user_ids": user_ids}, format="json")
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_user_search_permissions_filtering_privacy_and_validation(authenticated_account):
+    from django.core.cache import cache
+    from django.utils import timezone
+
+    from accounts.models import AccountStatus, User
+    from tests.helpers import PASSWORD, create_user
+
+    cache.clear()
+    _, student_client = authenticated_account(global_role_code="STUDENT")
+    denied = student_client.get("/users/search", {"q": "teacher"})
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN_TEACHER_OR_ADMIN"
+
+    _, teacher_client = authenticated_account(global_role_code="TEACHER")
+    target_teacher = create_user(global_role_code="TEACHER")
+    User.objects.filter(pk=target_teacher.pk).update(
+        email="gv.nguyen@utask.edu.vn", username="gvnguyen"
+    )
+    target_teacher.profile.first_name = "Nguyễn"
+    target_teacher.profile.last_name = "An"
+    target_teacher.profile.display_name = "Nguyễn Văn An"
+    target_teacher.profile.save(update_fields=("first_name", "last_name", "display_name"))
+
+    target_student = create_user(student_id="SV202601", global_role_code="STUDENT")
+    User.objects.filter(pk=target_student.pk).update(
+        email="sv.nguyen@utask.edu.vn", username="svnguyen"
+    )
+    suspended = create_user(
+        account_status=AccountStatus.SUSPENDED,
+        global_role_code="TEACHER",
+    )
+    User.objects.filter(pk=suspended.pk).update(
+        email="suspended.nguyen@utask.edu.vn", username="susnguyen"
+    )
+    deleted = create_user(global_role_code="TEACHER")
+    User.objects.filter(pk=deleted.pk).update(
+        email="deleted.nguyen@utask.edu.vn",
+        username="delnguyen",
+        deleted_at=timezone.now(),
+    )
+    assert PASSWORD  # noqa: S101
+
+    # Validation: short query, invalid role, limit > 20
+    assert teacher_client.get("/users/search", {"q": "a"}).status_code == 400
+    assert teacher_client.get("/users/search", {"q": "nguyen", "role": "HACKER"}).status_code == 400
+    assert teacher_client.get("/users/search", {"q": "nguyen", "limit": 25}).status_code == 400
+
+    # Role-filtered search returns only ACTIVE non-deleted TEACHER
+    resp = teacher_client.get("/users/search", {"q": "nguyen", "role": "TEACHER", "limit": 5})
+    assert resp.status_code == 200
+    data = resp.json()["data"]["users"]
+    ids = {row["id"] for row in data}
+    assert str(target_teacher.pk) in ids
+    assert str(target_student.pk) not in ids
+    assert str(suspended.pk) not in ids
+    assert str(deleted.pk) not in ids
+    assert set(data[0].keys()) == {
+        "id",
+        "display_name",
+        "email",
+        "student_id",
+        "avatar_url",
+        "roles",
+    }
+    assert resp.json()["meta"] == {"total": len(data), "limit": 5}
+
+    # Search by student_id works for SYSTEM_ADMIN too
+    _, admin_client = authenticated_account(global_role_code="SYSTEM_ADMIN")
+    by_sid = admin_client.get("/users/search", {"q": "SV202601"})
+    assert by_sid.status_code == 200
+    assert [row["id"] for row in by_sid.json()["data"]["users"]] == [str(target_student.pk)]
+
+
+def test_user_search_throttle_enforces_limit(authenticated_account, monkeypatch):
+    from django.core.cache import cache
+    from rest_framework.throttling import ScopedRateThrottle
+
+    cache.clear()
+    assert ScopedRateThrottle.THROTTLE_RATES["user_search"] == "30/min"
+    monkeypatch.setitem(ScopedRateThrottle.THROTTLE_RATES, "user_search", "2/min")
+    try:
+        _, teacher_client = authenticated_account(global_role_code="TEACHER")
+        assert teacher_client.get("/users/search", {"q": "test"}).status_code == 200
+        assert teacher_client.get("/users/search", {"q": "test"}).status_code == 200
+        throttled = teacher_client.get("/users/search", {"q": "test"})
+        assert throttled.status_code == 429
+    finally:
+        cache.clear()

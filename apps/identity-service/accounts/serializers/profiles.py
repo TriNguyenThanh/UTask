@@ -1,7 +1,7 @@
 from dj_rest_auth.serializers import UserDetailsSerializer
 from rest_framework import serializers
 
-from accounts.models import User
+from accounts.models import GlobalRoleCode, User
 
 
 class _UserSummarySerializer(UserDetailsSerializer):
@@ -39,6 +39,48 @@ class PublicUserSerializer(_UserSummarySerializer):
             "account_status",
         )
         read_only_fields = fields
+
+
+class UserSearchSerializer(_UserSummarySerializer):
+    class Meta(_UserSummarySerializer.Meta):
+        fields = (
+            "id",
+            "display_name",
+            "email",
+            "student_id",
+            "avatar_url",
+            "roles",
+        )
+        read_only_fields = fields
+
+
+class UserSearchQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(
+        min_length=2,
+        max_length=100,
+        error_messages={
+            "required": "Vui lòng nhập từ khóa tìm kiếm.",
+            "blank": "Từ khóa tìm kiếm không được để trống.",
+            "min_length": "Từ khóa tìm kiếm phải có ít nhất 2 ký tự.",
+            "max_length": "Từ khóa tìm kiếm không được vượt quá 100 ký tự.",
+        },
+    )
+    role = serializers.ChoiceField(
+        choices=GlobalRoleCode.choices,
+        required=False,
+        error_messages={"invalid_choice": "Vai trò lọc không hợp lệ."},
+    )
+    limit = serializers.IntegerField(
+        min_value=1,
+        max_value=20,
+        default=10,
+        required=False,
+        error_messages={
+            "invalid": "Giới hạn số lượng kết quả phải là số nguyên hợp lệ.",
+            "min_value": "Giới hạn số lượng kết quả phải từ 1 đến 20.",
+            "max_value": "Giới hạn số lượng kết quả phải từ 1 đến 20.",
+        },
+    )
 
 
 class AdminUserSerializer(_UserSummarySerializer):

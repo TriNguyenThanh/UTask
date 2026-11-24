@@ -182,6 +182,7 @@ REST_FRAMEWORK = {
         "registration": "100/min",
         "recovery": "300/min",
         "oauth": "100/min",
+        "user_search": "30/min",
     },
 }
 

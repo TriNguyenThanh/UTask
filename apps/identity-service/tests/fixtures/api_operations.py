@@ -18,6 +18,7 @@ DEFAULT_OPERATIONS = [
     ("/password-change", "post", 200),
     ("/users/me", "get", 200),
     ("/users/me", "patch", 200),
+    ("/users/search", "get", 200),
     ("/users/{user_id}", "get", 200),
     ("/users/batch", "post", 200),
     ("/admin/users", "get", 200),

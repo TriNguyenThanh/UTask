@@ -124,7 +124,9 @@ def contract_request(settings, signup_data):
             "SYSTEM_ADMIN"
             if "/admin/" in route
             else "TEACHER"
-            if "resend-activation" in route or "provision-students" in route
+            if "resend-activation" in route
+            or "provision-students" in route
+            or route == "/users/search"
             else "STUDENT"
         )
         user = create_user(global_role_code=role)
@@ -156,6 +158,8 @@ def contract_request(settings, signup_data):
             body = {"email": signup_data["email"]}
         elif route == "/users/me" and method == "patch":
             body = {"bio": "Contract example"}
+        elif route == "/users/search":
+            body = {"q": user.email[:4]}
         elif route.endswith("/batch"):
             body = {"user_ids": [str(user.pk)]}
         elif route.endswith("/status"):

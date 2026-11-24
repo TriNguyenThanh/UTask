@@ -199,9 +199,9 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Publisher lấy bản ghi chờ cũ nhất của mỗi user theo (created_at,id), dùng PostgreSQL row lock và skip-locked để tránh hai process đồng thời gửi cùng đầu hàng. Event lỗi cùng user không bị vượt. Chỉ ghi published_at sau Kafka ACK; ACK rồi crash trước mark có thể gây duplicate, consumer phải chống lặp theo event_id.
 8. GitHub reconcile theo3.7.1 trước update projection/replay/backfill; outage phải retry, không verified từ event cũ. Public/batch giữ policy Bearer toàn hệ thống hiện tại; không tự thêm quyền cùng lớp nếu sản phẩm chưa đổi contract.
 
-### 1.11. Trạng thái API và thư viện ở phiên bản1.7
+### 1.11. Trạng thái API và thư viện ở phiên bản 1.8
 
-25 thao tác đang bật mặc định; 6 OAuth qua IDENTITY_GOOGLE_ENABLED/IDENTITY_GITHUB_ENABLED,
+28 thao tác đang bật mặc định (gồm `GET /users/search`); 6 OAuth qua IDENTITY_GOOGLE_ENABLED/IDENTITY_GITHUB_ENABLED,
 2 avatar qua IDENTITY_AVATAR_ENABLED (mặc định false, bật phải có đủ R2 configuration).
 OpenAPI xuất bằng drf-spectacular từ config.urls và serializers thật qua
 [export_identity_api](../../apps/identity-service/accounts/management/commands/export_identity_api.py). Schema mặc định không
@@ -249,6 +249,7 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 | `WEAK_PASSWORD` | 400 | Mật khẩu không đáp ứng chính sách bảo mật (tối thiểu 8 ký tự, chữ, số, ký tự đặc biệt). |
 | `FORBIDDEN_TEACHER_OR_ADMIN` | 403 | Chỉ Giảng viên hoặc Quản trị viên hệ thống mới có quyền truy cập endpoint này. |
 | `FORBIDDEN_ADMIN_ONLY` | 403 | Thao tác đặc quyền chỉ dành riêng cho Quản trị viên cấp cao (`SYSTEM_ADMIN`). |
+| `CANNOT_SUSPEND_SELF` | 400 | Quản trị viên không thể tự tạm đình chỉ tài khoản của chính mình. |
 | `RATE_LIMIT_EXCEEDED` | 429 | Gửi quá nhiều yêu cầu xác thực trong khoảng thời gian ngắn. |
 | `IDEMPOTENT_REPLAY_ACTIVE` | 409 | Một yêu cầu mang Idempotency-Key này đang trong quá trình xử lý. |
 | `VALIDATION_ERROR` | 400 | Dữ liệu đầu vào sai kiểu, thiếu trường bắt buộc hoặc vi phạm regex. |
@@ -647,20 +648,32 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 * **Xử lý:** Trong một transaction khóa tài khoản, cập nhật `users.student_id` và/hoặc `user_profiles`. MSSV chuẩn hóa upper(trim), nullable và duy nhất; DB unique constraint vẫn bảo vệ khi có cập nhật đồng thời. Giá trị MSSV cũ không được lưu thành lịch sử và có thể được tài khoản khác sử dụng sau khi đổi. Kích hoạt Trigger tạo lại `display_name = "Nguyễn Văn A"`. Ghi audit và Outbox `identity.user.updated` khi có trường đổi để các consumer đồng bộ hồ sơ.
 
-* **Phản hồi Thành công (HTTP 200 OK):**
+* **Phản hồi Thành công (HTTP 200 OK):** Trả về đầy đủ đối tượng `CurrentUser` (cùng cấu trúc với `GET /users/me`, bao gồm `id`, `email`, `username`, `student_id`, `display_name`, `avatar_url`, `roles`, `first_name`, `last_name`, `phone_number`, `bio`, `github_username`, `academic_year`, `faculty`, `timezone`, `preferences`, `created_at`).
 ```json
 {
   "success": true,
   "message": "Cập nhật hồ sơ cá nhân thành công.",
   "data": {
-    "display_name": "Nguyễn Văn A",
+    "id": "b2c1d3e4-5f6a-7b8c-9d0e-1f2a3b4c5d6e",
+    "email": "sinhvien.k16@university.edu.vn",
+    "username": "sinhvien_k16",
     "student_id": "20210001",
+    "display_name": "Nguyễn Văn A",
+    "avatar_url": null,
+    "roles": ["STUDENT"],
+    "first_name": "Văn A",
+    "last_name": "Nguyễn",
     "phone_number": "0912345678",
     "bio": "Cập nhật định hướng Full-stack Engineer.",
+    "github_username": null,
+    "academic_year": null,
+    "faculty": "CNTT",
+    "timezone": "Asia/Ho_Chi_Minh",
     "preferences": {
       "theme": "system",
       "notification_email": false
-    }
+    },
+    "created_at": "2026-10-01T08:00:00Z"
   },
   "meta": null,
   "error": null
@@ -825,6 +838,19 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 ---
 
+#### 3.4.7. Tìm kiếm Người dùng Hoạt động (Search Active Users)
+* **Phương thức:** `GET`
+* **Đường dẫn:** `/users/search`
+* **Xác thực:** Bearer Token bắt buộc (chỉ `TEACHER` hoặc `SYSTEM_ADMIN`; `STUDENT` nhận `403 FORBIDDEN_TEACHER_OR_ADMIN`).
+* **Giới hạn tần suất:** `30/min` mỗi người dùng (`429`).
+* **Query Parameters:**
+  * `q` *(bắt buộc, 2–100 ký tự)*: tìm không phân biệt hoa thường theo `email`, `username`, `student_id` hoặc `profile.display_name`.
+  * `role` *(tùy chọn)*: `TEACHER` | `STUDENT` | `SYSTEM_ADMIN`.
+  * `limit` *(tùy chọn, mặc định `10`, tối đa `20`)*.
+* **Bảo mật & Phạm vi:** Chỉ trả tài khoản `account_status=ACTIVE` và `deleted_at IS NULL`; chỉ trả 6 trường công khai (`id`, `display_name`, `email`, `student_id`, `avatar_url`, `roles`) trong `data.users` kèm `meta: {"total", "limit"}`.
+
+---
+
 ### 3.5. Cấp tài khoản phục vụ import lớp học (US-1.4)
 
 #### 3.5.1. Hợp đồng Classroom → Identity đã chốt
@@ -955,7 +981,7 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 ```
 
 * **Xử lý:**
-  1. Khóa user. Lệnh đổi status không áp dụng cho user đã xóa; chỉ nhận ACTIVE/SUSPENDED. Không đổi PENDING_ACTIVATION sang ACTIVE thay luồng kích hoạt. Khi mutation đưa user về ACTIVE, reset Axes cho UUID của user theo API thư viện.
+  1. Khóa user. Chặn `SYSTEM_ADMIN` tự đình chỉ tài khoản của chính mình (`400 CANNOT_SUSPEND_SELF`). Lệnh đổi status không áp dụng cho user đã xóa; chỉ nhận ACTIVE/SUSPENDED. Không đổi PENDING_ACTIVATION sang ACTIVE thay luồng kích hoạt. Khi mutation đưa user về ACTIVE, reset Axes cho UUID của user theo API thư viện.
   2. Lệnh khôi phục có body `{"restore_deleted":true,"reason":"..."}`, không nhận status; clear deleted_at, giữ account_status/email/MSSV/roles/user_id và không phục hồi session.
   3. Đình chỉ thu hồi mọi session hoạt động; khôi phục cũng giữ session cũ vô hiệu. Ghi identity.user.status_changed với dữ liệu mới và audit trong cùng transaction.
   4. Response 200 trả user_id, account_status và deleted_at mới. Mọi lỗi dữ liệu/giao dịch rollback toàn bộ.

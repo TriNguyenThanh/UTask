@@ -21,6 +21,11 @@ def change_status(request, target_id, command):
             changed = user.deleted_at is not None
             user.deleted_at = None
         else:
+            if target_id == request.user.pk and command["status"] == AccountStatus.SUSPENDED:
+                raise IdentityAPIError(
+                    "CANNOT_SUSPEND_SELF",
+                    "Bạn không thể tự tạm đình chỉ tài khoản quản trị của mình.",
+                )
             if user.deleted_at or user.account_status == AccountStatus.PENDING_ACTIVATION:
                 raise IdentityAPIError(
                     "ACCOUNT_UNAVAILABLE", "Không thể đổi trạng thái tài khoản này."
