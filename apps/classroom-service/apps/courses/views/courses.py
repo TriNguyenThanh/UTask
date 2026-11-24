@@ -13,7 +13,11 @@ KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required
 
 class CourseListView(APIView):
     @extend_schema(
-        responses={200: envelope_schema("CourseList", CourseSerializer, many=True), **ERRORS}
+        description=(
+            "Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động; "
+            "Giảng viên và Quản trị viên hệ thống xem toàn bộ danh mục môn học."
+        ),
+        responses={200: envelope_schema("CourseList", CourseSerializer, many=True), **ERRORS},
     )
     def get(self, request):
         return success_response(list_courses(request), message="Đã lấy danh sách môn học.")

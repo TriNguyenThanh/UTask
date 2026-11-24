@@ -122,7 +122,7 @@ từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
-| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin mọi môn |
+| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin quản lý mọi môn |
 | Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động |
 | Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; Admin có các quyền trạng thái/phân công được đánh dấu trong bảng chuẩn, gồm LH13 |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
@@ -141,7 +141,9 @@ có quyền ngang nhau trong lớp; Admin chỉ có quyền được chọn cho 
 triển khai thật. Envelope giữ `success/message/data/meta/error`, thông báo
 tiếng Việt. Danh sách lớp, giảng viên lớp, ghi danh, nhóm, thành viên, liên
 kết và lịch sử có trang mặc định 20, tối đa 100; cursor gắn phạm vi/bộ lọc.
-Danh mục Course sắp theo mã/ID, chưa phân trang do model không có trường thời gian.
+Danh mục Course sắp theo mã/ID, chưa phân trang do model không có trường thời gian;
+`GET /courses/` lọc cho Student chỉ còn các môn thuộc lớp đang có ghi danh `ACTIVE`,
+còn Teacher và Admin xem toàn bộ danh mục môn.
 `Course.created_by_id` là UUID tùy chọn, tham chiếu logic tới Identity và chỉ đọc
 trên API. Teacher chỉ sửa/ngừng dùng môn mình tạo; Admin có thể quản lý mọi môn.
 Môn cũ có `created_by_id=NULL` chỉ Admin được sửa/ngừng dùng.
