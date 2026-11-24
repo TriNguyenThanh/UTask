@@ -314,3 +314,127 @@ def test_lock_grouping_preconditions_idempotency_and_unlock_grouping(
     assert clean_lock.status_code == 200
     assert clean_lock.json()["data"]["grouping_phase"] == "LOCKED"
     assert clean_lock.json()["data"]["version"] == 4
+
+
+def test_admin_can_reactivate_enrollment(section, actors, client_for, post_command):
+    enrollment = Enrollment.objects.get(class_section=section, user_id=actors["outsider"])
+    enrollment.status = "REMOVED"
+    enrollment.left_at = timezone.now()
+    enrollment.save(update_fields=["status", "left_at"])
+
+    response = post_command(
+        client_for(actors["admin"]),
+        f"/classes/{section.pk}/enrollments/{enrollment.pk}/reactivate/",
+        {"reason": "Quản trị viên khôi phục ghi danh"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "ACTIVE"
+    assert response.json()["data"]["left_at"] is None
+
+
+@pytest.mark.parametrize("closed_status", ["CLOSED", "ARCHIVED"])
+def test_unlock_grouping_rejects_student_blank_reason_and_non_open_class(
+    section, actors, client_for, post_command, closed_status
+):
+    teacher = client_for(actors["teacher"])
+    locked = post_command(
+        teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1, "force": True}
+    )
+    assert locked.status_code == 200
+
+    # Enrolled student gets 403
+    student_denied = post_command(
+        client_for(actors["leader"]),
+        f"/classes/{section.pk}/unlock-grouping/",
+        {"version": 2, "reason": "Tự mở khóa"},
+    )
+    assert student_denied.status_code == 403
+
+    # Blank reason gets 400
+    blank_reason = post_command(
+        teacher,
+        f"/classes/{section.pk}/unlock-grouping/",
+        {"version": 2, "reason": "   "},
+    )
+    assert blank_reason.status_code == 400
+
+    # Non-open class gets 409 CLASS_NOT_OPEN
+    section.status = closed_status
+    section.save(update_fields=["status"])
+    not_open = post_command(
+        teacher,
+        f"/classes/{section.pk}/unlock-grouping/",
+        {"version": 2, "reason": "Mở lại chia nhóm"},
+    )
+    assert not_open.status_code == 409
+    assert not_open.json()["error"]["code"] == "CLASS_NOT_OPEN"
+
+
+def test_teacher_can_dissolve_sole_leader_after_grouping_locked_while_student_cannot_self_leave(
+    section, actors, client_for, post_command
+):
+    solo_remove = StudyGroup.objects.create(class_section=section, name="Nhóm 1 người A")
+    solo_exit = StudyGroup.objects.create(class_section=section, name="Nhóm 1 người B")
+    leader_enroll = Enrollment.objects.get(class_section=section, user_id=actors["leader"])
+    member_enroll = Enrollment.objects.get(class_section=section, user_id=actors["member"])
+    GroupMember.objects.create(
+        class_section=section, group=solo_remove, enrollment=leader_enroll, role="LEADER"
+    )
+    GroupMember.objects.create(
+        class_section=section, group=solo_exit, enrollment=member_enroll, role="LEADER"
+    )
+
+    teacher = client_for(actors["teacher"])
+    assert (
+        post_command(
+            teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1, "force": True}
+        ).status_code
+        == 200
+    )
+
+    # After lock, sole leader cannot self-leave or self-exit even with dissolve_if_sole_member=True
+    leader_client = client_for(actors["leader"])
+    self_leave = post_command(
+        leader_client,
+        f"/groups/{solo_remove.pk}/leave/",
+        {"version": 1, "reason": "Xin rời", "dissolve_if_sole_member": True},
+    )
+    assert self_leave.status_code == 409
+    assert self_leave.json()["error"]["code"] == "GROUPING_LOCKED"
+
+    self_exit = post_command(
+        leader_client,
+        f"/classes/{section.pk}/enrollments/{leader_enroll.pk}/exit/",
+        {"reason": "Rời lớp", "dissolve_if_sole_member": True},
+    )
+    assert self_exit.status_code == 409
+    assert self_exit.json()["error"]["code"] == "GROUPING_LOCKED"
+
+    # Teacher CAN remove sole leader & dissolve group after lock via remove-member
+    teacher_remove = post_command(
+        teacher,
+        f"/groups/{solo_remove.pk}/remove-member/",
+        {
+            "version": 1,
+            "user_id": str(actors["leader"]),
+            "reason": "Loại sau khi chốt nhóm",
+            "dissolve_if_sole_member": True,
+        },
+    )
+    assert teacher_remove.status_code == 200
+    solo_remove.refresh_from_db()
+    assert solo_remove.status == "ARCHIVED"
+    assert not GroupMember.objects.filter(group=solo_remove, status="ACTIVE").exists()
+
+    # Teacher CAN remove sole leader from class & dissolve group after lock via enrollment exit
+    teacher_exit = post_command(
+        teacher,
+        f"/classes/{section.pk}/enrollments/{member_enroll.pk}/exit/",
+        {"reason": "Xóa sinh viên nghỉ học", "dissolve_if_sole_member": True},
+    )
+    assert teacher_exit.status_code == 200
+    solo_exit.refresh_from_db()
+    member_enroll.refresh_from_db()
+    assert solo_exit.status == "ARCHIVED"
+    assert member_enroll.status == "REMOVED"
+    assert OutboxEvent.objects.filter(aggregate_id__in=[solo_remove.pk, solo_exit.pk]).count() == 2
