@@ -257,13 +257,15 @@ class AIComposeTests(unittest.TestCase):
 
     def test_gateway_preserves_ai_versioned_uri_and_blocks_internal_routes(self):
         nginx = (ROOT / "infra/nginx/nginx.conf").read_text()
-        location = nginx.split("location /api/ai/ {", 1)[1].split("}", 1)[0]
+        location = nginx.split("location /api/ai/ {", 1)[1].split("\n    }", 1)[0]
         self.assertNotIn("rewrite", location)
+        self.assertIn("if ($request_method = OPTIONS) { return 204; }", location)
         self.assertIn("proxy_pass http://$ai_backend;", location)
         for path in (
             "/api/auth/api/v1/internal",
             "/api/work/api/v1/internal",
             "/api/integrations/api/v1/internal",
+            "/api/ai/v1/internal",
         ):
             self.assertIn(f"location = {path} {{\n      return 404;", nginx)
             self.assertIn(f"location ^~ {path}/ {{\n      return 404;", nginx)
