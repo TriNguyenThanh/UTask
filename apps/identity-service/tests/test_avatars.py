@@ -143,3 +143,62 @@ def test_avatar_redis_outage_no_success(avatar_client, monkeypatch):
     monkeypatch.setattr("accounts.services.avatars.receipt_client", lambda: broken)
     result = presign(client)
     assert result.status_code == 503 and result.json()["error"]["code"] == "IDENTITY_UNAVAILABLE"
+
+
+def test_avatar_delete_clears_profile_deletes_r2_outside_tx_and_is_idempotent(avatar_client):
+    from accounts.models import AuditLog
+
+    client, user, storage = avatar_client
+    deleted_keys = []
+
+    def fake_delete(**kwargs):
+        assert not connection.in_atomic_block
+        deleted_keys.append(kwargs["Key"])
+
+    storage.delete_object.side_effect = fake_delete
+
+    key = presign(client).json()["data"]["file_key"]
+    assert client.post(CONFIRM, {"file_key": key}, format="json").status_code == 200
+    events_before = OutboxEvent.objects.filter(event_type="identity.user.updated").count()
+
+    deleted = client.delete("/users/me/avatar")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"] == {"avatar_url": None}
+    assert deleted.json()["message"] == "Đã xóa ảnh đại diện."
+    user.profile.refresh_from_db()
+    assert user.profile.avatar_url is None
+    assert deleted_keys == [key]
+    assert (
+        AuditLog.objects.filter(target_user_id=str(user.pk), action="AVATAR_DELETED").count() == 1
+    )
+    assert (
+        OutboxEvent.objects.filter(event_type="identity.user.updated").count() == events_before + 1
+    )
+
+    # Idempotent repeat delete does not emit extra audit/outbox or call R2.
+    repeat = client.delete("/users/me/avatar")
+    assert repeat.status_code == 200 and repeat.json()["data"] == {"avatar_url": None}
+    assert len(deleted_keys) == 1
+    assert (
+        AuditLog.objects.filter(target_user_id=str(user.pk), action="AVATAR_DELETED").count() == 1
+    )
+
+
+def test_avatar_delete_skips_r2_for_external_url_and_tolerates_r2_cleanup_error(avatar_client):
+    client, user, storage = avatar_client
+    user.profile.avatar_url = "https://lh3.googleusercontent.com/a/external-pic"
+    user.profile.save(update_fields=("avatar_url",))
+
+    res = client.delete("/users/me/avatar")
+    assert res.status_code == 200 and res.json()["data"] == {"avatar_url": None}
+    storage.delete_object.assert_not_called()
+
+    key = presign(client).json()["data"]["file_key"]
+    assert client.post(CONFIRM, {"file_key": key}, format="json").status_code == 200
+    storage.delete_object.side_effect = EndpointConnectionError(
+        endpoint_url="https://r2.example.test"
+    )
+    res2 = client.delete("/users/me/avatar")
+    assert res2.status_code == 200 and res2.json()["data"] == {"avatar_url": None}
+    user.profile.refresh_from_db()
+    assert user.profile.avatar_url is None

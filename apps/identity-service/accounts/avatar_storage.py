@@ -1,11 +1,15 @@
 """R2's S3 API via boto3. No local success fallback or bespoke signing."""
 
+import logging
+
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 
 from common.errors import IdentityAPIError
+
+logger = logging.getLogger("identity.api")
 
 
 class AvatarStorage:
@@ -60,3 +64,17 @@ class AvatarStorage:
             raise IdentityAPIError(
                 "STORAGE_UNAVAILABLE", "Không thể kiểm tra ảnh đã tải lên.", status_code=503
             ) from exc
+
+    @classmethod
+    def delete(cls, key):
+        try:
+            cls.client().delete_object(Bucket=settings.IDENTITY_R2_BUCKET, Key=key)
+            return True
+        except ClientError as exc:
+            if str(exc.response.get("Error", {}).get("Code")) in {"404", "NoSuchKey", "NotFound"}:
+                return False
+            logger.warning("Avatar R2 object cleanup failed error=%s", type(exc).__name__)
+            return False
+        except BotoCoreError as exc:
+            logger.warning("Avatar R2 object cleanup failed error=%s", type(exc).__name__)
+            return False

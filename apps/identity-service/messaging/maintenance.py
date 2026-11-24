@@ -10,13 +10,14 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
-from accounts.models import IdempotencyRecord, OutboxEvent, UserSession
+from accounts.models import EmailChangeRequest, IdempotencyRecord, OutboxEvent, UserSession
 from messaging.mail_crypto import redact_expired_mail_secret
 
 MAIL_EVENTS = (
     "identity.activation.requested",
     "identity.student.imported",
     "identity.password_reset.requested",
+    "identity.email_change.requested",
 )
 
 
@@ -39,6 +40,7 @@ def cleanup_identity_data(*, apply=False, batch_size=500, now=None):
         "email_confirmations": EmailConfirmation.objects.filter(
             sent__lt=now - timedelta(days=account_settings.EMAIL_CONFIRMATION_EXPIRE_DAYS + 1)
         ),
+        "email_change_requests": EmailChangeRequest.objects.filter(expires_at__lt=now),
     }
     result = {}
     for name, query in queries.items():

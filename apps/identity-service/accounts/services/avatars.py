@@ -100,3 +100,31 @@ def confirm_avatar(request, key):
     except RedisError:
         pass  # DB commit is authoritative; repeated confirm of the current avatar is a no-op.
     return {"avatar_url": url}
+
+
+def _extract_owned_avatar_key(user_id, avatar_url: str | None) -> str | None:
+    if not avatar_url or not getattr(settings, "IDENTITY_R2_PUBLIC_URL", ""):
+        return None
+    prefix = settings.IDENTITY_R2_PUBLIC_URL.rstrip("/") + "/"
+    if not avatar_url.startswith(prefix):
+        return None
+    key = avatar_url.removeprefix(prefix)
+    if re.fullmatch(rf"avatars/{user_id}/[0-9]+_[0-9a-f]{{32}}\.(jpg|png|webp)", key):
+        return key
+    return None
+
+
+def delete_avatar(request):
+    old_key = None
+    with transaction.atomic():
+        user = lock_accounts(request)[request.user.pk]
+        current_url = user.profile.avatar_url
+        if current_url is not None:
+            old_key = _extract_owned_avatar_key(user.pk, current_url)
+            user.profile.avatar_url = None
+            user.profile.save(update_fields=("avatar_url", "updated_at"))
+            account_audit(request, user, "AVATAR_DELETED")
+            emit_user(user, "identity.user.updated")
+    if old_key is not None:
+        AvatarStorage.delete(old_key)  # Best-effort R2 cleanup outside DB transaction.
+    return {"avatar_url": None}

@@ -348,3 +348,42 @@ class IdempotencyRecord(models.Model):
             )
         ]
         indexes = [models.Index(fields=("created_at",), name="idx_idempotency_created_at")]
+
+
+class EmailChangeRequest(models.Model):
+    """Single-use hashed verification token for self-service email changes."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        db_column="user_id",
+        on_delete=models.CASCADE,
+        related_name="email_change_requests",
+    )
+    new_email = models.EmailField(max_length=255)
+    token_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "email_change_requests"
+        constraints = [
+            models.UniqueConstraint(fields=("token_hash",), name="uq_email_change_token_hash"),
+            models.CheckConstraint(
+                condition=Q(new_email=Lower(Trim(F("new_email")))) & ~Q(new_email=""),
+                name="chk_email_change_normalized",
+            ),
+            models.CheckConstraint(
+                condition=Q(expires_at__gt=F("created_at")),
+                name="chk_email_change_expiry",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("user", "created_at"),
+                condition=Q(consumed_at__isnull=True),
+                name="idx_email_change_user_pending",
+            ),
+            models.Index(fields=("expires_at",), name="idx_email_change_expires_at"),
+        ]

@@ -5,6 +5,7 @@ from dj_rest_auth.jwt_auth import (
     JWTCookieAuthentication,
 )
 from dj_rest_auth.serializers import LoginSerializer as RestAuthLoginSerializer
+from django.conf import settings
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
@@ -13,6 +14,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from authentication.adapters.session_tokens import FamilyRefreshToken
 from authentication.services.password_authentication import PasswordAuthenticationService
 from authentication.services.session_service import SessionService
+from common.errors import IdentityAPIError
 from common.serializers import StrictInputMixin
 
 
@@ -45,6 +47,17 @@ class LoginRequestSerializer(StrictInputMixin, RestAuthLoginSerializer):
     @staticmethod
     def validate_auth_user_status(user):
         PasswordAuthenticationService.validate_login_account(user)
+
+    @staticmethod
+    def validate_email_verification_status(user, email=None):
+        if settings.ACCOUNT_EMAIL_VERIFICATION == "mandatory":
+            address = user.emailaddress_set.filter(email=user.email).first()
+            if not address or not address.verified:
+                raise IdentityAPIError(
+                    "ACCOUNT_PENDING_ACTIVATION",
+                    "Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để xác minh.",
+                    status_code=403,
+                )
 
 
 class SessionTokenSerializer(TokenObtainPairSerializer):

@@ -192,6 +192,9 @@ SPECTACULAR_SETTINGS = {
     "SERVERS": [{"url": "/api/auth", "description": "Identity API qua gateway"}],
     "COMPONENT_SPLIT_REQUEST": True,
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "RoleCodeEnum": "accounts.models.GlobalRoleCode.choices",
+    },
 }
 
 REST_AUTH = {
@@ -314,6 +317,10 @@ if os.environ.get("IDENTITY_REDIS_URL"):
             "LOCATION": IDENTITY_REDIS_URL,
         }
     }
+
+IDENTITY_REQUIRE_EMAIL_ACTIVATION = _environment_bool(
+    "IDENTITY_REQUIRE_EMAIL_ACTIVATION", default=False
+)
 
 IDENTITY_GOOGLE_ENABLED = _environment_bool("IDENTITY_GOOGLE_ENABLED")
 IDENTITY_GITHUB_ENABLED = _environment_bool("IDENTITY_GITHUB_ENABLED")

@@ -2,11 +2,14 @@
 
 from allauth.account.forms import default_token_generator
 from axes.utils import reset as reset_axes
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
 from accounts.models import AccountStatus, User
 from authentication.services.session_service import audit, require_current_session, revoke_sessions
+from common.errors import IdentityAPIError
 from messaging.mail_crypto import mail_key
 
 
@@ -58,6 +61,28 @@ class PasswordService:
             revoke_sessions(current, "PASSWORD_CHANGED")
             audit(current, "PASSWORD_CHANGED", request)
             return result
+
+    @staticmethod
+    def set_initial_password(request, new_password: str):
+        with transaction.atomic():
+            current = User.objects.select_for_update().get(pk=request.user.pk)
+            require_current_session(current, request.auth)
+            if current.has_usable_password():
+                raise IdentityAPIError(
+                    "PASSWORD_ALREADY_SET",
+                    "Tài khoản đã có mật khẩu. Vui lòng dùng chức năng đổi mật khẩu.",
+                )
+            try:
+                validate_password(new_password, user=current)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError({"new_password1": list(exc.messages)}) from exc
+            current.set_password(new_password)
+            current.save(update_fields=("password", "updated_at"))
+            # SimpleJWT CHECK_REVOKE_TOKEN invalidates access tokens on password change;
+            # revoke all sessions atomically so DB state and JWT verification remain consistent.
+            revoke_sessions(current, "PASSWORD_CHANGED")
+            audit(current, "PASSWORD_SET", request)
+            return current
 
     @staticmethod
     def validate_reset_account(user):

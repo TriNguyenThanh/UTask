@@ -11,7 +11,18 @@ def public_users():
     return (
         User.objects.filter(deleted_at__isnull=True)
         .select_related("profile")
-        .prefetch_related("global_role_assignments__role", "emailaddress_set")
+        .prefetch_related("global_role_assignments__role", "emailaddress_set", "socialaccount_set")
+    )
+
+
+def admin_users(deleted: str = "active"):
+    queryset = User.objects.all()
+    if deleted == "active":
+        queryset = queryset.filter(deleted_at__isnull=True)
+    elif deleted == "deleted":
+        queryset = queryset.filter(deleted_at__isnull=False)
+    return queryset.select_related("profile").prefetch_related(
+        "global_role_assignments__role", "emailaddress_set", "socialaccount_set"
     )
 
 

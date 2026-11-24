@@ -27,11 +27,14 @@ def test_openapi_with_enabled_flags_reads_real_urlconf(settings, tmp_path):
         from tests.fixtures.api_operations import DEFAULT_OPERATIONS
 
         assert (
-            sum(len(methods) for methods in schema["paths"].values()) == len(DEFAULT_OPERATIONS) + 8
+            sum(len(methods) for methods in schema["paths"].values()) == len(DEFAULT_OPERATIONS) + 9
         )
         assert "get" in schema["paths"]["/csrf"]
         assert schema["paths"]["/oauth/google"].keys() == {"post", "delete"}
         assert schema["paths"]["/oauth/github"].keys() == {"post", "delete"}
+        assert schema["paths"]["/users/me/avatar"].keys() == {"delete"}
+        assert "200" in schema["paths"]["/users/me/avatar"]["delete"]["responses"]
+        assert "204" not in schema["paths"]["/users/me/avatar"]["delete"]["responses"]
         assert schema["paths"]["/users/me/avatar/confirm"].keys() == {"post"}
         for route in ("/oauth/google", "/oauth/google/start"):
             assert not any(

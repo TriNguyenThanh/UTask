@@ -77,3 +77,15 @@ class IdentityPasswordChangeSerializer(StrictInputMixin, PasswordChangeSerialize
             return super(IdentityPasswordChangeSerializer, self).save()
 
         return PasswordService.change_password(self.request, save_password)
+
+
+class IdentityPasswordSetSerializer(StrictInputMixin, serializers.Serializer):
+    new_password1 = serializers.CharField(write_only=True, max_length=128)
+    new_password2 = serializers.CharField(write_only=True, max_length=128)
+
+    def validate(self, attrs):
+        if attrs["new_password1"] != attrs["new_password2"]:
+            raise serializers.ValidationError(
+                {"new_password2": "Hai mật khẩu mới không trùng khớp."}
+            )
+        return attrs
