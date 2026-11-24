@@ -344,10 +344,11 @@ def test_user_search_permissions_filtering_privacy_and_validation(authenticated_
     User.objects.filter(pk=target_teacher.pk).update(
         email="gv.nguyen@utask.edu.vn", username="gvnguyen"
     )
-    target_teacher.profile.first_name = "Nguyễn"
-    target_teacher.profile.last_name = "An"
-    target_teacher.profile.display_name = "Nguyễn Văn An"
-    target_teacher.profile.save(update_fields=("first_name", "last_name", "display_name"))
+    target_teacher.profile.first_name = "Văn An"
+    target_teacher.profile.last_name = "Nguyễn"
+    target_teacher.profile.save(update_fields=("first_name", "last_name"))
+    target_teacher.profile.refresh_from_db()
+    assert target_teacher.profile.display_name == "Nguyễn Văn An"
 
     target_student = create_user(student_id="SV202601", global_role_code="STUDENT")
     User.objects.filter(pk=target_student.pk).update(
@@ -368,10 +369,19 @@ def test_user_search_permissions_filtering_privacy_and_validation(authenticated_
     )
     assert PASSWORD  # noqa: S101
 
-    # Validation: short query, invalid role, limit > 20
+    # Validation: missing q, short query, invalid role, limit > 20 (Vietnamese validation messages)
+    missing_q = teacher_client.get("/users/search")
+    assert missing_q.status_code == 400
+    assert missing_q.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert any("từ khóa" in item["issue"].lower() for item in missing_q.json()["error"]["details"])
     assert teacher_client.get("/users/search", {"q": "a"}).status_code == 400
     assert teacher_client.get("/users/search", {"q": "nguyen", "role": "HACKER"}).status_code == 400
     assert teacher_client.get("/users/search", {"q": "nguyen", "limit": 25}).status_code == 400
+
+    # Search by Vietnamese display_name with diacritics
+    by_name = teacher_client.get("/users/search", {"q": "Nguyễn Văn An"})
+    assert by_name.status_code == 200
+    assert [row["id"] for row in by_name.json()["data"]["users"]] == [str(target_teacher.pk)]
 
     # Role-filtered search returns only ACTIVE non-deleted TEACHER
     resp = teacher_client.get("/users/search", {"q": "nguyen", "role": "TEACHER", "limit": 5})
