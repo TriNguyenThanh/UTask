@@ -122,9 +122,29 @@ migration một lần. Worker/migration khai báo thêm `x-deploy.application` l
 image. Discovery kiểm tra quan hệ này, không đoán vai trò từ chuỗi image. App nội bộ
 khai báo `x-deploy.gateway_health_path: null`; app có route health qua gateway khai báo
 path tuyệt đối. Stack staging có một gateway; tên lấy từ Compose.
-Trong Compose, `x-work-runtime` dùng YAML anchor để chia sẻ image, env mappings
-và dependency giữa API/worker Work. Mỗi tiến trình vẫn khai báo command, healthcheck
-và phần dependency riêng; cấu hình này được Compose resolve trước khi chạy.
+
+### Quy ước dùng chung cấu hình Compose
+
+Compose local và staging dùng YAML extension field `x-*` kết hợp anchor để
+gom cấu hình runtime lặp lại giữa các container của cùng service. Đặt anchor
+gần đầu file Compose, theo trách nhiệm như `x-work-runtime`,
+`x-classroom-runtime` hoặc `x-ai-runtime`, rồi kế thừa bằng `<<: *...` trong
+từng mục `services`. Có thể tách anchor phụ cho dependency hoặc metadata dùng
+chung nếu nhiều container cùng cần.
+
+Anchor chứa cấu hình nền giống nhau, thường gồm image/build, `env_file`,
+restart, volume và dependency nền. Mỗi container giữ command, healthcheck,
+metadata `x-deploy`/`x-ci` và dependency riêng theo vai trò; trường metadata
+thực sự dùng chung có thể đặt trong anchor phụ. Áp dụng cùng quy ước cho cả
+Compose local và staging để cấu hình service không bị lặp hoặc trôi khác nhau
+giữa hai môi trường. Compose resolve anchor trước khi tạo container; `x-*` tự
+nó không tạo service hay container.
+
+Hai Compose dùng `x-identity-runtime`, `x-work-runtime`,
+`x-classroom-runtime`, `x-integration-runtime` và `x-notification-runtime` cho
+các process tương ứng; Compose local còn có `x-ai`. Dependency nền nằm trong
+anchor riêng khi nhiều process dùng chung; dependency đặc thù vẫn được khai
+báo tại từng process.
 
 Các script CI là automation chung của repository, không phải Python service hoặc
 project triển khai riêng. Khi chạy script cần đọc YAML, workflow dùng

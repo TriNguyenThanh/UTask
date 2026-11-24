@@ -38,21 +38,48 @@ AI dispatcher → Redis → AI worker → context/model → PostgreSQL AI → AI
 ## 2. Nơi đặt cấu hình
 
 Tạo `.env` từ [mẫu root](../../.env.example), nhưng không dùng giá trị mẫu cho
-môi trường dùng chung. Root `.env` giữ giá trị triển khai và secret. Các file
+môi trường dùng chung. Root `.env` giữ toàn bộ giá trị runtime và secret.
 `infra/env/ai-service.env`, `work-service.env` và `integration-service.env`
-chỉ ánh xạ biến vào process tương ứng; Compose không truyền tự động mọi biến
-trong root `.env` vào mọi container. Hai map URL Work mặc định được khai báo
+là mapping vào process tương ứng; mapping AI chứa cả biến thường và
+placeholder secret `${TEN_BIEN:-}`, không phải nguồn giá trị riêng. Compose
+không truyền tự động mọi biến trong root `.env` vào mọi container. Hai map URL Work mặc định được khai báo
 trong `apps/ai-service/src/config.py`, không cần điền trong `.env` khi dùng
-DNS Compose `work-service:8000`. File `infra/env/ai-service.env` chỉ chuyển
-override URL nếu được đặt; giá trị rỗng được Settings bỏ qua để dùng mặc định.
+DNS Compose `work-service:8000`. Mapping chuyển giá trị override URL nếu được
+đặt; giá trị rỗng được Settings bỏ qua để dùng mặc định.
 Override JSON thay toàn bộ map, không ghép từng key với mặc định. Nếu `.env`
 cũ chứa hai biến này, bỏ chúng để dùng cấu hình trong code; `{}` là override
 rỗng tường minh và sẽ bị từ chối ở staging/production.
 
+AI dùng duy nhất `infra/env/ai-service.env` cho các process API, worker,
+dispatcher và beat; PostgreSQL standalone dùng riêng
+`infra/env/database.env`. Mapping AI yêu cầu `AI_DATABASE_URL` và
+`AI_BROKER_URL` trong `.env` root hoặc environment process; không tự chọn URL
+theo tên Compose hay topology. `AI_ENVIRONMENT` mặc định an toàn là `staging`,
+vì vậy local phải đặt rõ `AI_ENVIRONMENT=development`; chỉ đặt
+`MOCK_TEST=true` khi muốn dùng fixture.
+
+Khi chạy Python trực tiếp trên host, `Settings` chỉ đọc `.env` root (đường dẫn
+được xác định từ source, không phụ thuộc thư mục làm việc) và biến process.
+Process environment ưu tiên hơn file. URL DB/broker khi chạy trên host phải
+dùng địa chỉ mà host truy cập được, không dùng DNS nội bộ Docker. Trong Compose,
+`env_file` cấp mapping chung vào container; Settings không đọc file mapping
+trực tiếp.
+
 Mỗi service API và worker cần cùng cấu hình xác thực/tích hợp của service đó.
-Compose hiện dùng chung `env_file` cho các process AI; Work và Integration
-dùng file env riêng của chúng. Sau khi đổi `.env` hoặc `infra/env/*.env`, tạo
-lại các container liên quan để process nạp cấu hình mới.
+Root local, staging và standalone đều nạp cùng `infra/env/ai-service.env` cho
+các process AI; PostgreSQL standalone nhận riêng
+[`infra/env/database.env`](../../infra/env/database.env).
+Staging phải đặt `AI_ENVIRONMENT=staging`, `MOCK_TEST=false` và URL DB/broker
+phù hợp trong `.env` hoặc environment process. Runtime staging chưa được xác
+minh. Standalone dùng `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` trong
+`.env` root qua `infra/env/database.env`; URL PostgreSQL phải khớp các giá trị
+này và dùng host `database`. Broker đặt `AI_BROKER_URL=redis://broker:6379/0`;
+password trong URL phải percent-encode. Khi dùng volume cũ, giữ nguyên các
+giá trị đã khởi tạo.
+`AI_WORKER_CONCURRENCY` chỉ nội suy tham số worker Compose (mặc định 2);
+`AI_HTTP_PORT` chỉ nội suy cổng host standalone. Hai biến này không đi vào
+environment runtime của process AI. Sau khi đổi `.env` hoặc mapping, tạo lại
+các container liên quan để process nạp cấu hình mới.
 
 ### Identity → AI
 
@@ -131,6 +158,9 @@ Chi tiết `ContextDocument`, giới hạn dữ liệu và rollout xem
 ## 3. Kiểm tra cấu hình trước khi khởi động
 
 Với `AI_ENVIRONMENT=staging` hoặc `production`, `MOCK_TEST` phải là `false`.
+Mapping chung mặc định `MOCK_TEST=false`, nhưng giá trị `MOCK_TEST=true` đã có
+trong `.env` server vẫn có thể được nội suy vào mapping; cần kiểm tra và sửa
+`.env` trước khi triển khai staging.
 Settings AI từ chối khởi động khi thiếu issuer, audience, `AI_IDENTITY_SERVICE_KEY`,
 ba authorization URL hoặc một trong 10 Work context URL. Nếu bật Work service
 auth, `AI_WORK_SERVICE_KEY` cũng bắt buộc. Nếu bật GitHub context, URL

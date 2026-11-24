@@ -44,7 +44,7 @@ async def test_mock_data_uses_normal_api_celery_and_completion_pipeline(
         pytest.skip("Redis integration cần TEST_REDIS_URL")
     prepare_mock_environment(tmp_path)
     settings = Settings(
-        _env_file=(tmp_path / "infra/env/ai-service.env", tmp_path / ".env"),
+        _env_file=tmp_path / ".env",
         database_url=os.environ["TEST_DATABASE_URL"],
         sync_timeout_seconds=0.001,
         identity_service_key="test-identity-key",

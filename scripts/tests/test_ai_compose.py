@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -21,7 +22,9 @@ class AIComposeTests(unittest.TestCase):
         env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith(("AI_", "IDENTITY_", "COMPOSE_", "UTASK_"))
+            if not key.startswith(
+                ("AI_", "IDENTITY_", "COMPOSE_", "UTASK_", "POSTGRES_")
+            )
         }
         env.update(
             UTASK_IMAGE_PREFIX="test/utask",
@@ -115,6 +118,198 @@ class AIComposeTests(unittest.TestCase):
                             )
                             self.assertNotIn("AI_CREDENTIAL_KEY", runtime)
 
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_ai_configuration_reaches_all_processes_in_every_topology(self):
+        # Use only the public example and synthetic overrides, never a real .env.
+        example = (ROOT / ".env.example").read_text()
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(
+                ("AI_", "IDENTITY_", "COMPOSE_", "UTASK_", "POSTGRES_")
+            )
+            and key
+            not in {
+                "MOCK_TEST",
+                "DATASETS_DIR",
+                "WORK_SERVICE_URL",
+                "INTEGRATION_SERVICE_URL",
+            }
+        }
+        env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="test")
+        overrides = {
+            "AI_ENVIRONMENT": "development",
+            "MOCK_TEST": "true",
+            "AI_MODEL": "fixture-model",
+            "AI_LLM_PROVIDER": "litellm",
+            "AI_LLM_API_BASE": "https://llm.example.invalid/v1",
+            "AI_LLM_API_KEY": "fixture-llm-key",
+            "AI_IDENTITY_BASE_URL": "https://identity.example.invalid",
+            "AI_IDENTITY_SERVICE_KEY": "fixture-identity-key",
+            "AI_WORK_SERVICE_AUTH_ENABLED": "true",
+            "AI_WORK_SERVICE_KEY": "fixture-work-key",
+            "AI_INTEGRATION_SERVICE_KEY": "fixture-integration-key",
+            "AI_AUTHORIZATION_URLS": '{"task":"https://work.example.invalid/auth"}',
+            "AI_CONTEXT_URLS": '{"task:details":"https://work.example.invalid/context"}',
+            "AI_MAX_MODEL_CALLS": "12",
+            "AI_MAX_CONTEXT_TOOL_CALLS": "20",
+            "AI_MAX_OUTPUT_TOKENS": "8000",
+            "AI_WORKFLOW_TIMEOUT_SECONDS": "240",
+            "AI_REQUESTS_PER_MINUTE": "9",
+            "AI_MAX_ACTIVE_REQUESTS_PER_USER": "3",
+            "AI_COMPLETION_RECONCILE_SECONDS": "7",
+            "AI_GITHUB_CONTEXT_ENABLED": "true",
+            "AI_TERMINAL_RETENTION_DAYS": "45",
+            "AI_RETENTION_BATCH_SIZE": "250",
+            "AI_RETENTION_INTERVAL_SECONDS": "1800",
+            "AI_DATABASE_URL": "postgresql+psycopg://fixture:fixture@database.invalid/ai",
+            "AI_BROKER_URL": "redis://broker.invalid:6379/4",
+            "DATASETS_DIR": "/fixture/datasets",
+            "WORK_SERVICE_URL": "https://work.example.invalid",
+            "INTEGRATION_SERVICE_URL": "https://integration.example.invalid",
+        }
+        fallback_keys = {"AI_ENVIRONMENT", "MOCK_TEST", "AI_MODEL", "AI_LLM_API_BASE"}
+        fallback_example = "\n".join(
+            line
+            for line in example.splitlines()
+            if line.partition("=")[0] not in fallback_keys
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            unrelated = "\nUNRELATED_ROOT_SECRET=fixture-unrelated-secret\n"
+            example_file = Path(directory) / "example-fixture.env"
+            example_file.write_text(example + unrelated)
+            fallback_file = Path(directory) / "compose-fixture.env"
+            fallback_file.write_text(fallback_example + unrelated)
+            for filename, names in (
+                ("docker-compose.yml", AI_PROCESSES),
+                ("docker-compose.staging.yml", AI_PROCESSES),
+                (
+                    "apps/ai-service/compose.yaml",
+                    ("api", "worker", "dispatcher", "beat"),
+                ),
+            ):
+                # One mapping cannot infer the selected stack; supply standalone
+                # URLs in its fixture just as a developer would in the root .env.
+                connections = ""
+                if filename == "apps/ai-service/compose.yaml":
+                    connections = (
+                        "\nAI_DATABASE_URL=postgresql+psycopg://ai_service:"
+                        "change-me-ai-postgres@database:5432/ai_context_db\n"
+                        "AI_BROKER_URL=redis://broker:6379/0\n"
+                        "POSTGRES_USER=ai_service\n"
+                        "POSTGRES_PASSWORD=change-me-ai-postgres\n"
+                        "POSTGRES_DB=ai_context_db\n"
+                    )
+                example_file.write_text(example + unrelated + connections)
+                fallback_file.write_text(fallback_example + unrelated + connections)
+                for mode in ("absent", "example", "overrides"):
+                    with self.subTest(compose=filename, mode=mode):
+                        fixture = fallback_file if mode == "absent" else example_file
+                        runtime_env = {
+                            **env,
+                            "AI_WORKER_CONCURRENCY": "7" if mode == "overrides" else "",
+                        }
+                        if mode == "overrides":
+                            runtime_env.update(overrides)
+                        result = subprocess.run(
+                            [
+                                "docker",
+                                "compose",
+                                "--env-file",
+                                str(fixture),
+                                "-f",
+                                filename,
+                                "--profile",
+                                "ai-service",
+                                "config",
+                                "--format",
+                                "json",
+                            ],
+                            cwd=ROOT,
+                            env=runtime_env,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        services = json.loads(result.stdout)["services"]
+                        standalone = filename == "apps/ai-service/compose.yaml"
+                        if standalone:
+                            self.assertEqual(
+                                {
+                                    key: services["database"]["environment"][key]
+                                    for key in (
+                                        "POSTGRES_USER",
+                                        "POSTGRES_DB",
+                                        "POSTGRES_PASSWORD",
+                                    )
+                                },
+                                {
+                                    "POSTGRES_USER": "ai_service",
+                                    "POSTGRES_DB": "ai_context_db",
+                                    "POSTGRES_PASSWORD": "change-me-ai-postgres",
+                                },
+                            )
+                            for secret in (
+                                "AI_LLM_API_KEY",
+                                "AI_IDENTITY_SERVICE_KEY",
+                                "AI_WORK_SERVICE_KEY",
+                                "AI_INTEGRATION_SERVICE_KEY",
+                            ):
+                                self.assertNotIn(
+                                    secret, services["database"]["environment"]
+                                )
+                        api_environment = services[names[0]]["environment"]
+                        for name in names:
+                            runtime = services[name]["environment"]
+                            self.assertEqual(runtime, api_environment)
+                            self.assertNotIn("UNRELATED_ROOT_SECRET", runtime)
+                            self.assertNotIn("IDENTITY_DJANGO_SECRET_KEY", runtime)
+                            self.assertNotIn("AI_DB_PASSWORD", runtime)
+                            self.assertNotIn("AI_HTTP_PORT", runtime)
+                            self.assertNotIn("POSTGRES_PASSWORD", runtime)
+                            if mode != "overrides":
+                                self.assertEqual(
+                                    runtime["AI_BROKER_URL"],
+                                    "redis://broker:6379/0"
+                                    if standalone
+                                    else "redis://redis:6379/1",
+                                )
+                                self.assertIn(
+                                    "@database:5432/ai_context_db"
+                                    if standalone
+                                    else "@postgres:5432/ai_context_db",
+                                    runtime["AI_DATABASE_URL"],
+                                )
+                            if mode == "overrides":
+                                for key, expected in overrides.items():
+                                    self.assertEqual(runtime[key], expected, key)
+                            elif mode == "absent":
+                                self.assertEqual(runtime["MOCK_TEST"], "false")
+                                self.assertEqual(runtime["AI_MODEL"], "")
+                                self.assertEqual(runtime["AI_LLM_API_BASE"], "")
+                                self.assertEqual(
+                                    runtime["AI_ENVIRONMENT"],
+                                    "staging",
+                                )
+                            else:
+                                self.assertEqual(runtime["MOCK_TEST"], "true")
+                                self.assertEqual(
+                                    runtime["AI_ENVIRONMENT"], "development"
+                                )
+                                self.assertEqual(
+                                    runtime["AI_MODEL"], "gemini-3.8-flash-high"
+                                )
+                                self.assertEqual(
+                                    runtime["AI_LLM_API_BASE"],
+                                    "http://host.docker.internal:8317/v1",
+                                )
+                        concurrency = "7" if mode == "overrides" else "2"
+                        self.assertIn(
+                            f"--concurrency={concurrency}",
+                            services[names[1]]["command"],
+                        )
+
     def test_ci_runs_compose_checks_when_either_configuration_test_changes(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         step = next(
@@ -140,7 +335,7 @@ class AIComposeTests(unittest.TestCase):
                 for name in AI_PROCESSES:
                     process = services[name]
                     self.assertEqual(process["image"], api["image"])
-                    self.assertEqual(process["environment"], api["environment"])
+                    self.assertNotIn("environment", process)
                     self.assertEqual(process["env_file"], api["env_file"])
                     self.assertTrue(process["init"])
                     self.assertEqual(process["restart"], "unless-stopped")
@@ -208,22 +403,25 @@ class AIComposeTests(unittest.TestCase):
         ):
             services = yaml.safe_load((ROOT / filename).read_text())["services"]
             for name in names:
-                for secret in ("AI_WORK_SERVICE_KEY", "AI_INTEGRATION_SERVICE_KEY"):
+                self.assertNotIn("environment", services[name])
+                for secret in (
+                    "AI_IDENTITY_SERVICE_KEY",
+                    "AI_LLM_API_KEY",
+                    "AI_WORK_SERVICE_KEY",
+                    "AI_INTEGRATION_SERVICE_KEY",
+                ):
                     with self.subTest(compose=filename, process=name, secret=secret):
-                        self.assertNotIn(secret, configuration)
-                        self.assertEqual(
-                            services[name]["environment"][secret], f"${{{secret}:-}}"
-                        )
-            for name in names:
-                self.assertNotIn("AI_JWT_PUBLIC_KEY", services[name]["environment"])
-                self.assertNotIn("AI_JWT_JWKS_URL", services[name]["environment"])
-                self.assertEqual(
-                    services[name]["environment"]["AI_WORK_SERVICE_AUTH_ENABLED"],
-                    "${AI_WORK_SERVICE_AUTH_ENABLED:-false}",
+                        self.assertIn(f"{secret}=${{{secret}:-}}", configuration)
+                mappings = services[name]["env_file"]
+                if isinstance(mappings, str):
+                    mappings = [mappings]
+                self.assertTrue(
+                    any(path.endswith("infra/env/ai-service.env") for path in mappings)
                 )
+            if filename == "apps/ai-service/compose.yaml":
+                self.assertNotIn("environment", services["database"])
             beat = services[names[-1]]
             self.assertEqual(beat["image"], services[names[0]]["image"])
-            self.assertEqual(beat["environment"], services[names[0]]["environment"])
             self.assertEqual(beat["env_file"], services[names[0]]["env_file"])
             self.assertEqual(
                 beat["command"],
@@ -313,7 +511,7 @@ class AIComposeTests(unittest.TestCase):
         )
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             for override in (
-                "",
+                None,
                 "postgresql+psycopg://fixture_user:encoded%40password@postgres:5432/custom_ai_db",
             ):
                 with self.subTest(compose=filename, override=bool(override)):
@@ -332,7 +530,9 @@ class AIComposeTests(unittest.TestCase):
                             "json",
                         ],
                         cwd=ROOT,
-                        env={**env, "AI_DATABASE_URL": override},
+                        env=env
+                        if override is None
+                        else {**env, "AI_DATABASE_URL": override},
                         capture_output=True,
                         text=True,
                         check=False,
@@ -360,8 +560,8 @@ class AIComposeTests(unittest.TestCase):
             for key, value in os.environ.items()
             if not key.startswith(("AI_", "UTASK_", "COMPOSE_")) and key != "MOCK_TEST"
         }
-        # .env.example explicitly selects development/mock for local use. Empty
-        # optional overrides exercise each Compose file's own defaults instead.
+        # Empty optional overrides exercise the shared mapping's safe defaults;
+        # connection URLs still come from the public example.
         env.update(
             UTASK_IMAGE_PREFIX="utask",
             UTASK_IMAGE_TAG="sha-compose-test",
@@ -425,9 +625,62 @@ class AIComposeTests(unittest.TestCase):
                     settings = services[name]["environment"]
                     self.assertEqual(
                         settings["MOCK_TEST"],
-                        "false" if "staging" in filename else "true",
+                        "false",
                     )
                     self.assertEqual(
                         settings["AI_ENVIRONMENT"],
-                        "staging" if "staging" in filename else "development",
+                        "staging",
                     )
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
+    def test_missing_connection_urls_fail_compose_before_startup(self):
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("AI_", "COMPOSE_", "UTASK_", "POSTGRES_"))
+            and key != "MOCK_TEST"
+        }
+        env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="test")
+        example = (ROOT / ".env.example").read_text()
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "connections.env"
+            for variable in ("AI_DATABASE_URL", "AI_BROKER_URL"):
+                without_variable = "\n".join(
+                    line
+                    for line in example.splitlines()
+                    if line.partition("=")[0] != variable
+                )
+                for value in (None, ""):
+                    fixture.write_text(
+                        without_variable
+                        + (f"\n{variable}={value}\n" if value is not None else "\n")
+                    )
+                    for filename in (
+                        "docker-compose.yml",
+                        "docker-compose.staging.yml",
+                        "apps/ai-service/compose.yaml",
+                    ):
+                        with self.subTest(
+                            variable=variable, value=value, compose=filename
+                        ):
+                            result = subprocess.run(
+                                [
+                                    "docker",
+                                    "compose",
+                                    "--env-file",
+                                    str(fixture),
+                                    "-f",
+                                    filename,
+                                    "--profile",
+                                    "ai-service",
+                                    "config",
+                                    "--quiet",
+                                ],
+                                cwd=ROOT,
+                                env=env,
+                                capture_output=True,
+                                text=True,
+                                check=False,
+                            )
+                            self.assertNotEqual(result.returncode, 0)
+                            self.assertIn(variable, result.stderr)

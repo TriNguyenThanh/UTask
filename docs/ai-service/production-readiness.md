@@ -54,9 +54,10 @@ Placeholder chỉ `{target_type}`, `{target_id}`. Khi bật GitHub, thêm
 project:github_activity URL Integration và key riêng. Staging/production
 thiếu mapping hoặc bật mock sẽ bị từ chối lúc nạp Settings. AI mặc định
 `AI_WORK_SERVICE_AUTH_ENABLED=false`; khi tích hợp Work thật, phải bật cờ và
-cấp key khớp Work vì provider luôn yêu cầu header này. Base URL
-provider LLM phải HTTPS ngoài development/test; URL nội bộ domain dùng cấu
-hình tĩnh HTTP/HTTPS theo network triển khai hiện có.
+cấp key khớp Work vì provider luôn yêu cầu header này. Base URL provider LLM
+chấp nhận HTTP hoặc HTTPS ở mọi môi trường; việc endpoint/model cụ thể có hoạt
+động và an toàn trong triển khai đích vẫn chưa được xác minh. URL nội bộ domain
+dùng cấu hình tĩnh HTTP/HTTPS theo network triển khai hiện có.
 
 HTTP adapter không redirect, có timeout, đọc streaming tối đa 65536 byte,
 kiểm tra domain/thời điểm/status và shape lồng nhau theo domain. Project gồm
@@ -88,8 +89,23 @@ phát hành. Chưa nghiệm thu hiệu năng migration hoặc nhịp cleanup pro
 
 Compose root local/staging có `ai-service`, `ai-worker`, `ai-dispatcher`,
 `ai-beat`; Compose standalone có api/worker/dispatcher/beat. Một image/cấu hình
-cho bốn process; secret inject environment, không đặt vào env_file thường.
-Compose truyền `AI_WORK_SERVICE_AUTH_ENABLED`. Giá trị mặc định code là
+cho bốn process. Root `.env` giữ giá trị runtime và secret; mapping chung
+`infra/env/ai-service.env` đưa biến thường và placeholder secret vào environment
+của mọi process AI qua `env_file`. PostgreSQL standalone dùng riêng
+`infra/env/database.env`; mapping không chứa giá trị secret thật.
+Mapping AI yêu cầu `AI_DATABASE_URL` và `AI_BROKER_URL` trong `.env` root hoặc
+environment process, không tự dựng URL theo stack. `AI_ENVIRONMENT` mặc định
+`staging`, `MOCK_TEST` mặc định `false`; `.env` local phải đặt rõ
+`AI_ENVIRONMENT=development`; chỉ bật `MOCK_TEST=true` khi dùng fixture.
+Khi chạy staging, đặt rõ
+`AI_ENVIRONMENT=staging`, `MOCK_TEST=false` cùng URL database/broker staging.
+Root local dùng URL trong `.env.example`. `AI_DB_NAME` bootstrap phải khớp tên
+database trong `AI_DATABASE_URL`; đổi tên thì cập nhật cả hai. Standalone cần
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` cho PostgreSQL riêng; URL
+database ứng dụng phải khớp các giá trị này và password cần percent-encode.
+Nếu dùng volume cũ, giữ các giá trị đã khởi tạo. Runtime staging chưa được
+xác minh.
+`AI_WORK_SERVICE_AUTH_ENABLED` được cấp qua mapping chung. Giá trị mặc định code là
 `false`, nhưng tích hợp Work thật cần đặt `true` và cấp `AI_WORK_SERVICE_KEY`
 cho mọi process AI gọi Work. Khi tắt, AI bỏ header `X-Service-Key`; Work sẽ
 từ chối request. Cờ không ảnh hưởng Identity hoặc Integration key.

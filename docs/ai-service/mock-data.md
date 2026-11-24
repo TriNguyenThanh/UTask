@@ -8,8 +8,18 @@ Compose override cho mock.
 
 ## Cấu hình
 
-`.env` ở repository root giữ cấu hình AI; [`infra/env/ai-service.env`](../../infra/env/ai-service.env)
-chỉ ánh xạ các biến đó vào container:
+`.env` ở repository root giữ toàn bộ cấu hình runtime AI, gồm cả secret;
+[`infra/env/ai-service.env`](../../infra/env/ai-service.env) là mapping chung
+cho các process AI trong Compose, chứa biến thường và placeholder secret
+`${TEN_BIEN:-}`. Mọi process AI dùng mapping này; PostgreSQL standalone dùng thêm
+mapping chung [`database.env`](../../infra/env/database.env). Mapping
+yêu cầu `AI_DATABASE_URL` và `AI_BROKER_URL`; không tự dựng URL theo topology.
+Local root có URL ví dụ trong `.env.example`. Khi dùng standalone, đặt
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` trong `.env` root và giữ
+chúng khớp với volume PostgreSQL hiện có. Đặt
+`AI_DATABASE_URL=postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD đã percent-encode>@database:5432/<POSTGRES_DB>`
+và `AI_BROKER_URL=redis://broker:6379/0` trong `.env` root hoặc environment
+process trước khi chạy:
 
 ```dotenv
 AI_ENVIRONMENT=development
@@ -27,10 +37,17 @@ Cấu hình thêm
 `AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`); service key
 phải trùng entry `ai` trong `IDENTITY_SERVICE_KEYS` của Identity. Compose root dùng `POSTGRES_USER`/`POSTGRES_PASSWORD`
 chung với Django và database AI riêng theo `AI_DB_NAME` (mặc định `ai_context_db`);
-`AI_DB_PASSWORD` chỉ dành cho Compose AI độc lập ở phần chạy bên dưới.
-Xem [cấu hình Compose root](README.md#chạy-từ-compose-root) cho override URL.
-Settings đọc config rồi secret;
-biến process có ưu tiên cao nhất. Không có env riêng cho mock.
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` cấu hình PostgreSQL
+standalone qua `infra/env/database.env`; password trong URL ứng dụng phải
+percent-encode nếu có ký tự đặc biệt.
+Xem [cấu hình Compose root](README.md#chạy-từ-compose-root) để biết URL local mẫu.
+Host Settings chỉ đọc `.env` root; process environment có ưu tiên cao nhất.
+Trong Compose, `env_file` cấp mapping chung vào container. Mapping mặc định
+`AI_ENVIRONMENT=staging` và `MOCK_TEST=false`; `.env.example` đặt rõ
+`AI_ENVIRONMENT=development`, `MOCK_TEST=true` và URL root local. Giá trị đã có
+trong `.env` thắng mặc định mapping, nên `.env` sao chép từ mẫu phải được sửa
+thành `AI_ENVIRONMENT=staging`, `MOCK_TEST=false` và URL staging trước khi chạy.
+Không có env riêng cho mock.
 `host.docker.internal` được ánh xạ về host trong Compose vì `localhost` bên
 trong container là chính container AI. `AI_LLM_API_KEY` phải khớp một key trong
 CLIProxyAPI Management → `api-keys`; model ID được LiteLLM bọc thành route
@@ -59,14 +76,14 @@ Từ `apps/ai-service/`:
 
 ```sh
 docker compose --project-name ai-mock --env-file ../../.env \
-  --env-file ../../infra/env/ai-service.env up --build -d --wait --wait-timeout 60 --remove-orphans
+  up --build -d --wait --wait-timeout 60 --remove-orphans
 curl http://127.0.0.1:8000/healthz
 ```
 
 Cùng một Compose cho cả mock và thật. `--remove-orphans` dọn container
 mock-domain cũ nếu còn từ cách chạy trước. Đổi cờ rồi chạy lại `up` để API và
 worker nạp cùng nguồn. Nếu chạy bằng uv, không đổi entrypoint API/worker;
-Settings tự đọc config, fixture đóng gói trong src.
+Host Settings đọc `.env` root kể cả khi cwd khác; fixture đóng gói trong src.
 
 Trong container, entrypoint API chạy `alembic upgrade head` trước Uvicorn;
 migration lỗi thì API dừng, worker/dispatcher tiếp tục chờ API healthy.
@@ -112,7 +129,9 @@ bị từ chối. Thiếu domain context trả lỗi thay vì dùng dữ liệu 
 
 ## Danh tính mẫu và token runtime
 
-`setup_mock.py` tạo danh tính UUID ổn định cho fixture: owner
+`setup_mock.py` đọc và ghi cấu hình JWT/mock trong `.env` root; không sửa
+mapping đã theo dõi ở `infra/env/ai-service.env` và giữ lại giá trị hiện có
+không thuộc các khóa do script quản lý. Script tạo danh tính UUID ổn định cho fixture: owner
 `00000000-0000-4000-8000-000000000001`, outsider
 `00000000-0000-4000-8000-000000000002`, cùng JWT RS256 có claim
 `token_type=access`. Public JWKS test được ghi vào `.env.mock/jwks.json`; script

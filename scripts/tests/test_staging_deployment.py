@@ -630,7 +630,8 @@ class StagingDeploymentTests(unittest.TestCase):
                 service = services[name]
                 self.assertEqual(service["profiles"], ["ai-service"])
                 self.assertEqual(service["image"], api["image"])
-                self.assertEqual(service["environment"], api["environment"])
+                self.assertNotIn("environment", service)
+                self.assertEqual(service["env_file"], api["env_file"])
                 for dependency in ("postgres", "redis"):
                     self.assertEqual(
                         service["depends_on"][dependency]["condition"],
@@ -660,6 +661,8 @@ class StagingDeploymentTests(unittest.TestCase):
             UTASK_IMAGE_TAG="sha-test",
             AI_ENVIRONMENT="",
             MOCK_TEST="",
+            AI_MODEL="",
+            AI_LLM_API_BASE="",
         )
         for environment in ("", "production"):
             for maps in (None, "", {}, {"work": "https://example.invalid/context"}):
@@ -708,6 +711,8 @@ class StagingDeploymentTests(unittest.TestCase):
                             runtime["AI_ENVIRONMENT"], environment or "staging"
                         )
                         self.assertEqual(runtime["MOCK_TEST"], "false")
+                        self.assertEqual(runtime["AI_MODEL"], "")
+                        self.assertEqual(runtime["AI_LLM_API_BASE"], "")
                     self.assertIn(
                         "--concurrency=2", compose["services"]["ai-worker"]["command"]
                     )
