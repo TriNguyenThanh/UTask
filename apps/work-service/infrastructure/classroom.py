@@ -27,9 +27,15 @@ class GroupSnapshot:
     class_id: str
     source_version: int
     members: tuple[GroupMemberFact, ...]
+    group_status: str = "ACTIVE"
 
     def validate(self):
         active = [m for m in self.members if m.status == "ACTIVE"]
+        invalid_status_state = (
+            self.group_status not in {"ACTIVE", "ARCHIVED"}
+            or (self.group_status == "ACTIVE" and sum(m.role == "LEADER" for m in active) != 1)
+            or (self.group_status == "ARCHIVED" and len(active) != 0)
+        )
         if (
             not self.group_id
             or not self.class_id
@@ -42,7 +48,7 @@ class GroupSnapshot:
                 or m.status not in {"ACTIVE", "LEFT", "REMOVED"}
                 for m in self.members
             )
-            or sum(m.role == "LEADER" for m in active) != 1
+            or invalid_status_state
         ):
             raise WorkError(
                 "CLASSROOM_UNAVAILABLE", "Dữ liệu thành viên nhóm học tập không hợp lệ.", 503
@@ -77,6 +83,7 @@ def snapshot_from_data(data, *, group_id=None):
                 GroupMemberFact(UUID(member["user_id"]), member["role"], member["status"])
                 for member in data["members"]
             ),
+            group_status=data.get("group_status", "ACTIVE"),
         ).validate()
         if group_id is not None and snapshot.group_id != str(UUID(str(group_id))):
             raise ValueError("Wrong group binding")

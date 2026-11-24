@@ -89,3 +89,12 @@ def test_malformed_authorization_is_denied_before_session_call(identity, authori
     assert response.status_code == 401 and response["WWW-Authenticate"] == "Bearer"
     assert response.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
     assert identity["calls"] == []
+
+
+@pytest.mark.parametrize("authorization", ["Bearer invalid-jwt", "Bearer", "Basic bad"])
+def test_docs_and_openapi_ignore_invalid_authorization_header(identity, authorization):
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=authorization)
+    assert client.get("/docs/").status_code == 200
+    assert client.get("/openapi/", HTTP_ACCEPT="application/json").status_code == 200
+    assert identity["calls"] == []

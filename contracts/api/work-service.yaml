@@ -4498,6 +4498,9 @@ paths:
           description: ''
     patch:
       operationId: tasks_partial_update
+      description: Trưởng nhóm được sửa mọi trường cập nhật hợp lệ; thành viên đang
+        được giao công việc được sửa tiêu đề (title), mô tả (description_html) và
+        tiêu chí nghiệm thu (acceptance_criteria).
       parameters:
       - in: path
         name: task_id

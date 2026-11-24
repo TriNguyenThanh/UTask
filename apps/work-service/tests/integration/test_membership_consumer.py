@@ -54,6 +54,43 @@ def test_membership_transfer_leave_rejoin_preserves_slot_and_capacity(
     assert ProjectMember.objects.get(user_id=actors["leader"]).left_at is None
 
 
+def test_archived_group_membership_snapshot_closes_all_members_and_preserves_project(
+    classroom_projects, actors, client_for
+):
+    from dataclasses import replace
+
+    from apps.messaging.classroom_consumer import consume_classroom_event
+    from apps.projects.models import Project
+    from tests.fixtures.classroom import membership_event
+
+    project_ids, base_snapshot = classroom_projects
+    project_id = project_ids[0]
+    leader_client = client_for(actors["leader"])
+    created_task = leader_client.post(
+        f"/projects/{project_id}/tasks/",
+        {"title": "Task lịch sử cần bảo toàn"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid4()),
+    )
+    assert created_task.status_code == 201
+
+    archived_snapshot = replace(
+        base_snapshot,
+        source_version=2,
+        group_status="ARCHIVED",
+        members=(
+            GroupMemberFact(actors["leader"], "LEADER", "REMOVED"),
+            GroupMemberFact(actors["member"], "MEMBER", "REMOVED"),
+        ),
+    )
+    assert consume_classroom_event(membership_event(archived_snapshot)) is True
+    assert not ProjectMember.objects.filter(project_id=project_id, status="ACTIVE").exists()
+    assert ProjectMember.objects.filter(project_id=project_id, status="REMOVED").count() == 2
+    project = Project.objects.get(pk=project_id)
+    assert project.group_source_version == 2
+    assert project.tasks.filter(title="Task lịch sử cần bảo toàn").exists()
+
+
 def test_profile_dedup_hash_conflict_and_no_permission(actors):
     event = identity_event(actors["outsider"])
     assert consume_event(event)

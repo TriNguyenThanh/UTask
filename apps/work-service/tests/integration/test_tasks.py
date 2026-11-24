@@ -105,11 +105,21 @@ def test_member_patch_version_and_lifecycle(task_api, client_for, actors):
     member = client_for(actors["member"])
     response = member.patch(detail, {"expected_version": 1, "story_points": 8}, format="json")
     assert response.status_code == 403
+    assert response.json()["error"]["code"] == "LEADER_PERMISSION_REQUIRED"
     response = member.patch(
-        detail, {"expected_version": 1, "description_html": "<p>Kết quả</p>"}, format="json"
+        detail,
+        {
+            "expected_version": 1,
+            "title": "Xây dựng API (đã cập nhật)",
+            "description_html": "<p>Kết quả</p>",
+            "acceptance_criteria": "Đạt đủ test tích hợp",
+        },
+        format="json",
     )
     assert response.status_code == 200
     assert response.json()["data"]["version"] == 2
+    assert response.json()["data"]["title"] == "Xây dựng API (đã cập nhật)"
+    assert response.json()["data"]["acceptance_criteria"] == "Đạt đủ test tích hợp"
     assert (
         leader.patch(detail, {"expected_version": 1, "priority": "HIGH"}, format="json").status_code
         == 409

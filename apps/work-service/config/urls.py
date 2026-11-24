@@ -25,7 +25,9 @@ urlpatterns = [
     ),
     path(
         "docs/",
-        SpectacularSwaggerView.as_view(url="../openapi/"),
+        SpectacularSwaggerView.as_view(
+            url="../openapi/", authentication_classes=[], permission_classes=[]
+        ),
         name="swagger-ui",
     ),
     path("", include("apps.projects.urls")),

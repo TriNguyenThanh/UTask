@@ -25,6 +25,8 @@ pytestmark = pytest.mark.unit
         "invalid-user",
         "no-leader",
         "two-leaders",
+        "invalid-group-status",
+        "archived-with-active",
     ],
 )
 def test_group_snapshot_rejects_ambiguous_or_invalid_authority(invalid):
@@ -51,10 +53,25 @@ def test_group_snapshot_rejects_ambiguous_or_invalid_authority(invalid):
         else {"members": (replace(member, role="MEMBER"),)}
         if invalid == "no-leader"
         else {"members": (member, GroupMemberFact(uuid4(), "LEADER"))}
+        if invalid == "two-leaders"
+        else {"group_status": "DELETED"}
+        if invalid == "invalid-group-status"
+        else {"group_status": "ARCHIVED"}
     )
     with pytest.raises(WorkError) as error:
         replace(fact, **change).validate()
     assert error.value.code == "CLASSROOM_UNAVAILABLE"
+
+
+def test_archived_group_snapshot_accepts_zero_active_members():
+    fact = GroupSnapshot(
+        "group",
+        "class",
+        2,
+        (GroupMemberFact(uuid4(), "LEADER", "REMOVED"),),
+        group_status="ARCHIVED",
+    )
+    assert fact.validate() is fact
 
 
 @pytest.mark.parametrize(
