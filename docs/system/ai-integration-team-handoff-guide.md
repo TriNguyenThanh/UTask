@@ -282,11 +282,51 @@
 
 ---
 
-## 4. Ghi chú phối hợp cho Team Notification (`apps/notification-service`)
+## 4. Ghi chú phối hợp cho Team Notification (`apps/notification-service`) & Hạ tầng Cloudflare R2 (`B30`)
 
 - **Đợt 6 — Kích hoạt tài khoản qua email (DG8 / `B3`):**
-  - Team Core Backend (`identity-service`) sẽ đưa cơ chế bỏ qua kích hoạt hiện hành vào cờ cấu hình `IDENTITY_REQUIRE_EMAIL_ACTIVATION`.
-  - Trước khi bật `IDENTITY_REQUIRE_EMAIL_ACTIVATION=true` trên staging/production, Team Notification cần xác nhận đã nghiệm thu consumer nhận `identity.activation.requested` và `identity.student.imported` cùng gửi email SMTP thật (chấm dứt chính sách tạm đặt mật khẩu ban đầu bằng email).
+  - Team Core Backend (`identity-service`) đã đưa cơ chế bỏ qua kích hoạt vào cờ cấu hình `IDENTITY_REQUIRE_EMAIL_ACTIVATION` (mặc định `false` ở local/dev).
+  - Trước khi bật `IDENTITY_REQUIRE_EMAIL_ACTIVATION=true` trên staging/production, Team Notification cần nghiệm thu consumer nhận `identity.activation.requested` và `identity.student.imported` cùng gửi email SMTP thật (chấm dứt chính sách tạm đặt mật khẩu ban đầu bằng email).
+- **Đợt 6.2.4 — Sự kiện đổi email mới (`identity.email_change.requested` v1):**
+  - `identity-service` phát sự kiện `identity.email_change.requested` (topic `utask.identity.events`, khóa phân vùng `user_id`, envelope v1 và cơ chế mã hóa AES-256-GCM giống hệt `identity.activation.requested` / `identity.password_reset.requested`):
+    ```json
+    {
+      "event_id": "uuid",
+      "event_type": "identity.email_change.requested",
+      "event_version": 1,
+      "aggregate_type": "user",
+      "aggregate_id": "<user_id>",
+      "occurred_at": "2026-11-24T12:00:00Z",
+      "trace_id": "uuid",
+      "producer": "identity-service",
+      "data": {
+        "user_id": "<user_id>",
+        "email": "<new_email>",
+        "expires_at": "2026-11-24T12:15:00Z",
+        "secret": {
+          "key_id": "<IDENTITY_MAIL_KEY_ID>",
+          "expires_at": "2026-11-24T12:15:00Z",
+          "nonce": "<base64-12-bytes>",
+          "ciphertext": "<base64-aes-256-gcm>"
+        }
+      }
+    }
+    ```
+  - **Giải mã `secret`:** AAD là `["<event_id>","identity.email_change.requested","<user_id>","<expires_at>"]` (UTF-8 không khoảng trắng); plaintext là `{"token":"<raw-token>","new_email":"<new_email>"}` (hạn 15 phút). Team Notification cần thêm handler & template gửi liên kết xác minh tới `data.email` (`new_email`), dẫn về trang xác nhận trên Web (gọi `POST /api/auth/users/me/email-change/confirm` với `{"token": "..."}`); nếu `secret == null` (đã hết hạn bị `cleanup_identity` redaction) thì bỏ qua an toàn.
+  - Phía `work-service` đã bổ sung `identity.email_change.requested` vào `NON_PROFILE_EVENT_TYPES` nên không đẩy nhầm sang DLQ.
+- **Hạ tầng Cloudflare R2 CORS (`B30`, dùng chung cho Avatar Identity & Attachment Work):**
+  - Token S3 R2 ứng dụng không có quyền sửa bucket CORS (`AccessDenied`); người quản trị hạ tầng Cloudflare cần cập nhật CORS Policy trên bucket R2 tại Cloudflare Dashboard (giữ nguyên các origin production như `https://utask.u-code.dev`, bổ sung origin Web local/staging nếu cần):
+    ```json
+    [
+      {
+        "AllowedOrigins": ["https://utask.u-code.dev", "http://localhost:8080"],
+        "AllowedMethods": ["PUT", "GET", "HEAD"],
+        "AllowedHeaders": ["Content-Type"],
+        "ExposeHeaders": ["ETag"],
+        "MaxAgeSeconds": 3600
+      }
+    ]
+    ```
 - **Đợt 7.2 — Thông báo lớp học P2 (`ClassAnnouncement`):**
   - Hiện Notification chưa đăng ký consumer nguồn Classroom. Sau khi chốt đặc tả P2, hai đội sẽ chốt hợp đồng sự kiện theo [hướng dẫn Notification](../notification-service/implementation.md#thêm-service-hoặc-event-mới).
 
