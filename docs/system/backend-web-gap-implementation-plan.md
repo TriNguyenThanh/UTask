@@ -1,6 +1,6 @@
 # Kế hoạch triển khai Backend xử lý khoảng trống API, Hợp đồng và Tích hợp (Identity · Classroom · Work · Integration · AI · Gateway)
 
-> **Trạng thái tài liệu:** `Đang triển khai` (DG1–DG8 đã được phê duyệt ngày 2026-11-24; **Đợt 1 & Đợt 2:** `Đã triển khai (local)` — đạt toàn bộ unit/integration PostgreSQL/contract và đã bàn giao biên bản Web, deploy staging `Chưa xác minh`; Đợt 3–7: `Chưa triển khai`).  
+> **Trạng thái tài liệu:** `Đang triển khai` (DG1–DG8 đã được phê duyệt ngày 2026-11-24; **Đợt 1, Đợt 2 & Đợt 3:** `Đã triển khai (local)` — đạt toàn bộ unit/integration PostgreSQL/contract và đã bàn giao biên bản Web, deploy staging `Chưa xác minh`; Đợt 4–7: `Chưa triển khai`).  
 > **Phạm vi thực thi:** **CHỈ BACKEND, GATEWAY, HỢP ĐỒNG & TÀI LIỆU** (`apps/identity-service`, `apps/classroom-service`, `apps/work-service`, `apps/integration-service`, `apps/ai-service`, `infra/nginx/nginx.conf`, `.env.example`, `infra/env/*.env`, `contracts/`, `docs/`). **KHÔNG chỉnh sửa mã nguồn `apps/web/**` trong kế hoạch này.**  
 > **Tài liệu bàn giao song hành cho Team Web:** [Biên bản bàn giao & Hướng dẫn tích hợp cho Team Web](../web/backend-api-handoff-guide.md) (được cập nhật thực tế sau mỗi đợt Backend hoàn tất).  
 > **Trạng thái hiện trạng hệ thống:** `Một phần` (đối chiếu thực tế trên checkout nhánh `feat/classroom-student-course-visibility`, commit gốc `be31707`).
