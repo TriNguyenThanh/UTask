@@ -16,6 +16,7 @@ và kiểm thử.
 - [Giao tiếp REST và Kafka](communication.md) và [danh mục sự kiện](kafka-events.md).
 - [Hạ tầng và phát triển local](infrastructure/README.md): môi trường, Kafka, Redis, job nền, lưu trữ và CI/CD.
 - [Hướng dẫn phát triển](development.md) và [thiết lập subagent Codex](subagents.md).
+- [Kế hoạch triển khai Backend xử lý khoảng trống API](backend-web-gap-implementation-plan.md) và [Hướng dẫn bàn giao cho Team AI, Team Integration & Team Notification](ai-integration-team-handoff-guide.md).
 - [Quyết định kiến trúc (ADR)](adr/README.md).
 
 ## Tài liệu theo service

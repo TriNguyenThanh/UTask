@@ -1,8 +1,10 @@
 # Kế hoạch triển khai Backend xử lý khoảng trống API, Hợp đồng và Tích hợp (Identity · Classroom · Work · Integration · AI · Gateway)
 
 > **Trạng thái tài liệu:** `Đang triển khai` (DG1–DG8 đã được phê duyệt ngày 2026-11-24; **Đợt 1, Đợt 2, Đợt 3 & Đợt 4:** `Đã triển khai (local)` — đạt toàn bộ unit/integration PostgreSQL/contract + kiểm chứng HTTP thật & Kafka Cloud và đã bàn giao biên bản Web, deploy staging `Chưa xác minh`; Đợt 5–7: `Chưa triển khai`).  
-> **Phạm vi thực thi:** **CHỈ BACKEND, GATEWAY, HỢP ĐỒNG & TÀI LIỆU** (`apps/identity-service`, `apps/classroom-service`, `apps/work-service`, `apps/integration-service`, `apps/ai-service`, `infra/nginx/nginx.conf`, `.env.example`, `infra/env/*.env`, `contracts/`, `docs/`). **KHÔNG chỉnh sửa mã nguồn `apps/web/**` trong kế hoạch này.**  
-> **Tài liệu bàn giao song hành cho Team Web:** [Biên bản bàn giao & Hướng dẫn tích hợp cho Team Web](../web/backend-api-handoff-guide.md) (được cập nhật thực tế sau mỗi đợt Backend hoàn tất).  
+> **Phạm vi thực thi của Team Core Backend:** **CHỈ 3 SERVICE CỐT LÕI (`apps/identity-service`, `apps/classroom-service`, `apps/work-service`), GATEWAY, CẤU HÌNH ENV, HỢP ĐỒNG & TÀI LIỆU** (`infra/nginx/nginx.conf`, `.env.example`, `infra/env/{identity,classroom,work}-service.env`, `contracts/`, `docs/`). **KHÔNG chỉnh sửa mã nguồn thuộc các đội khác: `apps/web/**`, `apps/ai-service/**`, `apps/integration-service/**`, `apps/notification-service/**`.**  
+> **Tài liệu bàn giao cho các đội khác:**
+> - **Team Web (`apps/web`):** [Biên bản bàn giao & Hướng dẫn tích hợp cho Team Web](../web/backend-api-handoff-guide.md) (cập nhật sau mỗi đợt).
+> - **Team AI (`ai-service`), Team Integration (`integration-service`) & Team Notification (`notification-service`):** [Hướng dẫn bàn giao & Phối hợp hợp đồng liên đội](ai-integration-team-handoff-guide.md) (đặc tả chi tiết phần provider cần làm ở Đợt 5–7 để khớp với Work/Identity/Classroom).  
 > **Trạng thái hiện trạng hệ thống:** `Một phần` (đối chiếu thực tế trên checkout nhánh `feat/classroom-student-course-visibility`, commit gốc `be31707`).
 
 Tài liệu này là kế hoạch triển khai **thuần phía Backend** nhằm lấp đầy toàn bộ khoảng trống API, góc chết vòng đời, adapter stub và lệch hợp đồng đã đối chiếu giữa 4 ứng dụng chính cùng `integration-service`, `ai-service` và Nginx Gateway. Mọi công việc phía giao diện `apps/web` — bao gồm cả việc nối các API Backend đã có sẵn — được tách hoàn toàn sang tài liệu bàn giao cho team Web để tránh trùng phạm vi trách nhiệm.
@@ -213,7 +215,9 @@ flowchart TD
 
 ---
 
-### Đợt 5 — Tích hợp đầu-cuối AI Proposal (`bulk-apply-ai`) và GitHub Integration (AI · Work · Integration)
+### Đợt 5 — Tích hợp đầu-cuối AI Proposal (`bulk-apply-ai`) và GitHub Integration (Phần `work-service` `Đã triển khai (local)` + Bàn giao Team AI & Team Integration)
+
+> **Phân tách thực thi (cập nhật phạm vi sở hữu):** Trong kế hoạch này, **Team Core Backend chỉ triển khai phần `apps/work-service/`** (`RemoteProposals`, mở rộng consumer `integration.github.account.changed` & `integration.github.reference.detected`, và public BFF `GET /projects/{id}/github/activity/`). Toàn bộ công việc phía `apps/ai-service/` (mục 5.1.1) và `apps/integration-service/` (mục 5.2, 5.3 phía provider) thuộc trách nhiệm **Team AI** và **Team Integration**, được bàn giao chi tiết hợp đồng wire tại [Hướng dẫn bàn giao cho Team AI & Team Integration](ai-integration-team-handoff-guide.md).
 
 **Mục tiêu:** Mở khóa thực sự luồng áp dụng đề xuất AI nguyên tử (`bulk-apply-ai`) và hoàn thiện đường truyền dữ liệu GitHub hai chiều giữa Integration Service và Work Service theo [ADR-004](adr/004-integration-github-account-ownership.md) và [ADR-005](adr/005-integration-work-ai-contracts.md).
 
@@ -232,7 +236,7 @@ flowchart TD
 2. **Phía `apps/work-service/`:**
    - Triển khai `RemoteProposals` trong `apps/work-service/infrastructure/ai.py`: HTTP client gọi `POST {WORK_AI_BASE_URL}/api/ai/v1/internal/requests/{proposal_id}/verify-proposal` ngoài DB transaction, truyền `X-Service-Key: WORK_AI_SERVICE_KEY` + forwarded actor `Authorization: Bearer`, timeout chặt, ánh xạ lỗi `404/409/410/503` sang `WorkError` tiếng Việt an toàn.
    - Giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` làm mặc định/rollback an toàn; thêm `WORK_AI_BASE_URL`, `WORK_AI_SERVICE_KEY` vào `.env.example` → `infra/env/work-service.env` → `config/settings/base.py`.
-   - Điều chỉnh `VerifiedProposal` và `apps/tasks/services/ai_verification.py`: cho phép `context_version` so khớp theo chuỗi `source_version` (`str(project.event_sequence)` / `str(task.version)`), và xác minh đầy đủ việc tạo nguyên tử task/subtask + quan hệ `BLOCKS` + `source="AI_BACKLOG"/"AI_SUBTASKS"` + `ai_proposal_id` trên `POST /projects/<id>/tasks/bulk-apply-ai/` và `POST /tasks/<id>/subtasks/bulk-apply-ai/`.
+   - Điều chỉnh `VerifiedProposal` và `apps/tasks/services/ai_verification.py`: chấp nhận `context_version` từ AI dạng số nguyên `>= 0` hoặc chuỗi số nguyên dương (`"42" -> 42`), giữ tương thích ngược với `BacklogApplySerializer`/`SubtaskApplySerializer`, và xác minh đầy đủ việc tạo nguyên tử task/subtask + quan hệ `BLOCKS` + `source="AI_BACKLOG"` / `source="AI_DECOMPOSED"` + `ai_proposal_id` trên `POST /projects/<id>/tasks/bulk-apply-ai/` và `POST /tasks/<id>/subtasks/bulk-apply-ai/`.
    - Giữ `POST /projects/<id>/ai-actions/apply/` ở trạng thái hoãn cho AI v2 (ghi rõ trong OpenAPI Work).
    - Viết wire test thật AI ↔ Work (PostgreSQL riêng, HTTP thật).
 
