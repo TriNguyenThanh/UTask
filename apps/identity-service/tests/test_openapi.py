@@ -1,7 +1,9 @@
 import json
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import yaml
 from allauth.account.forms import default_token_generator
 from allauth.account.models import EmailAddress
 from allauth.account.utils import user_pk_to_url_str
@@ -124,16 +126,37 @@ def contract_request(settings, signup_data):
             "SYSTEM_ADMIN"
             if "/admin/" in route
             else "TEACHER"
-            if "resend-activation" in route or "provision-students" in route
+            if "resend-activation" in route
+            or "provision-students" in route
+            or route == "/users/search"
             else "STUDENT"
         )
         user = create_user(global_role_code=role)
         if route.endswith("/login"):
             return client.post(route, {"email": user.email, "password": PASSWORD}, format="json")
+        if route.endswith("/password-set"):
+            from django.test import RequestFactory
+
+            from authentication.serializers.auth import SessionTokenSerializer
+
+            user.set_unusable_password()
+            user.save(update_fields=("password",))
+            fake_req = RequestFactory().post("/oauth/google")
+            fake_req._request = fake_req
+            user._identity_request = fake_req
+            user._identity_device = "Google OAuth Browser"
+            refresh = SessionTokenSerializer.get_token(user)
+            client.credentials(HTTP_AUTHORIZATION="Bearer " + str(refresh.access_token))
+            return client.post(
+                route,
+                {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD},
+                format="json",
+            )
         logged_in = login(client, user)
         client.cookies.clear()
         body, headers = {}, {}
         target_id = user.pk
+        session_id = UserSession.objects.get(user=user).pk
         if route.endswith("/refresh") or route.endswith("/logout"):
             body = {"refresh": logged_in.cookies["refresh_token"].value}
         elif route.endswith("/password-reset/request"):
@@ -156,8 +179,50 @@ def contract_request(settings, signup_data):
             body = {"email": signup_data["email"]}
         elif route == "/users/me" and method == "patch":
             body = {"bio": "Contract example"}
+        elif route == "/users/me" and method == "delete":
+            body = {"current_password": PASSWORD, "reason": "Contract self-delete"}
+        elif route == "/users/me/email-change/request":
+            body = {
+                "new_email": f"changed.{uuid4().hex[:8]}@example.edu.vn",
+                "current_password": PASSWORD,
+            }
+        elif route == "/users/me/email-change/confirm":
+            req = client.post(
+                "/users/me/email-change/request",
+                {
+                    "new_email": f"confirmed.{uuid4().hex[:8]}@example.edu.vn",
+                    "current_password": PASSWORD,
+                },
+                format="json",
+            )
+            assert req.status_code == 200, req.json()
+            mail_event = OutboxEvent.objects.get(
+                aggregate_id=user.pk, event_type="identity.email_change.requested"
+            )
+            body = {"token": mail_secret(mail_event)["token"]}
+        elif route == "/users/search":
+            body = {"q": user.email[:4]}
         elif route.endswith("/batch"):
             body = {"user_ids": [str(user.pk)]}
+        elif route == "/admin/users" and method == "post":
+            body = {
+                "email": signup_data["email"],
+                "first_name": "Contract",
+                "last_name": "Admin",
+                "roles": ["STUDENT"],
+                "password": PASSWORD,
+            }
+        elif route == "/admin/users/{user_id}":
+            target_id = create_user().pk
+            if method == "patch":
+                body = {"bio": "Admin updated"}
+        elif route.endswith("/unlock-login"):
+            target_id = create_user().pk
+        elif route.startswith("/admin/users/{user_id}/sessions"):
+            target = create_user()
+            login(APIClient(), target)
+            target_id = target.pk
+            session_id = UserSession.objects.get(user=target).pk
         elif route.endswith("/status"):
             target_id = create_user().pk
             body = {"status": "SUSPENDED", "reason": "Contract example"}
@@ -190,7 +255,7 @@ def contract_request(settings, signup_data):
             headers = {"HTTP_X_SERVICE_TOKEN": "contract-notification"}
             body = {"user_ids": [str(user.pk)]}
 
-        url = route.format(user_id=target_id, session_id=UserSession.objects.get(user=user).pk)
+        url = route.format(user_id=target_id, session_id=session_id)
         return getattr(client, method)(url, body, format="json", **headers)
 
     return execute
@@ -220,12 +285,29 @@ def test_export_is_validated_and_covers_real_contract_methods(tmp_path):
     assert {
         (route, method) for route, methods in schema["paths"].items() for method in methods
     } == {(route, method) for route, method, _ in DEFAULT_OPERATIONS}
-    assert schema["paths"]["/users/me"].keys() == {"get", "patch"}
+    assert schema["paths"]["/users/me"].keys() == {"get", "patch", "delete"}
     assert schema["paths"]["/activate"].keys() == {"post"}
     assert schema["paths"]["/admin/users/{user_id}/roles"].keys() == {"post", "delete"}
     assert "/users/me/avatar/confirm" not in schema["paths"]
     assert "/oauth/github" not in schema["paths"]
     assert schema["components"]["securitySchemes"]["jwtAuth"]["scheme"] == "bearer"
+
+
+@pytest.mark.contract
+def test_checked_in_identity_yaml_contract_matches_live_export(tmp_path):
+    contract_path = (
+        Path(__file__).resolve().parents[3] / "contracts" / "api" / "identity-service.yaml"
+    )
+    if not contract_path.exists():
+        pytest.skip("contracts/api/identity-service.yaml not present outside monorepo checkout")
+    output = tmp_path / "identity-service.yaml"
+    call_command("export_identity_api", output=str(output))
+    assert yaml.safe_load(contract_path.read_text(encoding="utf-8")) == yaml.safe_load(
+        output.read_text(encoding="utf-8")
+    )
+    assert contract_path.read_text(encoding="utf-8").replace("\r\n", "\n") == output.read_text(
+        encoding="utf-8"
+    ).replace("\r\n", "\n")
 
 
 @pytest.mark.contract
@@ -347,6 +429,7 @@ def test_live_responses_conform_to_exported_envelopes(
             "/logout-all",
             "/sessions",
             "/sessions/{session_id}",
+            "/password-set",
         }
     ],
 )

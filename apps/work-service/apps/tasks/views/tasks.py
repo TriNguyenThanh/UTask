@@ -107,7 +107,15 @@ class TaskDetailView(GenericAPIView):
             message="Đã tải chi tiết công việc.",
         )
 
-    @extend_schema(request=PatchTaskSerializer, responses={200: TASK, **ERRORS})
+    @extend_schema(
+        request=PatchTaskSerializer,
+        description=(
+            "Trưởng nhóm được sửa mọi trường cập nhật hợp lệ; thành viên đang được giao "
+            "công việc được sửa tiêu đề (title), mô tả (description_html) và tiêu chí "
+            "nghiệm thu (acceptance_criteria)."
+        ),
+        responses={200: TASK, **ERRORS},
+    )
     def patch(self, request, task_id):
         visible_task(request.user, task_id, for_write=True)
         serializer = self.get_serializer(data=request.data)

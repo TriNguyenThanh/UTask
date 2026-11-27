@@ -9,7 +9,9 @@ from apps.messaging.services.receipts import begin_receipt, finish_receipt, repl
 from common.errors import ClassroomError
 
 
-def save_course(request, payload, course_id=None, *, archive=False):
+def save_course(request, payload, course_id=None, *, archive=False, unarchive=False):
+    if archive and unarchive:
+        raise ValueError("Cannot archive and unarchive a course in the same operation.")
     require_role(request, "TEACHER", "SYSTEM_ADMIN")
     with transaction.atomic():
         course = (
@@ -30,6 +32,8 @@ def save_course(request, payload, course_id=None, *, archive=False):
             return replay_response(receipt)
         if archive:
             course.archived_at = timezone.now()
+        elif unarchive:
+            course.archived_at = None
         else:
             for key, value in payload.items():
                 setattr(course, key, value)
@@ -38,5 +42,5 @@ def save_course(request, payload, course_id=None, *, archive=False):
             receipt,
             CourseSerializer(course).data,
             status=200 if course_id else 201,
-            message="Đã lưu thông tin môn học.",
+            message="Đã mở lại môn học." if unarchive else "Đã lưu thông tin môn học.",
         )

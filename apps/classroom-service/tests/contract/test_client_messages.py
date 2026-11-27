@@ -10,12 +10,16 @@ def test_success_business_and_framework_messages_are_vietnamese(
     section, actors, client_for, post_command
 ):
     teacher = client_for(actors["teacher"])
-    success = post_command(teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1})
+    success = post_command(
+        teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1, "force": True}
+    )
     assert (
         success.status_code == 200
         and success.json()["message"] == "Đã chốt giai đoạn lập nhóm của lớp học."
     )
-    business = post_command(teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1})
+    business = post_command(
+        teacher, f"/classes/{section.pk}/lock-grouping/", {"version": 1, "force": True}
+    )
     assert business.status_code == 409 and business.json()["error"]["code"] == "VERSION_CONFLICT"
     assert "tải lại" in business.json()["message"]
     framework = post_command(teacher, "/classes/", {})

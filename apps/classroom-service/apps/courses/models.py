@@ -28,6 +28,7 @@ class ClassSection(models.Model):
     status = models.CharField(max_length=20, default="OPEN")
     grouping_phase = models.CharField(max_length=20, default="FORMING")
     grouping_locked_at = models.DateTimeField(null=True)
+    formation_deadline = models.DateTimeField(null=True, blank=True)
     group_min_size = models.PositiveIntegerField(default=1)
     group_max_size = models.PositiveIntegerField(default=6)
     join_code_hash = models.CharField(max_length=64, null=True)
@@ -67,7 +68,12 @@ class ClassSection(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=["course", "starts_on", "id"], name="ix_class_sections_course")
+            models.Index(fields=["course", "starts_on", "id"], name="ix_class_sections_course"),
+            models.Index(
+                fields=["status", "grouping_phase", "created_at", "id"],
+                name="ix_class_sections_filter",
+            ),
+            models.Index(fields=["term", "created_at", "id"], name="ix_class_sections_term"),
         ]
 
 
@@ -134,5 +140,9 @@ class Enrollment(models.Model):
                 fields=["user_id", "class_section"],
                 condition=Q(status="ACTIVE"),
                 name="ix_enrollments_active_scope",
-            )
+            ),
+            models.Index(
+                fields=["class_section", "status", "enrolled_at", "id"],
+                name="ix_enrollments_class_status",
+            ),
         ]

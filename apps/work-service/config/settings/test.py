@@ -15,3 +15,4 @@ DATABASES["default"]["TEST"] = {"NAME": os.environ.get("WORK_TEST_DATABASE", "te
 CELERY_TASK_ALWAYS_EAGER = True
 CLASSROOM_ADAPTER = "tests.fixtures.classroom.FixtureClassroom"
 IDENTITY_WORK_SERVICE_KEY = "test-work-key"
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

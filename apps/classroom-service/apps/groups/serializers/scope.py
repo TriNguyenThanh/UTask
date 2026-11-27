@@ -12,6 +12,7 @@ class MemberFactSerializer(serializers.Serializer):
 class GroupSnapshotSerializer(serializers.Serializer):
     group_id = serializers.UUIDField()
     class_id = serializers.UUIDField()
+    group_status = serializers.ChoiceField(choices=["ACTIVE", "ARCHIVED"], default="ACTIVE")
     source_version = serializers.IntegerField(min_value=1)
     members = MemberFactSerializer(many=True)
 

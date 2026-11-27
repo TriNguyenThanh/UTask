@@ -1,22 +1,63 @@
 from collections import defaultdict
 from uuid import UUID
 
+from django.apps import apps
+from django.contrib.postgres.aggregates import JSONBAgg
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, F, Q, Window
-from django.db.models.functions import RowNumber
+from django.db.models import (
+    BooleanField,
+    Count,
+    Exists,
+    F,
+    IntegerField,
+    JSONField,
+    OuterRef,
+    Q,
+    Subquery,
+    TextField,
+    Value,
+    Window,
+)
+from django.db.models.functions import Cast, Coalesce, JSONObject, RowNumber
 from rest_framework.exceptions import NotFound
 
 from apps.messaging.services.receipts import payload_hash
 from apps.projects.filters import BoardTaskFilter
-from apps.projects.models import State
+from apps.projects.models import State, UserProjection
 from apps.projects.permissions import active_member
 from apps.projects.queries.projects import read_project_scope
 from apps.projects.services.locking import lock_project
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskAssignment, TaskLabel
 from common.errors import WorkError
 
-FILTER_FIELDS = ("sprint_id", "assignee_id", "priority", "is_blocked")
+FILTER_FIELDS = (
+    "sprint_id",
+    "assignee_id",
+    "priority",
+    "is_blocked",
+    "epic_id",
+    "label_id",
+    "type",
+    "search",
+    "include_subtasks",
+)
+CARD_ONLY_FIELDS = (
+    "id",
+    "state_id",
+    "sequence_id",
+    "title",
+    "type",
+    "priority",
+    "story_points",
+    "due_date",
+    "is_blocked",
+    "blocked_reason",
+    "epic_id",
+    "parent_id",
+    "sort_order",
+    "version",
+)
 
 
 def filtered_tasks(project, params):
@@ -27,11 +68,104 @@ def filtered_tasks(project, params):
         state__project=project,
         state__deleted_at__isnull=True,
     )
+    if not params.get("include_subtasks", False) and params.get("type") != Task.Type.SUBTASK:
+        queryset = queryset.filter(parent_id__isnull=True)
     filters = {key: params[key] for key in FILTER_FIELDS if key in params}
     filterset = BoardTaskFilter(filters, queryset=queryset)
     if not filterset.is_valid():
         raise WorkError("VALIDATION_ERROR", "Bộ lọc bảng công việc không hợp lệ.")
     return filterset.qs
+
+
+def _annotate_card_metrics(queryset):
+    subtask_count = (
+        Task.objects.filter(parent_id=OuterRef("pk"), deleted_at__isnull=True)
+        .order_by()
+        .values("parent_id")
+        .annotate(n=Count("pk"))
+        .values("n")
+    )
+    profiles = UserProjection.objects.filter(user_id=OuterRef("user_id"))
+    assignees_subquery = (
+        TaskAssignment.objects.filter(task_id=OuterRef("pk"))
+        .order_by()
+        .values("task_id")
+        .annotate(
+            items=JSONBAgg(
+                JSONObject(
+                    user_id=Cast(F("user_id"), TextField()),
+                    display_name=Coalesce(Subquery(profiles.values("display_name")[:1]), Value("")),
+                    avatar_url=Subquery(profiles.values("avatar_url")[:1]),
+                ),
+                order_by=("assigned_at", "id"),
+            )
+        )
+        .values("items")
+    )
+    labels_subquery = (
+        TaskLabel.objects.filter(task_id=OuterRef("pk"), label__deleted_at__isnull=True)
+        .order_by()
+        .values("task_id")
+        .annotate(
+            items=JSONBAgg(
+                JSONObject(
+                    id=Cast(F("label_id"), TextField()),
+                    name=F("label__name"),
+                    color=F("label__color"),
+                ),
+                order_by=("label__name", "label_id"),
+            )
+        )
+        .values("items")
+    )
+    annotations = {
+        "subtasks_count": Coalesce(Subquery(subtask_count, output_field=IntegerField()), Value(0)),
+        "card_assignees": Coalesce(
+            Subquery(assignees_subquery, output_field=JSONField()),
+            Value([], output_field=JSONField()),
+        ),
+        "card_labels": Coalesce(
+            Subquery(labels_subquery, output_field=JSONField()),
+            Value([], output_field=JSONField()),
+        ),
+    }
+    if apps.is_installed("apps.collaboration"):
+        comment_count = (
+            apps.get_model("collaboration", "Comment")
+            .objects.filter(task_id=OuterRef("pk"), deleted_at__isnull=True)
+            .order_by()
+            .values("task_id")
+            .annotate(n=Count("pk"))
+            .values("n")
+        )
+        attachment_count = (
+            apps.get_model("collaboration", "Attachment")
+            .objects.filter(task_id=OuterRef("pk"), status="CONFIRMED", deleted_at__isnull=True)
+            .order_by()
+            .values("task_id")
+            .annotate(n=Count("pk"))
+            .values("n")
+        )
+        annotations["comments_count"] = Coalesce(
+            Subquery(comment_count, output_field=IntegerField()), Value(0)
+        )
+        annotations["attachments_count"] = Coalesce(
+            Subquery(attachment_count, output_field=IntegerField()), Value(0)
+        )
+    else:
+        annotations["comments_count"] = Value(0, output_field=IntegerField())
+        annotations["attachments_count"] = Value(0, output_field=IntegerField())
+    if apps.is_installed("apps.integrations"):
+        pr_links = apps.get_model("integrations", "TaskGitHubLink").objects.filter(
+            task_id=OuterRef("pk"),
+            link_type="PULL_REQUEST",
+            confirmation_status="CONFIRMED",
+            deleted_at__isnull=True,
+        )
+        annotations["has_pull_request"] = Exists(pr_links)
+    else:
+        annotations["has_pull_request"] = Value(False, output_field=BooleanField())
+    return queryset.annotate(**annotations)
 
 
 def cursor_scope(project, actor, state_id, params):
@@ -76,13 +210,29 @@ def decode_cursor(token, expected_scope):
     return cut
 
 
-def card(task, identifier):
+def card(task, identifier, *, assignees=None, labels=None):
+    resolved_assignees = assignees if assignees is not None else getattr(task, "card_assignees", ())
+    resolved_labels = labels if labels is not None else getattr(task, "card_labels", ())
     return {
         "id": str(task.pk),
         "code": f"{identifier}-{task.sequence_id}",
         "title": task.title,
+        "type": task.type,
+        "priority": task.priority,
+        "story_points": task.story_points,
+        "due_date": task.due_date.isoformat() if task.due_date else None,
+        "is_blocked": task.is_blocked,
+        "blocked_reason": task.blocked_reason,
+        "epic_id": str(task.epic_id) if task.epic_id else None,
+        "parent_id": str(task.parent_id) if task.parent_id else None,
         "sort_order": task.sort_order,
         "version": task.version,
+        "assignees": list(resolved_assignees),
+        "labels": list(resolved_labels),
+        "subtasks_count": getattr(task, "subtasks_count", 0),
+        "comments_count": getattr(task, "comments_count", 0),
+        "attachments_count": getattr(task, "attachments_count", 0),
+        "has_pull_request": bool(getattr(task, "has_pull_request", False)),
     }
 
 
@@ -111,27 +261,26 @@ def read_board(actor, project_id, params, *, state_id=None):
         project = lock_project(project_id)
         if active_member(project, actor) is None and not teacher_proven:
             raise NotFound("Không tìm thấy dự án yêu cầu.")
-        queryset = filtered_tasks(project, params)
-        # Card/cursor/grouping need these columns only. Filters may reference other
-        # columns in WHERE without loading their contents into every Task instance.
-        queryset = queryset.only("id", "state_id", "sequence_id", "title", "sort_order", "version")
+        base_queryset = filtered_tasks(project, params)
+        # Card/cursor/grouping need card columns only (never description_html/acceptance_criteria).
+        card_queryset = _annotate_card_metrics(base_queryset.only(*CARD_ONLY_FIELDS))
         if state_id is not None:
             state = State.objects.filter(
                 project=project, pk=state_id, deleted_at__isnull=True
             ).first()
             if state is None:
                 raise NotFound("Không tìm thấy cột trạng thái yêu cầu.")
-            queryset = queryset.filter(state=state)
-            total = queryset.count()
+            total = base_queryset.filter(state=state).count()
+            page_queryset = card_queryset.filter(state=state)
             size = params["page_size"]
             if params.get("cursor"):
                 cut = decode_cursor(
                     params["cursor"], cursor_scope(project, actor, state.pk, params)
                 )
-                queryset = queryset.filter(
+                page_queryset = page_queryset.filter(
                     Q(sort_order__gt=cut["rank"]) | Q(sort_order=cut["rank"], id__gt=cut["task_id"])
                 )
-            rows = list(queryset.order_by("sort_order", "id")[: size + 1])
+            rows = list(page_queryset.order_by("sort_order", "id")[: size + 1])
             return {
                 "project_id": str(project.pk),
                 "board_revision": project.board_revision,
@@ -145,10 +294,12 @@ def read_board(actor, project_id, params, *, state_id=None):
         size = params["limit_per_column"]
         states = list(project.states.filter(deleted_at__isnull=True).order_by("sequence", "id"))
         counts = dict(
-            queryset.values("state_id").annotate(total=Count("id")).values_list("state_id", "total")
+            base_queryset.values("state_id")
+            .annotate(total=Count("id"))
+            .values_list("state_id", "total")
         )
         rows = (
-            queryset.annotate(
+            card_queryset.annotate(
                 _column_row=Window(
                     expression=RowNumber(),
                     partition_by=[F("state_id")],

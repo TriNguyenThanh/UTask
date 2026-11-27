@@ -415,6 +415,7 @@ class IntegrationComposeTests(unittest.TestCase):
                             raise
                         time.sleep(0.1)
                 for method in ("GET", "HEAD", "OPTIONS"):
+                    public_expected = 204 if method == "OPTIONS" else 503
                     for path, expected in (
                         ("/api/integrations/api/v1/internal", 404),
                         ("/api/integrations/api/v1/internal/child", 404),
@@ -423,9 +424,12 @@ class IntegrationComposeTests(unittest.TestCase):
                         ("/api/integrations/api/v1/internal%2fchild", 404),
                         ("/api/integrations//api/v1/internal//child", 404),
                         ("/api/integrations/api/v1/public/../internal/child", 404),
-                        ("/api/integrations/api/v1/internality", 503),
-                        ("/api/integrations/api/v1/internal-other/child", 503),
-                        ("/api/integrations/healthz", 503),
+                        ("/api/integrations/api/v1/internality", public_expected),
+                        (
+                            "/api/integrations/api/v1/internal-other/child",
+                            public_expected,
+                        ),
+                        ("/api/integrations/healthz", public_expected),
                     ):
                         with self.subTest(method=method, path=path):
                             connection = http.client.HTTPConnection(

@@ -55,7 +55,10 @@ def join_class(request, payload):
         if enrollment.status != "ACTIVE":
             raise ClassroomError(
                 "ENROLLMENT_INACTIVE",
-                "Bạn đã rời hoặc bị loại khỏi lớp. Hãy liên hệ giảng viên phụ trách.",
+                (
+                    "Bạn đã rời hoặc bị loại khỏi lớp học này. "
+                    "Vui lòng liên hệ giảng viên phụ trách để được khôi phục ghi danh."
+                ),
                 409,
             )
         if created:
@@ -157,6 +160,7 @@ def add_students(request, class_id, payload):
                 row["reason"] = "DUPLICATE_STUDENT"
             elif user_id:
                 seen.add(user_id)
+                reactivate_inactive = bool(payload.get("reactivate_inactive", False))
                 with transaction.atomic():
                     enrollment, created = Enrollment.objects.get_or_create(
                         class_section=section,
@@ -168,8 +172,23 @@ def add_students(request, class_id, payload):
                     row["enrollment_id"] = str(enrollment.pk)
                     row["enrollment_result"] = "ENROLLED" if created else "ALREADY_ENROLLED"
                     if enrollment.status != "ACTIVE":
-                        row["enrollment_result"] = "FAILED"
-                        row["reason"] = "ENROLLMENT_INACTIVE"
+                        if reactivate_inactive:
+                            old_status = enrollment.status
+                            enrollment.status = "ACTIVE"
+                            enrollment.left_at = None
+                            enrollment.save(update_fields=["status", "left_at"])
+                            row["enrollment_result"] = "REACTIVATED"
+                            row["reason"] = None
+                            record_activity(
+                                enrollment,
+                                request.user.id,
+                                "enrollment.reactivated",
+                                old={"status": old_status},
+                                new={"status": "ACTIVE", "user_id": user_id},
+                            )
+                        else:
+                            row["enrollment_result"] = "FAILED"
+                            row["reason"] = "ENROLLMENT_INACTIVE"
                     elif created:
                         record_activity(
                             enrollment,
@@ -184,6 +203,7 @@ def add_students(request, class_id, payload):
             "already_enrolled": sum(
                 row["enrollment_result"] == "ALREADY_ENROLLED" for row in results
             ),
+            "reactivated": sum(row["enrollment_result"] == "REACTIVATED" for row in results),
             "failed": sum(row["enrollment_result"] == "FAILED" for row in results),
             "created_accounts": sum(row["account_result"] == "CREATED" for row in results),
             "existing_accounts": sum(row["account_result"] == "EXISTING" for row in results),
@@ -199,9 +219,46 @@ def add_students(request, class_id, payload):
         )
 
 
+def reactivate_enrollment(request, class_id, enrollment_id, payload):
+    actor_roles(request)
+    with transaction.atomic():
+        section = lock_class(class_id)
+        require_read(request, section)
+        require_manage(request, section)
+        enrollment = get_object_or_404(
+            Enrollment.objects.select_for_update(), pk=enrollment_id, class_section=section
+        )
+        receipt = begin_receipt(request, payload, section)
+        if receipt.status == "COMPLETED":
+            return replay_response(receipt)
+        require_open(section)
+        if enrollment.status == "ACTIVE":
+            raise ClassroomError(
+                "ENROLLMENT_ALREADY_ACTIVE",
+                "Sinh viên hiện đang ghi danh hoạt động trong lớp học này.",
+                409,
+            )
+        old_status = enrollment.status
+        enrollment.status = "ACTIVE"
+        enrollment.left_at = None
+        enrollment.save(update_fields=["status", "left_at"])
+        record_activity(
+            enrollment,
+            request.user.id,
+            "enrollment.reactivated",
+            old={"status": old_status},
+            new={"status": "ACTIVE", "reason": payload["reason"]},
+        )
+        return finish_receipt(
+            receipt,
+            EnrollmentSerializer(enrollment).data,
+            message="Đã khôi phục sinh viên vào lớp học.",
+        )
+
+
 def exit_class(request, class_id, enrollment_id, payload):
     actor_roles(request)
-    from apps.groups.models import GroupMember
+    from apps.groups.models import GroupMember, StudyGroup
     from apps.groups.services.members import end_membership
 
     with transaction.atomic():
@@ -218,17 +275,27 @@ def exit_class(request, class_id, enrollment_id, payload):
         membership = GroupMember.objects.filter(enrollment=enrollment, status="ACTIVE").first()
         if membership:
             require_open(section, forming=own)
+            source_group = StudyGroup.objects.select_for_update().get(pk=membership.group_id)
             end_membership(
                 section,
-                membership.group,
+                source_group,
                 membership,
                 request.user.id,
                 "LEFT" if own else "REMOVED",
                 payload["reason"],
+                dissolve_if_sole_member=bool(payload.get("dissolve_if_sole_member", False)),
             )
         enrollment.status = "LEFT" if own else "REMOVED"
         enrollment.left_at = timezone.now()
         enrollment.save(update_fields=["status", "left_at"])
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=request.user.id,
+            note="Sinh viên đã kết thúc ghi danh trong lớp học.",
+            class_section=section,
+            enrollment=enrollment,
+        )
         record_activity(
             enrollment,
             request.user.id,

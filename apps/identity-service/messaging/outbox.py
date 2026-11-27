@@ -66,14 +66,14 @@ def emit_user(user, event_type="identity.user.created"):
     )
 
 
-def emit_mail(user, event_type, secret, lifetime):
+def emit_mail(user, event_type, secret, lifetime, *, recipient_email=None):
     key = mail_key()
     event_id = uuid4()
     expires = (timezone.now() + timedelta(seconds=lifetime)).isoformat()
     encrypted_secret = encrypt_mail_payload(key, event_id, event_type, user.pk, expires, secret)
     data = {
         "user_id": str(user.pk),
-        "email": user.email,
+        "email": recipient_email or user.email,
         "expires_at": expires,
         "secret": encrypted_secret,
     }

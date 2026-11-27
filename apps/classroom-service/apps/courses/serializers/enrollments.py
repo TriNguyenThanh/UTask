@@ -18,6 +18,7 @@ class StudentListSerializer(StrictInputSerializer):
             "max_length": "Mỗi yêu cầu chỉ được chứa tối đa 100 sinh viên.",
         },
     )
+    reactivate_inactive = serializers.BooleanField(required=False)
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
@@ -41,6 +42,7 @@ class EnrollmentSummarySerializer(serializers.Serializer):
     total_records = serializers.IntegerField()
     enrolled = serializers.IntegerField()
     already_enrolled = serializers.IntegerField()
+    reactivated = serializers.IntegerField()
     failed = serializers.IntegerField()
     created_accounts = serializers.IntegerField()
     existing_accounts = serializers.IntegerField()
@@ -54,4 +56,9 @@ class StudentListResultSerializer(serializers.Serializer):
 
 
 class EnrollmentExitSerializer(StrictInputSerializer):
-    reason = serializers.CharField(max_length=500)
+    reason = serializers.CharField(min_length=1, max_length=500)
+    dissolve_if_sole_member = serializers.BooleanField(required=False)
+
+
+class EnrollmentReactivateSerializer(StrictInputSerializer):
+    reason = serializers.CharField(min_length=1, max_length=500)

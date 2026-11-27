@@ -351,3 +351,75 @@ def test_teacher_cannot_supply_course_creator(client_for, actors, post_command):
     assert response.status_code == 400
     assert Course.objects.count() == 0
     assert IdempotencyRecord.objects.count() == 0
+
+
+def test_course_detail_visibility_partial_patch_and_unarchive(client_for, actors, post_command):
+    teacher_client = client_for(actors["teacher"])
+    admin_client = client_for(actors["admin"])
+    student_client = client_for(actors["leader"])
+    outsider_client = client_for(actors["outsider"])
+
+    created = post_command(teacher_client, "/courses/", {"code": "se101", "name": "Nhập môn CNPM"})
+    assert created.status_code == 201
+    course_id = created.json()["data"]["id"]
+    course = Course.objects.get(pk=course_id)
+    section = ClassSection.objects.create(
+        course=course,
+        code="SE101-01",
+        name="Lớp SE101",
+        term="2026",
+        starts_on=date(2026, 1, 1),
+        ends_on=date(2026, 12, 31),
+    )
+    Enrollment.objects.create(class_section=section, user_id=actors["leader"], status="ACTIVE")
+
+    # GET /courses/{id}/ visibility matches visible_courses()
+    assert teacher_client.get(f"/courses/{course_id}/").status_code == 200
+    assert admin_client.get(f"/courses/{course_id}/").status_code == 200
+    student_detail = student_client.get(f"/courses/{course_id}/")
+    assert student_detail.status_code == 200 and student_detail.json()["data"]["code"] == "SE101"
+    assert outsider_client.get(f"/courses/{course_id}/").status_code == 404
+
+    # PATCH /courses/{id}/ supports partial updates and rejects empty payload
+    empty_patch = teacher_client.patch(
+        f"/courses/{course_id}/", {}, format="json", HTTP_IDEMPOTENCY_KEY=str(uuid4())
+    )
+    assert empty_patch.status_code == 400
+    assert empty_patch.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    name_only = teacher_client.patch(
+        f"/courses/{course_id}/",
+        {"name": "Công nghệ phần mềm"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid4()),
+    )
+    assert name_only.status_code == 200
+    assert name_only.json()["data"]["code"] == "SE101"
+    assert name_only.json()["data"]["name"] == "Công nghệ phần mềm"
+
+    code_only = teacher_client.patch(
+        f"/courses/{course_id}/",
+        {"code": " se201 "},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid4()),
+    )
+    assert code_only.status_code == 200
+    assert code_only.json()["data"]["code"] == "SE201"
+    assert code_only.json()["data"]["name"] == "Công nghệ phần mềm"
+
+    # Archive & unarchive lifecycle + replay + ownership guard
+    assert post_command(teacher_client, f"/courses/{course_id}/archive/", {}).status_code == 200
+    course.refresh_from_db()
+    assert course.archived_at is not None
+
+    assert post_command(student_client, f"/courses/{course_id}/unarchive/", {}).status_code == 403
+    unarchive_key = uuid4()
+    unarchived = post_command(
+        teacher_client, f"/courses/{course_id}/unarchive/", {}, key=unarchive_key
+    )
+    assert unarchived.status_code == 200
+    assert unarchived.json()["data"]["archived_at"] is None
+    replay = post_command(teacher_client, f"/courses/{course_id}/unarchive/", {}, key=unarchive_key)
+    assert replay.status_code == 200 and replay.json() == unarchived.json()
+    course.refresh_from_db()
+    assert course.archived_at is None

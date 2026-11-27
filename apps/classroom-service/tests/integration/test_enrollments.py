@@ -33,7 +33,7 @@ def test_class_exit_updates_membership_atomically_and_leader_cannot_exit(
             leader.pk,
             {"reason": "Chuyển lớp"},
         )
-    assert error.value.code == "LEADER_SUCCESSOR_REQUIRED"
+    assert error.value.code == "SOLE_LEADER_DISSOLVE_REQUIRED"
     leader.refresh_from_db()
     assert leader.status == "ACTIVE"
 

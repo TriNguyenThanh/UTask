@@ -69,3 +69,159 @@ def test_active_history_filters_apply_to_members_teachers_and_enrollments(
     teachers = client.get(f"/classes/{section.pk}/teachers/", {"status": "LEFT"})
     assert teachers.status_code == 200 and teachers.json()["data"] == []
     assert ClassTeacher.objects.filter(class_section=section, status="ACTIVE").exists()
+
+
+def test_django_filter_search_and_field_filters_across_resources(group, actors, client_for):
+    from apps.courses.models import Course
+    from apps.messaging.models import Activity
+
+    section = group.class_section
+    archived_course = Course.objects.create(
+        code="AI99", name="Trí tuệ nhân tạo", archived_at=timezone.now()
+    )
+    teacher = client_for(actors["teacher"])
+
+    # Courses: search & archived
+    assert [c["code"] for c in teacher.get("/courses/", {"archived": "true"}).json()["data"]] == [
+        archived_course.code
+    ]
+    assert [c["code"] for c in teacher.get("/courses/", {"archived": "false"}).json()["data"]] == [
+        section.course.code
+    ]
+    assert [c["code"] for c in teacher.get("/courses/", {"search": "trí tuệ"}).json()["data"]] == [
+        "AI99"
+    ]
+    assert teacher.get("/courses/", {"archived": "invalid"}).status_code == 400
+
+    # Classes: search, course_id, term, grouping_phase
+    assert (
+        len(
+            teacher.get(
+                "/classes/",
+                {
+                    "search": "SE01",
+                    "course_id": str(section.course_id),
+                    "term": "2026",
+                    "grouping_phase": "FORMING",
+                },
+            ).json()["data"]
+        )
+        == 1
+    )
+    assert teacher.get("/classes/", {"grouping_phase": "LOCKED"}).json()["data"] == []
+    assert teacher.get("/classes/", {"course_id": "not-a-uuid"}).status_code == 400
+
+    # Enrollments: has_group & user_id
+    assigned = teacher.get(f"/classes/{section.pk}/enrollments/", {"has_group": "true"}).json()[
+        "data"
+    ]
+    unassigned = teacher.get(f"/classes/{section.pk}/enrollments/", {"has_group": "false"}).json()[
+        "data"
+    ]
+    assert {row["user_id"] for row in assigned} == {str(actors["leader"]), str(actors["member"])}
+    assert {row["user_id"] for row in unassigned} == {str(actors["outsider"])}
+    only_leader = teacher.get(
+        f"/classes/{section.pk}/enrollments/", {"user_id": str(actors["leader"])}
+    ).json()["data"]
+    assert len(only_leader) == 1 and only_leader[0]["user_id"] == str(actors["leader"])
+
+    # Groups: search
+    StudyGroup.objects.create(class_section=section, name="Nhóm Backend")
+    searched = teacher.get(f"/classes/{section.pk}/groups/", {"search": "backend"}).json()["data"]
+    assert [row["name"] for row in searched] == ["Nhóm Backend"]
+
+    # Activities: verb, actor_user_id, created_from/created_to & cursor fingerprint
+    t1 = timezone.now() - timedelta(hours=2)
+    t2 = timezone.now() - timedelta(hours=1)
+    Activity.objects.create(
+        class_section=section,
+        actor_user_id=actors["teacher"],
+        verb="class.updated",
+        subject_type="ClassSection",
+        subject_id=section.pk,
+        changes={"old": None, "new": {"name": "A"}},
+        created_at=t1,
+    )
+    Activity.objects.create(
+        class_section=section,
+        actor_user_id=actors["leader"],
+        verb="group.created",
+        subject_type="StudyGroup",
+        subject_id=group.pk,
+        changes={"old": None, "new": {"source_version": 1}},
+        created_at=t2,
+    )
+    by_verb = teacher.get(
+        f"/classes/{section.pk}/activities/",
+        {"verb": "group.created", "actor_user_id": str(actors["leader"])},
+    ).json()["data"]
+    assert len(by_verb) == 1 and by_verb[0]["verb"] == "group.created"
+    by_time = teacher.get(
+        f"/classes/{section.pk}/activities/",
+        {"created_from": (t2 - timedelta(minutes=5)).isoformat()},
+    ).json()["data"]
+    assert len(by_time) == 1 and by_time[0]["verb"] == "group.created"
+    assert (
+        teacher.get(f"/classes/{section.pk}/activities/", {"created_from": "bad"}).status_code
+        == 400
+    )
+
+
+def test_cursor_invalidated_when_new_django_filters_change(group, actors, client_for):
+    from apps.messaging.models import Activity
+
+    section = group.class_section
+    StudyGroup.objects.create(class_section=section, name="Nhóm A2")
+    teacher = client_for(actors["teacher"])
+
+    # Enrollments: cursor bound to has_group=true cannot be reused with has_group=false
+    enroll_path = f"/classes/{section.pk}/enrollments/"
+    first_enroll = teacher.get(enroll_path, {"has_group": "true", "page_size": 1})
+    assert first_enroll.status_code == 200
+    enroll_cursor = first_enroll.json()["meta"]["pagination"]["next_cursor"]
+    assert enroll_cursor
+    assert (
+        teacher.get(enroll_path, {"has_group": "true", "cursor": enroll_cursor}).status_code == 200
+    )
+    assert (
+        teacher.get(enroll_path, {"has_group": "false", "cursor": enroll_cursor}).status_code == 400
+    )
+    assert teacher.get(enroll_path, {"cursor": enroll_cursor}).status_code == 400
+
+    # Groups: cursor bound to search="Nhóm" cannot be reused with different search
+    group_path = f"/classes/{section.pk}/groups/"
+    first_group = teacher.get(group_path, {"search": "Nhóm", "page_size": 1})
+    assert first_group.status_code == 200
+    group_cursor = first_group.json()["meta"]["pagination"]["next_cursor"]
+    assert group_cursor
+    assert teacher.get(group_path, {"search": "Nhóm", "cursor": group_cursor}).status_code == 200
+    assert teacher.get(group_path, {"search": "A2", "cursor": group_cursor}).status_code == 400
+
+    # Activities: cursor bound to verb cannot be reused with changed verb or added actor_user_id
+    for _ in range(2):
+        Activity.objects.create(
+            class_section=section,
+            actor_user_id=actors["teacher"],
+            verb="class.updated",
+            subject_type="ClassSection",
+            subject_id=section.pk,
+            changes={"old": None, "new": {}},
+        )
+    act_path = f"/classes/{section.pk}/activities/"
+    first_act = teacher.get(act_path, {"verb": "class.updated", "page_size": 1})
+    assert first_act.status_code == 200
+    act_cursor = first_act.json()["meta"]["pagination"]["next_cursor"]
+    assert act_cursor
+    assert teacher.get(act_path, {"verb": "class.updated", "cursor": act_cursor}).status_code == 200
+    assert teacher.get(act_path, {"verb": "group.created", "cursor": act_cursor}).status_code == 400
+    assert (
+        teacher.get(
+            act_path,
+            {
+                "verb": "class.updated",
+                "actor_user_id": str(actors["teacher"]),
+                "cursor": act_cursor,
+            },
+        ).status_code
+        == 400
+    )

@@ -139,7 +139,7 @@ def test_admin_group_operations_do_not_grant_unselected_group_rights(api, accoun
         "POST",
         group_data.section.path + "lock-grouping/",
         token=admin,
-        body={"version": section["version"]},
+        body={"version": section["version"], "force": True},
     )
     api(
         "POST",
@@ -224,7 +224,12 @@ def test_admin_adjustment_and_exit_preserve_scoped_membership(api, accounts, enr
         },
     )["data"]
     current = api("GET", enrolled.path, token=admin)["data"]
-    api("POST", enrolled.path + "lock-grouping/", token=admin, body={"version": current["version"]})
+    api(
+        "POST",
+        enrolled.path + "lock-grouping/",
+        token=admin,
+        body={"version": current["version"], "force": True},
+    )
     adjusted = api(
         "POST",
         enrolled.path + "adjust-member/",

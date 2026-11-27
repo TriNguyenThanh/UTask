@@ -68,6 +68,12 @@ def publish_membership(section, group, actor_id, verb, *, reason=None, increment
     )
 
 
+def _cancel_pending_requests(**kwargs):
+    from apps.groups.services.join_requests import cancel_pending_join_requests
+
+    return cancel_pending_join_requests(**kwargs)
+
+
 def create_group(request, payload):
     actor_roles(request)
     leader_id = payload.get("leader_id", request.user.id)
@@ -106,9 +112,19 @@ def create_group(request, payload):
             raise ClassroomError(
                 "ALREADY_IN_GROUP", "Bạn đã tham gia một nhóm trong lớp học này.", 409
             )
-        group = StudyGroup.objects.create(class_section=section, name=payload["name"])
+        create_kwargs = {"class_section": section, "name": payload["name"]}
+        for optional_field in ("is_recruiting", "recruitment_note", "needed_skills"):
+            if optional_field in payload:
+                create_kwargs[optional_field] = payload[optional_field]
+        group = StudyGroup.objects.create(**create_kwargs)
         GroupMember.objects.create(
             class_section=section, group=group, enrollment=enrollment, role="LEADER"
+        )
+        _cancel_pending_requests(
+            actor_id=request.user.id,
+            note="Sinh viên đã tạo nhóm học tập mới.",
+            class_section=section,
+            enrollment=enrollment,
         )
         publish_membership(section, group, request.user.id, "group.created", increment=False)
         return finish_receipt(
@@ -138,8 +154,52 @@ def update_group(request, group_id, payload):
         check_group_version(group, payload["version"])
         if group.status == "ARCHIVED":
             raise ClassroomError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        archiving = payload.get("status") == "ARCHIVED"
+        if archiving:
+            reason = str(payload.get("reason") or "").strip()
+            if not reason:
+                raise ClassroomError(
+                    "VALIDATION_ERROR",
+                    "Cần nêu lý do khi lưu trữ nhóm học tập.",
+                    400,
+                    details=[
+                        {"field": "reason", "issue": "Trường này là bắt buộc khi lưu trữ nhóm."}
+                    ],
+                )
+            active_members = list(
+                GroupMember.objects.select_for_update()
+                .filter(group=group, status="ACTIVE")
+                .order_by("id")
+            )
+            if active_members:
+                left_at = max(timezone.now(), max(member.joined_at for member in active_members))
+                GroupMember.objects.filter(pk__in=[member.pk for member in active_members]).update(
+                    status="REMOVED", left_at=left_at
+                )
+            if "name" in payload:
+                group.name = payload["name"]
+            group.status = "ARCHIVED"
+            group.is_recruiting = False
+            group.invite_code_hash = None
+            group.invite_expires_at = None
+            group.source_version += 1
+            group.save()
+            _cancel_pending_requests(
+                actor_id=request.user.id,
+                note="Nhóm học tập đã được lưu trữ.",
+                class_section=section,
+                group=group,
+            )
+            publish_membership(
+                section, group, request.user.id, "group.archived", reason=reason, increment=False
+            )
+            return finish_receipt(
+                receipt,
+                GroupSerializer(group).data,
+                message="Đã lưu trữ nhóm học tập và giải phóng các thành viên.",
+            )
         for key, value in payload.items():
-            if key != "version":
+            if key not in {"version", "reason"}:
                 setattr(group, key, value)
         group.source_version += 1
         group.save()

@@ -1,8 +1,8 @@
 # UTask – Identity Service RESTful API Specification
 ## Đặc tả Giao diện Lập trình Ứng dụng (Enterprise API Specification) cho Dịch vụ Xác thực & Định danh Toàn cục
 
-**Phiên bản:** 1.8 (trạng thái email và lockout thuộc thư viện; flags cho OAuth/R2)<br>
-**Trạng thái: Một phần.** Cập nhật20/10/2026; API local có source và 383 test đạt; avatar R2, Kafka và Identity–Classroom đã có kiểm chứng local. Gửi mail, OAuth thật, gateway/staging chưa nghiệm thu. Xem [phạm vi và cách tích hợp](README.md).<br>
+**Phiên bản:** 1.8 (trạng thái email và lockout thuộc thư viện; flags cho OAuth/R2 và `IDENTITY_REQUIRE_EMAIL_ACTIVATION`)<br>
+**Trạng thái: Đã triển khai (local).** Cập nhật 24/11/2026; hợp đồng OpenAPI chuẩn lưu tại [contracts/api/identity-service.yaml](../../contracts/api/identity-service.yaml) (35 paths / 41 thao tác mặc định + 9 thao tác gated OAuth/Avatar); 450/450 test local đạt trên PostgreSQL 16 + Redis 7 cô lập và 13/13 luồng HTTP thật + Kafka Cloud (`SASL_SSL`) đạt. Gửi mail thực qua SMTP/Notification (`B3`), Google/GitHub OAuth thật, CORS R2 bucket production (`B30`) và gateway/staging chưa nghiệm thu. Xem [phạm vi và cách tích hợp](README.md).<br>
 **Dịch vụ sở hữu:** `apps/identity-service`<br>
 **Cơ sở dữ liệu:** `identity_db` (PostgreSQL 16)<br>
 **Cổng lắng nghe cục bộ (Local Port):** `8001`<br>
@@ -199,12 +199,12 @@ không thu hồi access ở service chỉ kiểm chữ ký.
 7. Outbox.data lưu **toàn Kafka envelope**, gồm trace_id và data nghiệp vụ lồng bên trong; id/type/version/aggregate/created_at mirror envelope phải khớp. Publisher gửi envelope đã lưu, không tạo event_id/occurred_at mới khi retry. Publisher lấy bản ghi chờ cũ nhất của mỗi user theo (created_at,id), dùng PostgreSQL row lock và skip-locked để tránh hai process đồng thời gửi cùng đầu hàng. Event lỗi cùng user không bị vượt. Chỉ ghi published_at sau Kafka ACK; ACK rồi crash trước mark có thể gây duplicate, consumer phải chống lặp theo event_id.
 8. GitHub reconcile theo3.7.1 trước update projection/replay/backfill; outage phải retry, không verified từ event cũ. Public/batch giữ policy Bearer toàn hệ thống hiện tại; không tự thêm quyền cùng lớp nếu sản phẩm chưa đổi contract.
 
-### 1.11. Trạng thái API và thư viện ở phiên bản1.7
+### 1.11. Trạng thái API và thư viện ở phiên bản 1.8
 
-25 thao tác đang bật mặc định; 6 OAuth qua IDENTITY_GOOGLE_ENABLED/IDENTITY_GITHUB_ENABLED,
-2 avatar qua IDENTITY_AVATAR_ENABLED (mặc định false, bật phải có đủ R2 configuration).
-OpenAPI xuất bằng drf-spectacular từ config.urls và serializers thật qua
-[export_identity_api](../../apps/identity-service/accounts/management/commands/export_identity_api.py). Schema mặc định không
+41 thao tác đang bật mặc định (gồm trọn bộ quản trị `SYSTEM_ADMIN`, `DELETE /users/me`, `POST /users/me/email-change/{request,confirm}`, `POST /password-set` và `GET /users/search`); 6 OAuth qua `IDENTITY_GOOGLE_ENABLED`/`IDENTITY_GITHUB_ENABLED`,
+3 avatar qua `IDENTITY_AVATAR_ENABLED` (`presigned-url`, `confirm`, `DELETE /users/me/avatar`; mặc định `false`, bật phải có đủ R2 configuration).
+OpenAPI xuất bằng `drf-spectacular` từ `config.urls` và serializers thật qua
+[export_identity_api](../../apps/identity-service/accounts/management/commands/export_identity_api.py) (hỗ trợ cả `.yaml` và `.json`) và lưu chuẩn tại [contracts/api/identity-service.yaml](../../contracts/api/identity-service.yaml). Schema mặc định không
 tự mở routes gated hoặc chứng minh provider acceptance. Swagger UI và schema JSON có tại
 `/docs/` và `/openapi/` dùng trực tiếp khi phát triển local. Qua gateway,
 Swagger UI ở `/api/auth/docs/` và OpenAPI JSON ở `/api/auth/openapi/`;
@@ -249,6 +249,14 @@ là ảnh an toàn và URL PUT còn hiệu lực có thể overwrite object trư
 | `WEAK_PASSWORD` | 400 | Mật khẩu không đáp ứng chính sách bảo mật (tối thiểu 8 ký tự, chữ, số, ký tự đặc biệt). |
 | `FORBIDDEN_TEACHER_OR_ADMIN` | 403 | Chỉ Giảng viên hoặc Quản trị viên hệ thống mới có quyền truy cập endpoint này. |
 | `FORBIDDEN_ADMIN_ONLY` | 403 | Thao tác đặc quyền chỉ dành riêng cho Quản trị viên cấp cao (`SYSTEM_ADMIN`). |
+| `CANNOT_SUSPEND_SELF` | 400 | Quản trị viên không thể tự tạm đình chỉ tài khoản của chính mình. |
+| `CANNOT_DELETE_SELF` | 400 | Quản trị viên không thể tự xóa mềm tài khoản của chính mình qua `/admin/users/{id}`. |
+| `CANNOT_DELETE_LAST_ADMIN` | 400 | Không thể tự xóa tài khoản `SYSTEM_ADMIN` đang hoạt động cuối cùng của hệ thống. |
+| `RECENT_LOGIN_REQUIRED` | 403 | Tài khoản OAuth-only chưa có mật khẩu cần đăng nhập lại trong vòng 15 phút trước thao tác nhạy cảm (`DELETE /users/me`, đổi email). |
+| `INVALID_EMAIL_CHANGE_TOKEN` | 400 | Mã xác minh đổi email không hợp lệ, đã sử dụng, bị thay thế hoặc không thuộc người dùng hiện tại. |
+| `EMAIL_CHANGE_TOKEN_EXPIRED` | 400 | Mã xác minh đổi email đã quá hạn 15 phút. |
+| `PASSWORD_ALREADY_SET` | 400 | Tài khoản đã có mật khẩu dùng được; sử dụng `/password-change` thay vì `/password-set`. |
+| `ACCOUNT_UNAVAILABLE` | 400 | Tài khoản đã bị xóa mềm hoặc không ở trạng thái cho phép thao tác quản trị (cần khôi phục trước). |
 | `RATE_LIMIT_EXCEEDED` | 429 | Gửi quá nhiều yêu cầu xác thực trong khoảng thời gian ngắn. |
 | `IDEMPOTENT_REPLAY_ACTIVE` | 409 | Một yêu cầu mang Idempotency-Key này đang trong quá trình xử lý. |
 | `VALIDATION_ERROR` | 400 | Dữ liệu đầu vào sai kiểu, thiếu trường bắt buộc hoặc vi phạm regex. |
@@ -318,9 +326,7 @@ POST `/register`, Anonymous, dj-rest-auth RegisterView/RegisterSerializer.
 Request: `email, username, password1, password2, first_name, last_name`.
 Không nhận role/MSSV/extra field. Password qua validators Django (min 8, không common/numeric,
 độ tương tự user và chữ hoa/chữ thường/số/ký tự đặc biệt).
-201: `data={"user":{...},"account_status":"ACTIVE"}`, email được allauth đánh dấu
-đã xác minh ngay; không gửi yêu cầu mail kích hoạt và không cấp JWT. Đây là chính sách
-đăng ký hiện tại khi chưa có Resend; tài khoản import vẫn giữ luồng kích hoạt riêng.
+201: `data={"user":{...},"account_status":"ACTIVE"|"PENDING_ACTIVATION"}`. Hành vi kích hoạt phụ thuộc cờ môi trường `IDENTITY_REQUIRE_EMAIL_ACTIVATION` (mặc định `false` khi chưa nghiệm thu hạ tầng mail/SMTP): khi `false`, tạo tài khoản `ACTIVE` và đánh dấu email đã xác minh ngay; khi `true`, tạo tài khoản `PENDING_ACTIVATION`, giữ email chưa xác minh và ghi sự kiện `identity.activation.requested` vào outbox. Đăng nhập với tài khoản `PENDING_ACTIVATION` hoặc có `EmailAddress.verified=False` trả nhất quán `403 ACCOUNT_PENDING_ACTIVATION` bằng tiếng Việt. Không tự cấp JWT sau đăng ký.
 User/profile/STUDENT/audit/outbox cùng transaction. Idempotency-Key chưa hỗ trợ, gửi key
 trả 400 thay vì giả receipt. Email/username trùng trả 400 VALIDATION_ERROR, giữ unique DB.
 
@@ -407,6 +413,12 @@ dj-rest-auth PasswordChangeView/Serializer + SetPasswordForm; adapter recheck cr
 dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION_ERROR.
 200 `data=null`; **thu hồi mọi phiên, gồm thiết bị hiện tại**, yêu cầu login lại.
 Đây là đổi contract từ chính sách cũ giữ family hiện tại.
+
+#### 3.2.5. Đặt mật khẩu lần đầu cho tài khoản OAuth-only (`POST /password-set`)
+
+POST `/password-set`, Bearer. Dành riêng cho tài khoản chưa có mật khẩu sử dụng được (`has_usable_password == false`, ví dụ tài khoản đăng nhập lần đầu bằng Google OAuth) để giải bẫy không thể hủy liên kết Google (`CANNOT_UNLINK_ONLY_AUTH_METHOD`).
+Request: `{"new_password1": "...", "new_password2": "..."}` (không nhận `old_password` hay trường lạ).
+Xử lý dưới khóa tài khoản: nếu đã có mật khẩu dùng được trả `400 PASSWORD_ALREADY_SET`; nếu mật khẩu không khớp hoặc không đạt bộ kiểm tra bảo mật Django trả `400 VALIDATION_ERROR`. Khi thành công: lưu hash mật khẩu mới, ghi audit `PASSWORD_SET`, **thu hồi toàn bộ phiên hiện hành (`PASSWORD_CHANGED`) và xóa refresh cookie** (đồng bộ với cơ chế `CHECK_REVOKE_TOKEN` của SimpleJWT), trả `200 data=null` kèm yêu cầu đăng nhập lại bằng mật khẩu mới.
 
 ### 3.3. Phân nhóm Tích hợp Đăng nhập Mạng xã hội (OAuth 2.0 Integration)
 
@@ -615,6 +627,8 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
       "theme": "dark",
       "notification_email": true
     },
+    "has_usable_password": true,
+    "linked_providers": ["google"],
     "created_at": "2026-09-01T00:00:00Z"
   },
   "meta": null,
@@ -647,25 +661,61 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 * **Xử lý:** Trong một transaction khóa tài khoản, cập nhật `users.student_id` và/hoặc `user_profiles`. MSSV chuẩn hóa upper(trim), nullable và duy nhất; DB unique constraint vẫn bảo vệ khi có cập nhật đồng thời. Giá trị MSSV cũ không được lưu thành lịch sử và có thể được tài khoản khác sử dụng sau khi đổi. Kích hoạt Trigger tạo lại `display_name = "Nguyễn Văn A"`. Ghi audit và Outbox `identity.user.updated` khi có trường đổi để các consumer đồng bộ hồ sơ.
 
-* **Phản hồi Thành công (HTTP 200 OK):**
+* **Phản hồi Thành công (HTTP 200 OK):** Trả về đầy đủ đối tượng `CurrentUser` (cùng cấu trúc với `GET /users/me`, bao gồm `id`, `email`, `username`, `student_id`, `display_name`, `avatar_url`, `roles`, `first_name`, `last_name`, `phone_number`, `bio`, `github_username`, `academic_year`, `faculty`, `timezone`, `preferences`, `has_usable_password`, `linked_providers`, `created_at`).
 ```json
 {
   "success": true,
   "message": "Cập nhật hồ sơ cá nhân thành công.",
   "data": {
-    "display_name": "Nguyễn Văn A",
+    "id": "b2c1d3e4-5f6a-7b8c-9d0e-1f2a3b4c5d6e",
+    "email": "sinhvien.k16@university.edu.vn",
+    "username": "sinhvien_k16",
     "student_id": "20210001",
+    "display_name": "Nguyễn Văn A",
+    "avatar_url": null,
+    "roles": ["STUDENT"],
+    "first_name": "Văn A",
+    "last_name": "Nguyễn",
     "phone_number": "0912345678",
     "bio": "Cập nhật định hướng Full-stack Engineer.",
+    "github_username": null,
+    "academic_year": null,
+    "faculty": "CNTT",
+    "timezone": "Asia/Ho_Chi_Minh",
     "preferences": {
       "theme": "system",
       "notification_email": false
-    }
+    },
+    "created_at": "2026-10-01T08:00:00Z"
   },
   "meta": null,
   "error": null
 }
 ```
+
+---
+
+#### 3.4.2b. Tự Vô hiệu hóa / Xóa mềm Tài khoản (`DELETE /users/me`)
+* **Phương thức:** `DELETE`
+* **Đường dẫn:** `/users/me`
+* **Xác thực:** Bearer Token bắt buộc.
+* **Request Body (tùy chọn):** `{"current_password": "...", "reason": "..."}`.
+* **Quy tắc bảo mật:**
+  - Nếu tài khoản đã có mật khẩu (`has_usable_password == true`): bắt buộc cung cấp `current_password` khớp mật khẩu hiện tại, sai/thiếu trả `400 INCORRECT_CURRENT_PASSWORD`.
+  - Nếu tài khoản OAuth-only chưa đặt mật khẩu (`has_usable_password == false`): không gửi `current_password` và phiên đăng nhập hiện tại phải được tạo trong vòng **15 phút gần đây**, quá hạn trả `403 RECENT_LOGIN_REQUIRED`.
+  - Nếu người dùng có vai trò `SYSTEM_ADMIN`: khóa tuần tự hàng `GlobalRole(SYSTEM_ADMIN)` và từ chối `400 CANNOT_DELETE_LAST_ADMIN` nếu không còn tài khoản `SYSTEM_ADMIN` `ACTIVE` (chưa xóa mềm) nào khác.
+* **Xử lý & Phản hồi (`200 OK`):** Đặt `deleted_at = timezone.now()`, thu hồi toàn bộ phiên (`LOGOUT_ALL`), xóa cookie `refresh_token`, ghi audit `ACCOUNT_SELF_DELETED`, phát outbox `identity.user.status_changed`; trả `data: {"user_id", "account_status", "deleted_at"}`.
+
+#### 3.4.2c. Đổi Email có Xác minh Email mới (`POST /users/me/email-change/request` & `/confirm`)
+* **`POST /users/me/email-change/request`** (Bearer, throttle `recovery`):
+  - Request: `{"new_email": "...", "current_password": "..."}` (`current_password` bắt buộc nếu có mật khẩu; OAuth-only dùng cơ chế phiên đăng nhập trong vòng 15 phút).
+  - Kiểm tra fail-closed `IDENTITY_MAIL_KEY` (`503 IDENTITY_UNAVAILABLE` nếu thiếu); từ chối `400 VALIDATION_ERROR` nếu trùng email hiện tại hoặc đã thuộc tài khoản khác (kể cả đã xóa mềm).
+  - Vô hiệu các yêu cầu đổi email trước đó chưa tiêu thụ, lưu mã băm SHA-256 trong `email_change_requests` (hạn 900 giây), ghi audit `EMAIL_CHANGE_REQUESTED` và phát outbox mã hóa AES-256-GCM `identity.email_change.requested` gửi tới `new_email`.
+  - Phản hồi `200 OK`: `data: {"new_email", "expires_in": 900}`.
+* **`POST /users/me/email-change/confirm`** (Bearer, throttle `recovery`):
+  - Request: `{"token": "..."}`.
+  - Khóa tài khoản và bản ghi `EmailChangeRequest` thuộc đúng `request.user` (`400 INVALID_EMAIL_CHANGE_TOKEN` nếu sai/đã dùng/khác user; `400 EMAIL_CHANGE_TOKEN_EXPIRED` nếu quá 15 phút; `409 EMAIL_ALREADY_EXISTS` nếu email bị chiếm trong lúc chờ).
+  - Cập nhật `users.email`, đồng bộ `EmailAddress` (xóa bản ghi cũ của user, ghi `verified=True, primary=True` cho email mới), đánh dấu `consumed_at`, ghi audit `EMAIL_CHANGED`, phát `identity.user.updated`; trả `200 OK` với `CurrentUser` đã cập nhật.
 
 ---
 
@@ -738,6 +788,13 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
   "error": null
 }
 ```
+
+#### 3.4.4b. Xóa Ảnh đại diện (Delete Avatar)
+* **Phương thức:** `DELETE`
+* **Đường dẫn:** `/users/me/avatar` (chỉ mở khi bật `IDENTITY_AVATAR_ENABLED=true`)
+* **Xác thực:** Bearer Token bắt buộc.
+* **Xử lý:** Dưới khóa tài khoản, đặt `profile.avatar_url = null`, ghi audit `AVATAR_DELETED` và sự kiện outbox `identity.user.updated` trong cùng transaction. Sau commit (ngoài transaction), thực hiện xóa object trên Cloudflare R2 theo cơ chế best-effort **chỉ khi** URL cũ nằm đúng dưới prefix công khai R2 và khóa `avatars/{user_id}/...` của chính người dùng (không xóa URL ngoài như ảnh Google; lỗi tạm trên R2 chỉ ghi warning log và không làm thất bại phản hồi). Gọi lặp khi chưa có ảnh là no-op trả `200` không phát thêm audit/event.
+* **Phản hồi Thành công (HTTP 200 OK):** `data: {"avatar_url": null}`.
 
 ---
 
@@ -825,6 +882,19 @@ dưới khóa user. Password cũ sai/mới yếu/trùng cũ trả 400 VALIDATION
 
 ---
 
+#### 3.4.7. Tìm kiếm Người dùng Hoạt động (Search Active Users)
+* **Phương thức:** `GET`
+* **Đường dẫn:** `/users/search`
+* **Xác thực:** Bearer Token bắt buộc (chỉ `TEACHER` hoặc `SYSTEM_ADMIN`; `STUDENT` nhận `403 FORBIDDEN_TEACHER_OR_ADMIN`).
+* **Giới hạn tần suất:** `30/min` mỗi người dùng (`429`).
+* **Query Parameters:**
+  * `q` *(bắt buộc, 2–100 ký tự)*: tìm không phân biệt hoa thường theo `email`, `username`, `student_id` hoặc `profile.display_name`.
+  * `role` *(tùy chọn)*: `TEACHER` | `STUDENT` | `SYSTEM_ADMIN`.
+  * `limit` *(tùy chọn, mặc định `10`, tối đa `20`)*.
+* **Bảo mật & Phạm vi:** Chỉ trả tài khoản `account_status=ACTIVE` và `deleted_at IS NULL`; chỉ trả 6 trường công khai (`id`, `display_name`, `email`, `student_id`, `avatar_url`, `roles`) trong `data.users` kèm `meta: {"total", "limit"}`.
+
+---
+
 ### 3.5. Cấp tài khoản phục vụ import lớp học (US-1.4)
 
 #### 3.5.1. Hợp đồng Classroom → Identity đã chốt
@@ -896,84 +966,44 @@ Endpoint công khai cũ `/api/v1/admin/users/batch-import-students` không thu�
 
 ### 3.6. Phân nhóm Quản trị Người dùng Toàn cục (SYSTEM_ADMIN)
 
-#### 3.6.1. Danh sách Người dùng Toàn Hệ thống (Admin List Users)
-* **Phương thức:** `GET`
+#### 3.6.1. Danh sách & Tạo mới Người dùng Toàn Hệ thống (`GET / POST /admin/users`)
+* **Phương thức:** `GET` / `POST`
 * **Đường dẫn:** `/admin/users`
 * **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
-* **Query Parameters:**
+* **`GET` Query Parameters:**
   - `search`: Tìm theo email, display_name, username hoặc student_id.
   - `role`: Lọc theo vai trò (`SYSTEM_ADMIN`, `TEACHER`, `STUDENT`).
   - `status`: Lọc theo trạng thái (`ACTIVE`, `PENDING_ACTIVATION`, `SUSPENDED`); `LOCKED` trả lỗi validation.
+  - `deleted`: Lọc trạng thái xóa mềm (`active` mặc định | `deleted` | `all`).
   - `page`: Số trang (mặc định 1).
   - `limit`: Số bản ghi mỗi trang (mặc định 20, tối đa 100).
+* **Phản hồi `GET` (HTTP 200 OK):** Danh sách `AdminUser` (gồm cả trường `deleted_at`) kèm `meta` phân trang.
+* **`POST` Tạo tài khoản (`201 Created`):**
+  - Request: `email` (bắt buộc), tùy chọn `username`, `first_name`, `last_name`, `student_id` (tự chuẩn hóa chữ hoa), `roles` (mảng `STUDENT|TEACHER|SYSTEM_ADMIN`, mặc định `["STUDENT"]`), và **chọn đúng một trong hai**: `password` (tạo tài khoản `ACTIVE`, email verified ngay) hoặc `send_activation_email: true` (tạo `PENDING_ACTIVATION`, mật khẩu chưa đặt, ghi sự kiện mã hóa `identity.activation.requested`; thiếu khóa `IDENTITY_MAIL_KEY` trả `503` fail-closed và rollback hoàn toàn).
+  - Ghi audit `ADMIN_USER_CREATED` và outbox `identity.user.created` trong cùng transaction; trả `AdminUserDetail`. Trùng `email`/`username`/`student_id` trả `400 VALIDATION_ERROR` với chi tiết trường tiếng Việt.
 
-* **Phản hồi Thành công (HTTP 200 OK):**
-```json
-{
-  "success": true,
-  "message": "Lấy danh sách người dùng thành công.",
-  "data": [
-    {
-      "id": "b2c1d3e4-5f6a-7b8c-9d0e-1f2a3b4c5d6e",
-      "email": "giangvien@university.edu.vn",
-      "username": "giangvien_cntt",
-      "student_id": null,
-      "display_name": "TS. Lê Giảng Viên",
-      "account_status": "ACTIVE",
-      "is_email_verified": true,
-      "roles": ["TEACHER"],
-      "last_login_at": "2026-10-01T08:00:00Z",
-      "created_at": "2026-08-15T00:00:00Z"
-    }
-  ],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total_count": 1,
-    "total_pages": 1,
-    "has_next": false,
-    "next_cursor": null
-  },
-  "error": null
-}
-```
-
----
-
-#### 3.6.2. Thay đổi Trạng thái Tài khoản (Update User Status - Suspend/Unlock)
-* **Phương thức:** `PATCH`
-* **Đường dẫn:** `/admin/users/{user_id}/status`
+#### 3.6.1b. Chi tiết, Cập nhật Hồ sơ & Xóa mềm Tài khoản (`GET / PATCH / DELETE /admin/users/{user_id}`)
+* **Phương thức:** `GET` / `PATCH` / `DELETE`
+* **Đường dẫn:** `/admin/users/{user_id}`
 * **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
-* **Mô tả:** SYSTEM_ADMIN đổi ACTIVE/SUSPENDED hoặc khôi phục tài khoản xóa mềm bằng restore_deleted=true và reason bắt buộc. Hai dạng lệnh không được gửi cùng nhau; import/register/reset không được khôi phục user.
+* **`GET` (HTTP 200 OK):** Xem chi tiết tài khoản (kể cả tài khoản đã xóa mềm) theo schema `AdminUserDetail`: gồm toàn bộ trường `AdminUser` + `avatar_url`, `first_name`, `last_name`, `phone_number`, `bio`, `github_username`, `academic_year`, `faculty`, `timezone`, `has_usable_password`, `linked_providers`, `is_login_locked`, `failed_login_attempts`, `locked_until`, `active_sessions_count`.
+* **`PATCH` (HTTP 200 OK):** Cập nhật hồ sơ/MSSV cho người dùng khác (`first_name`, `last_name`, `student_id`, `phone_number`, `bio`, `academic_year`, `faculty`, `timezone`; từ chối body rỗng `{}` với `400 VALIDATION_ERROR` và từ chối tài khoản đã xóa mềm với `400 ACCOUNT_UNAVAILABLE`). Tự chuẩn hóa `student_id` chữ hoa, kiểm uniqueness, kích hoạt trigger `display_name`, ghi audit `ADMIN_PROFILE_UPDATED` và outbox `identity.user.updated`.
+* **`DELETE` (HTTP 200 OK):** Xóa mềm tài khoản (`deleted_at = timezone.now()`), chặn Admin tự xóa chính mình (`400 CANNOT_DELETE_SELF`), thu hồi toàn bộ phiên đang hoạt động (`ADMIN_REVOKED`), ghi audit `ACCOUNT_SOFT_DELETED` và outbox `identity.user.status_changed`; trả `data: {"user_id", "account_status", "deleted_at"}`. Gọi lặp trên tài khoản đã xóa mềm là idempotent (`200`).
 
-* **Request Body:**
-```json
-{
-  "status": "SUSPENDED",
-  "reason": "Vi phạm quy chế thi và bảo mật đồ án học phần."
-}
-```
+#### 3.6.2. Thay đổi Trạng thái Tài khoản & Mở khóa Đăng nhập (`PATCH /admin/users/{user_id}/status`, `POST /admin/users/{user_id}/unlock-login`)
+* **Phương thức:** `PATCH` `/admin/users/{user_id}/status` và `POST` `/admin/users/{user_id}/unlock-login`
+* **Xác thực:** Bearer Token (Quyền `SYSTEM_ADMIN`).
+* **Mô tả `PATCH /status`:** `SYSTEM_ADMIN` đổi `ACTIVE`/`SUSPENDED` (tùy chọn kèm `reset_lockout: true` khi `status: "ACTIVE"`, bị từ chối `400` nếu gửi cùng `status: "SUSPENDED"`) hoặc khôi phục tài khoản xóa mềm bằng `restore_deleted: true` và `reason` bắt buộc.
+  - Khóa user, chặn Admin tự đình chỉ mình (`400 CANNOT_SUSPEND_SELF`), không đổi trực tiếp `PENDING_ACTIVATION` sang `ACTIVE`.
+  - Khi `reset_lockout: true` trên tài khoản đang `ACTIVE` (kể cả khi `account_status` không đổi), vẫn thực thi `reset_axes(username=str(user.pk))` và ghi audit `LOGIN_UNLOCKED`.
+  - Đình chỉ thu hồi mọi phiên hoạt động; khôi phục xóa `deleted_at`, giữ nguyên trạng thái/roles/email/MSSV và không phục hồi phiên cũ. Trả `200` với `data: {"user_id", "account_status", "deleted_at"}`.
+* **Mô tả `POST /admin/users/{user_id}/unlock-login`:** Endpoint mở khóa đăng nhập `django-axes` chuyên biệt (body `{}`), luôn gọi `reset_axes(username=str(user.pk))`, ghi audit `LOGIN_UNLOCKED` (khi có bản ghi khóa bị xóa) và trả `200` với `data: {"user_id", "is_login_locked": false, "cleared_attempts": N}`.
 
-* **Xử lý:**
-  1. Khóa user. Lệnh đổi status không áp dụng cho user đã xóa; chỉ nhận ACTIVE/SUSPENDED. Không đổi PENDING_ACTIVATION sang ACTIVE thay luồng kích hoạt. Khi mutation đưa user về ACTIVE, reset Axes cho UUID của user theo API thư viện.
-  2. Lệnh khôi phục có body `{"restore_deleted":true,"reason":"..."}`, không nhận status; clear deleted_at, giữ account_status/email/MSSV/roles/user_id và không phục hồi session.
-  3. Đình chỉ thu hồi mọi session hoạt động; khôi phục cũng giữ session cũ vô hiệu. Ghi identity.user.status_changed với dữ liệu mới và audit trong cùng transaction.
-  4. Response 200 trả user_id, account_status và deleted_at mới. Mọi lỗi dữ liệu/giao dịch rollback toàn bộ.
-
-* **Phản hồi Thành công (HTTP 200 OK):**
-```json
-{
-  "success": true,
-  "message": "Cập nhật trạng thái tài khoản người dùng thành công.",
-  "data": {
-    "user_id": "b2c1d3e4-5f6a-7b8c-9d0e-1f2a3b4c5d6e",
-    "account_status": "SUSPENDED",
-    "deleted_at": null
-  },
-  "meta": null,
-  "error": null
-}
-```
+#### 3.6.4. Nhật ký Kiểm toán & Quản lý Phiên Người dùng (`SYSTEM_ADMIN`)
+* **`GET /admin/audit-logs`:** Tra cứu phân trang `AuditLog` (mới nhất trước) với các bộ lọc tùy chọn `actor_id`, `target_user_id`, `action`, `created_from`, `created_to` (ISO-8601; `created_from > created_to` trả `400 VALIDATION_ERROR`), `page`, `limit` (`<= 100`).
+* **`GET /admin/users/{user_id}/sessions`:** Danh sách phiên thiết bị của người dùng (`?include_revoked=false` mặc định chỉ trả phiên còn hạn & chưa thu hồi; `?include_revoked=true` trả lịch sử tối đa 100 phiên gần nhất). Trả `404 RESOURCE_NOT_FOUND` nếu user không tồn tại.
+* **`DELETE /admin/users/{user_id}/sessions/{session_id}`:** Thu hồi một phiên thiết bị (theo `token_family`) của đúng `user_id` (`404 SESSION_NOT_FOUND` nếu không tồn tại hoặc thuộc user khác — chống IDOR); ghi audit `ADMIN_SESSION_REVOKED`, trả `200` với `data: {"user_id", "session_id", "revoked": true}`.
+* **`POST /admin/users/{user_id}/sessions/revoke-all`:** Body `{}`, thu hồi toàn bộ phiên đang hoạt động của `user_id`, ghi audit `ADMIN_SESSIONS_REVOKED_ALL`, trả `200` với `data: {"user_id", "revoked_sessions_count": N}`.
 
 ---
 
@@ -1093,7 +1123,8 @@ Envelope theo4.1: event_id/type/aggregate_type/aggregate_id/occurred_at/event_ve
 | identity.user.role_assigned / identity.user.role_revoked | Role đổi thật; user_id,role_code,roles(sau đổi),actor_id | Projection; không cấp quyền project |
 | identity.password_reset.requested | Reset eligible; user_id,email,expires_at,secret(AES-GCM) | Notification reset template |
 | identity.student.imported | Mail event cũ; user_id,email,student_id(nullable),expires_at,secret(AES-GCM); không phát cho import mới theo chính sách tạm | Notification activation template |
-| identity.activation.requested | Resend eligible; user_id,email,expires_at,secret(AES-GCM) | Notification activation template |
+| identity.activation.requested | Resend/register/admin create eligible; user_id,email,expires_at,secret(AES-GCM) | Notification activation template |
+| identity.email_change.requested | Yêu cầu đổi email mới; user_id,email(=new_email),expires_at,secret(AES-GCM chứa `{token,new_email}`) | Notification email-change template |
 | identity.oauth.github_linked | Link mới; user_id,github_user_id(string numeric immutable),github_username | Integration → github.account.verified |
 | identity.oauth.github_unlinked | Unlink; user_id,github_user_id(captured trước delete) | Integration → github.account.unverified |
 

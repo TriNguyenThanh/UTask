@@ -3,7 +3,7 @@ from apps.tasks.queries import applied_action_receipt, applied_local_ids
 from infrastructure.ai import ai_client
 
 
-def verified_proof(actor, project_id, payload, scope, *, parent_id=None):
+def verified_proof(actor, project_id, payload, scope, *, parent_id=None, bearer=None):
     if lookup_receipt(scope, payload):
         return None
     field = "subtasks" if parent_id else "tasks"
@@ -11,21 +11,32 @@ def verified_proof(actor, project_id, payload, scope, *, parent_id=None):
     persisted = applied_local_ids(project_id, payload["proposal_id"], requested)
     if requested == persisted:
         return None
-    return ai_client().verify(
-        actor=actor,
-        project_id=project_id,
-        proposal_id=payload["proposal_id"],
-        kind="SUBTASK" if parent_id else "BACKLOG",
-        parent_id=parent_id,
-    )
+    client = ai_client()
+    kwargs = {
+        "actor": actor,
+        "project_id": project_id,
+        "proposal_id": payload["proposal_id"],
+        "kind": "SUBTASK" if parent_id else "BACKLOG",
+        "parent_id": parent_id,
+    }
+    if getattr(client, "accepts_bearer", False):
+        kwargs["bearer"] = bearer
+    return client.verify(**kwargs)
 
 
-def verified_action_proof(actor, project_id, payload, scope):
+def verified_action_proof(actor, project_id, payload, scope, *, bearer=None):
     prior = lookup_receipt(scope, payload) or applied_action_receipt(
         project_id, payload["proposal_id"], payload["item_id"]
     )
     if prior:
         return None
-    return ai_client().verify(
-        actor=actor, project_id=project_id, proposal_id=payload["proposal_id"], kind="ACTION"
-    )
+    client = ai_client()
+    kwargs = {
+        "actor": actor,
+        "project_id": project_id,
+        "proposal_id": payload["proposal_id"],
+        "kind": "ACTION",
+    }
+    if getattr(client, "accepts_bearer", False):
+        kwargs["bearer"] = bearer
+    return client.verify(**kwargs)

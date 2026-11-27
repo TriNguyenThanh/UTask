@@ -15,6 +15,7 @@ CONSTRAINT_ERRORS = {
     "uq_active_group_per_enrollment": (409, "ALREADY_IN_GROUP"),
     "uq_active_leader_per_group": (409, "GROUP_LEADER_CONFLICT"),
     "uq_group_project_project": (409, "PROJECT_LINK_CONFLICT"),
+    "uq_pending_join_request_per_enrollment": (409, "PENDING_JOIN_REQUEST_EXISTS"),
     "uq_idempotency_scope": (409, "CONCURRENT_MUTATION_IN_PROGRESS"),
 }
 
@@ -30,6 +31,10 @@ def database_error(exc):
             "ALREADY_IN_GROUP": "Sinh viên đã tham gia một nhóm trong lớp học này.",
             "GROUP_LEADER_CONFLICT": "Nhóm đã có trưởng nhóm. Vui lòng tải lại dữ liệu.",
             "PROJECT_LINK_CONFLICT": "Dự án đã liên kết với một nhóm học tập.",
+            "PENDING_JOIN_REQUEST_EXISTS": (
+                "Bạn đang có một yêu cầu gia nhập nhóm chờ duyệt trong lớp học này. "
+                "Vui lòng hủy yêu cầu cũ trước khi gửi yêu cầu mới."
+            ),
             "CONCURRENT_MUTATION_IN_PROGRESS": (
                 "Thao tác đang được xử lý. Vui lòng kiểm tra lại kết quả."
             ),

@@ -40,28 +40,31 @@ service xác thực token theo baseline. Internal-context API của Work đã c�
 contract mục tiêu nêu trên. Các thay đổi cần version/quy tắc tương thích và kiểm thử riêng; xem
 [ADR-001](../../docs/adr/001-adopt-architecture-baseline.md).
 
-Identity OpenAPI 1.8 được sinh từ URLconf và serializers của
-service bằng drf-spectacular. Artifact mặc định gồm 25 thao tác; OAuth/avatar tắt mặc định
-không xuất thành route đang mở. Bật flags trong môi trường đủ cấu hình để xuất riêng.
-Trách nhiệm, luồng và cách tích hợp: [Identity Service](../../docs/identity-service/README.md).
-Khi Identity chạy local, Swagger UI ở `/docs/` và OpenAPI JSON ở
-`/openapi/`. Trên staging qua Nginx, dùng `/api/auth/docs/` và
-`/api/auth/openapi/`.
+- [`identity-service.yaml`](identity-service.yaml): OpenAPI 1.8 của Identity Service,
+  sinh tự động từ URLconf và serializers thật bằng `drf-spectacular`
+  (`manage.py export_identity_api`). Artifact mặc định gồm **35 paths / 41 thao tác / 61 schemas**
+  (bao gồm bộ quản trị `SYSTEM_ADMIN`, `DELETE /users/me`, `POST /users/me/email-change/{request,confirm}`,
+  `POST /password-set`, `GET /users/search` và API nội bộ);
+  9 thao tác OAuth (6) và Avatar R2 (3, gồm `DELETE /users/me/avatar`) tắt mặc định qua feature flags
+  và chỉ xuất hiện khi bật cờ môi trường đủ cấu hình.
+  Trách nhiệm, luồng và cách tích hợp: [Identity Service](../../docs/identity-service/README.md).
+  Khi Identity chạy local, Swagger UI ở `/docs/` và OpenAPI JSON ở `/openapi/`.
+  Trên staging qua Nginx, dùng `/api/auth/docs/` và `/api/auth/openapi/`.
 
 ### Xuất hợp đồng Identity
 
-- Thư mục hiện chưa có artifact OpenAPI hoặc collection Reqable của Identity.
-- Khi cần artifact, xuất từ source/URLconf thật; không dùng schema giả hoặc coi collection là kết quả nghiệm thu.
+- Artifact chuẩn trong repository là [`identity-service.yaml`](identity-service.yaml) (được kiểm tra đồng bộ trực tiếp trong `apps/identity-service/tests/test_openapi.py`).
+- Khi thay đổi endpoint/serializer Identity, xuất lại từ source/URLconf thật (hỗ trợ cả `.yaml` và `.json`); không sửa tay schema giả hoặc coi collection là kết quả nghiệm thu.
 - Lệnh xuất OpenAPI mới nhất từ source code:
 
   ```bash
   # Trong container:
-  docker compose exec identity-service /app/.venv/bin/python manage.py export_identity_api --output /tmp/identity.openapi.json
-  docker compose cp identity-service:/tmp/identity.openapi.json contracts/api/identity.openapi.json
+  docker compose exec identity-service /app/.venv/bin/python manage.py export_identity_api --output /tmp/identity-service.yaml
+  docker compose cp identity-service:/tmp/identity-service.yaml contracts/api/identity-service.yaml
 
   # Hoặc trên môi trường local có uv/python:
   cd apps/identity-service
-  uv run --locked --env-file ../../.env python manage.py export_identity_api --output ../../contracts/api/identity.openapi.json
+  uv run --locked --env-file ../../.env python manage.py export_identity_api --output ../../contracts/api/identity-service.yaml
   ```
 
 ## Notification

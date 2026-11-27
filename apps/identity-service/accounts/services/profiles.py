@@ -1,7 +1,8 @@
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from rest_framework import serializers
 
-from accounts.models import User
+from accounts.models import AccountStatus, User
 from accounts.services.account_access import account_audit, lock_accounts
 from messaging.outbox import emit_user
 
@@ -10,8 +11,35 @@ def public_users():
     return (
         User.objects.filter(deleted_at__isnull=True)
         .select_related("profile")
-        .prefetch_related("global_role_assignments__role", "emailaddress_set")
+        .prefetch_related("global_role_assignments__role", "emailaddress_set", "socialaccount_set")
     )
+
+
+def admin_users(deleted: str = "active"):
+    queryset = User.objects.all()
+    if deleted == "active":
+        queryset = queryset.filter(deleted_at__isnull=True)
+    elif deleted == "deleted":
+        queryset = queryset.filter(deleted_at__isnull=False)
+    return queryset.select_related("profile").prefetch_related(
+        "global_role_assignments__role", "emailaddress_set", "socialaccount_set"
+    )
+
+
+def search_active_users(query: str, *, role: str | None = None, limit: int = 10) -> list[User]:
+    queryset = (
+        public_users()
+        .filter(account_status=AccountStatus.ACTIVE)
+        .filter(
+            Q(email__icontains=query)
+            | Q(username__icontains=query)
+            | Q(student_id__icontains=query)
+            | Q(profile__display_name__icontains=query)
+        )
+    )
+    if role:
+        queryset = queryset.filter(global_role_assignments__role__code=role)
+    return list(queryset.distinct().order_by("profile__display_name", "email", "id")[:limit])
 
 
 def update_profile(request, changes):

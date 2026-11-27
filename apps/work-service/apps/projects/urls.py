@@ -4,6 +4,8 @@ from apps.projects import views
 from apps.projects.views.ai_context import AIAuthorizeView, AIContextView
 from apps.projects.views.board import BoardColumnView, BoardView
 from apps.projects.views.dashboard import DashboardView
+from apps.projects.views.my_work import MyOverviewView
+from apps.projects.views.oversight import TeacherOversightProjectsView
 from apps.projects.views.states import StateDetailView
 
 urlpatterns = [
@@ -16,6 +18,12 @@ urlpatterns = [
         "api/v1/internal/ai/targets/<str:target_type>/<str:target_id>/contexts/<str:domain>",
         AIContextView.as_view(),
         name="ai-target-context",
+    ),
+    path("me/overview/", MyOverviewView.as_view(), name="my-overview"),
+    path(
+        "teacher/oversight/projects/",
+        TeacherOversightProjectsView.as_view(),
+        name="teacher-oversight-projects",
     ),
     path("projects/", views.ProjectListCreateView.as_view(), name="project-list"),
     path("projects/<uuid:project_id>/", views.ProjectDetailView.as_view(), name="project-detail"),

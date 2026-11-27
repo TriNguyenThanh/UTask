@@ -31,6 +31,7 @@ def membership_event(snapshot):
         "data": {
             "group_id": snapshot.group_id,
             "class_id": snapshot.class_id,
+            "group_status": snapshot.group_status,
             "source_version": snapshot.source_version,
             "members": [
                 {"user_id": str(m.user_id), "role": m.role, "status": m.status}

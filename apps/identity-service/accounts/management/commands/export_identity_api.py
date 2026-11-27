@@ -13,13 +13,18 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from drf_spectacular.generators import SchemaGenerator
-        from drf_spectacular.renderers import OpenApiJsonRenderer
+        from drf_spectacular.renderers import OpenApiJsonRenderer, OpenApiYamlRenderer
         from drf_spectacular.validation import validate_schema
 
         schema = SchemaGenerator(urlconf="config.urls").get_schema(public=True)
         validate_schema(schema)
         target = Path(options["output"]).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(OpenApiJsonRenderer().render(schema))
+        renderer = (
+            OpenApiYamlRenderer()
+            if target.suffix.lower() in {".yaml", ".yml"}
+            else OpenApiJsonRenderer()
+        )
+        target.write_bytes(renderer.render(schema))
         count = sum(len(path) for path in schema["paths"].values())
         self.stdout.write(self.style.SUCCESS(f"Validated Identity OpenAPI: {count} operations."))

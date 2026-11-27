@@ -191,8 +191,8 @@ def test_teacher_history_requires_current_teacher_or_admin_role(monkeypatch, rol
     "query,admin_allowed",
     [
         (group_queries.group_detail, True),
-        (group_queries.group_members, False),
-        (group_queries.group_projects, False),
+        (group_queries.group_members, True),
+        (group_queries.group_projects, True),
     ],
 )
 @pytest.mark.parametrize("allowed", [False, True])
@@ -306,6 +306,7 @@ def fresh_group_command(monkeypatch):
     monkeypatch.setattr(group_commands, "begin_receipt", begin)
     publish = Mock()
     monkeypatch.setattr(group_commands, "publish_membership", publish)
+    monkeypatch.setattr(group_commands, "_cancel_pending_requests", Mock(return_value=0))
     serialized = {"id": str(group.pk), "class_section": str(section.pk), "name": "Nhóm A"}
     monkeypatch.setattr(
         group_commands, "GroupSerializer", lambda *args: SimpleNamespace(data=serialized)

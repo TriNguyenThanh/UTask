@@ -114,5 +114,37 @@ def test_manager_removes_member_after_grouping_lock_but_cannot_remove_leader(
             {"version": 2, "user_id": actors["leader"], "reason": "Loại trưởng nhóm"},
             action="remove-member",
         )
-    assert error.value.code == "LEADER_SUCCESSOR_REQUIRED"
+    assert error.value.code == "SOLE_LEADER_DISSOLVE_REQUIRED"
     assert OutboxEvent.objects.count() == 1
+
+
+def test_admin_can_read_group_members_projects_and_transfer_leader_but_not_invite_code(
+    group, actors, client_for, post_command
+):
+    admin_client = client_for(actors["admin"])
+
+    members_resp = admin_client.get(f"/groups/{group.pk}/members/")
+    assert members_resp.status_code == 200
+    assert len(members_resp.json()["data"]) == 2
+
+    projects_resp = admin_client.get(f"/groups/{group.pk}/projects/")
+    assert projects_resp.status_code == 200
+
+    transfer = post_command(
+        admin_client,
+        f"/groups/{group.pk}/transfer-leader/",
+        {"version": 1, "user_id": str(actors["member"]), "reason": "Quản trị điều phối"},
+    )
+    assert transfer.status_code == 200
+    assert (
+        GroupMember.objects.get(group=group, enrollment__user_id=actors["member"]).role == "LEADER"
+    )
+    assert (
+        GroupMember.objects.get(group=group, enrollment__user_id=actors["leader"]).role == "MEMBER"
+    )
+
+    # Invite code (NH05) remains Leader-only (non-member/non-teacher concealed as 404)
+    invite = post_command(
+        admin_client, f"/groups/{group.pk}/invite-code/", {"version": 2, "enabled": True}
+    )
+    assert invite.status_code == 404

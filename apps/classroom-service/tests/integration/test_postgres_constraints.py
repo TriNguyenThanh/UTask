@@ -7,7 +7,13 @@ from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 
 from apps.courses.models import ClassSection, ClassTeacher, Enrollment
-from apps.groups.models import GroupMember, GroupProjectLink, StudyGroup
+from apps.groups.models import (
+    GroupJoinRequest,
+    GroupMember,
+    GroupProjectLink,
+    GroupTopicProposal,
+    StudyGroup,
+)
 from apps.messaging.models import IdempotencyRecord, OutboxEvent
 
 pytestmark = [
@@ -17,7 +23,7 @@ pytestmark = [
 ]
 
 
-def test_migrations_reverse_forward_and_exact_ten_business_tables():
+def test_migrations_reverse_forward_and_exact_twelve_business_tables():
     executor = MigrationExecutor(connection)
     targets = executor.loader.graph.leaf_nodes()
     executor.migrate([("groups", None), ("messaging", None), ("courses", None)])
@@ -35,13 +41,25 @@ def test_migrations_reverse_forward_and_exact_ten_business_tables():
         "STUDY_GROUPS",
         "GROUP_MEMBERS",
         "GROUP_PROJECT_LINKS",
+        "GROUP_JOIN_REQUESTS",
+        "GROUP_TOPIC_PROPOSALS",
         "ACTIVITIES",
         "OUTBOX_EVENTS",
         "IDEMPOTENCY_RECORDS",
     }
 
 
-@pytest.mark.parametrize("kind", ["group", "enrollment", "project"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "group",
+        "enrollment",
+        "project",
+        "join_request_group",
+        "join_request_enrollment",
+        "topic_proposal_group",
+    ],
+)
 def test_database_rejects_cross_class_relationship_even_direct_sql(section, actors, kind):
     other = ClassSection.objects.create(
         course=section.course,
@@ -52,24 +70,58 @@ def test_database_rejects_cross_class_relationship_even_direct_sql(section, acto
         ends_on=section.ends_on,
     )
     group = StudyGroup.objects.create(
-        class_section=other if kind in {"group", "project"} else section, name="Nhóm"
+        class_section=other
+        if kind in {"group", "project", "join_request_group", "topic_proposal_group"}
+        else section,
+        name="Nhóm",
     )
     enrollment = Enrollment.objects.create(
-        class_section=other if kind == "enrollment" else section, user_id=uuid4()
+        class_section=other if kind in {"enrollment", "join_request_enrollment"} else section,
+        user_id=uuid4(),
     )
+    now = timezone.now()
     with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
         if kind == "project":
             cursor.execute(
                 'INSERT INTO "GROUP_PROJECT_LINKS" '
                 "(id,class_section_id,group_id,project_id,linked_at) VALUES (%s,%s,%s,%s,%s)",
-                [uuid4(), section.pk, group.pk, uuid4(), timezone.now()],
+                [uuid4(), section.pk, group.pk, uuid4(), now],
+            )
+        elif kind in {"join_request_group", "join_request_enrollment"}:
+            cursor.execute(
+                'INSERT INTO "GROUP_JOIN_REQUESTS" '
+                "(id,class_section_id,group_id,enrollment_id,user_id,status,message,review_note,"
+                "reviewed_by_user_id,reviewed_at,created_at,updated_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,%s,%s)",
+                [
+                    uuid4(),
+                    section.pk,
+                    group.pk,
+                    enrollment.pk,
+                    enrollment.user_id,
+                    "PENDING",
+                    "",
+                    "",
+                    now,
+                    now,
+                ],
+            )
+        elif kind == "topic_proposal_group":
+            cursor.execute(
+                'INSERT INTO "GROUP_TOPIC_PROPOSALS" '
+                "(id,class_section_id,group_id,title,summary,objectives,status,teacher_feedback,"
+                "submitted_by_user_id,submitted_at,reviewed_by_user_id,reviewed_at,version,"
+                "created_at,updated_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,NULL,1,%s,%s)",
+                [uuid4(), section.pk, group.pk, "Đề tài", "Tóm tắt", "", "DRAFT", "", now, now],
             )
         else:
             cursor.execute(
                 'INSERT INTO "GROUP_MEMBERS" '
-                "(id,class_section_id,group_id,enrollment_id,role,status,joined_at,left_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,NULL)",
-                [uuid4(), section.pk, group.pk, enrollment.pk, "MEMBER", "ACTIVE", timezone.now()],
+                "(id,class_section_id,group_id,enrollment_id,role,status,skills,responsibility,"
+                "joined_at,left_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL)",
+                [uuid4(), section.pk, group.pk, enrollment.pk, "MEMBER", "ACTIVE", "[]", "", now],
             )
         cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
@@ -173,3 +225,47 @@ def test_project_unique_allows_multiple_projects_for_same_group(group):
             class_section=group.class_section, group=group, project_id=first
         )
     assert GroupProjectLink.objects.count() == 2
+
+
+def test_join_request_and_topic_check_constraints_reject_invalid_states(group, actors):
+    section = group.class_section
+    enrollment = Enrollment.objects.get(class_section=section, user_id=actors["outsider"])
+    now = timezone.now()
+
+    # APPROVED without reviewed_at/reviewed_by_user_id -> violates chk_join_request_state
+    with pytest.raises(IntegrityError), transaction.atomic():
+        GroupJoinRequest.objects.create(
+            class_section=section,
+            group=group,
+            enrollment=enrollment,
+            user_id=actors["outsider"],
+            status="APPROVED",
+        )
+    # PENDING with reviewed_at set -> violates chk_join_request_state
+    with pytest.raises(IntegrityError), transaction.atomic():
+        GroupJoinRequest.objects.create(
+            class_section=section,
+            group=group,
+            enrollment=enrollment,
+            user_id=actors["outsider"],
+            status="PENDING",
+            reviewed_at=now,
+        )
+    # Invalid topic status / version=0 -> violates chk_topic_proposal_state
+    with pytest.raises(IntegrityError), transaction.atomic():
+        GroupTopicProposal.objects.create(
+            class_section=section,
+            group=group,
+            title="Sai trạng thái",
+            summary="Mô tả",
+            status="UNKNOWN",
+        )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        GroupTopicProposal.objects.create(
+            class_section=section,
+            group=group,
+            title="Sai phiên bản",
+            summary="Mô tả",
+            status="DRAFT",
+            version=0,
+        )

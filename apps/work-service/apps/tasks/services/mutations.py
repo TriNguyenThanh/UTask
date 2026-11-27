@@ -73,7 +73,7 @@ def update_task(actor, task_id, payload):
         project, task = lock_task(task_id)
         member = require_task_writer(project, actor, task)
         changes = {key: value for key, value in payload.items() if key != "expected_version"}
-        require_member_fields(member, changes, {"description_html"})
+        require_member_fields(member, changes, {"title", "description_html", "acceptance_criteria"})
         check_version(task, payload["expected_version"])
         previous_version = task.version
         links = {

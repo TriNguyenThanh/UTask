@@ -2,6 +2,7 @@
 
 from allauth.account.adapter import get_adapter
 from dj_rest_auth.registration.serializers import RegisterSerializer
+from django.conf import settings
 from rest_framework import serializers
 
 from accounts.models import AccountStatus, User
@@ -23,7 +24,8 @@ class StudentRegisterSerializer(StrictInputMixin, RegisterSerializer):
         return super().validate_username(username.strip().lower())
 
     def custom_signup(self, request, user):
-        user.account_status = AccountStatus.ACTIVE
-        user.save(update_fields=("account_status", "updated_at"))
-        get_adapter(request).stash_verified_email(request, user.email)
+        if not settings.IDENTITY_REQUIRE_EMAIL_ACTIVATION:
+            user.account_status = AccountStatus.ACTIVE
+            user.save(update_fields=("account_status", "updated_at"))
+            get_adapter(request).stash_verified_email(request, user.email)
         RegistrationService.create_student_profile(request, user, self.validated_data)

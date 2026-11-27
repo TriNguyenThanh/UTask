@@ -5,6 +5,7 @@ import json
 from uuid import UUID
 
 from allauth.account.models import EmailAddress
+from django.conf import settings
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 
@@ -72,16 +73,33 @@ def provision_row(request, data, locked_ids):
         return user, "EXISTING"
     if not data["email"]:
         return None, "STUDENT_ID_NOT_FOUND"
-    # Temporary import policy: the normalized email is the initial password.
-    user = User.objects.create_user(
-        email=data["email"],
-        student_id=data["student_id"],
-        password=data["email"],
-        first_name=data["first_name"],
-        last_name=data["last_name"],
-        account_status=AccountStatus.ACTIVE,
-    )
-    EmailAddress.objects.create(user=user, email=user.email, primary=True, verified=True)
+    if settings.IDENTITY_REQUIRE_EMAIL_ACTIVATION:
+        user = User.objects.create_user(
+            email=data["email"],
+            student_id=data["student_id"],
+            password=None,
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            account_status=AccountStatus.PENDING_ACTIVATION,
+        )
+        user.profile.refresh_from_db(fields=("display_name",))
+        address = EmailAddress.objects.create(
+            user=user, email=user.email, primary=True, verified=False
+        )
+        user._identity_activation_event = "identity.student.imported"
+        address.send_confirmation(request._request)
+    else:
+        # Local/dev bypass when SMTP is not yet enabled (DG8 / B3).
+        user = User.objects.create_user(
+            email=data["email"],
+            student_id=data["student_id"],
+            password=data["email"],
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            account_status=AccountStatus.ACTIVE,
+        )
+        user.profile.refresh_from_db(fields=("display_name",))
+        EmailAddress.objects.create(user=user, email=user.email, primary=True, verified=True)
     locked_ids.add(user.pk)
     account_audit(request, user, "STUDENT_IMPORTED")
     emit_user(user)

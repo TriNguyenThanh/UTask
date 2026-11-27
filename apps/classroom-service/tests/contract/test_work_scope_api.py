@@ -98,3 +98,29 @@ def test_member_mention_scope_returns_only_active_class_teachers(group, client_f
 
     assert response.status_code == 200
     assert response.json()["data"]["mentionable_user_ids"] == [str(actors["teacher"])]
+
+
+def test_recovery_snapshot_returns_archived_group_while_project_snapshot_rejects_it(
+    group, client_for, actors
+):
+    archived = client_for(actors["teacher"]).patch(
+        f"/groups/{group.pk}/",
+        {"version": 1, "status": "ARCHIVED", "reason": "Hợp nhất nhóm"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=str(uuid4()),
+    )
+    assert archived.status_code == 200
+
+    project_snapshot = client_for(actors["teacher"]).get(
+        f"/internal/groups/{group.pk}/snapshot/", **WORK_CALLER
+    )
+    assert project_snapshot.status_code == 404
+
+    recovery = APIClient().get(f"/internal/groups/{group.pk}/recovery-snapshot/", **WORK_CALLER)
+    assert recovery.status_code == 200, recovery.content
+    data = recovery.json()["data"]
+    assert data["group_id"] == str(group.pk)
+    assert data["group_status"] == "ARCHIVED"
+    assert data["source_version"] == 2
+    assert len(data["members"]) == 2
+    assert all(row["status"] == "REMOVED" for row in data["members"])

@@ -10,12 +10,28 @@ from apps.collaboration.serializers import (
 )
 from apps.collaboration.services import comment_command
 from apps.projects.views import ERRORS
+from common.errors import WorkError
 from common.pagination import paginate
 from common.responses import success_response
 from config.api_documentation import envelope_schema
 
 COMMENT = envelope_schema("CommentEnvelope", CommentSerializer)
 COMMENTS = envelope_schema("CommentsEnvelope", CommentSerializer, many=True, paginated=True)
+
+
+def _parse_optional_bool(params, name, label):
+    if name not in params:
+        return None
+    raw = str(params.get(name, "")).strip().lower()
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    raise WorkError(
+        "VALIDATION_ERROR",
+        f"Tham số lọc {label} phải là true hoặc false.",
+        details=[{"field": name, "issue": "Giá trị phải là true hoặc false."}],
+    )
 
 
 class CommentCreateView(GenericAPIView):
@@ -115,16 +131,36 @@ class CommentListView(GenericAPIView):
     serializer_class = CommentSerializer
 
     @extend_schema(
-        parameters=[OpenApiParameter("cursor", str), OpenApiParameter("page_size", int)],
+        parameters=[
+            OpenApiParameter("cursor", str),
+            OpenApiParameter("page_size", int),
+            OpenApiParameter(
+                "is_teacher_feedback",
+                bool,
+                description="Lọc chỉ phản hồi giảng viên (true) hoặc bình luận thường (false).",
+            ),
+        ],
         responses={200: COMMENTS, **ERRORS},
     )
     def get(self, request, task_id=None, project_id=None):
         subject_access(request.user, task_id=task_id, project_id=project_id)
-        rows = subject_comments(task_id=task_id, project_id=project_id)
+        is_teacher_feedback = _parse_optional_bool(
+            request.query_params, "is_teacher_feedback", "phản hồi giảng viên"
+        )
+        rows = subject_comments(
+            task_id=task_id,
+            project_id=project_id,
+            is_teacher_feedback=is_teacher_feedback,
+        )
         rows, meta = paginate(
             rows,
             request.query_params,
-            scope={"actor": str(request.user.id), "task": str(task_id), "project": str(project_id)},
+            scope={
+                "actor": str(request.user.id),
+                "task": str(task_id),
+                "project": str(project_id),
+                "is_teacher_feedback": is_teacher_feedback,
+            },
         )
         return success_response(
             CommentSerializer(rows, many=True).data,

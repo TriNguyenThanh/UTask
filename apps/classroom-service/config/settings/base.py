@@ -73,6 +73,32 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.4",
     "SERVERS": [{"url": "/api/classroom", "description": "Classroom API qua gateway"}],
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {
+        "ClassStatusEnum": [("OPEN", "OPEN"), ("CLOSED", "CLOSED"), ("ARCHIVED", "ARCHIVED")],
+        "TeacherStatusEnum": [("ACTIVE", "ACTIVE"), ("LEFT", "LEFT")],
+        "GroupStatusEnum": [("ACTIVE", "ACTIVE"), ("ARCHIVED", "ARCHIVED")],
+        "MemberFactStatusEnum": [("ACTIVE", "ACTIVE"), ("LEFT", "LEFT"), ("REMOVED", "REMOVED")],
+        "TeacherRoleEnum": [("PRIMARY", "PRIMARY"), ("CO_TEACHER", "CO_TEACHER")],
+        "MemberFactRoleEnum": [("LEADER", "LEADER"), ("MEMBER", "MEMBER")],
+        "JoinRequestStatusEnum": [
+            ("PENDING", "PENDING"),
+            ("APPROVED", "APPROVED"),
+            ("REJECTED", "REJECTED"),
+            ("CANCELLED", "CANCELLED"),
+        ],
+        "TopicProposalStatusEnum": [
+            ("DRAFT", "DRAFT"),
+            ("PENDING", "PENDING"),
+            ("APPROVED", "APPROVED"),
+            ("REVISION_REQUESTED", "REVISION_REQUESTED"),
+            ("REJECTED", "REJECTED"),
+        ],
+        "TopicReviewDecisionEnum": [
+            ("APPROVED", "APPROVED"),
+            ("REVISION_REQUESTED", "REVISION_REQUESTED"),
+            ("REJECTED", "REJECTED"),
+        ],
+    },
 }
 IDENTITY_BASE_URL = os.environ.get("IDENTITY_BASE_URL", "http://identity-service:8000")
 IDENTITY_CLASSROOM_SERVICE_KEY = os.environ.get("IDENTITY_CLASSROOM_SERVICE_KEY", "")

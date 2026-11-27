@@ -14,6 +14,7 @@ from authentication.views.devices import (
     SessionLogoutView,
 )
 from authentication.views.internal import SessionStatusView
+from authentication.views.passwords import PasswordSetView
 from authentication.views.registration import (
     ActivationResendView,
     ActivationView,
@@ -64,6 +65,11 @@ urlpatterns = [
         "password-change",
         PasswordChangeView.as_view(),
         name="identity-password-change",
+    ),
+    path(
+        "password-set",
+        PasswordSetView.as_view(),
+        name="identity-password-set",
     ),
 ]
 

@@ -49,7 +49,8 @@ def synchronize_membership(project_id, snapshot):
             return False
         # Demote before promoting to respect the immediate partial unique constraint.
         new_leader = next(
-            m.user_id for m in snapshot.members if m.status == "ACTIVE" and m.role == "LEADER"
+            (m.user_id for m in snapshot.members if m.status == "ACTIVE" and m.role == "LEADER"),
+            None,
         )
         for member in slots.values():
             if (
@@ -101,9 +102,12 @@ def synchronize_membership(project_id, snapshot):
                         setattr(member, field, new)
                 member.group_source_version = snapshot.source_version
                 member.save()
-        if not ProjectMember.objects.filter(
-            project=project, role="LEADER", status="ACTIVE"
-        ).exists():
+        if (
+            snapshot.group_status == "ACTIVE"
+            and not ProjectMember.objects.filter(
+                project=project, role="LEADER", status="ACTIVE"
+            ).exists()
+        ):
             raise WorkError(
                 "ONE_LEADER_PER_PROJECT", "Dự án phải duy trì một trưởng nhóm đang hoạt động.", 409
             )

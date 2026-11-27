@@ -24,6 +24,15 @@ class Activity(models.Model):
             models.Index(
                 fields=["subject_type", "subject_id", "created_at"], name="ix_activities_subject"
             ),
+            models.Index(
+                fields=["class_section", "verb", "created_at", "id"],
+                name="ix_activities_class_verb",
+            ),
+            models.Index(
+                fields=["class_section", "actor_user_id", "created_at", "id"],
+                condition=Q(actor_user_id__isnull=False),
+                name="ix_activities_class_actor",
+            ),
         ]
 
 

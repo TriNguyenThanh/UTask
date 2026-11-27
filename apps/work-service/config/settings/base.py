@@ -134,6 +134,8 @@ CELERY_BEAT_SCHEDULE.update(
     }
 )
 WORK_AI_ADAPTER = os.environ.get("WORK_AI_ADAPTER", "infrastructure.ai.UnavailableProposals")
+WORK_AI_BASE_URL = os.environ.get("WORK_AI_BASE_URL", "http://ai-service:8000")
+WORK_AI_SERVICE_KEY = os.environ.get("WORK_AI_SERVICE_KEY", "")
 try:
     WORK_SERVICE_KEYS = json.loads(os.environ.get("WORK_SERVICE_KEYS", "{}"))
 except (ValueError, TypeError):
@@ -150,6 +152,20 @@ INTEGRATION_ADAPTER = os.environ.get(
 WORK_GITHUB_CONNECTION_ENABLED = (
     os.environ.get("WORK_GITHUB_CONNECTION_ENABLED", "false").lower() == "true"
 )
+try:
+    _activity_cache_ttl = int(os.environ.get("WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS") or "45")
+except ValueError:
+    _activity_cache_ttl = 45
+WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS = max(0, min(300, _activity_cache_ttl))
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": CELERY_BROKER_URL,
+        "KEY_PREFIX": "work",
+        "TIMEOUT": 60,
+        "OPTIONS": {"socket_connect_timeout": 1, "socket_timeout": 1},
+    }
+}
 WORK_INTEGRATION_BASE_URL = os.environ.get(
     "WORK_INTEGRATION_BASE_URL", "http://integration-service:8000"
 )
@@ -179,7 +195,18 @@ SPECTACULAR_SETTINGS["ENUM_NAME_OVERRIDES"] = {
     "EpicStatusEnum": "apps.tasks.models.Epic.Status",
     "AttachmentStatusEnum": "apps.collaboration.models.Attachment.Status",
     "MemberStatusEnum": "apps.projects.models.ProjectMember.Status",
+    "RoleEnum": "apps.projects.models.ProjectMember.Role",
     "ScopeActionEnum": ["ADD", "REMOVE"],
+    "GitHubActivityStatusEnum": [
+        "DISCONNECTED",
+        "PENDING",
+        "CONNECTED",
+        "PARTIAL",
+        "STALE",
+        "REAUTH_REQUIRED",
+    ],
+    "GitHubPullRequestStateEnum": ["OPEN", "MERGED", "CLOSED"],
+    "GitHubIssueStateEnum": ["OPEN", "CLOSED"],
 }
 
 NOTIFICATION_SERVICE_TOKEN = os.environ.get("NOTIFICATION_SERVICE_TOKEN", "")

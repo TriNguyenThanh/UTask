@@ -89,6 +89,7 @@ def test_partial_enrollment_pending_accounts_duplicates_and_replay(
         "total_records": 3,
         "enrolled": 2,
         "already_enrolled": 0,
+        "reactivated": 0,
         "failed": 1,
         "created_accounts": 2,
         "existing_accounts": 0,

@@ -27,7 +27,7 @@ def lock(api, accounts, section):
         "POST",
         section.path + "lock-grouping/",
         token=accounts.tokens["teacher"],
-        body={"version": current["version"]},
+        body={"version": current["version"], "force": True},
     )
 
 

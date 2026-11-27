@@ -139,6 +139,9 @@ class UnavailableIntegration:
     def verify_reference(self, **kwargs):
         raise source_error("Dịch vụ xác thực liên kết tích hợp hiện không khả dụng.")
 
+    def fetch_project_activity(self, **kwargs):
+        raise source_error("Dịch vụ lấy hoạt động GitHub hiện không khả dụng.")
+
     prepare = select_repository
     confirm = select_repository
     abort = select_repository
@@ -185,6 +188,279 @@ CONNECTION_FIELDS = frozenset(
         "synced_at",
     }
 )
+ACCOUNT_EVENT_FIELDS = frozenset(
+    {
+        "user_id",
+        "github_user_id",
+        "github_username",
+        "source_version",
+        "verified",
+        "synced_at",
+    }
+)
+REFERENCE_EVENT_FIELDS = frozenset(
+    {
+        "project_id",
+        "repo_id",
+        "generation",
+        "source_version",
+        "task_code",
+        "link_type",
+        "ref_id",
+        "title",
+        "status",
+        "url",
+        "is_verified",
+        "synced_at",
+    }
+)
+ACTIVITY_FIELDS = frozenset(
+    {
+        "project_id",
+        "repo_id",
+        "repo_owner",
+        "repo_name",
+        "default_branch",
+        "generation",
+        "status",
+        "open_pull_requests_count",
+        "branches",
+        "commits",
+        "pull_requests",
+        "issues",
+        "synced_at",
+    }
+)
+TASK_CODE_PATTERN = re.compile(r"^[A-Z0-9]{2,10}-[1-9][0-9]{0,9}$")
+GITHUB_ID_PATTERN = re.compile(r"^[1-9][0-9]{0,99}$")
+SHA_PATTERN = re.compile(r"^[0-9a-fA-F]{7,40}$")
+
+
+def _validate_github_url(url_value):
+    if not isinstance(url_value, str) or not 1 <= len(url_value) <= 1000:
+        raise ValueError("Invalid URL length")
+    parsed = urlparse(url_value)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "github.com"
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.port not in {None, 443}
+        or not parsed.path.startswith("/")
+    ):
+        raise ValueError("Invalid GitHub URL")
+    return url_value
+
+
+def account_fact_from_data(data):
+    try:
+        if not isinstance(data, dict) or set(data) != ACCOUNT_EVENT_FIELDS:
+            raise ValueError()
+        synced_at = parse_datetime(data["synced_at"])
+        if synced_at is None or synced_at.tzinfo is None:
+            raise ValueError()
+        if (
+            not isinstance(data["github_user_id"], str)
+            or not GITHUB_ID_PATTERN.fullmatch(data["github_user_id"])
+            or not isinstance(data["github_username"], str)
+        ):
+            raise ValueError()
+        fact = AccountFact(
+            user_id=UUID(str(data["user_id"])),
+            github_user_id=data["github_user_id"],
+            github_username=data["github_username"],
+            source_version=data["source_version"],
+            verified=data["verified"],
+        )
+        fact.validate()
+        if fact.source_version < 1:
+            raise ValueError()
+        return fact
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
+        raise source_error("Invalid account event payload") from exc
+
+
+def reference_event_from_data(data):
+    try:
+        if not isinstance(data, dict) or set(data) != REFERENCE_EVENT_FIELDS:
+            raise ValueError()
+        task_code = data["task_code"]
+        if not isinstance(task_code, str) or not TASK_CODE_PATTERN.fullmatch(task_code):
+            raise ValueError()
+        if not isinstance(data["repo_id"], str) or not GITHUB_ID_PATTERN.fullmatch(data["repo_id"]):
+            raise ValueError()
+        synced_at = parse_datetime(data["synced_at"])
+        fact = ReferenceFact(
+            project_id=UUID(str(data["project_id"])),
+            repo_id=data["repo_id"],
+            generation=data["generation"],
+            source_version=data["source_version"],
+            link_type=data["link_type"],
+            ref_id=data["ref_id"],
+            title=data["title"],
+            status=data["status"],
+            url=data["url"],
+            is_verified=data["is_verified"],
+            synced_at=synced_at,
+        )
+        fact.validate()
+        if fact.generation < 1 or fact.source_version < 1:
+            raise ValueError()
+        if fact.url:
+            _validate_github_url(fact.url)
+        return task_code, fact
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
+        raise source_error("Invalid reference event payload") from exc
+
+
+def project_activity_from_data(data, project_id):
+    try:
+        if not isinstance(data, dict) or set(data) != ACTIVITY_FIELDS:
+            raise ValueError()
+        if (
+            UUID(str(data["project_id"])) != UUID(str(project_id))
+            or not isinstance(data["repo_id"], str)
+            or not GITHUB_ID_PATTERN.fullmatch(data["repo_id"])
+            or not isinstance(data["repo_owner"], str)
+            or not 1 <= len(data["repo_owner"]) <= 100
+            or not isinstance(data["repo_name"], str)
+            or not 1 <= len(data["repo_name"]) <= 255
+            or not isinstance(data["default_branch"], str)
+            or not 1 <= len(data["default_branch"]) <= 100
+            or type(data["generation"]) is not int
+            or data["generation"] < 1
+            or data["status"] not in {"CONNECTED", "PARTIAL", "STALE", "REAUTH_REQUIRED"}
+            or type(data["open_pull_requests_count"]) is not int
+            or data["open_pull_requests_count"] < 0
+        ):
+            raise ValueError()
+        synced_at = parse_datetime(data["synced_at"])
+        if synced_at is None or synced_at.tzinfo is None:
+            raise ValueError()
+
+        branches = []
+        raw_branches = data["branches"]
+        if not isinstance(raw_branches, list) or len(raw_branches) > 20:
+            raise ValueError()
+        for item in raw_branches:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"name", "sha", "url"}
+                or not isinstance(item["name"], str)
+                or not 1 <= len(item["name"]) <= 300
+                or not isinstance(item["sha"], str)
+                or not SHA_PATTERN.fullmatch(item["sha"])
+            ):
+                raise ValueError()
+            branches.append(
+                {
+                    "name": item["name"],
+                    "sha": item["sha"],
+                    "url": _validate_github_url(item["url"]),
+                }
+            )
+
+        commits = []
+        raw_commits = data["commits"]
+        if not isinstance(raw_commits, list) or len(raw_commits) > 20:
+            raise ValueError()
+        for item in raw_commits:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"id", "title", "url", "occurred_at"}
+                or not isinstance(item["id"], str)
+                or not SHA_PATTERN.fullmatch(item["id"])
+                or not isinstance(item["title"], str)
+                or not 1 <= len(item["title"]) <= 300
+            ):
+                raise ValueError()
+            ts = parse_datetime(item["occurred_at"])
+            if ts is None or ts.tzinfo is None:
+                raise ValueError()
+            commits.append(
+                {
+                    "id": item["id"],
+                    "title": item["title"],
+                    "url": _validate_github_url(item["url"]),
+                    "occurred_at": ts.isoformat(),
+                }
+            )
+
+        pull_requests = []
+        raw_prs = data["pull_requests"]
+        if not isinstance(raw_prs, list) or len(raw_prs) > 20:
+            raise ValueError()
+        for item in raw_prs:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"id", "title", "status", "url", "occurred_at"}
+                or not isinstance(item["id"], str)
+                or not GITHUB_ID_PATTERN.fullmatch(item["id"])
+                or not isinstance(item["title"], str)
+                or not 1 <= len(item["title"]) <= 300
+                or item["status"] not in {"OPEN", "MERGED", "CLOSED"}
+            ):
+                raise ValueError()
+            ts = parse_datetime(item["occurred_at"])
+            if ts is None or ts.tzinfo is None:
+                raise ValueError()
+            pull_requests.append(
+                {
+                    "id": item["id"],
+                    "title": item["title"],
+                    "status": item["status"],
+                    "url": _validate_github_url(item["url"]),
+                    "occurred_at": ts.isoformat(),
+                }
+            )
+
+        issues = []
+        raw_issues = data["issues"]
+        if not isinstance(raw_issues, list) or len(raw_issues) > 20:
+            raise ValueError()
+        for item in raw_issues:
+            if (
+                not isinstance(item, dict)
+                or set(item) != {"id", "title", "status", "url", "occurred_at"}
+                or not isinstance(item["id"], str)
+                or not GITHUB_ID_PATTERN.fullmatch(item["id"])
+                or not isinstance(item["title"], str)
+                or not 1 <= len(item["title"]) <= 300
+                or item["status"] not in {"OPEN", "CLOSED"}
+            ):
+                raise ValueError()
+            ts = parse_datetime(item["occurred_at"])
+            if ts is None or ts.tzinfo is None:
+                raise ValueError()
+            issues.append(
+                {
+                    "id": item["id"],
+                    "title": item["title"],
+                    "status": item["status"],
+                    "url": _validate_github_url(item["url"]),
+                    "occurred_at": ts.isoformat(),
+                }
+            )
+
+        return {
+            "project_id": str(UUID(str(data["project_id"]))),
+            "repo_id": data["repo_id"],
+            "repo_owner": data["repo_owner"],
+            "repo_name": data["repo_name"],
+            "default_branch": data["default_branch"],
+            "connection_generation": data["generation"],
+            "status": data["status"],
+            "open_pull_requests_count": data["open_pull_requests_count"],
+            "branches": branches,
+            "commits": commits,
+            "pull_requests": pull_requests,
+            "issues": issues,
+            "synced_at": synced_at.isoformat(),
+        }
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
+        raise source_error("Invalid project activity response") from exc
 
 
 def connection_fact_from_data(data):
@@ -215,7 +491,7 @@ def connection_fact_from_data(data):
 class RemoteIntegration:
     """The single HTTP boundary to Integration; all business decisions remain in Work."""
 
-    def _request(self, method, path, *, bearer=None, body=None):
+    def _request(self, method, path, *, bearer=None, body=None, max_bytes=65536):
         base = settings.WORK_INTEGRATION_BASE_URL
         key = settings.WORK_INTEGRATION_SERVICE_KEY
         try:
@@ -278,7 +554,7 @@ class RemoteIntegration:
                 raw = bytearray()
                 for chunk in reply.iter_content(4096):
                     raw.extend(chunk)
-                    if len(raw) > 65536:
+                    if len(raw) > max_bytes:
                         raise ValueError()
                 envelope = json.loads(raw)
                 if (
@@ -439,3 +715,12 @@ class RemoteIntegration:
             return fact
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise source_error("Invalid reference response") from exc
+
+    def fetch_project_activity(self, *, project_id, bearer):
+        data = self._request(
+            "GET",
+            self._path(project_id) + "activity",
+            bearer=bearer,
+            max_bytes=131072,
+        )
+        return project_activity_from_data(data, project_id)

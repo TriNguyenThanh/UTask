@@ -4,7 +4,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 
 from accounts.serializers.avatars import AvatarConfirmSerializer, AvatarPresignSerializer
-from accounts.services.avatars import confirm_avatar, presign_avatar
+from accounts.services.avatars import confirm_avatar, delete_avatar, presign_avatar
 
 
 @extend_schema_view(
@@ -48,3 +48,25 @@ class AvatarConfirmView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(confirm_avatar(request, serializer.validated_data["file_key"]))
+
+
+@extend_schema_view(
+    delete=extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                "AvatarDeleteData",
+                fields={
+                    "avatar_url": serializers.URLField(allow_null=True),
+                },
+            )
+        },
+    )
+)
+class AvatarDeleteView(GenericAPIView):
+    serializer_class = AvatarConfirmSerializer
+    http_method_names = ["delete", "options"]
+    success_message = "Đã xóa ảnh đại diện."
+
+    def delete(self, request):
+        return Response(delete_avatar(request))

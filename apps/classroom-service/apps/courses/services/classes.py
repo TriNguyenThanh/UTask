@@ -6,8 +6,15 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
 
-from apps.courses.models import ClassSection, ClassTeacher, Course
-from apps.courses.permissions import actor_roles, bearer, require_manage, require_read, require_role
+from apps.courses.models import ClassSection, ClassTeacher, Course, Enrollment
+from apps.courses.permissions import (
+    actor_roles,
+    bearer,
+    require_manage,
+    require_open,
+    require_read,
+    require_role,
+)
 from apps.courses.serializers.classes import ClassSerializer, TeacherSerializer
 from apps.groups.models import StudyGroup
 from apps.messaging.services.audit import record_activity
@@ -104,6 +111,7 @@ def change_class(request, class_id, payload, *, action="update"):
         section = get_object_or_404(ClassSection, pk=class_id)
         require_read(request, section)
         require_manage(request, section)
+        require_open(section)
         verified_teacher(request, payload["user_id"])
     with transaction.atomic():
         section = lock_class(class_id)
@@ -112,6 +120,8 @@ def change_class(request, class_id, payload, *, action="update"):
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
+        if action != "state":
+            require_open(section)
         check_version(section, payload["version"])
         if action == "update":
             values = {k: v for k, v in payload.items() if k != "version"}
@@ -141,9 +151,84 @@ def change_class(request, class_id, payload, *, action="update"):
             if section.status == "ARCHIVED" and payload["status"] != "ARCHIVED":
                 raise ClassroomError("CLASS_ARCHIVED", "Lớp đã lưu trữ không thể mở lại.", 409)
             section.status = payload["status"]
+            if payload["status"] in {"CLOSED", "ARCHIVED"}:
+                from apps.groups.services.join_requests import cancel_pending_join_requests
+
+                cancel_pending_join_requests(
+                    actor_id=request.user.id,
+                    note="Lớp học đã đóng hoặc lưu trữ.",
+                    class_section=section,
+                )
         elif action == "lock-grouping":
+            if section.grouping_phase == "LOCKED":
+                return finish_receipt(
+                    receipt,
+                    ClassSerializer(section, context={"actor_id": request.user.id}).data,
+                    message="Lớp học đã ở trạng thái chốt lập nhóm.",
+                )
+            if not payload.get("force", False):
+                unassigned_count = (
+                    Enrollment.objects.filter(class_section=section, status="ACTIVE")
+                    .exclude(memberships__status="ACTIVE", memberships__group__status="ACTIVE")
+                    .count()
+                )
+                undersized = list(
+                    StudyGroup.objects.filter(class_section=section, status="ACTIVE")
+                    .annotate(active_count=Count("members", filter=Q(members__status="ACTIVE")))
+                    .filter(active_count__lt=section.group_min_size)
+                    .order_by("created_at", "id")
+                    .values("id", "name", "active_count")
+                )
+                if unassigned_count > 0 or undersized:
+                    details = []
+                    if unassigned_count > 0:
+                        details.append(
+                            {
+                                "field": "unassigned_students",
+                                "issue": (
+                                    f"Còn {unassigned_count} sinh viên đang ghi danh nhưng chưa "
+                                    "thuộc nhóm học tập nào."
+                                ),
+                            }
+                        )
+                    for item in undersized:
+                        details.append(
+                            {
+                                "field": f"groups.{item['id']}",
+                                "issue": (
+                                    f'Nhóm "{item["name"]}" hiện có '
+                                    f"{item['active_count']}/{section.group_min_size} "
+                                    "thành viên tối thiểu."
+                                ),
+                            }
+                        )
+                    raise ClassroomError(
+                        "GROUPING_PRECONDITIONS_UNMET",
+                        (
+                            "Chưa đáp ứng điều kiện chốt lập nhóm. Vui lòng xử lý các mục còn "
+                            "thiếu hoặc xác nhận vẫn chốt lập nhóm."
+                        ),
+                        409,
+                        details=details,
+                    )
             section.grouping_phase = "LOCKED"
             section.grouping_locked_at = section.grouping_locked_at or timezone.now()
+            from apps.groups.services.join_requests import cancel_pending_join_requests
+
+            cancel_pending_join_requests(
+                actor_id=request.user.id,
+                note="Lớp học đã chốt giai đoạn lập nhóm.",
+                class_section=section,
+            )
+        elif action == "unlock-grouping":
+            if section.grouping_phase == "FORMING":
+                return finish_receipt(
+                    receipt,
+                    ClassSerializer(section, context={"actor_id": request.user.id}).data,
+                    message="Lớp học hiện đang ở trạng thái mở chia nhóm.",
+                )
+            section.grouping_phase = "FORMING"
+            section.grouping_locked_at = None
         elif action == "teacher":
             teacher = ClassTeacher.objects.filter(
                 class_section=section, user_id=payload["user_id"]
@@ -174,16 +259,24 @@ def change_class(request, class_id, payload, *, action="update"):
             )
         section.version += 1
         section.save()
-        record_activity(
-            section, request.user.id, "class." + action, new=ClassSerializer(section).data
+        serialized = ClassSerializer(section, context={"actor_id": request.user.id}).data
+        activity_verb = (
+            "class.grouping_unlocked" if action == "unlock-grouping" else "class." + action
         )
+        activity_new = (
+            {"reason": payload["reason"], "version": section.version}
+            if action == "unlock-grouping"
+            else serialized
+        )
+        record_activity(section, request.user.id, activity_verb, new=activity_new)
         return finish_receipt(
             receipt,
-            ClassSerializer(section).data,
+            serialized,
             message={
                 "update": "Đã cập nhật thông tin lớp học.",
                 "state": "Đã cập nhật trạng thái lớp học.",
                 "lock-grouping": "Đã chốt giai đoạn lập nhóm của lớp học.",
+                "unlock-grouping": "Đã mở khóa giai đoạn lập nhóm của lớp học.",
                 "teacher": "Đã cập nhật phân công giảng viên phụ trách.",
             }[action],
         )
@@ -198,6 +291,7 @@ def issue_class_code(request, class_id, payload):
         receipt = begin_receipt(request, payload, section)
         if receipt.status == "COMPLETED":
             return replay_response(receipt)
+        require_open(section)
         check_version(section, payload["version"])
         enabled = payload["enabled"]
         expires = payload.get("expires_at", timezone.now() + timedelta(days=7)) if enabled else None

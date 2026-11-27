@@ -1,8 +1,12 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.views import APIView
 
-from apps.courses.queries.courses import list_courses
-from apps.courses.serializers.courses import CourseInputSerializer, CourseSerializer
+from apps.courses.queries.courses import course_detail, list_courses
+from apps.courses.serializers.courses import (
+    CourseInputSerializer,
+    CoursePatchSerializer,
+    CourseSerializer,
+)
 from apps.courses.services.courses import save_course
 from common.responses import success_response
 from common.serializers import StrictInputSerializer
@@ -13,6 +17,16 @@ KEY = OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required
 
 class CourseListView(APIView):
     @extend_schema(
+        operation_id="courses_list",
+        parameters=[
+            OpenApiParameter("search", str, description="Tìm kiếm theo mã hoặc tên môn học."),
+            OpenApiParameter(
+                "archived",
+                str,
+                enum=["true", "false", "all"],
+                description="Lọc trạng thái lưu trữ môn học.",
+            ),
+        ],
         description=(
             "Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động; "
             "Giảng viên và Quản trị viên hệ thống xem toàn bộ danh mục môn học."
@@ -36,7 +50,19 @@ class CourseListView(APIView):
 
 class CourseUpdateView(APIView):
     @extend_schema(
-        request=CourseInputSerializer,
+        description=(
+            "Sinh viên chỉ xem môn học thuộc các lớp đang ghi danh hoạt động; "
+            "Giảng viên và Quản trị viên hệ thống xem chi tiết mọi môn học."
+        ),
+        responses={200: envelope_schema("CourseDetail", CourseSerializer), **ERRORS},
+    )
+    def get(self, request, course_id):
+        return success_response(
+            course_detail(request, course_id), message="Đã lấy thông tin môn học."
+        )
+
+    @extend_schema(
+        request=CoursePatchSerializer,
         parameters=[KEY],
         description=(
             "Giảng viên được sửa môn học do mình tạo; Quản trị viên hệ thống được sửa mọi môn học."
@@ -47,7 +73,7 @@ class CourseUpdateView(APIView):
         },
     )
     def patch(self, request, course_id):
-        serializer = CourseInputSerializer(data=request.data)
+        serializer = CoursePatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return save_course(request, serializer.validated_data, course_id)
 
@@ -69,3 +95,22 @@ class CourseArchiveView(APIView):
         serializer = StrictInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return save_course(request, serializer.validated_data, course_id, archive=True)
+
+
+class CourseUnarchiveView(APIView):
+    @extend_schema(
+        request=StrictInputSerializer,
+        parameters=[KEY],
+        description=(
+            "Giảng viên được mở lại môn học do mình tạo; "
+            "Quản trị viên hệ thống được mở lại mọi môn học."
+        ),
+        responses={
+            200: envelope_schema("CourseUnarchiveViewResponse", CourseSerializer),
+            **ERRORS,
+        },
+    )
+    def post(self, request, course_id):
+        serializer = StrictInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return save_course(request, serializer.validated_data, course_id, unarchive=True)

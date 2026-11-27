@@ -32,6 +32,16 @@ thành; không phụ thuộc LLM. AI phân tích/giải thích hoặc đề xu�
 không quyết định giá trị chỉ số. Chỉ số, cửa sổ tính và xử lý dữ liệu thiếu
 cần đặc tả và test trước khi công bố API.
 
+**Bổ sung Đợt 3 đã triển khai trong mã nguồn (kiểm thử local trên PostgreSQL 16; chưa xác minh staging):**
+- Tổng hợp cá nhân xuyên dự án trong `work_db`: `GET /me/tasks/` và `GET /me/overview/` (`work-metrics-v1`).
+- Giám sát dự án theo lớp cho giảng viên với tín hiệu rủi ro tất định (xác minh phạm vi từ Classroom internal API, fail-closed `503`): `GET /teacher/oversight/projects/` (dựa trên `Project.last_activity_at` cập nhật tự động qua `record_activities`).
+- Làm giàu thẻ `/projects/{id}/kanban/` (19 trường, 5 bộ lọc mới gồm `include_subtasks` mặc định `false`), mở `GET /projects/{id}/activities/` (chỉ mục `Activity.scope_project`) và lọc `?is_teacher_feedback=true|false` cho bình luận. Hợp đồng chuẩn cập nhật tại [Work contract](../../contracts/api/work-service.yaml).
+
+**Bổ sung Đợt 5 phía Work đã triển khai trong mã nguồn (kiểm thử local trên PostgreSQL 16 + Redis 7 + Kafka Cloud với HTTP stub đúng hợp đồng; chờ provider thật từ Team AI & Team Integration; chưa xác minh staging):**
+- Adapter xác thực AI proposal thật `RemoteProposals` ([infrastructure/ai.py](../../apps/work-service/infrastructure/ai.py)) gọi `POST {WORK_AI_BASE_URL}/api/ai/v1/internal/requests/{proposal_id}/verify-proposal` ngoài DB transaction (chuyển tiếp actor Bearer + `X-Service-Key`), hỗ trợ `BACKLOG` (`AI_BACKLOG`) và `SUBTASK` (`AI_DECOMPOSED`), hoãn `ACTION` sang AI v2 theo DG5; giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` mặc định an toàn.
+- Consumer `utask.integration.events` ([integration_consumer.py](../../apps/work-service/apps/messaging/integration_consumer.py)) định tuyến đủ 3 sự kiện: `integration.project.connection.changed`, `integration.github.account.changed` (gọi `apply_account_fact()` cập nhật `ProjectMember.is_github_verified`) và `integration.github.reference.detected` (giải mã `task_code` → `ingest_reference()` tạo ứng viên `TaskGitHubLink` ở trạng thái `PENDING`).
+- Public BFF `GET /projects/{project_id}/github/activity/` trả ngay `DISCONNECTED`/`PENDING` từ `work_db`, còn khi `CONNECTED` gọi `RemoteIntegration.fetch_project_activity()` kèm cache Redis ngắn (`WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS`, mặc định 45 giây; chỉ cache `CONNECTED`/`PARTIAL`, không cache `STALE`/`REAUTH_REQUIRED`) và luôn gộp mới `linked_task_ids` từ các `TaskGitHubLink(confirmation_status="CONFIRMED")`. Hợp đồng đối tác chi tiết xem tại [hướng dẫn bàn giao Team AI & Integration](../system/ai-integration-team-handoff-guide.md).
+
 ## Giao tiếp
 
 Classroom sở hữu Group/GroupMember; Work sở hữu Project/ProjectMember.

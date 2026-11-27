@@ -17,3 +17,13 @@ class CourseInputSerializer(StrictInputSerializer):
 
     def validate_code(self, value):
         return value.strip().upper()
+
+
+class CoursePatchSerializer(CourseInputSerializer):
+    code = serializers.CharField(max_length=50, required=False)
+    name = serializers.CharField(max_length=200, required=False)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Cần cung cấp ít nhất một trường để cập nhật.")
+        return attrs

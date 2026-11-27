@@ -3,7 +3,8 @@
 Identity là nguồn dữ liệu gốc về tài khoản, hồ sơ, vai trò toàn hệ thống và phiên đăng
 nhập của UTask. Tài liệu này hướng dẫn các service khác tích hợp; chi tiết request/response
 nằm trong [đặc tả API](api-specification.md).
-Schema OpenAPI local được cung cấp tại `/openapi/`; qua gateway staging là
+Schema OpenAPI chuẩn trong repository nằm tại [contracts/api/identity-service.yaml](../../contracts/api/identity-service.yaml);
+schema động local được cung cấp tại `/openapi/` và qua gateway staging là
 `/api/auth/openapi/`.
 
 Theo [baseline](<../system/architecture-baseline.md>),
@@ -71,10 +72,16 @@ Lockout không phải một trạng thái vòng đời của user.
 
 ## Cách hoạt động
 
-1. **Đăng ký:** tạo user ACTIVE, profile và role STUDENT; email được đánh dấu đã xác
-   minh ngay, không chờ email kích hoạt trong giai đoạn chưa có Resend.
-   Đăng nhập riêng để nhận JWT. Import mới cũng được đánh dấu ACTIVE/email verified
-   theo chính sách tạm; tài khoản pending cũ vẫn dùng luồng kích hoạt hiện có.
+1. **Đăng ký:** điều khiển qua cờ môi trường `IDENTITY_REQUIRE_EMAIL_ACTIVATION`
+   (mặc định `false` khi chưa nghiệm thu hạ tầng mail/SMTP):
+   - Khi `false`: tạo user `ACTIVE`, profile và role `STUDENT`; email được đánh dấu
+     đã xác minh ngay, không chờ email kích hoạt. Import sinh viên cũng dùng chính
+     sách tạm `ACTIVE` (mật khẩu ban đầu là email chuẩn hóa).
+   - Khi `true`: tự đăng ký tạo `PENDING_ACTIVATION` và phát `identity.activation.requested`;
+     import sinh viên tạo `PENDING_ACTIVATION` với mật khẩu chưa đặt (`unusable password`)
+     và phát `identity.student.imported` để sinh viên kích hoạt và đặt mật khẩu qua `/activate`.
+   Đăng nhập luôn tách riêng để nhận JWT; tài khoản `PENDING_ACTIVATION` hoặc có email
+   chưa xác minh khi đăng nhập trả nhất quán `403 ACCOUNT_PENDING_ACTIVATION` bằng tiếng Việt.
 2. **Đăng nhập:** dj-rest-auth/Django Auth/allauth kiểm email hoặc username/password;
    Identity kiểm trạng thái tài khoản rồi tạo phiên thiết bị và token SimpleJWT.
 3. **Refresh:** SimpleJWT đổi refresh token và blacklist token trước; Identity giữ
@@ -111,12 +118,12 @@ Các URL công khai cũ có tiền tố `/api/v1/auth`, `/api/v1/users` hoặc `
 | Đăng ký        | POST `/register`                                                                                      | Anonymous; không nhận role/MSSV, chưa hỗ trợ Idempotency-Key             |
 | Kích hoạt      | POST `/activate`, `/activation/resend`                                                                | Anonymous; key dùng một lần, resend vô hiệu key cũ                       |
 | Login/refresh  | POST `/login`, `/refresh`; GET `/csrf`                                                                | Login cấp CSRF cookie; refresh bằng body JWT hoặc cookie                  |
-| Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`                         | Request/confirm anonymous; change cần Bearer và password cũ              |
+| Password       | POST `/password-reset/request`, `/password-reset/confirm`, `/password-change`, `/password-set`        | Request/confirm anonymous; change cần Bearer + password cũ; `/password-set` cho tài khoản chưa có mật khẩu (Google-only) |
 | Logout         | POST `/logout`, `/logout-all`                                                                         | Bearer                                                                   |
 | Thiết bị       | GET `/sessions`; DELETE `/sessions/{session_id}`                                                      | Bearer; phiên thuộc user hiện tại                                        |
-| Hồ sơ cá nhân  | GET/PATCH `/users/me`                                                                                 | Bearer; tự sửa MSSV đã chuẩn hóa/duy nhất; không đổi email hoặc role      |
-| Tra cứu        | GET `/users/{user_id}`; POST `/users/batch`                                                           | Bearer; batch `user_ids`, tối đa100, loại trùng và bỏ ID không tìm thấy  |
-| Quản trị       | GET `/admin/users`; PATCH `/admin/users/{user_id}/status`; POST/DELETE `/admin/users/{user_id}/roles` | SYSTEM_ADMIN; không tự thu hồi role admin của chính mình                 |
+| Hồ sơ cá nhân  | GET/PATCH/DELETE `/users/me`; POST `/users/me/email-change/{request,confirm}`; DELETE `/users/me/avatar` (khi bật `IDENTITY_AVATAR_ENABLED`) | Bearer; trả thêm `has_usable_password` & `linked_providers`; tự sửa MSSV chuẩn hóa/duy nhất; tự xóa mềm cần mật khẩu hoặc login gần đây (chặn Admin cuối); đổi email có xác minh email mới |
+| Tra cứu        | GET `/users/{user_id}`; POST `/users/batch`; GET `/users/search`                                      | Bearer (`search` chỉ `TEACHER`/`SYSTEM_ADMIN`, 30/min); batch tối đa 100 |
+| Quản trị       | GET/POST `/admin/users`; GET/PATCH/DELETE `/admin/users/{user_id}`; PATCH `.../status`; POST/DELETE `.../roles`; POST `.../unlock-login`; GET `/admin/audit-logs`; GET/DELETE `.../sessions`; POST `.../sessions/revoke-all` | SYSTEM_ADMIN; hỗ trợ `?deleted=active\|deleted\|all`, `reset_lockout`, chống tự xóa/tự đình chỉ/tự gỡ role admin |
 | Kiểm tra phiên | POST `/api/v1/internal/auth/session-status`                                                           | Bearer cần kiểm tra + key của caller `work`, `classroom` hoặc `ai`       |
 | Cấp sinh viên  | POST `/api/v1/internal/users/provision-students`                                                      | Classroom key + actor Bearer TEACHER/SYSTEM_ADMIN + Idempotency-Key UUID |
 | Resend nội bộ  | POST `/api/v1/internal/users/{user_id}/resend-activation`                                             | Classroom key + actor Bearer; user pending đủ điều kiện                  |
@@ -169,7 +176,11 @@ Luồng client: gọi `POST /users/me/avatar/presigned-url` với tên, loại v
 ảnh; PUT byte ảnh vào `upload_url` với đúng `Content-Type`; sau đó gọi
 `POST /users/me/avatar/confirm` với `file_key`. Backend kiểm HEAD trên R2 rồi cập nhật
 hồ sơ và outbox. Ảnh chưa tồn tại hoặc metadata không khớp không được ghi vào hồ sơ.
-Chỉ hỗ trợ JPEG/PNG/WebP, tối đa5 MB; URL tải lên có hạn300 giây.
+Chỉ hỗ trợ JPEG/PNG/WebP, tối đa 5 MB; URL tải lên có hạn 300 giây. Khi cần gỡ ảnh
+đại diện, gọi `DELETE /users/me/avatar` (mở cùng cờ `IDENTITY_AVATAR_ENABLED=true`):
+backend xóa `avatar_url` trong transaction cùng audit `AVATAR_DELETED` và outbox
+`identity.user.updated`, sau đó dọn object trên R2 theo cơ chế best-effort ngoài
+transaction (chỉ xóa khi URL khớp prefix R2 của chính người dùng; gọi lặp idempotent).
 
 Đã chạy luồng này với R2 thật, gồm GET ảnh public và confirm lặp không phát thêm
 event; bằng chứng ở `artifacts/identity/localization-r2/runtime.json`. CORS preflight
@@ -235,7 +246,7 @@ Nghiệp vụ ở `event.data`; consumer xử lý lặp bằng `event_id`.
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `identity.user.created`, `identity.user.updated`, `identity.user.activated`                         | Cập nhật thông tin user và báo kích hoạt            |
 | `identity.user.role_assigned`, `identity.user.role_revoked`                                       | Thông báo đổi global role                           |
-| `identity.activation.requested`, `identity.student.imported`, `identity.password_reset.requested` | Notification gửi hướng dẫn; mail secret được mã hóa |
+| `identity.activation.requested`, `identity.student.imported`, `identity.password_reset.requested`, `identity.email_change.requested` | Notification gửi hướng dẫn; mail secret được mã hóa |
 | `identity.oauth.github_linked`, `identity.oauth.github_unlinked`                                  | Thông báo liên kết GitHub cho Integration           |
 
 Mail secret dùng AES-GCM/key ID; Notification cần cấu hình giải mã tương ứng.

@@ -6,12 +6,18 @@ from apps.courses.models import ClassSection
 from apps.courses.queries.enrollments import list_enrollments
 from apps.courses.serializers.enrollments import (
     EnrollmentExitSerializer,
+    EnrollmentReactivateSerializer,
     EnrollmentSerializer,
     JoinCodeSerializer,
     StudentListResultSerializer,
     StudentListSerializer,
 )
-from apps.courses.services.enrollments import add_students, exit_class, join_class
+from apps.courses.services.enrollments import (
+    add_students,
+    exit_class,
+    join_class,
+    reactivate_enrollment,
+)
 from common.responses import success_response
 from config.api_documentation import ERRORS, LIST_PARAMETERS, STATUS_PARAMETER, envelope_schema
 
@@ -54,8 +60,9 @@ class EnrollmentExitView(APIView):
         request=EnrollmentExitSerializer,
         description=(
             "Sinh viên tự rời lớp theo điều kiện hiện tại; Teacher đang phụ trách hoặc Admin "
-            "được loại sinh viên. Trưởng nhóm phải có người kế nhiệm "
-            "trước khi kết thúc thành viên nhóm."
+            "được loại sinh viên. Nếu là trưởng nhóm và còn thành viên khác thì cần chuyển quyền "
+            "trước; nếu là thành viên duy nhất của nhóm thì cần gửi dissolve_if_sole_member=true "
+            "để giải thể nhóm."
         ),
         parameters=[KEY],
         responses={
@@ -69,9 +76,43 @@ class EnrollmentExitView(APIView):
         return exit_class(request, class_id, enrollment_id, serializer.validated_data)
 
 
+class EnrollmentReactivateView(APIView):
+    @extend_schema(
+        request=EnrollmentReactivateSerializer,
+        description=(
+            "Giảng viên phụ trách lớp hoặc Quản trị viên hệ thống khôi phục ghi danh đã rời/loại "
+            "trở lại trạng thái ACTIVE khi lớp đang mở."
+        ),
+        parameters=[KEY],
+        responses={
+            200: envelope_schema("EnrollmentReactivateViewResponse", EnrollmentSerializer),
+            **ERRORS,
+        },
+    )
+    def post(self, request, class_id, enrollment_id):
+        serializer = EnrollmentReactivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return reactivate_enrollment(request, class_id, enrollment_id, serializer.validated_data)
+
+
 class EnrollmentListView(APIView):
     @extend_schema(
-        parameters=[*LIST_PARAMETERS, STATUS_PARAMETER],
+        description=(
+            "Giảng viên phụ trách hoặc Quản trị viên hệ thống xem danh sách ghi danh của lớp. "
+            "Để tìm theo tên, email hoặc MSSV, tra cứu trước qua GET /api/auth/users/search rồi "
+            "lọc bằng tham số user_id."
+        ),
+        parameters=[
+            *LIST_PARAMETERS,
+            STATUS_PARAMETER,
+            OpenApiParameter(
+                "has_group",
+                str,
+                enum=["true", "false"],
+                description="Lọc sinh viên đã có nhóm hoạt động hay chưa.",
+            ),
+            OpenApiParameter("user_id", str, description="Lọc theo UUID người dùng."),
+        ],
         responses={
             200: envelope_schema(
                 "EnrollmentListViewResponse", EnrollmentSerializer, many=True, paginated=True

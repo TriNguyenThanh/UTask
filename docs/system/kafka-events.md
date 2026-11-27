@@ -13,8 +13,11 @@
 | `ai.analysis.completed`, `ai.project.risk.detected`                                                          | AI           | Notification hoặc service đã đăng ký nhận         | Thông báo phân tích/rủi ro đã hoàn tất |
 
 Classroom công bố sự kiện `classroom.group.membership.changed` khi thành viên
-nhóm thay đổi; xem [hợp đồng JSON Schema](../../contracts/events/classroom.group.membership.changed.v1.json).
-Work nhận ảnh chụp thành viên để cập nhật các dự án hoạt động của nhóm.
+nhóm thay đổi hoặc khi nhóm được giải thể/lưu trữ (`data.group_status` = `ACTIVE`
+hoặc `ARCHIVED`, trong đó nhóm `ARCHIVED` có 0 thành viên `ACTIVE`); xem
+[hợp đồng JSON Schema](../../contracts/events/classroom.group.membership.changed.v1.json).
+Work nhận ảnh chụp thành viên để cập nhật các dự án hoạt động của nhóm (khi nhóm
+`ARCHIVED`, Work đóng toàn bộ `ProjectMember` đang hoạt động và bảo toàn lịch sử dự án).
 
 Work công bố sự kiện `work.project.created`; Classroom nhận sự kiện để ghi
 liên kết nhóm–dự án. Xem [hợp đồng JSON Schema](../../contracts/events/work.project.created.v1.json).

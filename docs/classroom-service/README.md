@@ -34,8 +34,10 @@ Tài liệu cùng service: [mô hình dữ liệu](data-model.md),
 [sơ đồ](diagram/README.md).
 
 Classroom Service quản lý môn học, lớp theo học kỳ, giảng viên, sinh viên, ghi
-danh, nhóm, thành viên nhóm và liên kết dự án. Nhóm tự chọn đề tài và tạo dự
-án tại Work; Classroom không giữ danh mục đề bài chung của giảng viên.
+danh, nhóm, thành viên nhóm, ghép nhóm mở (yêu cầu gia nhập, kỹ năng/vai trò),
+đề xuất đề tài gắn 1-1 theo nhóm (`GroupTopicProposal`, DG3) và liên kết dự án.
+Nhóm tự đề xuất đề tài để giảng viên duyệt và tạo dự án thực thi tại Work;
+Classroom vẫn không giữ danh mục đề bài chung của giảng viên.
 
 ```text
 Classroom: Teacher → Class → Group / GroupMember
@@ -78,12 +80,14 @@ Các quyết định chính:
   thành viên thường; Giảng viên được phân/chuyển/loại trong đúng lớp với lý do,
   lịch sử, giới hạn tối đa và quy tắc giữ Trưởng nhóm.
 - Admin hệ thống giữ các quyền đã chọn trong bảng quyền chuẩn.
-  Phần bổ sung được chốt lần này gồm LH10 loại ghi danh người khác, LH13 chốt
+  Phần bổ sung được chốt gồm LH10 loại ghi danh người khác, LH13 chốt
   lập nhóm, LH15 điều chỉnh thành viên; NH01 xem mọi nhóm, NH02 tạo
-  nhóm thay cho Leader được chỉ định, NH03/NH04/NH09/NH12 lần lượt xem chi tiết,
-  sửa nhóm, loại thành viên và xem lịch sử. Với NH03, sinh viên chỉ xem nhóm
-  đang là thành viên ACTIVE của chính mình. Các API NH05/NH07/NH10/NH11 không
-  có nhánh Admin. Admin không vì thế có quyền đọc toàn bộ nội dung Work.
+  nhóm thay cho Leader được chỉ định, NH03/NH04/NH07/NH09/NH10/NH11/NH12
+  lần lượt xem chi tiết, sửa nhóm, xem thành viên, loại thành viên, chuyển
+  trưởng nhóm, xem metadata liên kết nhóm–dự án và xem lịch sử. Với NH03,
+  sinh viên chỉ xem nhóm đang là thành viên ACTIVE của chính mình. API NH05
+  (mã mời nhóm) vẫn chỉ dành cho Trưởng nhóm. Admin không vì thế có quyền
+  đọc toàn bộ nội dung dự án Work.
 - Classroom gọi API Identity đã có để cấp/tìm tài khoản khi thêm danh sách sinh viên;
   không đọc hoặc ghi `identity_db`.
 - Work lấy snapshot/scope cần phản hồi qua REST và nhận membership event qua
@@ -109,8 +113,10 @@ khóa phiên bản trong bước tích hợp; không tạo hợp đồng giả t
 Nguồn mã tại [apps/classroom-service](../../apps/classroom-service) có ba app
 `courses`, `groups`, `messaging`. Mỗi miền tách models, serializers, queries,
 services, views và urls. Bộ dùng chung copy/điều chỉnh từ Work theo bảng 2.1
-của kế hoạch; không import Work ở runtime. Model/migration có 10 bảng, khóa
-ngoại ghép bảo đảm thành viên, ghi danh và liên kết cùng lớp.
+của kế hoạch; không import Work ở runtime. Model/migration có 12 bảng (bổ sung `GROUP_JOIN_REQUESTS` và
+`GROUP_TOPIC_PROPOSALS` ở Đợt 4), khóa ngoại ghép cùng lớp và chỉ mục phủ
+khóa ngoại bảo đảm thành viên, ghi danh, yêu cầu gia nhập, đề tài nhóm và liên
+kết cùng lớp.
 
 Gateway công khai duy nhất `/api/classroom/`, bỏ tiền tố trước khi proxy.
 Các đường dưới đây là tài nguyên tương đối. Lệnh có chống lặp nhận
@@ -122,16 +128,19 @@ từ chối; mã thô không có trong GET hoặc receipt. Thứ tự cụ thể
 
 | Nhóm API | Đường tài nguyên | Quyền |
 | --- | --- | --- |
-| Môn | `courses/`, `courses/{id}/`, `courses/{id}/archive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng môn do mình tạo; Admin quản lý mọi môn |
-| Lớp | `classes/`, `classes/{id}/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động |
-| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; Admin có các quyền trạng thái/phân công được đánh dấu trong bảng chuẩn, gồm LH13 |
+| Môn | `courses/`, `courses/{id}/` (GET/PATCH partial), `courses/{id}/archive/`, `courses/{id}/unarchive/` | Đọc sau xác thực: Student chỉ xem môn thuộc lớp đang ghi danh ACTIVE, Teacher/Admin xem toàn bộ danh mục; Teacher tạo/sửa/ngừng dùng/mở lại môn do mình tạo; Admin quản lý mọi môn |
+| Lớp | `classes/`, `classes/{id}/`, `classes/{id}/summary/`, `teacher/classes/summary/` | Teacher tạo cho mình; Admin chỉ định Teacher đang hoạt động; cập nhật lớp yêu cầu lớp đang `OPEN`; thống kê tổng hợp lớp (`summary/`) chỉ cho Giảng viên phụ trách `ACTIVE` hoặc Admin |
+| Trạng thái/phân công | `classes/{id}/state/`, `lock-grouping/`, `unlock-grouping/`, `teachers/assign/` | Teacher được phân công hoặc Admin theo các quyền đã chọn; `lock-grouping/` kiểm tra SV chưa có nhóm & nhóm thiếu `group_min_size` trừ khi gửi `force=true`; `unlock-grouping/` mở khóa lại khi lớp `OPEN` |
 | Giảng viên lớp | `classes/{id}/teachers/` | Sinh viên trong lớp đọc phân công ACTIVE; người quản lý được xem lịch sử |
-| Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm sinh viên |
-| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/` | NH01 Admin xem mọi nhóm; NH02 Teacher/Admin tạo thay Leader đang ghi danh; NH03 Student chỉ xem nhóm mình đang là thành viên ACTIVE |
-| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `leave/`, `remove-member/`, `transfer-leader/` | Admin không có quyền NH05/NH07/NH10; NH09 cho phép Admin loại thành viên |
+| Mã lớp/ghi danh | `classes/{id}/join-code/`, `classes/join/`, `classes/{id}/students/`, `enrollments/`, `enrollments/{eid}/exit/`, `enrollments/{eid}/reactivate/` | Student dùng mã; Teacher đúng lớp hoặc Admin thêm/khôi phục sinh viên (`reactivate/` hoặc `reactivate_inactive=true`); cấp/tắt mã yêu cầu lớp đang `OPEN` |
+| Nhóm | `groups/`, `groups/{id}/`, `classes/{id}/groups/`, `classes/{id}/my-group/` | NH01 Admin xem mọi nhóm; NH02 Teacher/Admin tạo thay Leader đang ghi danh; NH03 Student xem nhóm mình đang là thành viên ACTIVE (`my-group/` trả `data=null` nếu chưa vào nhóm); `POST/PATCH` nhóm hỗ trợ `is_recruiting`, `recruitment_note`, `needed_skills`; `PATCH /groups/{id}/` với `status=ARCHIVED` bắt buộc `reason`, giải phóng thành viên, tự hủy yêu cầu gia nhập `PENDING` và phát Kafka |
+| Ghép nhóm mở | `classes/{id}/open-groups/`, `classes/{id}/unassigned-students/` | Sinh viên đang ghi danh `ACTIVE`, Giảng viên phụ trách hoặc Admin (ngoài lớp `404`). Chỉ trả 4 trường tối giản `{user_id, display_name, student_id, avatar_url}` giữ nguyên `LH09` (không lộ lịch sử ghi danh hay `LEFT`/`REMOVED`) |
+| Yêu cầu gia nhập | `groups/{id}/join-requests/` (GET/POST), `classes/{id}/my-join-requests/`, `groups/{id}/join-requests/{req_id}/{approve,reject,cancel}/` | Sinh viên `ACTIVE` chưa có nhóm gửi tối đa 1 yêu cầu `PENDING`/lớp và tự hủy (`cancel/`); Leader, Giảng viên phụ trách hoặc Admin xem và duyệt/từ chối (`approve/` tạo `GroupMember`, phát Kafka và tự hủy các yêu cầu `PENDING` khác); tự hủy `PENDING` khi lưu trữ/giải thể nhóm, chốt/đóng lớp hoặc sinh viên đổi nhóm/rời lớp |
+| Mã/thành viên | `groups/{id}/invite-code/`, `groups/join/`, `members/`, `members/me/`, `members/{user_id}/`, `leave/`, `remove-member/`, `transfer-leader/` | Admin không có quyền NH05; Admin có quyền NH07, NH09 và NH10; thành viên `ACTIVE` tự sửa `skills`/`responsibility` qua `members/me/`; chỉ Trưởng nhóm sửa `responsibility` thành viên qua `members/{user_id}/`; trưởng nhóm duy nhất cần `dissolve_if_sole_member=true` để giải thể nhóm an toàn |
+| Đề tài nhóm | `groups/{id}/topic/` (GET/PUT), `groups/{id}/topic/submit/`, `groups/{id}/topic/review/` | Thành viên nhóm, Giảng viên phụ trách hoặc Admin xem (`data=null` khi chưa tạo); chỉ Trưởng nhóm tạo/sửa (`DRAFT`/`REVISION_REQUESTED`/`REJECTED`, kiểm `version`) và gửi duyệt (`submit/`); chỉ Giảng viên phụ trách `ACTIVE` xét duyệt (`APPROVED`/`REVISION_REQUESTED`/`REJECTED`, bắt buộc `feedback` khi yêu cầu sửa/từ chối) |
 | Điều chỉnh P1 | `classes/{id}/adjust-member/` | Teacher đang được phân công hoặc Admin; có lý do và xử lý kế nhiệm Leader |
-| Liên kết | `groups/{id}/projects/` | Thành viên đúng nhóm hoặc giảng viên đúng lớp |
-| Lịch sử | `classes/{id}/activities/`, `groups/{id}/activities/` | Giảng viên đúng lớp hoặc Admin; thành viên chỉ xem lịch sử đúng nhóm |
+| Liên kết | `groups/{id}/projects/` | Thành viên đúng nhóm, giảng viên đúng lớp hoặc Admin (chỉ metadata liên kết) |
+| Lịch sử | `classes/{id}/activities/`, `groups/{id}/activities/` | Giảng viên đúng lớp hoặc Admin; thành viên chỉ xem lịch sử đúng nhóm (gồm `StudyGroup`, `GroupMember`, `GroupJoinRequest`, `GroupTopicProposal` của nhóm đó) |
 
 Chi tiết các lựa chọn đã duyệt và phần để lại nằm tại
 bảng quyền ngày 18/10/2026. `PRIMARY` và `CO_TEACHER`

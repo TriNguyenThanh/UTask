@@ -15,6 +15,11 @@ FILTER_PARAMETERS = [
     OpenApiParameter("assignee_id", str),
     OpenApiParameter("priority", str),
     OpenApiParameter("is_blocked", bool),
+    OpenApiParameter("epic_id", str),
+    OpenApiParameter("label_id", str),
+    OpenApiParameter("type", str),
+    OpenApiParameter("search", str),
+    OpenApiParameter("include_subtasks", bool),
 ]
 
 
@@ -26,7 +31,7 @@ class BoardView(GenericAPIView):
         responses={200: envelope_schema("BoardEnvelope", BoardSerializer), **ERRORS},
     )
     def get(self, request, project_id):
-        serializer = self.get_serializer(data=request.query_params)
+        serializer = self.get_serializer(data=request.query_params.dict())
         serializer.is_valid(raise_exception=True)
         return success_response(
             read_board(request.user, project_id, serializer.validated_data),
@@ -46,7 +51,7 @@ class BoardColumnView(GenericAPIView):
         },
     )
     def get(self, request, project_id, state_id):
-        serializer = self.get_serializer(data=request.query_params)
+        serializer = self.get_serializer(data=request.query_params.dict())
         serializer.is_valid(raise_exception=True)
         return success_response(
             read_board(request.user, project_id, serializer.validated_data, state_id=state_id),

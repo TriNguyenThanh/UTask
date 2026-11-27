@@ -1,0 +1,5468 @@
+openapi: 3.0.3
+info:
+  title: UTask Identity API
+  version: '1.8'
+paths:
+  /.well-known/jwks.json:
+    get:
+      operationId: .well_known_jwks.json_retrieve
+      tags:
+      - .well-known
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+          description: ''
+  /activate:
+    post:
+      operationId: activate_create
+      description: Library verification plus SetPasswordForm for imported, unusable-password
+        accounts.
+      tags:
+      - activate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivationInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActivationInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActivationInputRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /activation/resend:
+    post:
+      operationId: activation_resend_create
+      description: |-
+        Resends another email to an unverified email.
+
+        Accepts the following POST parameter: email.
+      tags:
+      - activation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendEmailVerificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendEmailVerificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendEmailVerificationRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/audit-logs:
+    get:
+      operationId: admin_audit_logs_list
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 60
+      - in: query
+        name: actor_id
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+      - in: query
+        name: created_from
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: created_to
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - in: query
+        name: target_user_id
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/PaginatedAdminAuditLogList'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users:
+    get:
+      operationId: admin_users_list
+      parameters:
+      - in: query
+        name: deleted
+        schema:
+          enum:
+          - active
+          - deleted
+          - all
+          type: string
+          default: active
+          minLength: 1
+        description: |-
+          * `active` - active
+          * `deleted` - deleted
+          * `all` - all
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - in: query
+        name: role
+        schema:
+          enum:
+          - SYSTEM_ADMIN
+          - TEACHER
+          - STUDENT
+          type: string
+          minLength: 1
+        description: |-
+          * `SYSTEM_ADMIN` - System administrator
+          * `TEACHER` - Teacher
+          * `STUDENT` - Student
+      - in: query
+        name: search
+        schema:
+          type: string
+          maxLength: 255
+      - in: query
+        name: status
+        schema:
+          enum:
+          - PENDING_ACTIVATION
+          - ACTIVE
+          - SUSPENDED
+          type: string
+          minLength: 1
+        description: |-
+          * `PENDING_ACTIVATION` - PENDING_ACTIVATION
+          * `ACTIVE` - ACTIVE
+          * `SUSPENDED` - SUSPENDED
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/PaginatedAdminUserList'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    post:
+      operationId: admin_users_create
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateUserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminCreateUserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminCreateUserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminUserDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}:
+    get:
+      operationId: admin_users_retrieve
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminUserDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    patch:
+      operationId: admin_users_partial_update
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserPatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserPatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserPatchRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminUserDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    delete:
+      operationId: admin_users_destroy
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminSoftDeleteData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/roles:
+    post:
+      operationId: admin_users_roles_create
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AssignedRoles'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    delete:
+      operationId: admin_users_roles_destroy
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RevokedRoles'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/sessions:
+    get:
+      operationId: admin_users_sessions_list
+      parameters:
+      - in: query
+        name: include_revoked
+        schema:
+          type: boolean
+          default: false
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSession'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/sessions/{session_id}:
+    delete:
+      operationId: admin_users_sessions_destroy
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminRevokeSessionData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/sessions/revoke-all:
+    post:
+      operationId: admin_users_sessions_revoke_all_create
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/AdminRevokeAllSessionsData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/status:
+    patch:
+      operationId: admin_users_status_partial_update
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStatusChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStatusChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStatusChangeRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/StatusData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /admin/users/{user_id}/unlock-login:
+    post:
+      operationId: admin_users_unlock_login_create
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/UnlockLoginData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /api/v1/internal/auth/session-status:
+    post:
+      operationId: api_v1_internal_auth_session_status_create
+      description: Backend key first; validate the forwarded credential locally without
+        recursion.
+      parameters:
+      - in: header
+        name: Authorization
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/SessionStatusData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /api/v1/internal/users/{user_id}/oauth/GITHUB:
+    get:
+      operationId: api_v1_internal_users_oauth_GITHUB_retrieve
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: user_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/GitHubMappingData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /api/v1/internal/users/{user_id}/resend-activation:
+    post:
+      operationId: api_v1_internal_users_resend_activation_create
+      parameters:
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /api/v1/internal/users/notification-contacts:
+    post:
+      operationId: api_v1_internal_users_notification_contacts_create
+      parameters:
+      - in: header
+        name: X-Service-Token
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactRequestRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationContactsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+          description: ''
+  /api/v1/internal/users/provision-students:
+    post:
+      operationId: api_v1_internal_users_provision_students_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Service-Key
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisionStudentsRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProvisionStudentsRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProvisionStudentsRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/ExistingProvisionData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/CreatedProvisionData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /csrf:
+    get:
+      operationId: csrf_retrieve
+      description: Bootstrap Django CSRF for browser clients without visiting Swagger.
+      tags:
+      - csrf
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/CSRFData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /login:
+    post:
+      operationId: login_create
+      description: Anonymous login must work even when the client still carries a
+        revoked Bearer.
+      tags:
+      - login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/JWT'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /logout:
+    post:
+      operationId: logout_create
+      description: |-
+        Calls Django logout method and delete the Token object
+        assigned to the current User object.
+
+        Accepts/Returns nothing.
+      tags:
+      - logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutInputRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /logout-all:
+    post:
+      operationId: logout_all_create
+      description: |-
+        Calls Django logout method and delete the Token object
+        assigned to the current User object.
+
+        Accepts/Returns nothing.
+      tags:
+      - logout-all
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/LogoutAllData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /password-change:
+    post:
+      operationId: password_change_create
+      description: |-
+        Calls Django Auth SetPasswordForm save method.
+
+        Accepts the following POST parameters: new_password1, new_password2
+        Returns the success/fail message.
+      tags:
+      - password-change
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordChangeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RestAuthDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /password-reset/confirm:
+    post:
+      operationId: password_reset_confirm_create
+      description: |-
+        Password reset e-mail link is confirmed, therefore
+        this resets the user's password.
+
+        Accepts the following POST parameters: token, uid,
+            new_password1, new_password2
+        Returns the success/fail message.
+      tags:
+      - password-reset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetConfirmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetConfirmRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RestAuthDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /password-reset/request:
+    post:
+      operationId: password_reset_request_create
+      description: |-
+        Calls Django Auth PasswordResetForm save method.
+
+        Accepts the following POST parameters: email
+        Returns the success/fail message.
+      tags:
+      - password-reset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordResetRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RestAuthDetail'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /password-set:
+    post:
+      operationId: password_set_create
+      tags:
+      - password-set
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordSetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordSetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdentityPasswordSetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /refresh:
+    post:
+      operationId: refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SessionRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SessionRefreshRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RefreshData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /register:
+    post:
+      operationId: register_create
+      description: |-
+        Registers a new user.
+
+        Accepts the following POST parameters: username, email, password1, password2.
+      tags:
+      - register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentRegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentRegisterRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/RegistrationData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /sessions:
+    get:
+      operationId: sessions_list
+      tags:
+      - sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /sessions/{session_id}:
+    delete:
+      operationId: sessions_destroy
+      description: |-
+        Calls Django logout method and delete the Token object
+        assigned to the current User object.
+
+        Accepts/Returns nothing.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - sessions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    nullable: true
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/{user_id}:
+    get:
+      operationId: users_retrieve
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/PublicUser'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/batch:
+    post:
+      operationId: users_batch_create
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchUsersRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BatchUsersRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BatchUsersRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/PublicUsers'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/me:
+    get:
+      operationId: users_me_retrieve
+      description: |-
+        Reads and updates UserModel fields
+        Accepts GET, PUT, PATCH methods.
+
+        Default accepted fields: username, first_name, last_name
+        Default display fields: pk, username, email, first_name, last_name
+        Read-only fields: pk, email
+
+        Returns UserModel fields.
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/CurrentUser'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    patch:
+      operationId: users_me_partial_update
+      description: |-
+        Reads and updates UserModel fields
+        Accepts GET, PUT, PATCH methods.
+
+        Default accepted fields: username, first_name, last_name
+        Default display fields: pk, username, email, first_name, last_name
+        Read-only fields: pk, email
+
+        Returns UserModel fields.
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfilePatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfilePatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfilePatchRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/CurrentUser'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+    delete:
+      operationId: users_me_destroy
+      description: |-
+        Reads and updates UserModel fields
+        Accepts GET, PUT, PATCH methods.
+
+        Default accepted fields: username, first_name, last_name
+        Default display fields: pk, username, email, first_name, last_name
+        Read-only fields: pk, email
+
+        Returns UserModel fields.
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelfDeleteAccountRequest'
+        required: false
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/SelfDeleteAccountData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/me/email-change/confirm:
+    post:
+      operationId: users_me_email_change_confirm_create
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailChangeConfirmRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/CurrentUser'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/me/email-change/request:
+    post:
+      operationId: users_me_email_change_request_create
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/EmailChangeRequestData'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+  /users/search:
+    get:
+      operationId: users_search_retrieve
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Số kết quả tối đa (mặc định 10, tối đa 20).
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Từ khóa tìm kiếm (tối thiểu 2 ký tự) theo email, tên đăng nhập,
+          MSSV hoặc tên hiển thị.
+        required: true
+      - in: query
+        name: role
+        schema:
+          type: string
+          enum:
+          - STUDENT
+          - SYSTEM_ADMIN
+          - TEACHER
+        description: Lọc theo vai trò toàn cục (TEACHER, STUDENT, SYSTEM_ADMIN).
+      tags:
+      - users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                description: One response contract used by runtime rendering and schema
+                  generation.
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/UserSearchResults'
+                  meta:
+                    type: object
+                    additionalProperties: {}
+                    nullable: true
+                  error:
+                    allOf:
+                    - $ref: '#/components/schemas/APIError'
+                    nullable: true
+                required:
+                - data
+                - error
+                - message
+                - meta
+                - success
+          description: ''
+        '400':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '401':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '403':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '404':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '405':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '422':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '429':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '500':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+        '503':
+          description: Identity API error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseEnvelope'
+components:
+  schemas:
+    APIError:
+      type: object
+      description: Shared error payload, preserving existing detail objects and array
+        semantics.
+      properties:
+        code:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - code
+      - details
+    AccountStatusEnum:
+      enum:
+      - PENDING_ACTIVATION
+      - ACTIVE
+      - SUSPENDED
+      type: string
+      description: |-
+        * `PENDING_ACTIVATION` - Pending activation
+        * `ACTIVE` - Active
+        * `SUSPENDED` - Suspended
+    ActivationInputRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+        new_password1:
+          type: string
+          minLength: 1
+        new_password2:
+          type: string
+          minLength: 1
+      required:
+      - key
+    AdminAuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actor_id:
+          type: string
+          readOnly: true
+          nullable: true
+        action:
+          type: string
+          readOnly: true
+        target_user_id:
+          type: string
+          readOnly: true
+          nullable: true
+        ip_address:
+          type: string
+          readOnly: true
+        user_agent:
+          type: string
+          readOnly: true
+        details:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - action
+      - actor_id
+      - created_at
+      - details
+      - id
+      - ip_address
+      - target_user_id
+      - user_agent
+    AdminCreateUserRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        username:
+          type: string
+          nullable: true
+          maxLength: 100
+        first_name:
+          type: string
+          default: ''
+          maxLength: 100
+        last_name:
+          type: string
+          default: ''
+          maxLength: 100
+        student_id:
+          type: string
+          nullable: true
+          maxLength: 50
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleCodeEnum'
+          default:
+          - STUDENT
+          maxItems: 3
+          minItems: 1
+        password:
+          type: string
+          writeOnly: true
+          nullable: true
+          minLength: 1
+          maxLength: 128
+        send_activation_email:
+          type: boolean
+          default: false
+      required:
+      - email
+    AdminRevokeAllSessionsData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        revoked_sessions_count:
+          type: integer
+      required:
+      - revoked_sessions_count
+      - user_id
+    AdminRevokeSessionData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        revoked:
+          type: boolean
+      required:
+      - revoked
+      - session_id
+      - user_id
+    AdminSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        token_family:
+          type: string
+          format: uuid
+          readOnly: true
+        device_name:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+        user_agent:
+          type: string
+          readOnly: true
+        is_revoked:
+          type: boolean
+          readOnly: true
+        revoked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        revoked_reason:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/RevokedReasonEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - device_name
+      - expires_at
+      - id
+      - ip_address
+      - is_revoked
+      - revoked_at
+      - revoked_reason
+      - token_family
+      - user_agent
+    AdminSoftDeleteData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        account_status:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - account_status
+      - deleted_at
+      - user_id
+    AdminUser:
+      type: object
+      description: User model w/o password
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        student_id:
+          type: string
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          readOnly: true
+        account_status:
+          allOf:
+          - $ref: '#/components/schemas/AccountStatusEnum'
+          readOnly: true
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        last_login_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - account_status
+      - created_at
+      - deleted_at
+      - display_name
+      - email
+      - id
+      - is_email_verified
+      - last_login_at
+      - roles
+      - student_id
+      - username
+    AdminUserDetail:
+      type: object
+      description: User model w/o password
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        student_id:
+          type: string
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          readOnly: true
+        account_status:
+          allOf:
+          - $ref: '#/components/schemas/AccountStatusEnum'
+          readOnly: true
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        last_login_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        avatar_url:
+          type: string
+          readOnly: true
+          nullable: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
+          nullable: true
+        bio:
+          type: string
+          readOnly: true
+          nullable: true
+        github_username:
+          type: string
+          readOnly: true
+          nullable: true
+        academic_year:
+          type: string
+          readOnly: true
+          nullable: true
+        faculty:
+          type: string
+          readOnly: true
+          nullable: true
+        timezone:
+          type: string
+          readOnly: true
+        has_usable_password:
+          type: boolean
+          readOnly: true
+        linked_providers:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        is_login_locked:
+          type: boolean
+          readOnly: true
+        failed_login_attempts:
+          type: integer
+          readOnly: true
+        locked_until:
+          type: string
+          nullable: true
+          readOnly: true
+        active_sessions_count:
+          type: integer
+          readOnly: true
+      required:
+      - academic_year
+      - account_status
+      - active_sessions_count
+      - avatar_url
+      - bio
+      - created_at
+      - deleted_at
+      - display_name
+      - email
+      - faculty
+      - failed_login_attempts
+      - first_name
+      - github_username
+      - has_usable_password
+      - id
+      - is_email_verified
+      - is_login_locked
+      - last_login_at
+      - last_name
+      - linked_providers
+      - locked_until
+      - phone_number
+      - roles
+      - student_id
+      - timezone
+      - username
+    AssignedRoles:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+      required:
+      - roles
+      - user_id
+    BatchUsersRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 100
+      required:
+      - user_ids
+    CSRFData:
+      type: object
+      properties:
+        csrf_token:
+          type: string
+      required:
+      - csrf_token
+    ContactRequestRequest:
+      type: object
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 100
+          minItems: 1
+      required:
+      - user_ids
+    CreatedProvisionData:
+      type: object
+      properties:
+        summary:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - results
+      - summary
+    CurrentUser:
+      type: object
+      description: User model w/o password
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        student_id:
+          type: string
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          readOnly: true
+        avatar_url:
+          type: string
+          readOnly: true
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
+          nullable: true
+        bio:
+          type: string
+          readOnly: true
+          nullable: true
+        github_username:
+          type: string
+          readOnly: true
+          nullable: true
+        academic_year:
+          type: string
+          readOnly: true
+          nullable: true
+        faculty:
+          type: string
+          readOnly: true
+          nullable: true
+        timezone:
+          type: string
+          readOnly: true
+        preferences:
+          readOnly: true
+        has_usable_password:
+          type: boolean
+          readOnly: true
+        linked_providers:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_year
+      - avatar_url
+      - bio
+      - created_at
+      - display_name
+      - email
+      - faculty
+      - first_name
+      - github_username
+      - has_usable_password
+      - id
+      - last_name
+      - linked_providers
+      - phone_number
+      - preferences
+      - roles
+      - student_id
+      - timezone
+      - username
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        token_family:
+          type: string
+          format: uuid
+        device_name:
+          type: string
+          maxLength: 100
+        ip_address:
+          type: string
+          maxLength: 45
+        is_current:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - expires_at
+      - id
+      - ip_address
+      - is_current
+      - token_family
+    EmailChangeConfirmRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        token:
+          type: string
+          minLength: 16
+          maxLength: 255
+      required:
+      - token
+    EmailChangeRequestData:
+      type: object
+      properties:
+        new_email:
+          type: string
+          format: email
+        expires_in:
+          type: integer
+      required:
+      - expires_in
+      - new_email
+    EmailChangeRequestRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        new_email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        current_password:
+          type: string
+          writeOnly: true
+          nullable: true
+          minLength: 1
+          maxLength: 128
+      required:
+      - new_email
+    ExistingProvisionData:
+      type: object
+      properties:
+        summary:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - results
+      - summary
+    GitHubMappingData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        mapping:
+          type: object
+          additionalProperties: {}
+          nullable: true
+      required:
+      - mapping
+      - user_id
+    IdentityPasswordChangeRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        old_password:
+          type: string
+          minLength: 1
+          maxLength: 128
+        new_password1:
+          type: string
+          minLength: 1
+          maxLength: 128
+        new_password2:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+      - new_password1
+      - new_password2
+      - old_password
+    IdentityPasswordResetConfirmRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        new_password1:
+          type: string
+          minLength: 1
+          maxLength: 128
+        new_password2:
+          type: string
+          minLength: 1
+          maxLength: 128
+        uid:
+          type: string
+          minLength: 1
+        token:
+          type: string
+          minLength: 1
+      required:
+      - new_password1
+      - new_password2
+      - token
+      - uid
+    IdentityPasswordResetRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    IdentityPasswordSetRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        new_password1:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+        new_password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+      required:
+      - new_password1
+      - new_password2
+    JWT:
+      type: object
+      description: Serializer for JWT authentication.
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+      required:
+      - access
+      - refresh
+      - user
+    LoginRequestRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+        device_name:
+          type: string
+          minLength: 1
+          default: Unknown Device
+          maxLength: 100
+      required:
+      - password
+    LogoutAllData:
+      type: object
+      properties:
+        revoked_sessions_count:
+          type: integer
+      required:
+      - revoked_sessions_count
+    LogoutInputRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+    NotificationContact:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        account_status:
+          $ref: '#/components/schemas/AccountStatusEnum'
+      required:
+      - account_status
+      - display_name
+      - email
+      - user_id
+    NotificationContactsResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationContact'
+      required:
+      - users
+    NullEnum:
+      enum:
+      - null
+    PaginatedAdminAuditLogList:
+      type: array
+      items:
+        $ref: '#/components/schemas/AdminAuditLog'
+    PaginatedAdminUserList:
+      type: array
+      items:
+        $ref: '#/components/schemas/AdminUser'
+    PatchedAdminUserPatchRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        student_id:
+          type: string
+          nullable: true
+          maxLength: 50
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 20
+        bio:
+          type: string
+          nullable: true
+        academic_year:
+          type: string
+          nullable: true
+          maxLength: 20
+        faculty:
+          type: string
+          nullable: true
+          maxLength: 100
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 50
+        preferences: {}
+    PatchedProfilePatchRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        student_id:
+          type: string
+          nullable: true
+          maxLength: 50
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 20
+        bio:
+          type: string
+          nullable: true
+        academic_year:
+          type: string
+          nullable: true
+          maxLength: 20
+        faculty:
+          type: string
+          nullable: true
+          maxLength: 100
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 50
+        preferences: {}
+    PatchedStatusChangeRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        restore_deleted:
+          type: boolean
+        reset_lockout:
+          type: boolean
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    ProvisionStudentsRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        students:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          maxItems: 100
+          minItems: 1
+      required:
+      - students
+    PublicUser:
+      type: object
+      description: User model w/o password
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        student_id:
+          type: string
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          readOnly: true
+        avatar_url:
+          type: string
+          readOnly: true
+          nullable: true
+        bio:
+          type: string
+          readOnly: true
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        account_status:
+          type: string
+          readOnly: true
+      required:
+      - account_status
+      - avatar_url
+      - bio
+      - display_name
+      - email
+      - id
+      - roles
+      - student_id
+    PublicUsers:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicUser'
+      required:
+      - users
+    RefreshData:
+      type: object
+      properties:
+        access:
+          type: string
+        access_expiration:
+          type: string
+          format: date-time
+      required:
+      - access
+      - access_expiration
+    RegistrationData:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+        account_status:
+          type: string
+      required:
+      - account_status
+      - user
+    ResendEmailVerificationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    ResponseEnvelope:
+      type: object
+      description: One response contract used by runtime rendering and schema generation.
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          nullable: true
+        meta:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        error:
+          allOf:
+          - $ref: '#/components/schemas/APIError'
+          nullable: true
+      required:
+      - data
+      - error
+      - message
+      - meta
+      - success
+    RestAuthDetail:
+      nullable: true
+      enum:
+      - null
+    RevokedReasonEnum:
+      enum:
+      - LOGOUT
+      - LOGOUT_ALL
+      - ROTATED
+      - REPLAY_ATTACK
+      - ADMIN_REVOKED
+      - PASSWORD_CHANGED
+      type: string
+      description: |-
+        * `LOGOUT` - Logout
+        * `LOGOUT_ALL` - Logout all sessions
+        * `ROTATED` - Refresh token rotated
+        * `REPLAY_ATTACK` - Refresh token replay detected
+        * `ADMIN_REVOKED` - Revoked by administrator
+        * `PASSWORD_CHANGED` - Password changed
+    RevokedRoles:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+      required:
+      - roles
+      - user_id
+    RoleChangeRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        role_code:
+          $ref: '#/components/schemas/RoleCodeEnum'
+      required:
+      - role_code
+    RoleCodeEnum:
+      enum:
+      - SYSTEM_ADMIN
+      - TEACHER
+      - STUDENT
+      type: string
+      description: |-
+        * `SYSTEM_ADMIN` - System administrator
+        * `TEACHER` - Teacher
+        * `STUDENT` - Student
+    SelfDeleteAccountData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        account_status:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - account_status
+      - deleted_at
+      - user_id
+    SelfDeleteAccountRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+          nullable: true
+          minLength: 1
+          maxLength: 128
+        reason:
+          type: string
+          maxLength: 500
+    SessionRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+          description: WIll override cookie.
+    SessionStatusData:
+      type: object
+      properties:
+        active:
+          type: boolean
+      required:
+      - active
+    StatusData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        account_status:
+          type: string
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - account_status
+      - deleted_at
+      - user_id
+    StatusEnum:
+      enum:
+      - ACTIVE
+      - SUSPENDED
+      type: string
+      description: |-
+        * `ACTIVE` - ACTIVE
+        * `SUSPENDED` - SUSPENDED
+    StudentRegisterRequest:
+      type: object
+      description: Reject unknown input fields rather than silently dropping privileged
+        data.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password1:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+      - email
+      - first_name
+      - last_name
+      - password1
+      - password2
+      - username
+    UnlockLoginData:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        is_login_locked:
+          type: boolean
+        cleared_attempts:
+          type: integer
+      required:
+      - cleared_attempts
+      - is_login_locked
+      - user_id
+    UserSearch:
+      type: object
+      description: User model w/o password
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        student_id:
+          type: string
+          readOnly: true
+          nullable: true
+        avatar_url:
+          type: string
+          readOnly: true
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - avatar_url
+      - display_name
+      - email
+      - id
+      - roles
+      - student_id
+    UserSearchResults:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSearch'
+      required:
+      - users
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+- url: /api/auth
+  description: Identity API qua gateway
