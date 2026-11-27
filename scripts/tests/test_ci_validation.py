@@ -184,6 +184,8 @@ class CIValidationTests(unittest.TestCase):
         previous = next(step for step in steps if step.get("id") == "previous")
         download = next(step for step in steps if step.get("id") == "validation")
         self.assertIn("github.event_name == 'push'", previous["if"])
+        self.assertIn("refs/heads/main", previous["if"])
+        self.assertIn("refs/heads/dev", previous["if"])
         self.assertTrue(download["continue-on-error"])
         self.assertEqual(
             download["with"]["run-id"], "${{ steps.previous.outputs.run_id }}"
@@ -197,18 +199,20 @@ class CIValidationTests(unittest.TestCase):
     shutil.which("node"), "Requires Node.js for the GitHub Script step"
 )
 class PreviousPRRunTests(unittest.TestCase):
-    def lookup(self, *, runs, prs=None, error=False):
+    def lookup(self, *, runs, prs=None, error=False, ref="refs/heads/main"):
         step = next(
             step for step in JOBS["changes"]["steps"] if step.get("id") == "previous"
         )
+        base_branch = ref.removeprefix("refs/heads/")
         scenario = {
             "runs": runs,
+            "ref": ref,
             "prs": prs
             if prs is not None
             else [
                 {
                     "merged_at": "2026-10-21T01:00:00Z",
-                    "base": {"ref": "main"},
+                    "base": {"ref": base_branch},
                     "merge_commit_sha": "merge",
                     "head": {"sha": "head"},
                 }
@@ -225,7 +229,7 @@ class PreviousPRRunTests(unittest.TestCase):
           }}
         };
         const core = {setOutput: (k,v) => outputs[k] = v, info: () => {}};
-        const context = {repo: {owner: 'owner', repo: 'repo'}, sha: 'merge'};
+        const context = {repo: {owner: 'owner', repo: 'repo'}, sha: 'merge', ref: scenario.ref};
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
         await new AsyncFunction('github', 'context', 'core', process.env.SCRIPT)(github, context, core);
         process.stdout.write(JSON.stringify(outputs));
@@ -249,6 +253,56 @@ class PreviousPRRunTests(unittest.TestCase):
         self.assertEqual(result["run_id"], "123")
         self.assertEqual(result["query"]["head_sha"], "head")
         self.assertEqual(result["query"]["event"], "pull_request")
+
+    def test_dev_pr_merge_reuses_its_latest_successful_run(self):
+        result = self.lookup(
+            runs=[{"id": 456, "conclusion": "success"}], ref="refs/heads/dev"
+        )
+        self.assertEqual(result["run_id"], "456")
+        self.assertEqual(result["query"]["head_sha"], "head")
+        self.assertEqual(result["query"]["event"], "pull_request")
+
+    def test_pr_for_other_base_branch_or_non_branch_ref_is_not_reused(self):
+        main_pr = [
+            {
+                "merged_at": "2026-10-21T01:00:00Z",
+                "base": {"ref": "main"},
+                "merge_commit_sha": "merge",
+                "head": {"sha": "head"},
+            }
+        ]
+        dev_pr = [
+            {
+                "merged_at": "2026-10-21T01:00:00Z",
+                "base": {"ref": "dev"},
+                "merge_commit_sha": "merge",
+                "head": {"sha": "head"},
+            }
+        ]
+        self.assertNotIn(
+            "run_id",
+            self.lookup(
+                runs=[{"id": 123, "conclusion": "success"}],
+                prs=main_pr,
+                ref="refs/heads/dev",
+            ),
+        )
+        self.assertNotIn(
+            "run_id",
+            self.lookup(
+                runs=[{"id": 123, "conclusion": "success"}],
+                prs=dev_pr,
+                ref="refs/heads/main",
+            ),
+        )
+        self.assertNotIn(
+            "run_id",
+            self.lookup(
+                runs=[{"id": 123, "conclusion": "success"}],
+                prs=main_pr,
+                ref="refs/tags/v1.0.0",
+            ),
+        )
 
     def test_older_success_is_not_reused_after_failure_or_pending_run(self):
         for status in ("failure", "cancelled", None):

@@ -91,15 +91,17 @@ jobs:
 
       - name: Find the merged PR's latest CI run
         id: previous
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
         uses: actions/github-script@v7
         with:
           script: |
             try {
               const repo = context.repo;
+              if (!context.ref?.startsWith('refs/heads/')) return;
+              const targetBranch = context.ref.slice('refs/heads/'.length);
               const prs = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit,
                 {...repo, commit_sha: context.sha, per_page: 100});
-              const pr = prs.find(p => p.merged_at && p.base.ref === 'main' && p.merge_commit_sha === context.sha);
+              const pr = prs.find(p => p.merged_at && p.base.ref === targetBranch && p.merge_commit_sha === context.sha);
               if (!pr) return;
               const {data} = await github.rest.actions.listWorkflowRuns({
                 ...repo, workflow_id: 'ci.yml', event: 'pull_request', head_sha: pr.head.sha, per_page: 100
