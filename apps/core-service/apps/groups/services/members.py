@@ -1,0 +1,425 @@
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+
+from apps.activities.services import record_classroom_activity as record_activity
+from apps.courses.access_codes import code_hash
+from apps.courses.models import Enrollment
+from apps.courses.permissions import (
+    actor_roles,
+    require_manage,
+    require_open,
+    require_read,
+    require_role,
+)
+from apps.courses.services.classes import lock_class
+from apps.groups.models import GroupMember, StudyGroup
+from apps.groups.permissions import (
+    active_enrollment,
+    active_member,
+    require_group_read,
+    require_leader,
+)
+from apps.groups.queries.profiles import fetch_user_profiles
+from apps.groups.serializers.groups import GroupSerializer
+from apps.groups.serializers.members import MemberSerializer
+from apps.groups.services.groups import check_group_version, lock_group, publish_membership
+from apps.messaging.services.receipts import (
+    begin_receipt,
+    finish_receipt,
+    lookup_receipt,
+    receipt_scope,
+    replay_response,
+    require_key,
+)
+from common.errors import CoreAPIError
+
+
+def require_capacity(section, group):
+    if group.status != "ACTIVE":
+        raise CoreAPIError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+    if GroupMember.objects.filter(group=group, status="ACTIVE").count() >= section.group_max_size:
+        raise CoreAPIError("GROUP_FULL", "Nhóm đã đủ số thành viên tối đa.", 409)
+
+
+def join_group(request, payload):
+    require_role(request, "STUDENT")
+    saved = lookup_receipt(
+        receipt_scope(request, require_key(request, require_uuid=True), domain="classroom"),
+        payload,
+    )
+    candidate = (
+        get_object_or_404(StudyGroup, pk=saved.response_body["data"]["id"])
+        if saved is not None and saved.status == "COMPLETED"
+        else get_object_or_404(
+            StudyGroup.objects.only("id", "class_section_id"),
+            invite_code_hash=code_hash(payload["code"]),
+        )
+    )
+    with transaction.atomic():
+        section, group = lock_group(candidate.pk)
+        receipt = begin_receipt(
+            request, payload, section=section, domain="classroom", require_uuid=True
+        )
+        if receipt.status == "COMPLETED":
+            require_group_read(group, request.user, roles=actor_roles(request))
+            return replay_response(receipt)
+        require_role(request, "STUDENT")
+        enrollment = active_enrollment(section, request.user)
+        require_open(section, forming=True)
+        if (
+            group.invite_code_hash != code_hash(payload["code"])
+            or not group.invite_expires_at
+            or group.invite_expires_at <= timezone.now()
+        ):
+            raise CoreAPIError(
+                "ACCESS_CODE_EXPIRED", "Mã mời nhóm không còn hiệu lực. Hãy xin mã mới.", 409
+            )
+        if GroupMember.objects.filter(enrollment=enrollment, status="ACTIVE").exists():
+            raise CoreAPIError(
+                "ALREADY_IN_GROUP", "Bạn đã tham gia một nhóm trong lớp học này.", 409
+            )
+        require_capacity(section, group)
+        GroupMember.objects.create(class_section=section, group=group, enrollment=enrollment)
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=request.user.id,
+            note="Sinh viên đã tham gia nhóm bằng mã mời.",
+            class_section=section,
+            enrollment=enrollment,
+        )
+        publish_membership(section, group, request.user.id, "group.member.joined")
+        return finish_receipt(
+            receipt,
+            GroupSerializer(group).data,
+            status=201,
+            message="Bạn đã tham gia nhóm học tập.",
+        )
+
+
+def transfer_leader(group, successor_user_id):
+    current = get_object_or_404(GroupMember, group=group, role="LEADER", status="ACTIVE")
+    successor = get_object_or_404(
+        GroupMember,
+        group=group,
+        enrollment__user_id=successor_user_id,
+        enrollment__status="ACTIVE",
+        status="ACTIVE",
+    )
+    if current.pk != successor.pk:
+        current.role = "MEMBER"
+        current.save(update_fields=["role"])
+        successor.role = "LEADER"
+        successor.save(update_fields=["role"])
+
+
+def end_membership(
+    section, group, membership, actor_id, status, reason, *, dissolve_if_sole_member=False
+):
+    if membership.role == "LEADER":
+        other_active = (
+            GroupMember.objects.filter(group=group, status="ACTIVE")
+            .exclude(pk=membership.pk)
+            .exists()
+        )
+        if other_active:
+            raise CoreAPIError(
+                "LEADER_SUCCESSOR_REQUIRED",
+                "Hãy chuyển quyền trưởng nhóm trước khi rời hoặc loại thành viên này.",
+                409,
+            )
+        if not dissolve_if_sole_member:
+            raise CoreAPIError(
+                "SOLE_LEADER_DISSOLVE_REQUIRED",
+                (
+                    "Trưởng nhóm hiện là thành viên duy nhất còn hoạt động trong nhóm. "
+                    "Vui lòng xác nhận giải thể nhóm nếu muốn tiếp tục."
+                ),
+                409,
+                details=[
+                    {
+                        "field": "dissolve_if_sole_member",
+                        "issue": (
+                            "Cần xác nhận giải thể nhóm khi trưởng nhóm là thành viên duy nhất."
+                        ),
+                    }
+                ],
+            )
+        membership.status = status
+        membership.left_at = max(timezone.now(), membership.joined_at)
+        membership.save(update_fields=["status", "left_at"])
+        group.status = "ARCHIVED"
+        group.is_recruiting = False
+        group.invite_code_hash = None
+        group.invite_expires_at = None
+        group.source_version += 1
+        group.save(
+            update_fields=[
+                "status",
+                "is_recruiting",
+                "invite_code_hash",
+                "invite_expires_at",
+                "source_version",
+                "updated_at",
+            ]
+        )
+        from apps.groups.services.join_requests import cancel_pending_join_requests
+
+        cancel_pending_join_requests(
+            actor_id=actor_id,
+            note="Nhóm học tập đã được giải thể.",
+            class_section=section,
+            group=group,
+        )
+        publish_membership(
+            section, group, actor_id, "group.dissolved", reason=reason, increment=False
+        )
+        return
+    membership.status = status
+    membership.left_at = max(timezone.now(), membership.joined_at)
+    membership.save(update_fields=["status", "left_at"])
+    publish_membership(section, group, actor_id, "group.member." + status.lower(), reason=reason)
+
+
+def change_member(request, group_id, payload, *, action):
+    actor_roles(request)
+    with transaction.atomic():
+        section, group = lock_group(group_id)
+        admin_allowed = action in {"remove-member", "transfer-leader"}
+        require_group_read(
+            group, request.user, roles=actor_roles(request), admin_allowed=admin_allowed
+        )
+        if action in {"remove-member", "transfer-leader"}:
+            require_leader(
+                group,
+                request.user,
+                teacher_allowed=True,
+                roles=actor_roles(request),
+                admin_allowed=admin_allowed,
+            )
+        elif active_member(group, request.user) is None:
+            raise CoreAPIError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
+        receipt = begin_receipt(
+            request, payload, section=section, domain="classroom", require_uuid=True
+        )
+        if receipt.status == "COMPLETED":
+            return replay_response(receipt)
+        require_open(section, forming=action == "leave")
+        if group.status != "ACTIVE":
+            raise CoreAPIError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        check_group_version(group, payload["version"])
+        if action == "transfer-leader":
+            transfer_leader(group, payload["user_id"])
+            publish_membership(
+                section,
+                group,
+                request.user.id,
+                "group.leader.transferred",
+                reason=payload["reason"],
+            )
+        else:
+            if action == "remove-member":
+                member = get_object_or_404(
+                    GroupMember,
+                    group=group,
+                    enrollment__user_id=payload["user_id"],
+                    status="ACTIVE",
+                )
+            else:
+                member = active_member(group, request.user)
+                if member is None:
+                    raise CoreAPIError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
+            end_membership(
+                section,
+                group,
+                member,
+                request.user.id,
+                "LEFT" if action == "leave" else "REMOVED",
+                payload["reason"],
+                dissolve_if_sole_member=bool(payload.get("dissolve_if_sole_member", False)),
+            )
+        return finish_receipt(
+            receipt,
+            GroupSerializer(group).data,
+            message={
+                "transfer-leader": "Đã chuyển quyền trưởng nhóm.",
+                "remove-member": "Đã loại thành viên khỏi nhóm và giữ lịch sử tham gia.",
+                "leave": "Bạn đã rời nhóm học tập.",
+            }[action],
+        )
+
+
+def adjust_member(request, class_id, payload):
+    actor_roles(request)
+    with transaction.atomic():
+        section = lock_class(class_id)
+        require_read(request, section)
+        require_manage(request, section)
+        saved = lookup_receipt(
+            receipt_scope(request, require_key(request, require_uuid=True), domain="classroom"),
+            payload,
+        )
+        if saved is not None and saved.status == "COMPLETED":
+            return replay_response(
+                begin_receipt(
+                    request, payload, section=section, domain="classroom", require_uuid=True
+                )
+            )
+        enrollment = get_object_or_404(
+            Enrollment, class_section=section, user_id=payload["user_id"], status="ACTIVE"
+        )
+        current = (
+            GroupMember.objects.filter(enrollment=enrollment, status="ACTIVE")
+            .select_related("group")
+            .first()
+        )
+        group_ids = {current.group_id} if current else set()
+        if payload["target_group_id"]:
+            group_ids.add(payload["target_group_id"])
+        locked = {
+            group.pk: group
+            for group in StudyGroup.objects.select_for_update()
+            .filter(pk__in=group_ids, class_section=section)
+            .order_by("id")
+        }
+        if len(locked) != len(group_ids):
+            raise CoreAPIError("RESOURCE_NOT_FOUND", "Không tìm thấy nhóm trong lớp học này.", 404)
+        receipt = begin_receipt(
+            request, payload, section=section, domain="classroom", require_uuid=True
+        )
+        if receipt.status == "COMPLETED":
+            return replay_response(receipt)
+        require_open(section)
+        target = locked.get(payload["target_group_id"])
+        if current and current.group_id == payload["target_group_id"]:
+            return finish_receipt(
+                receipt,
+                {"user_id": str(enrollment.user_id), "group_id": str(current.group_id)},
+                message="Sinh viên đã thuộc nhóm được chọn.",
+            )
+        if target:
+            require_capacity(section, target)
+        if current:
+            source = locked[current.group_id]
+            if source.status != "ACTIVE":
+                raise CoreAPIError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+            if current.role == "LEADER":
+                other_active = (
+                    GroupMember.objects.filter(group=source, status="ACTIVE")
+                    .exclude(pk=current.pk)
+                    .exists()
+                )
+                if other_active:
+                    if (
+                        "successor_user_id" not in payload
+                        or payload["successor_user_id"] == enrollment.user_id
+                    ):
+                        raise CoreAPIError(
+                            "LEADER_SUCCESSOR_REQUIRED",
+                            "Hãy chọn trưởng nhóm kế nhiệm hợp lệ.",
+                            409,
+                        )
+                    transfer_leader(source, payload["successor_user_id"])
+                    current.refresh_from_db()
+            end_membership(
+                section,
+                source,
+                current,
+                request.user.id,
+                "REMOVED",
+                payload["reason"],
+                dissolve_if_sole_member=bool(payload.get("dissolve_if_sole_member", False)),
+            )
+        if target:
+            GroupMember.objects.create(class_section=section, group=target, enrollment=enrollment)
+            from apps.groups.services.join_requests import cancel_pending_join_requests
+
+            cancel_pending_join_requests(
+                actor_id=request.user.id,
+                note="Giảng viên đã điều chỉnh sinh viên vào nhóm học tập.",
+                class_section=section,
+                enrollment=enrollment,
+            )
+            publish_membership(
+                section, target, request.user.id, "group.member.assigned", reason=payload["reason"]
+            )
+        return finish_receipt(
+            receipt,
+            {"user_id": str(enrollment.user_id), "group_id": str(target.pk) if target else None},
+            message="Đã cập nhật nhóm của sinh viên và giữ lịch sử tham gia.",
+        )
+
+
+def update_my_member_profile(request, group_id, payload):
+    actor_roles(request)
+    with transaction.atomic():
+        section, group = lock_group(group_id)
+        member = active_member(group, request.user)
+        if member is None:
+            raise CoreAPIError("RESOURCE_NOT_FOUND", "Không tìm thấy thành viên nhóm.", 404)
+        require_open(section)
+        if group.status != "ACTIVE":
+            raise CoreAPIError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        member = (
+            GroupMember.objects.select_for_update().select_related("enrollment").get(pk=member.pk)
+        )
+        old_values = {}
+        new_values = {}
+        update_fields = []
+        if "skills" in payload:
+            old_values["skills"] = list(member.skills or [])
+            member.skills = payload["skills"]
+            new_values["skills"] = list(member.skills)
+            update_fields.append("skills")
+        if "responsibility" in payload:
+            old_values["responsibility"] = member.responsibility
+            member.responsibility = payload["responsibility"]
+            new_values["responsibility"] = member.responsibility
+            update_fields.append("responsibility")
+        if update_fields:
+            member.save(update_fields=update_fields)
+            record_activity(
+                member,
+                request.user.id,
+                "group.member.profile.updated",
+                old=old_values,
+                new=new_values,
+            )
+    profiles = fetch_user_profiles([member.enrollment.user_id])
+    member.profile = profiles.get(str(member.enrollment.user_id), {})
+    return MemberSerializer(member).data
+
+
+def update_member_responsibility(request, group_id, target_user_id, payload):
+    roles = actor_roles(request)
+    with transaction.atomic():
+        section, group = lock_group(group_id)
+        require_group_read(group, request.user, roles=roles)
+        require_leader(group, request.user, roles=roles)
+        require_open(section)
+        if group.status != "ACTIVE":
+            raise CoreAPIError("GROUP_ARCHIVED", "Nhóm đã được lưu trữ.", 409)
+        member = get_object_or_404(
+            GroupMember.objects.select_for_update().select_related("enrollment"),
+            group=group,
+            enrollment__user_id=target_user_id,
+            enrollment__status="ACTIVE",
+            status="ACTIVE",
+        )
+        old_value = member.responsibility
+        member.responsibility = payload["responsibility"]
+        member.save(update_fields=["responsibility"])
+        record_activity(
+            member,
+            request.user.id,
+            "group.member.responsibility.updated",
+            old={"responsibility": old_value},
+            new={
+                "responsibility": member.responsibility,
+                "user_id": str(target_user_id),
+            },
+        )
+    profiles = fetch_user_profiles([member.enrollment.user_id])
+    member.profile = profiles.get(str(member.enrollment.user_id), {})
+    return MemberSerializer(member).data

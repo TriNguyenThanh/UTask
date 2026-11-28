@@ -1,0 +1,226 @@
+"""Initial schema for courses, class_sections, class_teachers, and enrollments."""
+
+import uuid
+
+import django.db.models.deletion
+import django.utils.timezone
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+    initial = True
+
+    dependencies = []
+
+    operations = [
+        migrations.CreateModel(
+            name="Course",
+            fields=[
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_by_id", models.UUIDField(editable=False, null=True)),
+                ("code", models.CharField(max_length=50)),
+                ("name", models.CharField(max_length=200)),
+                ("archived_at", models.DateTimeField(null=True)),
+            ],
+            options={
+                "db_table": "courses",
+                "constraints": [
+                    models.UniqueConstraint(fields=("code",), name="uq_courses_code"),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="ClassSection",
+            fields=[
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("code", models.CharField(max_length=50)),
+                ("name", models.CharField(max_length=200)),
+                ("term", models.CharField(max_length=100)),
+                ("starts_on", models.DateField()),
+                ("ends_on", models.DateField()),
+                ("status", models.CharField(default="OPEN", max_length=20)),
+                ("grouping_phase", models.CharField(default="FORMING", max_length=20)),
+                ("grouping_locked_at", models.DateTimeField(null=True)),
+                ("formation_deadline", models.DateTimeField(blank=True, null=True)),
+                ("group_min_size", models.PositiveIntegerField(default=1)),
+                ("group_max_size", models.PositiveIntegerField(default=6)),
+                ("join_code_hash", models.CharField(max_length=64, null=True)),
+                ("join_code_expires_at", models.DateTimeField(null=True)),
+                ("version", models.PositiveBigIntegerField(default=1)),
+                ("event_sequence", models.PositiveBigIntegerField(default=0)),
+                ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "course",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="classes",
+                        to="courses.course",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "class_sections",
+                "indexes": [
+                    models.Index(
+                        fields=["course", "starts_on", "id"], name="ix_class_sections_course"
+                    ),
+                    models.Index(
+                        fields=["status", "grouping_phase", "created_at", "id"],
+                        name="ix_class_sections_filter",
+                    ),
+                    models.Index(
+                        fields=["term", "created_at", "id"], name="ix_class_sections_term"
+                    ),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(fields=("code",), name="uq_class_sections_code"),
+                    models.UniqueConstraint(
+                        condition=models.Q(("join_code_hash__isnull", False)),
+                        fields=("join_code_hash",),
+                        name="uq_class_sections_join_code",
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(("starts_on__lte", models.F("ends_on"))),
+                        name="chk_class_section_dates",
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(
+                            ("group_min_size__gt", 0),
+                            ("group_min_size__lte", models.F("group_max_size")),
+                        ),
+                        name="chk_class_section_group_size",
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(("status__in", ["OPEN", "CLOSED", "ARCHIVED"]))
+                        & (
+                            models.Q(
+                                ("grouping_locked_at__isnull", True), ("grouping_phase", "FORMING")
+                            )
+                            | models.Q(
+                                ("grouping_locked_at__isnull", False), ("grouping_phase", "LOCKED")
+                            )
+                        ),
+                        name="chk_class_section_state",
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(("event_sequence__gte", 0), ("version__gte", 1)),
+                        name="chk_class_section_counters",
+                    ),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="ClassTeacher",
+            fields=[
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("user_id", models.UUIDField(db_index=True)),
+                ("role", models.CharField(default="CO_TEACHER", max_length=20)),
+                ("status", models.CharField(default="ACTIVE", max_length=20)),
+                ("assigned_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("left_at", models.DateTimeField(null=True)),
+                (
+                    "class_section",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="teachers",
+                        to="courses.classsection",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "class_teachers",
+                "indexes": [
+                    models.Index(
+                        condition=models.Q(("status", "ACTIVE")),
+                        fields=["user_id", "class_section"],
+                        name="ix_class_teachers_active_scope",
+                    ),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("class_section", "user_id"), name="uq_class_teacher"
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(("role__in", ["PRIMARY", "CO_TEACHER"]))
+                        & (
+                            models.Q(("left_at__isnull", True), ("status", "ACTIVE"))
+                            | models.Q(("left_at__isnull", False), ("status", "LEFT"))
+                        ),
+                        name="chk_class_teacher_state",
+                    ),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="Enrollment",
+            fields=[
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("user_id", models.UUIDField(db_index=True)),
+                ("status", models.CharField(default="ACTIVE", max_length=20)),
+                ("source", models.CharField(default="SELF", max_length=20)),
+                ("enrolled_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("left_at", models.DateTimeField(null=True)),
+                (
+                    "class_section",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="enrollments",
+                        to="courses.classsection",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "enrollments",
+                "indexes": [
+                    models.Index(
+                        condition=models.Q(("status", "ACTIVE")),
+                        fields=["user_id", "class_section"],
+                        name="ix_enrollments_active_scope",
+                    ),
+                    models.Index(
+                        fields=["class_section", "status", "enrolled_at", "id"],
+                        name="ix_enrollments_class_status",
+                    ),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("class_section", "user_id"), name="uq_enrollment_user"
+                    ),
+                    models.UniqueConstraint(
+                        fields=("class_section", "id"), name="uq_enrollment_class_id"
+                    ),
+                    models.CheckConstraint(
+                        condition=models.Q(("source__in", ["SELF", "TEACHER", "BATCH"]))
+                        & (
+                            models.Q(("left_at__isnull", True), ("status", "ACTIVE"))
+                            | models.Q(
+                                ("left_at__isnull", False), ("status__in", ["LEFT", "REMOVED"])
+                            )
+                        ),
+                        name="chk_enrollment_state",
+                    ),
+                ],
+            },
+        ),
+    ]
