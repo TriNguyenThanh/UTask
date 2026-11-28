@@ -1,22 +1,18 @@
 # Quyền sở hữu dữ liệu
 
-**Trạng thái: Thiết kế mục tiêu.** Theo baseline mục 8, mỗi service sở hữu dữ
-liệu gốc và database riêng. Có thể dùng chung PostgreSQL server/cluster,
-nhưng database user/credential phải riêng và chỉ có quyền trong phạm vi service.
-Xem [baseline](architecture-baseline.md).
+**Trạng thái: Một phần (`Đã triển khai (local)` cho `core_db` theo [ADR-006](adr/006-consolidate-core-monolith.md); tách credential toàn cluster và staging `Chưa xác minh`).** Mỗi service độc lập sở hữu dữ liệu gốc và database riêng. Ba miền lõi Identity, Classroom và Work dùng chung cơ sở dữ liệu `core_db` trong `apps/core-service` nhưng vẫn phân tách quyền sở hữu ở cấp mô-đun Django (11 app phẳng trong DAG 4 tầng). Các service ngoài (`integration-service`, `notification-service`, `ai-service`) tiếp tục giữ database tách biệt. Xem [baseline](architecture-baseline.md) và [ADR-006](adr/006-consolidate-core-monolith.md).
 
-| Database mục tiêu | Service sở hữu | Dữ liệu                                                                                             |
-| ----------------- | -------------- | --------------------------------------------------------------------------------------------------- |
-| `identity_db`     | Identity       | User, profile, global role, phiên/token metadata                                                    |
-| `work_db`         | Work           | Project/ProjectMember, backlog, Sprint, Task, Comment, Workflow, Activity và tiến độ                |
-| `classroom_db`    | Classroom      | Môn học, lớp, Group/GroupMember, điểm danh/điểm số và liên kết nhóm–project                         |
-| `integration_db`  | Integration    | GitHub user/link/consent/credential, GitHub App, repository, webhook và dữ liệu GitHub đã chuẩn hóa |
-| `notification_db` | Notification   | Notification, người nhận, trạng thái gửi, template/tùy chọn khi được chọn                           |
-| `ai_context_db`   | AI             | Tên thiết kế riêng của AI cho yêu cầu/kết quả và context khi cần; baseline chưa đặt tên database AI |
+| Database hiện hành / mục tiêu | Service sở hữu | Dữ liệu |
+| --- | --- | --- |
+| `core_db` | Core Service (`apps/core-service`: Identity, Classroom, Work) | User, profile, global role, phiên/token metadata; môn học, lớp, Group/GroupMember, liên kết nhóm–project; Project/ProjectMember, backlog, Sprint, Task, Comment, Workflow, Activity và tiến độ |
+| `integration_db` | Integration (`apps/integration-service`) | GitHub user/link/consent/credential, GitHub App, repository, webhook và dữ liệu GitHub đã chuẩn hóa |
+| `notification_db` | Notification (`apps/notification-service`) | Notification, người nhận, trạng thái gửi, template/tùy chọn khi được chọn |
+| `ai_context_db` | AI (`apps/ai-service`) | Yêu cầu, idempotency, trạng thái job, kết quả phân tích/đề xuất và context khi cần |
 
-Tên database không chứng minh database hoặc migration đã tồn tại.
-`project_db` và `progress_db` là tên thiết kế cũ, không phải mục tiêu triển
-khai theo baseline mới. Không tạo database Progress riêng cho tiến độ Work.
+Tên database không chứng minh mọi migration trên staging đã được áp dụng.
+`identity_db`, `classroom_db`, `work_db` là tên database riêng trước khi hợp nhất
+theo [ADR-006](adr/006-consolidate-core-monolith.md); `project_db` và `progress_db`
+là tên thiết kế cũ hơn. Không tạo database Progress riêng cho tiến độ Work.
 
 ## ID tham chiếu và dữ liệu đọc
 
@@ -58,7 +54,9 @@ phục hồi worker và dead-letter cần thiết kế trước migration.
 
 ## Hiện trạng hạ tầng
 
-**Một phần:** script PostgreSQL chuẩn bị năm database nghiệp vụ theo Compose.
+**Một phần:** script `infra/postgres/init-databases.sh` chuẩn bị bốn cơ sở dữ
+liệu hiện hành theo Compose (`core_db`, `integration_db`, `notification_db`,
+`ai_context_db`).
 Integration M1 đã có role/login riêng qua `INTEGRATION_DB_USER` và
 `INTEGRATION_DB_PASSWORD`, không nhận tài khoản quản trị trong container app.
 Role không có quyền superuser/tạo database/tạo role/replication/bypass RLS,
@@ -67,15 +65,16 @@ CONNECT/TEMP; role/grant đã có trong môi trường cũ được giữ nguyê
 role/DB ngoài repo cần ACL rõ ràng; không suy việc tách Integration là đã tách
 toàn cluster.
 
-Identity/Work/Classroom vẫn dùng credential chung, còn thiếu so với baseline.
-AI dùng PostgreSQL riêng theo [cấu hình AI](../ai-service/README.md).
+Core Service (`core_db`), Notification (`notification_db`) và AI (`ai_context_db`
+trong Compose root) hiện vẫn dùng credential `POSTGRES_USER`/`POSTGRES_PASSWORD`
+chung, còn thiếu so với baseline về tách credential.
 Kiểm tra bootstrap M1 ở [Integration foundation](../integration-service/foundation.md);
 chưa xác minh database/role staging thực tế. Xem [biến môi trường](infrastructure/environment.md).
 
 ### Notification dùng credential chung theo yêu cầu hiện tại
 
 Notification vẫn sở hữu database `notification_db`, nhưng runtime dùng chung
-`POSTGRES_USER`/`POSTGRES_PASSWORD` với Identity/Work/Classroom theo yêu cầu
+`POSTGRES_USER`/`POSTGRES_PASSWORD` với Core Service theo yêu cầu
 đơn giản hóa. Bootstrap đã bỏ khối tạo role/ACL riêng của Notification;
 không còn kiểm tra username khác quản trị. Đây là hiện trạng chưa đáp ứng
 credential riêng theo baseline, không cấp phép đọc DB service khác trong code.

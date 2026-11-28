@@ -1,15 +1,15 @@
 # Giao tiếp giữa các service
 
-**Trạng thái: Thiết kế mục tiêu.** Theo baseline mục 2, 9–11 và 13–15; xem
-[nguồn baseline](architecture-baseline.md).
+**Trạng thái: Một phần (`Đã triển khai (local)` cho giao tiếp nội bộ trong `core-service` theo [ADR-006](adr/006-consolidate-core-monolith.md); thiết kế mục tiêu cho toàn hệ thống).** Theo baseline mục 2, 9–11 và 13–15; xem [nguồn baseline](architecture-baseline.md).
 
-## REST, job nội bộ và sự kiện
+## Giao tiếp trong tiến trình, REST, job nội bộ và sự kiện
 
-| Nhu cầu                                   | Cơ chế         | Ví dụ                                                                  |
-| ----------------------------------------- | -------------- | ---------------------------------------------------------------------- |
-| Command/query cần phản hồi trực tiếp      | REST           | Work kiểm tra Group; AI kiểm tra quyền và lấy context qua internal API |
-| Công việc nền nội bộ service              | Celery + Redis | Đồng bộ GitHub, gửi email, retry, deadline scan, outbox publishing     |
-| Thông báo việc đã xảy ra cho service khác | Kafka          | Work phát `task.assigned`, Integration phát hoạt động GitHub           |
+| Nhu cầu | Cơ chế | Ví dụ |
+| --- | --- | --- |
+| Tương tác giữa Identity, Classroom và Work trong `core-service` | Gọi hàm nội bộ qua `interface.py` (in-process, cùng transaction `core_db`) | Work kiểm tra nhóm/quyền giảng viên qua `apps.groups.interface`; Classroom tra cứu/tạo user qua `apps.accounts.interface` |
+| Command/query xuyên service cần phản hồi trực tiếp | REST nội bộ | AI kiểm tra phiên và quyền/context qua `identity-service`/`work-service` (Docker aliases của `core-service`); Work gọi Integration |
+| Công việc nền nội bộ service | Celery + Redis | Xuất outbox (`core-worker`), đồng bộ GitHub, gửi email, retry, quét deadline |
+| Thông báo việc đã xảy ra cho service ngoài | Kafka | Core phát `utask.identity.events` và `utask.work.events` cho Notification; Integration phát `utask.integration.events` cho Core |
 
 Không chuyển mọi giao tiếp sang Kafka và không tạo chuỗi hỏi–đáp Kafka cho
 query đồng bộ. Job nội bộ là lệnh thực thi; domain event thông báo thay đổi
@@ -18,12 +18,20 @@ riêng; số worker không được ấn định là singleton.
 
 ## Quy tắc theo service
 
-- REST chỉ qua API công bố, không truy cập database service khác. Internal API
-  vẫn phải kiểm tra danh tính, quyền và giới hạn dữ liệu.
-- Identity cấp JWT access/refresh token; các service xác thực token và kiểm tra
-  quyền tài nguyên ở backend, không đọc Identity DB.
-- Work quản lý Project/Task/Sprint và tính tiến độ bằng quy tắc; có thể gọi
-  Classroom đồng bộ để xác minh nhóm/lớp.
+- **Bên trong `core-service`:** Identity, Classroom và Work chỉ tương tác chéo qua
+  `apps.accounts.interface`, `apps.groups.interface` và `apps.projects.interface`,
+  không gọi vòng lặp HTTP hay đẩy sự kiện Kafka nội bộ giữa ba miền này.
+- **Giữa `core-service` và service ngoài (`ai-service`, `integration-service`,
+  `notification-service`):** REST chỉ đi qua API công bố, không truy cập database
+  service khác. Internal API vẫn phải kiểm tra danh tính, service key, quyền và
+  giới hạn dữ liệu. Docker network aliases `identity-service`, `classroom-service`,
+  `work-service` trên `core-service` giữ nguyên toàn bộ URL nội bộ cho các đội
+  ngoài ([ADR-006](adr/006-consolidate-core-monolith.md)).
+- Miền Identity trong `core-service` cấp JWT access/refresh token (RS256) và công
+  bố `/.well-known/jwks.json`; các service ngoài xác thực token và kiểm tra quyền
+  tài nguyên ở backend, không đọc `core_db`.
+- Miền Work trong `core-service` quản lý Project/Task/Sprint và tính tiến độ bằng
+  quy tắc; gọi trực tiếp Classroom qua `apps.groups.interface` để xác minh nhóm/lớp.
 - Integration là service duy nhất gọi trực tiếp GitHub; service khác dùng
   internal API hoặc event GitHub đã chuẩn hóa. Hợp đồng REST nội bộ Work/AI
   hiện **đã triển khai phía provider**, flags mặc định tắt và Work/AI thật

@@ -1,7 +1,8 @@
 # Hướng dẫn bàn giao & Phối hợp hợp đồng cho Team AI, Team Integration và Team Notification
 
-> **Mục đích tài liệu:** Kênh bàn giao kỹ thuật chính thức từ **Team Core Backend (`identity-service`, `classroom-service`, `work-service`)** sang **Team AI (`apps/ai-service`)**, **Team Integration (`apps/integration-service`)** và **Team Notification (`apps/notification-service`)** nhằm khớp nối trọn vẹn **Đợt 5**, **Đợt 6** và **Đợt 7** theo [Kế hoạch triển khai Backend](backend-web-gap-implementation-plan.md).  
-> **Trạng thái tài liệu:** Phần phía **`work-service` (Team Core Backend)** của Đợt 5 đã ở trạng thái `Đã triển khai (local)` và qua kiểm thử unit/integration PostgreSQL/Redis/Kafka Cloud với HTTP stub đúng hợp đồng (deploy staging `Chưa xác minh`). Các endpoint và event mới phía **`ai-service` (Team AI)** và **`integration-service` (Team Integration)** vẫn ở trạng thái `Chưa triển khai` (`Thiết kế mục tiêu`) cho tới khi từng đội xác nhận bằng code + contract + kiểm thử.  
+> **Mục đích tài liệu:** Kênh bàn giao kỹ thuật chính thức từ **Team Core Backend (`apps/core-service`, hợp nhất Identity, Classroom và Work theo [ADR-006](adr/006-consolidate-core-monolith.md))** sang **Team AI (`apps/ai-service`)**, **Team Integration (`apps/integration-service`)** và **Team Notification (`apps/notification-service`)** nhằm khớp nối trọn vẹn **Đợt 5**, **Đợt 6** và **Đợt 7** theo [Kế hoạch triển khai Backend](backend-web-gap-implementation-plan.md).  
+> **Cập nhật kiến trúc (ADR-006 — Không phá vỡ tích hợp cho 3 đội):** Ba dịch vụ lõi cũ đã hợp nhất vào `apps/core-service` trên `core_db`, nhưng **không yêu cầu sửa bất kỳ dòng mã hay biến môi trường nào** phía Team AI, Team Integration hay Team Notification: container `core-service` đăng ký đầy đủ Docker network aliases (`identity-service`, `classroom-service`, `work-service`), giữ nguyên toàn bộ internal routes (`/.well-known/jwks.json`, `/users/me`, `/api/v1/internal/*`), và outbox Kafka tiếp tục phát đúng `producer: "identity-service"` trên `utask.identity.events` cùng `producer: "work-service"` trên `utask.work.events`.  
+> **Trạng thái tài liệu:** Phần phía **miền Work trong `apps/core-service` (Team Core Backend)** của Đợt 5 đã ở trạng thái `Đã triển khai (local)` và qua kiểm thử hợp đồng/kiến trúc trên PostgreSQL 16 (deploy staging `Chưa xác minh`). Các endpoint và event mới phía **`ai-service` (Team AI)** và **`integration-service` (Team Integration)** vẫn ở trạng thái `Chưa triển khai` (`Thiết kế mục tiêu`) cho tới khi từng đội xác nhận bằng code + contract + kiểm thử.  
 > **Phân tách trách nhiệm:** Team Core Backend **không chỉnh sửa** mã nguồn thuộc `apps/ai-service/**`, `apps/integration-service/**`, `apps/notification-service/**` và `apps/web/**`. Tài liệu này chốt hợp đồng wire (REST nội bộ, Kafka event, mã lỗi, biến môi trường và điều kiện nghiệm thu) để hai phía phát triển song song và ghép nối an toàn.
 
 ---
@@ -21,8 +22,8 @@
 ## 2. Hướng dẫn cho Team AI (`apps/ai-service`) — Đợt 5.1 (`bulk-apply-ai`, DG5)
 
 ### 2.1. Hiện trạng đã xác minh trên mã nguồn hai bên
-- **Phía `apps/work-service` (`Đã triển khai (local)`):**
-  - Đã hoàn thiện cả 2 endpoint áp dụng nguyên tử (`POST /projects/{project_id}/tasks/bulk-apply-ai/` với `source="AI_BACKLOG"` và `POST /tasks/{task_id}/subtasks/bulk-apply-ai/` với `source="AI_DECOMPOSED"`) và adapter HTTP thật `RemoteProposals` ([infrastructure/ai.py](../../apps/work-service/infrastructure/ai.py)), ánh xạ env `WORK_AI_BASE_URL` / `WORK_AI_SERVICE_KEY` (giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` làm mặc định an toàn), chuyển tiếp actor Bearer + `X-Service-Key`, hoãn `ACTION` sang AI v2 theo DG5 và kiểm thử wire HTTP thật (`test_ai_remote_proposals.py`, `test_ai_remote_apply_wire.py`).
+- **Phía `apps/core-service` — miền Work (`Đã triển khai (local)`):**
+  - Đã hoàn thiện cả 2 endpoint áp dụng nguyên tử (`POST /projects/{project_id}/tasks/bulk-apply-ai/` với `source="AI_BACKLOG"` và `POST /tasks/{task_id}/subtasks/bulk-apply-ai/` với `source="AI_DECOMPOSED"`) và adapter HTTP thật `RemoteProposals` ([infrastructure/ai.py](../../apps/core-service/infrastructure/ai.py)), ánh xạ env `WORK_AI_BASE_URL` / `WORK_AI_SERVICE_KEY` (giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` làm mặc định an toàn), chuyển tiếp actor Bearer + `X-Service-Key` và hoãn `ACTION` sang AI v2 theo DG5.
 - **Phía `apps/ai-service` (`Một phần`):**
   - Hiện có 3 route (`/healthz`, `POST /api/ai/v1/requests`, `GET /api/ai/v1/requests/{request_id}`) tại [routes.py](../../apps/ai-service/src/api/routes.py#L18-L50).
   - Schema kết quả `BacklogItem` và `Subtask` tại [results.py](../../apps/ai-service/src/models/results.py#L11-L38) **chưa có** `local_id`, `ai_revision` và kết quả lưu chưa chuẩn hóa `context_version` cho bước xác thực ngược.
@@ -84,7 +85,7 @@
     "expires_at": "2026-12-24T10:00:00Z"
   }
   ```
-  - Lưu ý kiểu dữ liệu bắt buộc khớp `VerifiedProposal` trong [infrastructure/ai.py](../../apps/work-service/infrastructure/ai.py#L12-L60):
+  - Lưu ý kiểu dữ liệu bắt buộc khớp `VerifiedProposal` trong [infrastructure/ai.py](../../apps/core-service/infrastructure/ai.py):
     - `proposal_id`: string bằng đúng `str(request_id)`.
     - `proposal_type`: `"BACKLOG"` | `"SUBTASK"`.
     - `context_version`: integer `>= 0`.
@@ -115,9 +116,9 @@
 ## 3. Hướng dẫn cho Team Integration (`apps/integration-service`) — Đợt 5.2 & 5.3 (DG1, DG6)
 
 ### 3.1. Hiện trạng đã xác minh trên mã nguồn hai bên
-- **Phía `apps/work-service` (`Đã triển khai (local)`):**
-  - Đã mở rộng [integration_consumer.py](../../apps/work-service/apps/messaging/integration_consumer.py) nhận và định tuyến đủ cả 3 sự kiện trên `utask.integration.events` (`integration.project.connection.changed`, `integration.github.account.changed` → `apply_account_fact()`, `integration.github.reference.detected` → giải mã `task_code` → `ingest_reference()` tạo ứng viên `PENDING`).
-  - Đã bổ sung `RemoteIntegration.fetch_project_activity()` ([infrastructure/integration.py](../../apps/work-service/infrastructure/integration.py)) và public BFF `GET /projects/{project_id}/github/activity/` ([services/activity.py](../../apps/work-service/apps/integrations/services/activity.py)) có cache Redis ngắn (`WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS=45`) và gộp mới `linked_task_ids` đã `CONFIRMED`; đã cập nhật [work-service.yaml](../../contracts/api/work-service.yaml) và kiểm thử wire HTTP + Redis 7 + Kafka Cloud.
+- **Phía `apps/core-service` — miền Work (`Đã triển khai (local)`):**
+  - Đã hoàn thiện [consumer.py](../../apps/core-service/apps/integrations/consumer.py) nhận và định tuyến đủ cả 3 sự kiện trên `utask.integration.events` (`integration.project.connection.changed`, `integration.github.account.changed` → `apply_account_fact()`, `integration.github.reference.detected` → giải mã `task_code` → `ingest_reference()` tạo ứng viên `PENDING`).
+  - Đã bổ sung `RemoteIntegration.fetch_project_activity()` ([infrastructure/integration.py](../../apps/core-service/infrastructure/integration.py)) và public BFF `GET /projects/{project_id}/github/activity/` ([services/activity.py](../../apps/core-service/apps/integrations/services/activity.py)) có cache Redis ngắn (`WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS=45`) và gộp mới `linked_task_ids` đã `CONFIRMED`, bám đúng hợp đồng [work-service.yaml](../../contracts/api/work-service.yaml).
 - **Phía `apps/integration-service` (`Một phần`):**
   - Đã có `link_verified_account` / `unlink_github_account` ([github_accounts/services.py](../../apps/integration-service/apps/github_accounts/services.py#L13-L93)) và `revoke_authorization` ([github_jobs/webhooks.py](../../apps/integration-service/apps/github_jobs/webhooks.py#L88-L123)) nhưng **chưa phát** event tài khoản GitHub lên outbox/Kafka.
   - Đã có `GitHubProjectClient.activity()` ([github_project.py](../../apps/integration-service/infrastructure/github_project.py#L295-L335)) đọc commits/PRs/issues nhưng **chưa có** internal endpoint cho caller `work` và chưa đọc `branches`.
@@ -266,7 +267,7 @@
        }
      }
      ```
-  - **Ràng buộc khớp 1:1 với `ReferenceFact` của Work ([infrastructure/integration.py](../../apps/work-service/infrastructure/integration.py#L77-L132)):**
+  - **Ràng buộc khớp 1:1 với `ReferenceFact` của Work ([infrastructure/integration.py](../../apps/core-service/infrastructure/integration.py)):**
     - `is_verified` phải là `true` (đã xác thực chữ ký webhook GitHub thuộc đúng `repo_id` và `generation` hiện hành).
     - `status` chỉ có giá trị `"OPEN" | "MERGED" | "CLOSED"` khi `link_type == "PULL_REQUEST"`, còn lại bắt buộc `null`.
     - `url` chỉ chấp nhận `https://github.com/...` không chứa query/fragment/credentials.
@@ -332,10 +333,10 @@
 
 ---
 
-## 5. Phần Team Core Backend (`work-service`) đã triển khai ở Đợt 5 (`Đã triển khai (local)`)
+## 5. Phần Team Core Backend (`apps/core-service` — miền Work) đã triển khai ở Đợt 5 (`Đã triển khai (local)`)
 
-Team Core Backend đã hoàn tất trọn phần thuộc quyền sở hữu của `work-service` bám đúng hợp đồng ở Mục 2 & Mục 3 trên (không sửa mã nguồn của Team AI hay Team Integration):
-1. **`RemoteProposals` (`apps/work-service/infrastructure/ai.py`):** gọi `POST {WORK_AI_BASE_URL}/api/ai/v1/internal/requests/{proposal_id}/verify-proposal` ngoài DB transaction, truyền `X-Service-Key: WORK_AI_SERVICE_KEY` + forwarded actor Bearer, chấp nhận `context_version` dạng số nguyên hoặc chuỗi số nguyên dương, ánh xạ lỗi `401/403/404/409/410/503` sang `WorkError` tiếng Việt; giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` làm mặc định an toàn.
-2. **Consumer `utask.integration.events` (`apps/work-service/apps/messaging/integration_consumer.py`):** mở rộng định tuyến theo `event_type` cho cả 3 sự kiện (`integration.project.connection.changed`, `integration.github.account.changed` → `apply_account_fact()`, `integration.github.reference.detected` → phân giải `task_code` → `ingest_reference()`).
-3. **Public BFF `GET /projects/{project_id}/github/activity/` (`apps/work-service/infrastructure/integration.py`, `apps/integrations/`):** kiểm quyền `visible_project`, trả ngay `DISCONNECTED`/`PENDING` từ `work_db` nếu chưa kết nối; khi `CONNECTED` gọi `RemoteIntegration.fetch_project_activity()` có cache Redis (`WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS`, mặc định 45 giây) theo `(project_id, connection_generation)` (chỉ cache `CONNECTED`/`PARTIAL`, kiểm tra khớp `repo_id`/`generation`) và luôn gộp mới `linked_task_ids` từ `TaskGitHubLink(confirmation_status="CONFIRMED")`.
-4. **Kiểm thử độc lập đã nghiệm thu trên local:** Đạt trọn bộ **1.049/1.049 pytest PostgreSQL 16** (bao gồm 76 bài unit/integration/concurrency/OpenAPI `Draft202012Validator` phía Work ở 4 tệp Đợt 5), **79/79** `test_work_receipt_contract.py` cho `contracts/api/work-service.yaml`, và **11/11 bước E2E HTTP thật + Redis 7 + Kafka Cloud (`SASL_SSL` trên `utask.integration.events`)** với HTTP stub đúng hợp đồng Mục 2–3. Sẵn sàng chạy kiểm thử ghép thật khi Team AI và Team Integration hoàn tất provider.
+Team Core Backend đã hoàn tất trọn phần thuộc quyền sở hữu của miền Work trong `apps/core-service` (hợp nhất theo [ADR-006](adr/006-consolidate-core-monolith.md)) bám đúng hợp đồng ở Mục 2 & Mục 3 trên (không sửa mã nguồn của Team AI hay Team Integration):
+1. **`RemoteProposals` (`apps/core-service/infrastructure/ai.py`):** gọi `POST {WORK_AI_BASE_URL}/api/ai/v1/internal/requests/{proposal_id}/verify-proposal` ngoài DB transaction, truyền `X-Service-Key: WORK_AI_SERVICE_KEY` + forwarded actor Bearer, chấp nhận `context_version` dạng số nguyên hoặc chuỗi số nguyên dương, ánh xạ lỗi `401/403/404/409/410/503` sang `CoreAPIError` tiếng Việt; giữ `WORK_AI_ADAPTER=infrastructure.ai.UnavailableProposals` làm mặc định an toàn.
+2. **Consumer `utask.integration.events` (`apps/core-service/apps/integrations/consumer.py`):** định tuyến theo `event_type` cho cả 3 sự kiện (`integration.project.connection.changed`, `integration.github.account.changed` → `apply_account_fact()`, `integration.github.reference.detected` → phân giải `task_code` → `ingest_reference()`).
+3. **Public BFF `GET /projects/{project_id}/github/activity/` (`apps/core-service/infrastructure/integration.py`, `apps/core-service/apps/integrations/`):** kiểm quyền `visible_project`, trả ngay `DISCONNECTED`/`PENDING` từ `core_db` nếu chưa kết nối; khi `CONNECTED` gọi `RemoteIntegration.fetch_project_activity()` có cache Redis (`WORK_GITHUB_ACTIVITY_CACHE_TTL_SECONDS`, mặc định 45 giây) theo `(project_id, connection_generation)` (chỉ cache `CONNECTED`/`PARTIAL`, kiểm tra khớp `repo_id`/`generation`) và luôn gộp mới `linked_task_ids` từ `TaskGitHubLink(confirmation_status="CONFIRMED")`.
+4. **Kiểm thử hiện hành trên `apps/core-service` (local):** Đạt bộ kiểm thử hợp nhất PostgreSQL 16 (71/71 pytest bao gồm `test_architecture_boundaries.py`, `test_external_team_contracts.py` và integration xuyên miền), `export_api_contracts --validate` (0 lỗi/cảnh báo; khớp đầy đủ tuyến công khai với `contracts/api/{identity,classroom,work}-service.yaml`). Sẵn sàng chạy kiểm thử ghép thật khi Team AI và Team Integration hoàn tất provider.

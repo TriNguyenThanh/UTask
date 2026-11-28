@@ -6,15 +6,15 @@ một mẫu [.env.example](../../../.env.example). Mỗi máy có `.env` riêng,
 
 - `database.env`: thông tin PostgreSQL dùng chung (`POSTGRES_*`).
 - `django.env`: cấu hình dùng chung cho các dịch vụ Django.
-- `postgres.env`: tên database do script khởi tạo sử dụng.
-- `<service>.env`: cấu hình riêng của từng service, gồm tên database và khóa service hoặc URL service.
-- `classroom-service.env`: cấu hình riêng Classroom Service, gồm
-  `KAFKA_BOOTSTRAP_SERVERS` để kết nối tới broker Kafka.
+- `postgres.env`: tên database do script khởi tạo sử dụng (`CORE_DB_NAME`, `INTEGRATION_DB_NAME`, `NOTIFICATION_DB_NAME`, `AI_DB_NAME`).
+- `core-service.env`: cấu hình thống nhất cho **Core Modular Monolith** (`apps/core-service`, hợp nhất Identity, Classroom và Work theo [ADR-006](../adr/006-consolidate-core-monolith.md)), gồm `CORE_DB_NAME`, `CORE_DJANGO_SECRET_KEY`, `CORE_REDIS_URL`, cấu hình JWT/OAuth/proxy của Identity, `CLASSROOM_ACCESS_CODE_HMAC_KEY`, lưu trữ R2 hợp nhất (`CORE_STORAGE_ADAPTER`, `CORE_R2_*` có fallback tương thích ngược sang `WORK_R2_*`/`IDENTITY_R2_*`), Kafka đối ngoại (`utask.identity.events`, `utask.work.events`, `utask.work.integration.dlq`) và adapter AI/Integration.
+- `<service>.env`: cấu hình riêng của từng service ngoài (`ai-service.env`, `integration-service.env`, `notification-service.env`).
 
-Phần Work kết nối Integration có URL, key hai chiều, cờ nhận lệnh và consumer
-riêng trong `infra/env/work-service.env`, cùng nguồn `.env` như các biến khác.
-Mặc định adapter unavailable và cờ tắt; cách ghép key, bật profile và recreate
-process Work nằm tại [hướng dẫn Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
+Phần miền Work trong `core-service` kết nối Integration có URL, key hai chiều, cờ
+nhận lệnh và consumer riêng trong `infra/env/core-service.env`, cùng nguồn `.env`
+như các biến khác. Mặc định adapter unavailable và cờ tắt; cách ghép key, bật
+profile và recreate process Core nằm tại
+[hướng dẫn Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
 Không cần thêm giá trị cố định vào Compose hoặc sửa nghiệp vụ service khác.
 
 ## Web gọi API và CORS
@@ -78,8 +78,9 @@ khẩu khi dùng SASL khiến client dừng với lỗi cấu hình, không tự
 
 `KAFKA_SSL_CA_LOCATION` để trống để dùng chứng chỉ tin cậy mặc định của client.
 Nếu nhà cung cấp cấp chứng chỉ CA riêng (chứng chỉ dùng để xác minh máy chủ),
-Compose staging gắn thư mục `infra/env` chỉ đọc vào `/run/kafka-certificates`
-cho các container Work/Classroom. Đặt tệp tại `infra/env/ca.pem`, rồi cấu hình:
+Compose gắn thư mục `infra/env` chỉ đọc vào `/run/kafka-certificates`
+cho các container Core (`core-service`, `core-worker`, `core-consumer`) và các
+service dùng Kafka khác. Đặt tệp tại `infra/env/ca.pem`, rồi cấu hình:
 
 ```dotenv
 KAFKA_SSL_CA_LOCATION=/run/kafka-certificates/ca.pem
@@ -105,13 +106,15 @@ docker compose up --build -d
 docker compose -f docker-compose.staging.yml -f staging-images.json up -d
 ```
 
-Nếu cần chạy app có profile khi thao tác staging thủ công, thêm
-`--profile work-service --profile classroom-service` trước `up`.
+Nếu cần chạy thêm worker/consumer Core hoặc app có profile khi thao tác staging
+thủ công, thêm `--profile core-service` (cùng các profile dịch vụ ngoài nếu dùng)
+trước `up`.
 Khi truyền `--profile` trên lệnh, Docker Compose ưu tiên danh sách đó thay cho
 `COMPOSE_PROFILES`; nếu vẫn dùng broker Docker, thêm cả `--profile kafka`.
 Deploy staging tự bật profile các app được phát hành và giữ lựa chọn profile
-`kafka` nếu máy chủ đã chọn. `work-consumer` chạy cùng Work, không có profile
-riêng; nguồn Integration chỉ chạy khi chọn adapter thật. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
+`kafka` nếu máy chủ đã chọn. `core-worker` và `core-consumer` chạy cùng profile
+`core-service` dùng chung image `utask/core-service`; consumer `consume_integration`
+chỉ tiêu thụ nguồn Integration khi chọn adapter thật. Để dùng cloud, bỏ `kafka` khỏi `COMPOSE_PROFILES`
 (giữ các profile khác nếu có) rồi điền địa chỉ broker.
 Không cần file Compose riêng hay script khởi động bổ sung.
 Worker chỉ chờ broker Docker khi profile `kafka` được bật; khi tắt, dependency
@@ -124,10 +127,9 @@ lưu theo [hướng dẫn Kafka](kafka.md#kafka-bên-ngoài). Giữ nguyên volu
 cần quay lại broker Docker. Sau khi sửa cấu hình kết nối, tạo lại các container
 liên quan để nhận biến mới; chỉ restart không nạp lại giá trị.
 
-Các biến kết nối đi qua `.env` → `infra/env/work-service.env` hoặc
-`infra/env/classroom-service.env` → Compose `env_file` → settings → client
-gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn container cần chạy,
-không thay đổi nội dung sự kiện.
+Các biến kết nối đi qua `.env` → `infra/env/core-service.env` → Compose
+`env_file` → settings → client gửi/nhận và gửi thông điệp lỗi. Profile chỉ chọn
+container cần chạy, không thay đổi nội dung sự kiện.
 
 AI Service nhận giá trị triển khai từ `.env` root; `infra/env/ai-service.env`
 ánh xạ biến thường vào container. AI_ENVIRONMENT và MOCK_TEST chọn context mock;
@@ -229,19 +231,19 @@ cùng cấu hình. Đã kiểm tra nội suy Compose, chưa xác minh deploy th�
 Workflow đọc `.env` này nhưng không upload hoặc ghi đè nó. Secrets GitHub như khóa SSH
 và token GHCR phục vụ triển khai; chúng không tự trở thành biến của ứng dụng.
 
-| Giá trị trong `.env` VPS                                       | Container nhận                                                   |
-| -------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `POSTGRES_*`                                                   | PostgreSQL và các app cần database, qua mapping dùng chung       |
-| `IDENTITY_DB_NAME`, `IDENTITY_DJANGO_SECRET_KEY`, `IDENTITY_*` | Identity: `DATABASE_NAME`, `DJANGO_SECRET_KEY` và cấu hình riêng |
-| `WORK_DB_NAME`, `WORK_DJANGO_SECRET_KEY`                       | Work khi bật profile của service                                 |
-| `CLASSROOM_DB_NAME`, `CLASSROOM_DJANGO_SECRET_KEY`             | Classroom khi bật                                                |
+| Giá trị trong `.env` VPS | Container nhận |
+| --- | --- |
+| `POSTGRES_*` | PostgreSQL và các app cần database, qua mapping dùng chung |
+| `CORE_DB_NAME`, `CORE_DJANGO_SECRET_KEY`, `CORE_REDIS_URL`, `IDENTITY_*`, `CLASSROOM_ACCESS_CODE_HMAC_KEY`, `WORK_*`, `CORE_R2_*` | Core Service (`core-service`, `core-worker`, `core-consumer`): `DATABASE_NAME`, `DJANGO_SECRET_KEY` và cấu hình hợp nhất của Identity/Classroom/Work |
 | `INTEGRATION_DB_NAME`, `INTEGRATION_DB_USER`, `INTEGRATION_DB_PASSWORD`, `INTEGRATION_DJANGO_SECRET_KEY`, `INTEGRATION_IDENTITY_URL` | Integration khi bật |
-| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY`       | Notification khi bật                                             |
+| `NOTIFICATION_DB_NAME`, `NOTIFICATION_DJANGO_SECRET_KEY` | Notification khi bật |
+| `AI_DB_NAME`, `AI_*` | AI khi bật |
 
 Giá trị thật nằm trong `.env`; `infra/env/<service>.env` chỉ ánh xạ `${TEN_BIEN}`.
 Không tạo thêm `.env` trong từng container và không đưa nguyên `.env` chung vào tất cả
-app. Hiện chỉ cần điền secret runtime của Identity và PostgreSQL, cùng khóa mail nếu
-dùng đăng ký/reset; các app chưa bật chưa cần secret riêng. Giữ các tên database theo
+app. Hiện cần điền secret runtime của Core Service (`CORE_DJANGO_SECRET_KEY`,
+`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa RSA Identity) và PostgreSQL, cùng khóa mail nếu
+dùng đăng ký/reset; các app ngoài chưa bật chưa cần secret riêng. Giữ các tên database theo
 mẫu cho script khởi tạo PostgreSQL. Xem [phạm vi staging và biến cần có](ci-cd.md).
 
 Sau khi sửa `.env`, phải tạo lại container của service để áp dụng biến mới, không chỉ
@@ -252,16 +254,17 @@ Dùng cả `-f docker-compose.staging.yml -f staging-images.json` khi gọi
 
 Các service Django hiện dùng chung `POSTGRES_USER` và `POSTGRES_PASSWORD`, nhưng mỗi service vẫn nhận `DATABASE_NAME` riêng. Đây là hiện trạng chưa đáp ứng credential riêng theo baseline đã nêu ở trên.
 
-Work nhận cấu hình qua `.env` → `infra/env/work-service.env` → `env_file` của HTTP,
-publisher, Beat và profile consumer → `config/settings/base.py`. Bốn biến
-`WORK_R2_ENDPOINT`, `WORK_R2_ACCESS_KEY`, `WORK_R2_SECRET_KEY`, `WORK_R2_BUCKET`
-có placeholder trống trong `.env.example`; chỉ điền credentials của môi trường
-được phép dùng. `WORK_STORAGE_ADAPTER` mặc định tại mapping là
-`infrastructure.storage.R2Storage`. `WORK_AI_ADAPTER` và
-`WORK_INTEGRATION_ADAPTER` mặc định vẫn là `UnavailableProposals` và
-`UnavailableIntegration`: thêm mapping không tự nối service thật. Giữ
-`WORK_CLASSROOM_DEV_ENABLED=false` ở staging; không đưa fixture test vào adapter
-runtime. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
+Core Service nhận cấu hình qua `.env` → `infra/env/core-service.env` → `env_file`
+của `core-service`, `core-worker` và `core-consumer` → `config/settings/base.py`.
+Bốn biến lưu trữ Cloudflare R2 hợp nhất là `CORE_R2_ENDPOINT`, `CORE_R2_ACCESS_KEY`,
+`CORE_R2_SECRET_KEY`, `CORE_R2_BUCKET` (kèm `CORE_R2_PUBLIC_URL` cho avatar), tự
+động fallback sang `WORK_R2_*` và `IDENTITY_R2_*` nếu tệp `.env` cũ còn dùng tên
+trước [ADR-006](../adr/006-consolidate-core-monolith.md). `CORE_STORAGE_ADAPTER`
+mặc định là `infrastructure.storage.R2Storage` (fallback `WORK_STORAGE_ADAPTER`).
+`WORK_AI_ADAPTER` và `WORK_INTEGRATION_ADAPTER` mặc định vẫn là
+`infrastructure.ai.UnavailableProposals` và
+`infrastructure.integration.UnavailableIntegration`: thêm mapping không tự nối
+service thật. Kiểm propagation với env test riêng không thay nghiệm thu R2/provider.
 
 `env_file` chỉ đưa các biến của file đó vào service được khai báo; không gán một file chung chứa toàn bộ secret cho mọi service.
 
@@ -279,60 +282,38 @@ nằm ngay trong `infra/nginx/nginx.conf`, đối chiếu ngày 2026-10-19 với
 
 **Dùng Compose hiện tại không cần khai báo biến IP trong `.env`, `.env.staging`
 hoặc `.env.example`.** Hạ tầng tự cấp cấu hình mạng Docker qua
-`infra/env/identity-service.env`; Nginx gửi IP người dùng đã xác nhận cho Identity.
+`infra/env/core-service.env`; Nginx gửi IP người dùng đã xác nhận cho Core Service.
 
 Trường hợp hạ tầng tùy chỉnh: mapping có thể ghi đè bằng biến môi trường nội bộ
-`IDENTITY_TRUSTED_PROXY_CIDRS`, là danh sách IP/CIDR proxy cách nhau bằng dấu phẩy.
+`IDENTITY_TRUSTED_PROXY_CIDRS` (hoặc `CORE_TRUSTED_PROXY_CIDRS`), là danh sách IP/CIDR proxy cách nhau bằng dấu phẩy.
 Mặc định `172.16.0.0/12` bao gồm mạng bridge Docker thông thường; nếu chuyển sang
 subnet ngoài dải này hoặc muốn giới hạn chặt hơn, quản trị hạ tầng cấu hình theo
 IP/subnet Nginx thực tế. Không dùng `0.0.0.0/0` hoặc `::/0` và không publish cổng
-HTTP của Identity ra ngoài. Chạy app ngoài Compose mặc định không tin header proxy.
+HTTP của Core ra ngoài. Chạy app ngoài Compose mặc định không tin header proxy.
 
-Middleware Identity chuẩn hóa `REMOTE_ADDR` trước session, audit, Axes và rate
+Middleware `common.middleware.TrustedProxyClientIPMiddleware` chuẩn hóa `REMOTE_ADDR` trước session, audit, Axes và rate
 limit. DRF bỏ qua header XFF thô (`NUM_PROXIES=0`); Axes đọc `REMOTE_ADDR` đã chuẩn
 hóa. Header không hợp lệ hoặc nguồn không được tin cậy giữ IP kết nối ban đầu.
 Các service khác chưa được đổi cách lấy IP trong thay đổi này.
 
-Triển khai cần cả image Identity mới và cấu hình Nginx mới; chỉ reload Nginx hoặc
+Triển khai cần cả image Core mới và cấu hình Nginx mới; chỉ reload Nginx hoặc
 restart image cũ chưa đủ. Sau deploy, đăng nhập mới qua domain Cloudflare rồi kiểm
 tra `user_sessions.ip_address` và audit của lần đó. Có thể đối chiếu IP proxy bằng
 `docker inspect utask-nginx-1 --format '{{json .NetworkSettings.Networks}}'`.
 Kiểm tra thêm request trực tiếp có header giả không được ghi nhận là IP giả.
 Session/audit cũ giữ nguyên IP lịch sử; kiểm thử local không thay cho xác minh VPS.
 
-Classroom nhận cấu hình qua `.env` → `infra/env/classroom-service.env` → API,
-publisher, Beat, consumer → `config/settings/base.py`. Cần khóa HMAC
-`CLASSROOM_ACCESS_CODE_HMAC_KEY`, khóa caller Identity
-`IDENTITY_CLASSROOM_SERVICE_KEY` và khóa Work `CLASSROOM_WORK_SERVICE_KEY`.
-Các secret để trống trong mẫu, phải điền riêng từng môi trường. Caller keys
-`classroom`/`work` trong `IDENTITY_SERVICE_KEYS` phải khớp; không thay route
-Identity để nối Classroom. Work dùng `CLASSROOM_BASE_URL`, adapter
-`RemoteClassroom`, cùng khóa Work; staging giữ chế độ Classroom dev tắt.
-
-Classroom Celery dùng Redis DB3 (`CLASSROOM_REDIS_URL`); Work dùng DB2.
-`CLASSROOM_KAFKA_TOPIC`, `CLASSROOM_WORK_KAFKA_TOPIC`, nhóm đọc và DLQ có mapping
-riêng; phía Work nhận các biến `WORK_CLASSROOM_KAFKA_*`. `KAFKA_LOG_RETENTION_MS`
-mặc định 604800000 (7 ngày) là mặc định broker cho topic nghiệp vụ và DLQ
-không có override; topic đã tồn tại có cấu hình riêng cần kiểm trực tiếp.
-Chi tiết tại [Classroom backend](../../classroom-service/README.md).
-
-Mapping Work dùng `CLASSROOM_KAFKA_TOPIC` ở `.env` làm nguồn cho
-`WORK_CLASSROOM_KAFKA_TOPIC` trong container để bên gửi Classroom và bên nhận
-Work dùng cùng topic. `WORK_KAFKA_TOPIC`, nhóm đọc
-`WORK_CLASSROOM_KAFKA_GROUP`, topic lỗi `WORK_CLASSROOM_KAFKA_DLQ_TOPIC` và
-giới hạn `WORK_CLASSROOM_CONSUMER_MAX_RETRIES` cũng đi qua mapping này cho
-API và mọi worker Work ở cả Compose local lẫn staging. Chỉ khai báo trong
-`.env.example` không tự đưa biến vào container; phải có ánh xạ `env_file`.
-Consumer Classroom của Work dùng cùng hàm cấu hình kết nối với publisher,
-consumer Identity và bên gửi thông điệp lỗi, gồm tài khoản, mật khẩu và CA
-khi dùng Kafka cloud. Quy tắc chỉ xác nhận offset sau xử lý hoặc DLQ thành công
-được giữ nguyên; kiểm thử cấu hình không thay cho nghiệm thu luồng sự kiện thật.
-
-Consumer hồ sơ Work dùng `WORK_IDENTITY_KAFKA_TOPIC`; khi để trống, mapping lấy
-`IDENTITY_KAFKA_TOPIC` (mặc định `utask.identity.events`) để khớp producer Identity.
-Không tạo broker Identity riêng. Đã có kiểm chứng local riêng tại
-[Work nhận sự kiện Identity](../../project-service/identity-events.md); không coi đó là
-nghiệm thu staging hoặc consumer Notification.
+Sau [ADR-006](../adr/006-consolidate-core-monolith.md), Identity, Classroom và
+Work chạy chung trong `apps/core-service` nên không còn cần các khóa caller nội
+bộ giữa ba miền (`IDENTITY_CLASSROOM_SERVICE_KEY`, `IDENTITY_WORK_SERVICE_KEY`,
+`CLASSROOM_WORK_SERVICE_KEY`) hay consumer Kafka nội bộ Classroom/Identity trong
+Work. Core Service dùng chung `CORE_REDIS_URL` (mặc định `redis://redis:6379/0`
+với `KEY_PREFIX="core"`), cần `CLASSROOM_ACCESS_CODE_HMAC_KEY` cho mã lớp/mã mời,
+và chỉ giữ 2 topic Kafka outbound đối ngoại (`IDENTITY_KAFKA_TOPIC=utask.identity.events`,
+`WORK_KAFKA_TOPIC=utask.work.events`) cùng 1 consumer inbound
+(`WORK_INTEGRATION_KAFKA_GROUP`, `WORK_INTEGRATION_DLQ_TOPIC=utask.work.integration.dlq`).
+`IDENTITY_SERVICE_KEYS` và `WORK_SERVICE_KEYS` tiếp tục lưu các khóa cho service
+ngoài (`ai`, `integration`, `notification`).
 
 Image prefix/tag và khóa RSA Identity là các đầu vào của staging Compose.
 Workflow cấp image app/worker theo digest qua `staging-images.json`;
@@ -344,18 +325,18 @@ không publish HTTPS 443, mount chứng chỉ hoặc chạy Certbot. TLS trên V
 chưa được xác minh; xem [cấu hình staging](ci-cd.md#chuẩn-bị-máy-staging).
 Các giá trị OAuth/R2/caller keys nằm trong `.env` của từng máy; file ánh xạ chỉ
 chứa `${...}` hoặc hằng cấu hình container không bí mật. Không điền credential hoặc
-flags trực tiếp vào `infra/env/identity-service.env`.
+flags trực tiếp vào `infra/env/core-service.env`.
 
-Local để `IDENTITY_REDIS_URL` trống theo cấu hình cache hiện tại. Compose staging đặt
-mặc định Redis `redis://redis:6379/0` và Integration `http://integration-service:8000`;
+`infra/env/core-service.env` đặt mặc định `CORE_REDIS_URL=redis://redis:6379/0`
+và `IDENTITY_INTEGRATION_URL=http://integration-service:8000`;
 giá trị không trống trong `.env` có thể thay các mặc định này. Chỉ bật OAuth/avatar sau
 khi có đủ credential và callback theo [tài liệu Identity](../../identity-service/README.md).
 
 Nếu đổi tên database, cập nhật giá trị trong `.env` và chuẩn bị database tương ứng có
-chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; staging chỉ
-chạy script qua cơ chế khởi tạo volume mới; khi deploy có AI, script còn chạy lại
-trên PostgreSQL đã healthy để bổ sung database AI còn thiếu trước migration.
-Sửa `.env` không tự đổi tên database hoặc
+chủ đích. Local wrapper gọi script bảo đảm database ở mỗi lần khởi động; trên staging,
+khi deploy có `core-service` hoặc `ai-service`, `scripts/deploy_staging.sh` gọi
+`init-databases.sh` trên PostgreSQL đã healthy để tạo các database còn thiếu trước
+bước migration. Sửa `.env` không tự đổi tên database hoặc
 chuyển dữ liệu. Không xóa volume để áp dụng biến môi trường.
 
 ## Cấu hình AI trong Compose root
@@ -394,7 +375,9 @@ AI_WORK_SERVICE_KEY=<secret khớp WORK_SERVICE_KEYS.ai>
 ```
 
 Hai map URL Work mặc định nằm trong `apps/ai-service/src/config.py`, dùng
-`work-service:8000`. Chỉ đặt `AI_AUTHORIZATION_URLS`/`AI_CONTEXT_URLS` khi cần
+`work-service:8000` (và `AI_IDENTITY_BASE_URL` mặc định `http://identity-service:8000`);
+cả hai tên host đều trỏ về `core-service:8000` nhờ Docker network aliases theo
+[ADR-006](../adr/006-consolidate-core-monolith.md). Chỉ đặt `AI_AUTHORIZATION_URLS`/`AI_CONTEXT_URLS` khi cần
 override toàn bộ map; giá trị rỗng dùng mặc định, JSON `{}` ghi đè thành map
 rỗng và sẽ bị từ chối ở staging/production. Xóa hai biến khỏi `.env` cũ nếu
 muốn dùng mặc định mới. Mapping trong `infra/env/ai-service.env` chuyển override
@@ -413,8 +396,9 @@ Work vẫn tự kiểm tra quyền domain mỗi lần authorize/context; cờ n�
 JWT, kiểm tra session Identity hoặc kiểm tra quyền.
 
 Settings của AI từ chối khởi động staging/production khi thiếu issuer,
-audience, key AI→Identity hoặc URL authorize/context bắt buộc. API, worker,
-dispatcher và beat dùng chung environment. Compose vẫn render được khi
+audience, key AI→Identity hoặc URL authorize/context bắt buộc. API, worker và
+dispatcher dùng chung environment (trên staging 1 VPS, `ai-worker` nhúng Beat
+qua cờ `-B`; production đa replica cần tách Beat singleton riêng). Compose vẫn render được khi
 không bật AI mà thiếu secret; khi bật AI phải điền đủ trước khi chạy
 migration/khởi động. Kiểm thử mock và render Compose không thay thế kiểm
 tra phiên Identity hoặc quyền domain thật. Bảng URL/key và thứ tự rollout nằm
