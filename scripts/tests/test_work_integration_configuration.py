@@ -1,4 +1,4 @@
-"""Work connection configuration: one consumer container and private receipt."""
+"""Core/Work integration configuration: one consumer container and private receipt."""
 
 import json
 import os
@@ -8,30 +8,29 @@ from pathlib import Path
 
 import yaml
 
+from scripts.discover_services import load_compose_services
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class WorkIntegrationConfigurationTests(unittest.TestCase):
-    def test_consumer_reuses_work_image_env_and_private_kafka_network(self):
+    def test_consumer_reuses_core_image_env_and_private_kafka_network(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
-            services = yaml.safe_load((ROOT / filename).read_text(encoding="utf-8"))[
-                "services"
-            ]
-            consumer = services["work-consumer"]
-            api = services["work-service"]
+            services = load_compose_services(ROOT / filename)
+            consumer = services["core-consumer"]
+            api = services["core-service"]
             self.assertEqual(consumer["image"], api["image"])
             self.assertEqual(consumer["env_file"], api["env_file"])
             self.assertEqual(
-                consumer["command"], ["python", "manage.py", "consume_work"]
+                consumer["command"], ["python", "manage.py", "consume_integration"]
             )
-            self.assertEqual(consumer.get("profiles", []), api.get("profiles", []))
             self.assertEqual(
                 [
                     name
                     for name in services
-                    if name.startswith("work-") and name.endswith("consumer")
+                    if name.startswith("core-") and name.endswith("consumer")
                 ],
-                ["work-consumer"],
+                ["core-consumer"],
             )
             self.assertIn("healthcheck", consumer)
             self.assertEqual(consumer["stop_grace_period"], "15s")
@@ -41,8 +40,8 @@ class WorkIntegrationConfigurationTests(unittest.TestCase):
                 consumer["depends_on"]["kafka"]["condition"], "service_healthy"
             )
 
-    def test_work_mapping_contains_only_variable_references_and_safe_defaults(self):
-        text = (ROOT / "infra/env/work-service.env").read_text(encoding="utf-8")
+    def test_core_mapping_contains_only_variable_references_and_safe_defaults(self):
+        text = (ROOT / "infra/env/core-service.env").read_text(encoding="utf-8")
         example = (ROOT / ".env.example").read_text(encoding="utf-8")
         for name in [
             "WORK_INTEGRATION_BASE_URL",
@@ -75,10 +74,9 @@ class WorkIntegrationConfigurationTests(unittest.TestCase):
         text = (ROOT / "infra/kafka/start-kafka.sh").read_text(encoding="utf-8")
         mapping = (ROOT / "infra/env/kafka-startup.env").read_text(encoding="utf-8")
         self.assertIn("utask.integration.events", text)
-        self.assertIn("WORK_IDENTITY_KAFKA_TOPIC", text)
-        self.assertIn("utask.work.profile.dlq", text)
+        self.assertIn("IDENTITY_KAFKA_TOPIC", text)
         self.assertIn(
-            "WORK_IDENTITY_KAFKA_TOPIC=${WORK_IDENTITY_KAFKA_TOPIC:-${IDENTITY_KAFKA_TOPIC:-utask.identity.events}}",
+            "IDENTITY_KAFKA_TOPIC=${IDENTITY_KAFKA_TOPIC:-utask.identity.events}",
             mapping,
         )
         self.assertIn("WORK_INTEGRATION_DLQ_TOPIC", text)
@@ -119,12 +117,7 @@ class WorkIntegrationConfigurationTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             services = json.loads(result.stdout)["services"]
-            for name in [
-                "work-service",
-                "work-publisher",
-                "work-beat",
-                "work-consumer",
-            ]:
+            for name in ["core-service", "core-worker", "core-consumer"]:
                 values = services[name]["environment"]
                 self.assertEqual(
                     str(values["WORK_GITHUB_CONNECTION_ENABLED"]).lower(), "true"

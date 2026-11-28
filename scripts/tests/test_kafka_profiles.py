@@ -57,13 +57,13 @@ class KafkaProfileDeploymentTests(unittest.TestCase):
             with (
                 self.subTest(selected=selected),
                 deployment_runtime(
-                    services="work-service",
-                    migrations="work-service",
-                    paths="/api/work/healthz",
+                    services="core-service",
+                    migrations="core-service",
+                    paths="/api/auth/healthz /api/classroom/healthz /api/work/healthz",
                 ) as (root, env, calls),
             ):
                 env["COMPOSE_TEST_ENVIRONMENT"] = f"COMPOSE_PROFILES={selected}\n"
-                env["EXPECTED_SERVICE_NAMES"] = "work-service work-consumer"
+                env["EXPECTED_SERVICE_NAMES"] = "core-service core-worker core-consumer"
                 result = run_staging_deploy(root, env)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 commands = docker_calls(calls)
@@ -71,16 +71,16 @@ class KafkaProfileDeploymentTests(unittest.TestCase):
                     if "pull" in command or "up" in command:
                         self.assertEqual(
                             any(
-                                command[i : i + 2] == ["--profile", "work-consumer"]
+                                command[i : i + 2] == ["--profile", "core-consumer"]
                                 for i in range(len(command) - 1)
                             ),
                             False,
                         )
                 runtime_up = next(c for c in commands if "up" in c and "--no-deps" in c)
-                self.assertIn("work-consumer", runtime_up)
+                self.assertIn("core-consumer", runtime_up)
 
     def test_server_kafka_profile_controls_broker_start_and_wait(self):
-        for selected in ("", "kafka", "kafka,work-service"):
+        for selected in ("", "kafka", "kafka,core-service"):
             with (
                 self.subTest(selected=selected),
                 deployment_runtime() as (root, env, calls),
@@ -133,24 +133,14 @@ class NativeKafkaComposeTests(unittest.TestCase):
     def test_staging_certificate_directory_is_read_only_and_ca_file_optional(self):
         recipients = {
             "notification-service",
-            "notification-migrate",
             "notification-worker",
-            "notification-beat",
             "notification-identity-consumer",
             "notification-work-consumer",
-            "identity-publisher",
             "integration-service",
-            "integration-migrate",
             "integration-worker",
-            "integration-beat",
-            "work-service",
-            "work-publisher",
-            "work-beat",
-            "work-consumer",
-            "classroom-service",
-            "classroom-publisher",
-            "classroom-beat",
-            "classroom-work-consumer",
+            "core-service",
+            "core-worker",
+            "core-consumer",
         }
         env = {
             key: value
@@ -167,6 +157,9 @@ class NativeKafkaComposeTests(unittest.TestCase):
             shutil.copyfile(
                 ROOT / "docker-compose.staging.yml",
                 checkout / "docker-compose.staging.yml",
+            )
+            shutil.copytree(
+                ROOT / "infra/compose/staging", checkout / "infra/compose/staging"
             )
             self.assertFalse((mappings / "ca.pem").exists())
             for ca_location in ("", "/run/kafka-certificates/ca.pem"):
@@ -256,9 +249,7 @@ class NativeKafkaComposeTests(unittest.TestCase):
                             "-f",
                             base,
                             "--profile",
-                            "work-service",
-                            "--profile",
-                            "classroom-service",
+                            "core-service",
                         ]
                         if enabled:
                             args += ["--profile", "kafka"]
@@ -274,7 +265,7 @@ class NativeKafkaComposeTests(unittest.TestCase):
                         services = json.loads(result.stdout)["services"]
                         self.assertEqual("kafka" in services, enabled)
                         for name, runtime in services.items():
-                            if name.startswith(("work-", "classroom-")):
+                            if name.startswith("core-"):
                                 for variable, value in kafka_settings.items():
                                     self.assertEqual(
                                         runtime["environment"][variable], value

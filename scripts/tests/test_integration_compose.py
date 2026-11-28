@@ -11,25 +11,30 @@ from unittest.mock import patch
 
 import yaml
 
-from scripts.discover_services import discover_services
+from scripts.discover_services import discover_services, load_compose_services
 
 ROOT = Path(__file__).resolve().parents[2]
+INTEGRATION_LOCAL_PROCESSES = ("integration-service", "integration-worker")
+INTEGRATION_STAGING_PROCESSES = ("integration-service", "integration-worker")
+
+
+def _integration_processes(filename: str) -> tuple[str, ...]:
+    return (
+        INTEGRATION_STAGING_PROCESSES
+        if "staging" in filename
+        else INTEGRATION_LOCAL_PROCESSES
+    )
 
 
 class IntegrationComposeTests(unittest.TestCase):
     def test_kafka_is_optional_and_certificates_are_read_only(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(filename=filename):
-                services = yaml.safe_load((ROOT / filename).read_text())["services"]
+                services = load_compose_services(ROOT / filename)
                 dependency = services["integration-worker"]["depends_on"]["kafka"]
                 self.assertEqual(dependency["condition"], "service_healthy")
                 self.assertIs(dependency["required"], False)
-                for name in (
-                    "integration-service",
-                    "integration-migrate",
-                    "integration-worker",
-                    "integration-beat",
-                ):
+                for name in _integration_processes(filename):
                     mounts = services[name]["volumes"]
                     self.assertIn(
                         {
@@ -93,12 +98,7 @@ class IntegrationComposeTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, "Compose rendering failed")
                     services = json.loads(result.stdout)["services"]
                     self.assertEqual("kafka" in services, local_broker)
-                    for name in (
-                        "integration-service",
-                        "integration-migrate",
-                        "integration-worker",
-                        "integration-beat",
-                    ):
+                    for name in _integration_processes(filename):
                         for key, expected in configuration.items():
                             self.assertEqual(
                                 services[name]["environment"][key], expected
@@ -159,12 +159,7 @@ class IntegrationComposeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     services = json.loads(result.stdout)["services"]
-                    for name in (
-                        "integration-service",
-                        "integration-migrate",
-                        "integration-worker",
-                        "integration-beat",
-                    ):
+                    for name in _integration_processes(filename):
                         environment = services[name]["environment"]
                         for key, value in expected.items():
                             self.assertEqual(
@@ -176,34 +171,28 @@ class IntegrationComposeTests(unittest.TestCase):
     def test_dedicated_credentials_and_preparation_gate_in_both_compose_files(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(filename=filename):
-                services = yaml.safe_load((ROOT / filename).read_text())["services"]
+                services = load_compose_services(ROOT / filename)
                 api = services["integration-service"]
                 self.assertEqual(api["profiles"], ["integration-service"])
                 self.assertTrue(api["init"])
                 self.assertNotIn("./infra/env/database.env", api["env_file"])
                 self.assertIn("./infra/env/integration-service.env", api["env_file"])
                 self.assertEqual(
-                    api["depends_on"]["integration-migrate"]["condition"],
-                    "service_completed_successfully",
-                )
-                self.assertEqual(
                     api["depends_on"]["redis"]["condition"], "service_healthy"
                 )
-                migration = services["integration-migrate"]
+                # Both local and single-VPS staging drop redundant integration-migrate
+                # (API entrypoint + deploy_staging.sh migrate) and embed Beat (`-B`).
+                self.assertNotIn("integration-migrate", services)
+                self.assertNotIn("integration-beat", services)
+                worker = services["integration-worker"]
+                self.assertIn("-B", worker["command"])
                 self.assertEqual(
-                    migration["command"],
-                    ["python", "manage.py", "migrate", "--noinput"],
+                    worker["depends_on"]["integration-service"]["condition"],
+                    "service_healthy",
                 )
-                self.assertNotIn("./infra/env/database.env", migration["env_file"])
-                for name in ("integration-worker", "integration-beat"):
-                    process = services[name]
-                    self.assertEqual(
-                        process["depends_on"]["integration-migrate"]["condition"],
-                        "service_completed_successfully",
-                    )
-                    self.assertIn(
-                        "./infra/env/integration-service.env", process["env_file"]
-                    )
+                self.assertIn(
+                    "./infra/env/integration-service.env", worker["env_file"]
+                )
                 postgres = services["postgres"]
                 if filename == "docker-compose.yml":
                     self.assertEqual(
@@ -236,12 +225,13 @@ class IntegrationComposeTests(unittest.TestCase):
             (root / "docker-compose.staging.yml").write_text(
                 (ROOT / "docker-compose.staging.yml").read_text()
             )
+            shutil.copytree(
+                ROOT / "infra/compose/staging", root / "infra/compose/staging"
+            )
             # Existing active Django apps remain fixtures; Integration is discovered
             # entirely from the same three manifests as every other Python app.
             for name in (
-                "identity-service",
-                "work-service",
-                "classroom-service",
+                "core-service",
                 "integration-service",
             ):
                 app = root / "apps" / name
@@ -336,11 +326,11 @@ class IntegrationComposeTests(unittest.TestCase):
                 )
                 self.assertEqual(environment["POSTGRES_HOST"], "postgres")
                 self.assertEqual(environment["DATABASE_NAME"], "integration_db")
-                for name in (
-                    "integration-service",
-                    "integration-worker",
-                    "integration-beat",
-                ):
+                for name in [
+                    p
+                    for p in _integration_processes(filename)
+                    if p != "integration-migrate"
+                ]:
                     self.assertEqual(
                         services[name]["environment"]["INTEGRATION_REDIS_URL"],
                         "redis://redis:6379/9",

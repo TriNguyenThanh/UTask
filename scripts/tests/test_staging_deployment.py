@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch
 import yaml
 
 from scripts import ci_local
-from scripts.discover_services import discover_services
+from scripts.discover_services import discover_services, load_compose_services
 from scripts.tests.fixtures.deployment import (
     INPUT_NAMES,
     deployment_runtime,
@@ -38,7 +38,7 @@ GATEWAY_CHECK = REMOTE.split("gateway_check=$(cat <<'PY'\n", 1)[1].split("\nPY",
 
 class StagingDeploymentTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI required")
-    def test_identity_only_compose_does_not_require_ai_runtime_secrets(self):
+    def test_core_only_compose_does_not_require_ai_runtime_secrets(self):
         env = {
             key: value
             for key, value in os.environ.items()
@@ -58,7 +58,7 @@ class StagingDeploymentTests(unittest.TestCase):
                 "-f",
                 "docker-compose.staging.yml",
                 "--profile",
-                "identity-service",
+                "core-service",
                 "config",
                 "--format",
                 "json",
@@ -71,13 +71,13 @@ class StagingDeploymentTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         services = json.loads(result.stdout)["services"]
-        self.assertIn("identity-service", services)
+        self.assertIn("core-service", services)
         self.assertFalse(
             {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"} & services.keys()
         )
 
     def test_deploy_skips_ai_live_evaluation_with_or_without_evaluation_settings(self):
-        for selected in ("identity-service", "identity-service ai-service"):
+        for selected in ("core-service", "core-service ai-service"):
             for settings in ("", None):
                 with (
                     self.subTest(selected=selected, settings=settings),
@@ -169,8 +169,8 @@ class StagingDeploymentTests(unittest.TestCase):
             )
             # GitHub's fromJSON evaluates this JSON string before workflow_call.
             gateway = json.loads(outputs["gateway_service"])
-        compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
-        self.assertIn(gateway, compose["services"])
+        compose = load_compose_services(ROOT / "docker-compose.staging.yml")
+        self.assertIn(gateway, compose)
         with deployment_runtime() as (root, env, calls):
             env["gateway_service"] = gateway
             env["EXPECTED_GATEWAY_SERVICE"] = gateway
@@ -188,7 +188,7 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertNotIn(outputs["gateway_service"], command)
 
     def test_ai_migration_runs_for_every_deployment_without_persistent_job(self):
-        with deployment_runtime(services="identity-service ai-service") as (
+        with deployment_runtime(services="core-service ai-service") as (
             root,
             env,
             calls,
@@ -211,7 +211,7 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_ai_database_preparation_failure_stops_before_migrations_and_rollout(self):
         with deployment_runtime(
-            services="identity-service ai-service",
+            services="core-service ai-service",
             fail_on="database-preparation",
             fail_code=74,
         ) as (root, env, calls):
@@ -240,9 +240,9 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_remote_deploy_continues_after_compose_run_consumes_stdin(self):
         with deployment_runtime(
-            services="identity-service sample-service worker-service",
-            migrations="identity-service sample-service",
-            paths="/api/auth/healthz /api/sample/healthz",
+            services="core-service sample-service worker-service",
+            migrations="core-service sample-service",
+            paths="/api/auth/healthz /api/classroom/healthz /api/work/healthz /api/sample/healthz",
         ) as (root, env, calls):
             names = {
                 "registry_token": "STAGING_REGISTRY_TOKEN",
@@ -278,11 +278,17 @@ class StagingDeploymentTests(unittest.TestCase):
             checks = [c for c in commands if "exec" in c and "migrate" in c]
             self.assertEqual(
                 [c[c.index("--interactive=false") + 1] for c in checks],
-                ["identity-service", "sample-service"],
+                ["core-service", "sample-service"],
             )
             probes = [c for c in commands if GATEWAY_CHECK in c]
             self.assertEqual(
-                [c[-2] for c in probes], ["/api/auth/healthz", "/api/sample/healthz"]
+                [c[-2] for c in probes],
+                [
+                    "/api/auth/healthz",
+                    "/api/classroom/healthz",
+                    "/api/work/healthz",
+                    "/api/sample/healthz",
+                ],
             )
             self.assertEqual(
                 next(c for c in commands if "up" in c)[-3:],
@@ -453,7 +459,9 @@ class StagingDeploymentTests(unittest.TestCase):
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
+            compose = {
+                "services": load_compose_services(ROOT / "docker-compose.staging.yml")
+            }
             for name, overrides in (extra_runtime or {}).items():
                 compose["services"][name] = {
                     **compose["services"].get(name, {}),
@@ -481,31 +489,35 @@ class StagingDeploymentTests(unittest.TestCase):
                 deployment=changes.get("deployment", False),
             )
 
-    def test_identity_does_not_require_unimplemented_services_or_web(self):
+    def test_core_does_not_require_unimplemented_services_or_web(self):
         outputs = self.validate(
-            ["identity-service"], {"files": ["apps/identity-service/models.py"]}
+            ["core-service"], {"files": ["apps/core-service/models.py"]}
         )
         self.assertEqual(
             outputs["release_matrix"],
-            {"include": [{"service": "identity-service"}]},
+            {"include": [{"service": "core-service"}]},
         )
         self.assertFalse(outputs["web_ready"])
         self.assertTrue(outputs["checks"]["include"][0]["postgres"])
         self.assertTrue(outputs["checks"]["include"][0]["redis"])
         self.assertIn(
-            "IDENTITY_TEST_REDIS_URL",
+            "CORE_REDIS_URL",
             json.loads(outputs["checks"]["include"][0]["test_env"]),
+        )
+        self.assertEqual(
+            outputs["gateway_health_paths"],
+            ["/api/auth/healthz", "/api/classroom/healthz", "/api/work/healthz"],
         )
 
     def test_missing_enabled_service_blocks_release(self):
         with self.assertRaisesRegex(ValueError, "missing"):
-            self.validate(["identity-service"], files=False)
+            self.validate(["core-service"], files=False)
 
     def test_invalid_selection_blocks_release(self):
         for services in (
             [],
             ["unknown"],
-            ["work-service"],
+            ["ai-service"],
         ):
             with self.subTest(services=services), self.assertRaises(ValueError):
                 self.validate(services)
@@ -514,12 +526,12 @@ class StagingDeploymentTests(unittest.TestCase):
         self,
     ):
         outputs = self.validate(
-            ["identity-service", "ai-service"],
+            ["core-service", "ai-service"],
             {"shared": True},
             fastapi=["ai-service"],
         )
-        self.assertEqual(outputs["services"], ["ai-service", "identity-service"])
-        self.assertEqual(outputs["django_services"], ["identity-service"])
+        self.assertEqual(outputs["services"], ["ai-service", "core-service"])
+        self.assertEqual(outputs["django_services"], ["core-service"])
         check = outputs["checks"]["include"][0]
         self.assertTrue(check["postgres"])
         self.assertTrue(check["redis"])
@@ -533,7 +545,7 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_postgres_detection_follows_transitive_dependencies_and_image(self):
         outputs = self.validate(
-            ["identity-service", "sample-service"],
+            ["core-service", "sample-service"],
             {"shared": True},
             fastapi=["sample-service"],
             extra_runtime={
@@ -565,9 +577,7 @@ class StagingDeploymentTests(unittest.TestCase):
         self.assertIn("isolated-database", outputs["infrastructure_services"])
 
     def test_migration_job_requires_application_image_without_healthcheck(self):
-        compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-            "services"
-        ]
+        compose = load_compose_services(ROOT / "docker-compose.staging.yml")
         migration = {
             "profiles": ["ai-service"],
             "image": compose["ai-service"]["image"],
@@ -575,7 +585,7 @@ class StagingDeploymentTests(unittest.TestCase):
         }
         self.assertNotIn("healthcheck", migration)
         outputs = self.validate(
-            ["identity-service", "ai-service"], fastapi=["ai-service"]
+            ["core-service", "ai-service"], fastapi=["ai-service"]
         )
         self.assertNotIn("sample-migration", outputs["infrastructure_services"])
         for overrides in ({"application": "missing-service"}, {"image": "other:fixed"}):
@@ -589,43 +599,42 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "migration must use the image"),
             ):
                 self.validate(
-                    ["identity-service", "ai-service"],
+                    ["core-service", "ai-service"],
                     fastapi=["ai-service"],
                     extra_runtime={"sample-migration": invalid},
                 )
 
     def test_dispatcher_requires_healthcheck_even_when_migration_is_one_shot(self):
-        dispatcher = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-            "services"
-        ]["ai-dispatcher"]
+        dispatcher = load_compose_services(ROOT / "docker-compose.staging.yml")[
+            "ai-dispatcher"
+        ]
         dispatcher["healthcheck"] = None
         with self.assertRaisesRegex(
             ValueError, "ai-dispatcher requires an enabled Compose healthcheck"
         ):
             self.validate(
-                ["identity-service", "ai-service"],
+                ["core-service", "ai-service"],
                 fastapi=["ai-service"],
                 extra_runtime={"ai-dispatcher": dispatcher},
             )
 
     def test_unimplemented_domain_dependency_still_blocks_discovery(self):
-        with self.assertRaisesRegex(ValueError, "unimplemented service work-service"):
+        with self.assertRaisesRegex(ValueError, "unimplemented service integration-service"):
             self.validate(
-                ["identity-service", "ai-service"],
+                ["core-service", "ai-service"],
                 extra_runtime={
                     "ai-service": {
                         "profiles": ["ai-service"],
-                        "depends_on": {"work-service": {}},
+                        "depends_on": {"integration-service": {}},
                     }
                 },
                 fastapi=["ai-service"],
             )
 
     def test_ai_processes_share_image_environment_and_migration_gate(self):
-        compose = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())
-        services = compose["services"]
+        services = load_compose_services(ROOT / "docker-compose.staging.yml")
         api = services["ai-service"]
-        for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat"):
+        for name in ("ai-service", "ai-worker", "ai-dispatcher"):
             with self.subTest(name=name):
                 service = services[name]
                 self.assertEqual(service["profiles"], ["ai-service"])
@@ -641,6 +650,8 @@ class StagingDeploymentTests(unittest.TestCase):
                         service["depends_on"]["ai-service"]["condition"],
                         "service_healthy",
                     )
+        self.assertIn("-B", services["ai-worker"]["command"])
+        self.assertNotIn("ai-beat", services)
         self.assertNotIn("ai-migrate", services)
         self.assertNotIn("work-service", api["depends_on"])
         self.assertNotIn("integration-service", api["depends_on"])
@@ -696,7 +707,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         check=True,
                     )
                     compose = json.loads(result.stdout)
-                    for name in ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat"):
+                    for name in ("ai-service", "ai-worker", "ai-dispatcher"):
                         runtime = compose["services"][name]["environment"]
                         for key in ("AI_CONTEXT_URLS", "AI_AUTHORIZATION_URLS"):
                             if isinstance(maps, dict):
@@ -775,9 +786,9 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_ai_deploy_migrates_after_dependencies_and_stops_on_failure(self):
         for selected, failure in (
-            ("identity-service ai-service", 0),
-            ("identity-service ai-service", 73),
-            ("identity-service", 0),
+            ("core-service ai-service", 0),
+            ("core-service ai-service", 73),
+            ("core-service", 0),
         ):
             with (
                 self.subTest(selected=selected, failure=failure),
@@ -829,7 +840,7 @@ class StagingDeploymentTests(unittest.TestCase):
                         self.assertIn("--no-deps", runtime[0])
                         self.assertIn("ai-worker", runtime[0])
                         self.assertIn("ai-dispatcher", runtime[0])
-                        self.assertIn("ai-beat", runtime[0])
+                        self.assertNotIn("ai-beat", runtime[0])
                         self.assertNotIn("ai-migrate", runtime[0])
                     self.assertEqual(
                         any("exec" in command for command in after), failure == 0
@@ -840,37 +851,38 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_only_disabled_service_changes_do_not_trigger_release(self):
         outputs = self.validate(
-            ["identity-service"], {"files": ["apps/work-service/README.md"]}
+            ["core-service"], {"files": ["apps/ai-service/README.md"]}
         )
         self.assertFalse(outputs["release_needed"])
         self.assertFalse(outputs["checks_needed"])
 
     def test_deployment_change_builds_enabled_images_for_initial_release(self):
-        outputs = self.validate(["identity-service"], {"deployment": True})
+        outputs = self.validate(["core-service"], {"deployment": True})
         self.assertEqual(
-            outputs["release_matrix"], {"include": [{"service": "identity-service"}]}
+            outputs["release_matrix"], {"include": [{"service": "core-service"}]}
         )
         self.assertTrue(outputs["release_needed"])
 
     def test_release_matrix_contains_all_enabled_services(self):
         outputs = self.validate(
-            ["identity-service", "work-service"],
-            {"files": ["apps/work-service/models.py"]},
+            ["core-service", "integration-service"],
+            {"files": ["apps/integration-service/models.py"]},
         )
         self.assertEqual(
             outputs["release_matrix"]["include"],
             [
-                {"service": "identity-service"},
-                {"service": "work-service"},
+                {"service": "core-service"},
+                {"service": "integration-service"},
             ],
         )
         self.assertEqual(
-            [item["service"] for item in outputs["checks"]["include"]], ["work-service"]
+            [item["service"] for item in outputs["checks"]["include"]],
+            ["integration-service"],
         )
 
     def test_new_service_is_discovered_without_workflow_or_registry_changes(self):
         outputs = self.validate(
-            ["identity-service", "sample-service"],
+            ["core-service", "sample-service"],
             {"files": ["apps/sample-service/models.py"]},
             extra_runtime={
                 "sample-service": {
@@ -881,17 +893,22 @@ class StagingDeploymentTests(unittest.TestCase):
                 }
             },
         )
-        self.assertEqual(outputs["services"], ["identity-service", "sample-service"])
+        self.assertEqual(outputs["services"], ["core-service", "sample-service"])
         self.assertEqual(outputs["checks"]["include"][0]["service"], "sample-service")
         self.assertIn("sample-service", outputs["django_services"])
         self.assertEqual(
             outputs["gateway_health_paths"],
-            ["/api/auth/healthz", "/api/sample/healthz"],
+            [
+                "/api/auth/healthz",
+                "/api/classroom/healthz",
+                "/api/work/healthz",
+                "/api/sample/healthz",
+            ],
         )
 
     def test_non_django_service_does_not_receive_django_migrations(self):
         outputs = self.validate(
-            ["identity-service", "worker-service"],
+            ["core-service", "worker-service"],
             {"shared": True},
             extra_runtime={
                 "worker-service": {
@@ -902,16 +919,19 @@ class StagingDeploymentTests(unittest.TestCase):
             },
             fastapi=["worker-service"],
         )
-        self.assertEqual(outputs["django_services"], ["identity-service"])
+        self.assertEqual(outputs["django_services"], ["core-service"])
         self.assertFalse(outputs["checks"]["include"][1]["postgres"])
-        self.assertEqual(outputs["gateway_health_paths"], ["/api/auth/healthz"])
+        self.assertEqual(
+            outputs["gateway_health_paths"],
+            ["/api/auth/healthz", "/api/classroom/healthz", "/api/work/healthz"],
+        )
 
     def test_missing_gateway_metadata_blocks_service_discovery(self):
         with self.assertRaisesRegex(ValueError, "x-deploy.gateway_health_path"):
             self.validate(
-                ["identity-service"],
+                ["core-service"],
                 extra_runtime={
-                    "identity-service": {
+                    "core-service": {
                         "healthcheck": {"test": ["CMD", "true"]},
                         "x-deploy": {},
                     }
@@ -932,9 +952,9 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "absolute HTTP path"),
             ):
                 self.validate(
-                    ["identity-service"],
+                    ["core-service"],
                     extra_runtime={
-                        "identity-service": {
+                        "core-service": {
                             "healthcheck": {"test": ["CMD", "true"]},
                             "x-deploy": {"gateway_health_path": path},
                         }
@@ -955,9 +975,9 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "enabled Compose healthcheck"),
             ):
                 self.validate(
-                    ["identity-service"],
+                    ["core-service"],
                     extra_runtime={
-                        "identity-service": {
+                        "core-service": {
                             "healthcheck": healthcheck,
                             "x-deploy": {"gateway_health_path": None},
                         }
@@ -967,13 +987,13 @@ class StagingDeploymentTests(unittest.TestCase):
     def test_duplicate_gateway_paths_block_service_discovery(self):
         with self.assertRaisesRegex(ValueError, "Duplicate gateway_health_path"):
             self.validate(
-                ["identity-service", "work-service"],
+                ["core-service", "integration-service"],
                 extra_runtime={
-                    "work-service": {
-                        "profiles": ["work-service"],
-                        "image": yaml.safe_load(
-                            (ROOT / "docker-compose.staging.yml").read_text()
-                        )["services"]["work-service"]["image"],
+                    "integration-service": {
+                        "profiles": ["integration-service"],
+                        "image": load_compose_services(
+                            ROOT / "docker-compose.staging.yml"
+                        )["integration-service"]["image"],
                         "healthcheck": {"test": ["CMD", "true"]},
                         "x-deploy": {"gateway_health_path": "/api/auth/healthz"},
                     }
@@ -982,8 +1002,8 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_gateway_failure_stops_deployment_after_all_migration_checks(self):
         with deployment_runtime(
-            services="identity-service sample-service",
-            migrations="identity-service sample-service",
+            services="core-service sample-service",
+            migrations="core-service sample-service",
             paths="/api/auth/healthz /api/sample/healthz",
             fail_on="gateway",
             fail_code=75,
@@ -997,10 +1017,10 @@ class StagingDeploymentTests(unittest.TestCase):
 
     def test_new_service_without_runtime_config_blocks_release(self):
         with self.assertRaisesRegex(ValueError, "no staging Compose service"):
-            self.validate(["identity-service", "progress-service"])
+            self.validate(["core-service", "progress-service"])
 
     def test_local_ci_checks_detected_services_without_requiring_web(self):
-        outputs = self.validate(["identity-service"], {"shared": True})
+        outputs = self.validate(["core-service"], {"shared": True})
         discovery = subprocess.CompletedProcess([], 0, json.dumps(outputs), "")
         with (
             patch.object(ci_local, "parse_args") as args,
@@ -1027,11 +1047,11 @@ class StagingDeploymentTests(unittest.TestCase):
         self.assertEqual(regression.args[1], shlex.split(ci_command))
         self.assertLess(
             labels.index("Deployment regression tests"),
-            labels.index("Pytest for identity-service"),
+            labels.index("Pytest for core-service"),
         )
-        self.assertIn("Pytest for identity-service", labels)
+        self.assertIn("Pytest for core-service", labels)
         self.assertFalse(
-            any("work-service" in label or "Web" in label for label in labels)
+            any("integration-service" in label or "Web" in label for label in labels)
         )
 
     def test_ci_result_allows_skipped_jobs_and_blocks_failure_or_cancellation(self):
@@ -1076,8 +1096,11 @@ class StagingDeploymentTests(unittest.TestCase):
             result = run_staging_deploy(root, env)
             self.assertEqual(result.returncode, 73, result.stderr)
             commands = docker_calls(calls)
+            migration = next(i for i, c in enumerate(commands) if "migrate" in c)
             self.assertEqual(sum("up" in c for c in commands), 1)
-            self.assertFalse(any("exec" in c for c in commands))
+            self.assertFalse(
+                any("exec" in c or "up" in c for c in commands[migration + 1 :])
+            )
 
     def test_dependency_health_failure_stops_migration(self):
         with deployment_runtime(fail_on="up", fail_code=72) as (root, env, calls):
@@ -1086,19 +1109,15 @@ class StagingDeploymentTests(unittest.TestCase):
             self.assertFalse(any("migrate" in c for c in docker_calls(calls)))
 
     def test_auxiliary_healthcheck_is_required_and_dependencies_are_discovered(self):
-        outputs = self.validate(["identity-service", "work-service"])
+        outputs = self.validate(["core-service"])
         self.assertEqual(
             outputs["infrastructure_services"], ["kafka", "postgres", "redis"]
         )
-        for name in ("work-publisher", "work-beat", "nginx"):
-            runtime = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-                "services"
-            ][name]
+        for name in ("core-worker", "core-consumer", "nginx"):
+            runtime = load_compose_services(ROOT / "docker-compose.staging.yml")[name]
             runtime["healthcheck"] = {"test": ["NONE"]}
             with self.subTest(service=name), self.assertRaisesRegex(ValueError, name):
-                self.validate(
-                    ["identity-service", "work-service"], extra_runtime={name: runtime}
-                )
+                self.validate(["core-service"], extra_runtime={name: runtime})
 
     def test_nginx_config_failure_stops_before_migrations(self):
         with deployment_runtime(fail_on="nginx", fail_code=76) as (root, env, calls):
@@ -1138,7 +1157,7 @@ class StagingDeploymentTests(unittest.TestCase):
         script = step["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
         cases = (
             (service, digest)
-            for service in ("work-service", "ai-service")
+            for service in ("core-service", "ai-service")
             for digest in ("sha256:" + "a" * 64, "invalid", "")
         )
         for service, digest in cases:
@@ -1151,11 +1170,15 @@ class StagingDeploymentTests(unittest.TestCase):
                     ROOT / "docker-compose.staging.yml",
                     root / "docker-compose.staging.yml",
                 )
+                shutil.copytree(
+                    ROOT / "infra/compose/staging", root / "infra/compose/staging"
+                )
                 result = subprocess.run(
                     [os.sys.executable, "-c", script],
                     cwd=root,
                     env={
                         **os.environ,
+                        "PYTHONPATH": str(ROOT),
                         "SERVICE": service,
                         "IMAGE": "test/" + service,
                         "DIGEST": digest,
@@ -1174,13 +1197,12 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertEqual(
                     set(images),
                     {
-                        "work-service",
-                        "work-publisher",
-                        "work-beat",
-                        "work-consumer",
+                        "core-service",
+                        "core-worker",
+                        "core-consumer",
                     }
-                    if service == "work-service"
-                    else {"ai-service", "ai-worker", "ai-dispatcher", "ai-beat"},
+                    if service == "core-service"
+                    else {"ai-service", "ai-worker", "ai-dispatcher"},
                 )
                 self.assertTrue(
                     all(
@@ -1198,8 +1220,8 @@ class StagingDeploymentTests(unittest.TestCase):
         script = step["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
         for available in (
             [],
-            ["identity-service"],
-            ["identity-service", "work-service"],
+            ["core-service"],
+            ["core-service", "ai-service"],
         ):
             with (
                 self.subTest(available=available),
@@ -1227,7 +1249,7 @@ class StagingDeploymentTests(unittest.TestCase):
                     cwd=root,
                     env={
                         **os.environ,
-                        "STAGING_SERVICES": "identity-service work-service",
+                        "STAGING_SERVICES": "core-service ai-service",
                     },
                     capture_output=True,
                     text=True,
@@ -1297,27 +1319,43 @@ class StagingDeploymentTests(unittest.TestCase):
                 self.assertEqual(opener.open.call_args.kwargs["timeout"], 5)
 
     def test_gateway_name_is_read_from_compose(self):
-        gateway = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-            "services"
-        ]["nginx"]
+        gateway = load_compose_services(ROOT / "docker-compose.staging.yml")["nginx"]
         outputs = self.validate(
-            ["identity-service"],
+            ["core-service"],
             extra_runtime={"nginx": {"profiles": ["disabled"]}, "edge": gateway},
         )
         self.assertEqual(outputs["gateway_service"], "edge")
 
     def test_runtime_roles_ignore_image_string_conventions(self):
-        redis = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-            "services"
-        ]["redis"]
+        redis = load_compose_services(ROOT / "docker-compose.staging.yml")["redis"]
         redis["image"] = "${UTASK_IMAGE_PREFIX}/redis:fixed"
-        outputs = self.validate(["identity-service"], extra_runtime={"redis": redis})
+        outputs = self.validate(["core-service"], extra_runtime={"redis": redis})
         self.assertIn("redis", outputs["infrastructure_services"])
+
+    def test_staging_release_uploads_modular_compose_and_triggers_ci_filter(self):
+        upload = next(
+            step["run"]
+            for step in RELEASE["jobs"]["deploy-staging"]["steps"]
+            if step.get("name") == "Upload deployment files"
+        )
+        self.assertIn('"$workdir/infra/compose/staging"', upload)
+        self.assertIn(
+            'scp infra/compose/staging/*.yml "$target:${STAGING_WORKDIR}/infra/compose/staging/"',
+            upload,
+        )
+        ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+        step = next(
+            s
+            for s in ci["jobs"]["changes"]["steps"]
+            if s.get("id") == "filter"
+        )
+        filters = yaml.safe_load(step["with"]["filters"])
+        self.assertIn("infra/compose/staging/**", filters["deployment"])
 
     def test_unknown_runtime_role_blocks_release(self):
         with self.assertRaisesRegex(ValueError, "x-deploy.role"):
             self.validate(
-                ["identity-service"],
+                ["core-service"],
                 extra_runtime={
                     "cache": {
                         "healthcheck": {"test": ["CMD", "true"]},
@@ -1327,7 +1365,7 @@ class StagingDeploymentTests(unittest.TestCase):
             )
 
     def test_discovery_selects_django_checks_with_project_settings(self):
-        outputs = self.validate(["identity-service"], {"shared": True})
+        outputs = self.validate(["core-service"], {"shared": True})
         check = outputs["checks"]["include"][0]
         self.assertTrue(check["django"])
         self.assertEqual(

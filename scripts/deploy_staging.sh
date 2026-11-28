@@ -55,10 +55,12 @@ infrastructure=("${active_infrastructure[@]}")
 if (( ${#infrastructure[@]} )); then
   "${compose[@]}" up -d --no-build --wait --wait-timeout 120 "${infrastructure[@]}" < /dev/null
 fi
-if [[ " $service_names " == *" ai-service "* ]]; then
+if [[ " $service_names " == *" core-service "* || " $service_names " == *" ai-service "* ]]; then
   # Existing PostgreSQL volumes do not rerun entrypoint initialization. Provision
-  # declared databases idempotently before applying the AI schema migration.
+  # declared databases idempotently before applying service schema migrations.
   "${compose[@]}" exec -T --interactive=false postgres /bin/sh /docker-entrypoint-initdb.d/init-databases.sh < /dev/null
+fi
+if [[ " $service_names " == *" ai-service "* ]]; then
   "${compose[@]}" run --rm --no-deps --interactive=false ai-service /app/.venv/bin/alembic upgrade head < /dev/null
 fi
 for service in "${services[@]}"; do

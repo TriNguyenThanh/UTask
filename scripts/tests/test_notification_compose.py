@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import yaml
 
+from scripts.discover_services import load_compose_services
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -17,28 +19,43 @@ class NotificationComposeTests(unittest.TestCase):
     def test_runtime_processes_share_image_and_wait_for_migration(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(filename=filename):
-                services = yaml.safe_load((ROOT / filename).read_text())["services"]
+                services = load_compose_services(ROOT / filename)
                 api = services["notification-service"]
                 self.assertIn("./infra/env/database.env", api["env_file"])
-                for name in (
+                runtime_names = (
                     "notification-service",
                     "notification-worker",
-                    "notification-beat",
                     "notification-identity-consumer",
                     "notification-work-consumer",
-                ):
+                )
+                for name in runtime_names:
                     process = services[name]
                     self.assertEqual(process["image"], api["image"])
                     self.assertEqual(process["profiles"], ["notification-service"])
-                    self.assertEqual(
-                        process["depends_on"]["notification-migrate"]["condition"],
-                        "service_completed_successfully",
-                    )
+                    if "staging" in filename:
+                        if name != "notification-service":
+                            self.assertEqual(
+                                process["depends_on"]["notification-service"][
+                                    "condition"
+                                ],
+                                "service_healthy",
+                            )
+                    else:
+                        self.assertEqual(
+                            process["depends_on"]["notification-migrate"]["condition"],
+                            "service_completed_successfully",
+                        )
                     self.assertTrue(process["healthcheck"]["test"])
-                self.assertEqual(
-                    services["notification-migrate"]["command"],
-                    ["python", "manage.py", "migrate", "--noinput"],
-                )
+                self.assertNotIn("notification-beat", services)
+                self.assertIn("-B", services["notification-worker"]["command"])
+                if "staging" in filename:
+                    # Staging runs manage.py migrate explicitly in scripts/deploy_staging.sh.
+                    self.assertNotIn("notification-migrate", services)
+                else:
+                    self.assertEqual(
+                        services["notification-migrate"]["command"],
+                        ["python", "manage.py", "migrate", "--noinput"],
+                    )
                 for name in ("notification-identity-consumer", "notification-work-consumer"):
                     self.assertEqual(
                         services[name]["depends_on"]["kafka"],
@@ -120,9 +137,7 @@ class NotificationComposeTests(unittest.TestCase):
                     "PSQL_CALLS": str(calls),
                     "POSTGRES_USER": "shared_user",
                     "POSTGRES_DB": "postgres",
-                    "IDENTITY_DB_NAME": "identity_test",
-                    "WORK_DB_NAME": "work_test",
-                    "CLASSROOM_DB_NAME": "classroom_test",
+                    "CORE_DB_NAME": "core_test",
                     "INTEGRATION_DB_NAME": "integration_test",
                     "AI_DB_NAME": "ai_test",
                     "NOTIFICATION_DB_NAME": "notification_test",
@@ -139,7 +154,7 @@ class NotificationComposeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                 invoked = [json.loads(line) for line in calls.read_text().splitlines()]
-                self.assertEqual(len(invoked), 12)
+                self.assertEqual(len(invoked), 8)
                 for call in invoked:
                     self.assertIn("CREATE DATABASE", call["sql"])
                     self.assertNotIn("ALTER ROLE", call["sql"])

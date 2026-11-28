@@ -11,8 +11,15 @@ from unittest.mock import Mock, patch
 
 import yaml
 
+from scripts.discover_services import load_compose_services
+
 ROOT = Path(__file__).resolve().parents[2]
-AI_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher", "ai-beat")
+AI_LOCAL_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher")
+AI_STAGING_PROCESSES = ("ai-service", "ai-worker", "ai-dispatcher")
+
+
+def _ai_processes(filename: str) -> tuple[str, ...]:
+    return AI_STAGING_PROCESSES if "staging" in filename else AI_LOCAL_PROCESSES
 
 
 class AIComposeTests(unittest.TestCase):
@@ -90,7 +97,7 @@ class AIComposeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     services = json.loads(result.stdout)["services"]
-                    for name in AI_PROCESSES:
+                    for name in _ai_processes(filename):
                         with self.subTest(process=name):
                             runtime = services[name]["environment"]
                             self.assertEqual(runtime["AI_JWT_ISSUER"], issuer)
@@ -135,9 +142,9 @@ class AIComposeTests(unittest.TestCase):
     def test_processes_share_image_configuration_and_wait_for_migration(self):
         for filename in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=filename):
-                services = yaml.safe_load((ROOT / filename).read_text())["services"]
+                services = load_compose_services(ROOT / filename)
                 api = services["ai-service"]
-                for name in AI_PROCESSES:
+                for name in _ai_processes(filename):
                     process = services[name]
                     self.assertEqual(process["image"], api["image"])
                     self.assertEqual(process["environment"], api["environment"])
@@ -168,13 +175,16 @@ class AIComposeTests(unittest.TestCase):
                 if "staging" in filename:
                     self.assertIn("healthcheck", services["ai-dispatcher"])
                     self.assertEqual(api["x-deploy"]["gateway_health_path"], None)
-                    for name in ("ai-worker", "ai-dispatcher", "ai-beat"):
+                    for name in ("ai-worker", "ai-dispatcher"):
                         self.assertEqual(
                             services[name]["x-deploy"]["application"], "ai-service"
                         )
                     self.assertEqual(
                         services["postgres"]["x-deploy"]["role"], "infrastructure"
                     )
+                # Local and single-VPS staging embed Beat into ai-worker (`-B`).
+                self.assertIn("-B", services["ai-worker"]["command"])
+                self.assertNotIn("ai-beat", services)
                 self.assertNotIn("ai-postgres", services)
                 self.assertEqual(
                     [
@@ -201,12 +211,16 @@ class AIComposeTests(unittest.TestCase):
             ("AI_RETENTION_INTERVAL_SECONDS", "3600"),
         ):
             self.assertIn(f"{variable}=${{{variable}:-{default}}}", configuration)
-        for filename, names in (
-            ("docker-compose.yml", AI_PROCESSES),
-            ("docker-compose.staging.yml", AI_PROCESSES),
-            ("apps/ai-service/compose.yaml", ("api", "worker", "dispatcher", "beat")),
+        for filename, names, has_separate_beat in (
+            ("docker-compose.yml", AI_LOCAL_PROCESSES, False),
+            ("docker-compose.staging.yml", AI_STAGING_PROCESSES, False),
+            (
+                "apps/ai-service/compose.yaml",
+                ("api", "worker", "dispatcher", "beat"),
+                True,
+            ),
         ):
-            services = yaml.safe_load((ROOT / filename).read_text())["services"]
+            services = load_compose_services(ROOT / filename)
             for name in names:
                 for secret in ("AI_WORK_SERVICE_KEY", "AI_INTEGRATION_SERVICE_KEY"):
                     with self.subTest(compose=filename, process=name, secret=secret):
@@ -221,6 +235,9 @@ class AIComposeTests(unittest.TestCase):
                     services[name]["environment"]["AI_WORK_SERVICE_AUTH_ENABLED"],
                     "${AI_WORK_SERVICE_AUTH_ENABLED:-false}",
                 )
+            if not has_separate_beat:
+                self.assertIn("-B", services["ai-worker"]["command"])
+                continue
             beat = services[names[-1]]
             self.assertEqual(beat["image"], services[names[0]]["image"])
             self.assertEqual(beat["environment"], services[names[0]]["environment"])
@@ -271,9 +288,7 @@ class AIComposeTests(unittest.TestCase):
             self.assertIn(f"location ^~ {path}/ {{\n      return 404;", nginx)
 
     def test_dispatcher_liveness_accepts_only_matching_process_arguments(self):
-        services = yaml.safe_load((ROOT / "docker-compose.staging.yml").read_text())[
-            "services"
-        ]
+        services = load_compose_services(ROOT / "docker-compose.staging.yml")
         probe = services["ai-dispatcher"]["healthcheck"]["test"]
         self.assertEqual(probe[:3], ["CMD", "python", "-c"])
         for arguments, healthy in (
@@ -345,7 +360,7 @@ class AIComposeTests(unittest.TestCase):
                         services["postgres"]["environment"]["AI_DB_NAME"],
                         "custom_ai_db",
                     )
-                    for name in AI_PROCESSES:
+                    for name in _ai_processes(filename):
                         self.assertEqual(
                             services[name]["environment"]["AI_DATABASE_URL"],
                             override
@@ -397,9 +412,10 @@ class AIComposeTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 services = json.loads(result.stdout)["services"]
-                for name in (*AI_PROCESSES, "postgres"):
+                processes = _ai_processes(filename)
+                for name in (*processes, "postgres"):
                     self.assertIn(name, services)
-                for name in AI_PROCESSES:
+                for name in processes:
                     settings = services[name]["environment"]
                     self.assertIn(
                         "@postgres:5432/ai_context_db", settings["AI_DATABASE_URL"]
@@ -423,7 +439,7 @@ class AIComposeTests(unittest.TestCase):
                     self.assertEqual(
                         services[name]["image"], "utask/ai-service:sha-compose-test"
                     )
-                for name in AI_PROCESSES:
+                for name in processes:
                     settings = services[name]["environment"]
                     self.assertEqual(
                         settings["MOCK_TEST"],

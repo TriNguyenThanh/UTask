@@ -59,7 +59,7 @@ class TestEnvironmentTransportTests(unittest.TestCase):
     def test_invalid_or_unknown_service_does_not_write_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "output"
-            for service in ("../work-service", "missing-service"):
+            for service in ("../core-service", "missing-service"):
                 with self.subTest(service=service), self.assertRaises(ValueError):
                     write_test_environment(ROOT, service, output)
                 self.assertFalse(output.exists())
@@ -104,7 +104,7 @@ class TestEnvironmentTransportTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "sys.argv", ["discover_services.py", "--write-test-env", "work-service"]
+                "sys.argv", ["discover_services.py", "--write-test-env", "core-service"]
             ),
             contextlib.redirect_stderr(io.StringIO()),
             self.assertRaises(SystemExit) as error,

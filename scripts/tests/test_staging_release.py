@@ -202,7 +202,7 @@ class StagingReleaseSelectionTests(unittest.TestCase):
         self.git("init", "--quiet")
         self.git("config", "user.name", "Release Test")
         self.git("config", "user.email", "release-test@example.invalid")
-        self.baseline = self.commit("apps/work-service/runtime.py", "value = 1\n")
+        self.baseline = self.commit("apps/core-service/runtime.py", "value = 1\n")
         self.clean = DeploymentState(self.baseline, "2026-10-21T01:00:00Z", ())
 
     def git(self, *args):
@@ -231,7 +231,7 @@ class StagingReleaseSelectionTests(unittest.TestCase):
     def test_successful_deploy_then_test_only_commit_runs_checks_without_release(self):
         for path in (
             "scripts/tests/test_runtime.py",
-            "apps/work-service/tests/test_runtime.py",
+            "apps/core-service/tests/test_runtime.py",
         ):
             candidate = self.commit(path, "def test_runtime(): pass\n")
             plan = plan_release(self.clean, candidate)
@@ -242,7 +242,7 @@ class StagingReleaseSelectionTests(unittest.TestCase):
             self.assertEqual(plan["base_sha"], self.baseline)
 
     def test_failed_ci_then_test_fix_releases_pending_application_changes(self):
-        failed_candidate = self.commit("apps/work-service/runtime.py", "value = 2\n")
+        failed_candidate = self.commit("apps/core-service/runtime.py", "value = 2\n")
         candidate = self.commit(
             "scripts/tests/test_runtime.py", "def test_runtime(): pass\n"
         )
@@ -256,15 +256,15 @@ class StagingReleaseSelectionTests(unittest.TestCase):
         )
         self.assertTrue(result["release_needed"])
         self.assertIn(
-            "work-service", [row["service"] for row in result["checks"]["include"]]
+            "core-service", [row["service"] for row in result["checks"]["include"]]
         )
         self.assertTrue(
             guard_release(self.clean, candidate, plan["deployment_state"])["proceed"]
         )
 
     def test_failed_partial_rollout_forces_release_even_after_code_is_reverted(self):
-        self.commit("apps/work-service/runtime.py", "value = 2\n")
-        candidate = self.commit("apps/work-service/runtime.py", "value = 1\n")
+        self.commit("apps/core-service/runtime.py", "value = 2\n")
+        candidate = self.commit("apps/core-service/runtime.py", "value = 1\n")
         failed = DeploymentState(
             self.baseline,
             self.clean.succeeded_at,
@@ -283,9 +283,9 @@ class StagingReleaseSelectionTests(unittest.TestCase):
         self.assertEqual(len(result["checks"]["include"]), len(result["services"]))
 
     def test_newer_successful_deployment_skips_older_release(self):
-        candidate = self.commit("apps/work-service/runtime.py", "value = 2\n")
+        candidate = self.commit("apps/core-service/runtime.py", "value = 2\n")
         plan = plan_release(self.clean, candidate)
-        newer = self.commit("apps/work-service/runtime.py", "value = 3\n")
+        newer = self.commit("apps/core-service/runtime.py", "value = 3\n")
         state = DeploymentState(newer, "2026-10-21T02:00:00Z", ())
         self.assertFalse(
             guard_release(state, candidate, plan["deployment_state"])["proceed"]
@@ -294,7 +294,7 @@ class StagingReleaseSelectionTests(unittest.TestCase):
             plan_release(state, candidate)
 
     def test_changed_or_busy_staging_blocks_release_until_checks_are_replanned(self):
-        candidate = self.commit("apps/work-service/runtime.py", "value = 2\n")
+        candidate = self.commit("apps/core-service/runtime.py", "value = 2\n")
         for status in ("failure", "in_progress"):
             state = DeploymentState(
                 self.baseline,
