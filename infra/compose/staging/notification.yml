@@ -1,0 +1,107 @@
+# Notification Service on single-VPS staging: 1 pinned image, 4 runtime containers.
+# scripts/deploy_staging.sh runs `manage.py migrate --noinput` + `migrate --check`
+# explicitly before starting runtime containers, eliminating `notification-migrate`.
+# Worker embeds Beat (`-B`) for single-replica staging; split standalone Beat before
+# scaling > 1 replica in production.
+x-logging: &default_logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-notification-runtime: &notification_runtime
+  <<: *default_logging
+  profiles: [notification-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/notification-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/database.env
+    - ./infra/env/django.env
+    - ./infra/env/notification-service.env
+  volumes:
+    - type: bind
+      source: ./infra/env
+      target: /run/kafka-certificates
+      read_only: true
+  depends_on: &notification_dependencies
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  notification-service:
+    <<: *notification_runtime
+    x-deploy:
+      gateway_health_path: /api/notifications/healthz
+    x-ci:
+      test_env:
+        NOTIFICATION_TEST_DB_USER: utask_ci
+        NOTIFICATION_TEST_DB_PASSWORD: ci-only-postgres-password
+        NOTIFICATION_TEST_DB_NAME: notification_test
+        TEST_DATABASE_NAME: notification_test
+        NOTIFICATION_TEST_DB_HOST: 127.0.0.1
+        NOTIFICATION_TEST_DB_PORT: "5432"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  notification-worker:
+    <<: *notification_runtime
+    command: ["celery", "-A", "config", "worker", "-B", "-Q", "notification", "--concurrency=1", "--schedule=/tmp/notification-celerybeat"]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    depends_on: &notification_worker_dependencies
+      <<: *notification_dependencies
+      notification-service:
+        condition: service_healthy
+    x-deploy: &notification_worker
+      role: worker
+      application: notification-service
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
+      interval: 45s
+      timeout: 10s
+      retries: 4
+      start_period: 20s
+
+  notification-identity-consumer:
+    <<: *notification_runtime
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on: &notification_consumer_dependencies
+      <<: *notification_worker_dependencies
+      kafka:
+        condition: service_healthy
+        required: false
+    command: ["python", "manage.py", "consume_notifications", "--source", "identity"]
+    x-deploy: *notification_worker
+    healthcheck: &notification_consumer_health
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert any(b'consume_notifications' in p.read_bytes().split(bytes([0])) for p in Path('/proc').glob('[0-9]*/cmdline'))"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  notification-work-consumer:
+    <<: *notification_runtime
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on: *notification_consumer_dependencies
+    command: ["python", "manage.py", "consume_notifications", "--source", "work"]
+    x-deploy: *notification_worker
+    healthcheck: *notification_consumer_health

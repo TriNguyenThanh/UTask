@@ -1,0 +1,85 @@
+# AI Service (local dev): 1 image built once, 3 containers (API migrates via entrypoint; worker embeds Beat `-B`; dispatcher).
+x-logging: &default_logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-ai: &ai
+  <<: *default_logging
+  profiles: [ai-service]
+  image: ${UTASK_IMAGE_PREFIX:-utask}/ai-service:${UTASK_IMAGE_TAG:-local}
+  restart: unless-stopped
+  init: true
+  env_file:
+    - ./infra/env/ai-service.env
+  environment:
+    AI_DATABASE_URL: ${AI_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${AI_DB_NAME:-ai_context_db}}
+    AI_BROKER_URL: redis://redis:6379/1
+    AI_IDENTITY_BASE_URL: ${AI_IDENTITY_BASE_URL:-http://identity-service:8000}
+    AI_IDENTITY_SERVICE_KEY: ${AI_IDENTITY_SERVICE_KEY:-}
+    AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
+    AI_WORK_SERVICE_AUTH_ENABLED: ${AI_WORK_SERVICE_AUTH_ENABLED:-false}
+    AI_WORK_SERVICE_KEY: ${AI_WORK_SERVICE_KEY:-}
+    AI_INTEGRATION_SERVICE_KEY: ${AI_INTEGRATION_SERVICE_KEY:-}
+  extra_hosts:
+    - host.docker.internal:host-gateway
+
+services:
+  ai-service:
+    <<: *ai
+    build: ./apps/ai-service
+    volumes:
+      - ./datasets:/app/datasets:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  ai-worker:
+    <<: *ai
+    command: [celery, -A, "jobs.celery_app:celery_app", worker, -B, --loglevel=INFO, --concurrency=2, --schedule=/tmp/ai-beat-schedule]
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    depends_on:
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A jobs.celery_app:celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      interval: 45s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ai-dispatcher:
+    <<: *ai
+    command: [python, -m, jobs.dispatcher]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
