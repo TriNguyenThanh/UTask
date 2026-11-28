@@ -124,11 +124,29 @@ migration một lần. Worker/migration khai báo thêm `x-deploy.application` l
 image. Discovery kiểm tra quan hệ này, không đoán vai trò từ chuỗi image. App nội bộ
 khai báo `x-deploy.gateway_health_path: null`; app có route health qua gateway khai báo
 path tuyệt đối. Stack staging có một gateway; tên lấy từ Compose.
-Trong Compose, `x-core-runtime` dùng YAML anchor để chia sẻ image (`utask/core-service`),
-env mappings (`infra/env/core-service.env`), volumes và dependency giữa `core-service`,
-`core-worker` và `core-consumer` ([ADR-006](../adr/006-consolidate-core-monolith.md)).
-Mỗi tiến trình vẫn khai báo command và healthcheck riêng; cấu hình này được Compose
-resolve trước khi chạy.
+### Quy ước dùng chung cấu hình Compose
+
+Compose local (`infra/compose/*.yml`) và staging (`infra/compose/staging/*.yml`)
+dùng YAML extension field `x-*` kết hợp anchor để gom cấu hình runtime lặp lại
+giữa các container của cùng service (kèm `x-logging` xoay vòng log). Đặt anchor
+gần đầu từng file Compose theo trách nhiệm như `x-core-runtime`,
+`x-integration-runtime`, `x-notification-runtime` hoặc `x-ai-runtime` / `x-ai`,
+rồi kế thừa bằng `<<: *...` trong từng mục `services`. Có thể tách anchor phụ
+cho dependency hoặc metadata dùng chung nếu nhiều container cùng cần.
+
+Anchor chứa cấu hình nền giống nhau, thường gồm image, `env_file`, `restart`,
+`logging`, volume và dependency nền. Mỗi container giữ `build` (chỉ đặt một lần
+trên service chính để an toàn với Bake), command, healthcheck, `deploy.resources`,
+metadata `x-deploy`/`x-ci` và dependency riêng theo vai trò. Áp dụng cùng quy
+ước cho cả Compose local và staging để cấu hình service không bị lặp hoặc trôi
+khác nhau giữa hai môi trường. Compose resolve anchor trước khi tạo container;
+`x-*` tự nó không tạo service hay container.
+
+Trong kiến trúc Modular Monolith ([ADR-006](../adr/006-consolidate-core-monolith.md)),
+`x-core-runtime` chia sẻ image (`utask/core-service`), env mappings
+(`infra/env/core-service.env`), volumes và dependency giữa `core-service`,
+`core-worker` và `core-consumer`; các service ngoại biên dùng
+`x-integration-runtime`, `x-notification-runtime` và `x-ai` / `x-ai-runtime`.
 
 Các script CI là automation chung của repository, không phải Python service hoặc
 project triển khai riêng. Khi chạy script cần đọc YAML, workflow dùng

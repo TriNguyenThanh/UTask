@@ -109,8 +109,12 @@ Các profile AI/Integration không cần cho lệnh khởi động Identity–Cl
 
 ## Chạy riêng pipeline AI từ root
 
-Điền `AI_DB_NAME`, key AI→Identity/Work và cấu hình LLM trong
+Điền `AI_DB_NAME`, `AI_DATABASE_URL`, `AI_BROKER_URL`, key AI→Identity/Work và cấu hình LLM trong
 `.env` theo [hướng dẫn cấu hình AI](../../ai-service/deployment-and-service-integration.md).
+Hai URL kết nối là bắt buộc; Compose không tự chọn theo stack. Mẫu root dùng
+database AI trên `postgres:5432` và broker `redis://redis:6379/1`.
+Tên database trong URL phải khớp `AI_DB_NAME`. Local đặt rõ
+`AI_ENVIRONMENT=development`; chỉ bật `MOCK_TEST=true` khi dùng dữ liệu mẫu.
 URL map Work mặc định nằm trong `config.py`; chỉ override nếu địa chỉ Work khác.
 Password DB phải dùng được
 trong URL; nếu có ký tự đặc biệt, đặt `AI_DATABASE_URL` với password đã percent-encode.

@@ -14,6 +14,96 @@ code trong `apps/ai-service/**`, agent phải cập nhật file này trong cùng
 
 ## Đã hoàn thành
 
+### 2026-11-24 — Một file ánh xạ riêng cho AI trong infra
+
+- Chỉ giữ `infra/env/ai-service.env` cho process AI; xóa
+  `ai-service-database.env` của lần chia trước. PostgreSQL standalone dùng
+  lại `infra/env/database.env` chung với `POSTGRES_USER`, `POSTGRES_PASSWORD`
+  và `POSTGRES_DB`; bổ sung ánh xạ tên database vào file chung. Healthcheck
+  standalone đọc user/database từ biến container, không cố định tên cũ.
+- URL ứng dụng standalone phải khớp `POSTGRES_*` đã cấu hình và trỏ tới
+  `database`; không xóa volume hay chuyển dữ liệu/database đang có.
+  Cập nhật `.env.example` và tài liệu, không sửa `.env` thật.
+- Script tạo mock không sinh `AI_DB_PASSWORD` nữa; test bao phủ cả trường
+  hợp chưa có biến và trường hợp có giá trị cũ cần được giữ nguyên khi
+  setup/refresh, cùng mật khẩu PostgreSQL và các secret khác.
+- Kiểm tra: **184 tests** của `scripts/tests` đạt; **46 tests** trong
+  `test_environment_modes.py` và `test_env_location.py` đạt bằng môi trường
+  uv tạm ngoài repo, tắt nạp dotenv developer trước collection. Ruff lint và
+  format ba file Python thay đổi đạt; `git diff --check` đạt.
+- Chưa chạy/recreate container, chưa kiểm runtime PostgreSQL/Redis/LLM.
+  Giới hạn GitNexus toàn worktree đã ghi ở các mục trước vẫn còn áp dụng.
+
+### 2026-11-24 — Gộp ánh xạ AI theo trách nhiệm
+
+- Thay cấu trúc chia theo stack ở mục trước bằng hai file:
+  `infra/env/ai-service.env` dùng chung cho API/worker/dispatcher/beat và
+  `infra/env/ai-service-database.env` chỉ cấp cho PostgreSQL standalone.
+  Xóa ba mapping root/staging/standalone; mọi Compose AI chỉ nạp mapping chung
+  bằng `env_file`, không thêm `environment`.
+- `AI_DATABASE_URL` và `AI_BROKER_URL` bắt buộc được khai báo trong `.env`
+  root hoặc biến process; không còn suy ra URL theo stack. `.env.example`
+  ghi rõ URL root Docker; standalone cần đổi sang `database` và `broker`,
+  còn chạy Python trên host cần URL truy cập được từ host. Mapping chung
+  mặc định `AI_ENVIRONMENT=staging`, `MOCK_TEST=false`; mẫu local vẫn chọn
+  development/mock tường minh. Giữ nguyên `.env` thật và các thay đổi khác.
+- Cập nhật Compose local/staging/standalone, test cấu hình và tài liệu liên
+  quan; lịch sử chia file bên dưới chỉ mô tả trạng thái trước lần gộp này.
+- Kiểm tra: toàn bộ `scripts/tests` đạt **184 tests** bằng uv/unittest;
+  bao gồm render ba stack, URL cấu hình và override, từ chối URL vắng mặt
+  hoặc rỗng trước startup, JWT, ngân sách và giới hạn secret. Ruff lint/format
+  hai file test đạt. GitNexus toàn worktree vẫn báo CRITICAL, gồm các thay đổi
+  có sẵn và giới hạn tham chiếu đã ghi bên dưới; không coi là kiểm tra sạch.
+  Chưa chạy/recreate container, chưa kiểm runtime DB/Redis/LLM.
+
+### 2026-11-24 — Chuyển toàn bộ ánh xạ Compose AI vào infra
+
+- Bỏ `environment` của bốn process AI trong Compose root local/staging và
+  stack AI độc lập; các process chỉ nạp mapping qua `env_file`.
+- `infra/env/ai-service.env` giữ biến chung; `ai-service-root.env`,
+  `ai-service-staging.env` và `ai-service-standalone.env` giữ môi trường cùng
+  URL PostgreSQL/Redis theo stack. Không đặt môi trường ở mapping chung để
+  giá trị đã nội suy của file trước không lấn mặc định staging khi biến vắng mặt.
+- PostgreSQL standalone nhận `ai-service-database.env` riêng. Port HTTP và
+  concurrency vẫn được nội suy vào `ports`/`command`, không cấp vào process AI.
+  Giữ `.env` root làm nguồn giá trị, mock mặc định tắt và các override hiện có.
+- Cập nhật `scripts/tests/test_ai_compose.py`,
+  `scripts/tests/test_staging_deployment.py`, chú thích `.env.example` và tài
+  liệu cấu hình AI/hạ tầng. Giữ nguyên các thay đổi có sẵn trong worktree.
+- Kiểm tra: `uv run --no-project --with PyYAML==6.0.3 python -m unittest
+  discover -s scripts/tests -p 'test_*.py'` đạt **183 tests**; gồm render Compose
+  local/staging/standalone, biến vắng mặt/rỗng/ghi đè, URL đúng stack, PostgreSQL
+  standalone và giới hạn secret. Ruff lint/format hai file test đạt.
+- GitNexus impact cấu hình báo MEDIUM; truy vấn hàm test và detect_changes
+  toàn worktree còn cảnh báo CRITICAL với tham chiếu không khớp source. Không
+  coi đồ thị là kiểm tra sạch. Chưa chạy/recreate container, chưa kiểm runtime
+  PostgreSQL/Redis/LLM; chưa deploy hoặc commit.
+
+### 2026-11-22 — Thống nhất nguồn giá trị và ánh xạ môi trường AI
+
+- `.env` root là nơi giữ giá trị triển khai và secret; `.env.example` phân biệt
+  biến ứng dụng với biến dành cho Compose. `infra/env/ai-service.env` ánh xạ
+  chung cả biến thường và placeholder secret, không chứa credential thật.
+- Compose local/staging/độc lập chỉ giữ URL database/Redis theo stack và hai
+  mặc định môi trường/mock của staging. Redis override và
+  `AI_WORKER_CONCURRENCY` có hiệu lực ở cả ba kiểu Compose. Mapping mặc định
+  tắt mock, không chọn model hoặc proxy ngầm; mẫu local vẫn khai báo minh thị.
+- `src/config.py` chỉ đọc giá trị từ `.env` root khi chạy bằng Python, tránh
+  để python-dotenv diễn giải biểu thức lồng nhau dành cho Compose. JWT kế thừa
+  issuer/audience Identity khi chưa có override AI; biến process được ưu tiên.
+- `scripts/setup_mock.py` đọc/ghi cấu hình và secret vào `.env` root, giữ nguyên
+  file ánh xạ. Cập nhật test vị trí cấu hình, JWT fallback, tạo/refresh mock và
+  pipeline mock; không thay đổi API, schema database hoặc hành vi suy luận.
+- Kiểm tra: AI **549 passed, 66 skipped** do không cấp PostgreSQL/Redis test;
+  một cảnh báo experimental từ ADK. Bộ script triển khai **183 tests passed**,
+  gồm render ba kiểu Compose, override cho mọi process và kiểm tra không đưa
+  secret ngoài phạm vi vào container. Ruff các file Python thay đổi và render
+  Compose local/staging/độc lập đạt. Dùng môi trường uv tạm ngoài repo, tắt
+  dotenv developer trước khi thu thập test; không sửa `.env` thật.
+- GitNexus impact/change analysis còn cảnh báo và tham chiếu không khớp source;
+  không coi đây là kết quả đồ thị sạch. Chưa nghiệm thu container runtime,
+  PostgreSQL/Redis hoặc LLM thật; chưa deploy hoặc commit.
+
 ### 2026-11-21 — Tăng thời hạn thực thi lên 5 phút và ánh xạ biến ngân sách
 
 - `src/config.py` cho phép và mặc định `workflow_timeout_seconds` bằng 300 giây;

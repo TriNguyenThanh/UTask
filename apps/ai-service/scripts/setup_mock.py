@@ -1,10 +1,9 @@
-"""Thiết lập mock: cấu hình trong ai-service.env, secret trong .env root."""
+"""Thiết lập dữ liệu kiểm thử mock và cấu hình trong .env root."""
 
 import argparse
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from secrets import token_hex
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -19,11 +18,10 @@ def prepare_mock_environment(
     *,
     refresh: bool = False,
 ) -> Path:
-    config_path = repo_root / "infra" / "env" / "ai-service.env"
     secret_path = repo_root / ".env"
     tokens_path = repo_root / ".env.mock"
     existing = dotenv_values(secret_path) if secret_path.exists() else {}
-    settings = Settings(_env_file=config_path, mock_test=True)
+    settings = Settings(_env_file=secret_path, mock_test=True)
     if not 1 <= token_hours <= 24:
         raise ValueError("Token mock chỉ có thời hạn 1–24 giờ")
     if tokens_path.is_file() or (
@@ -33,7 +31,6 @@ def prepare_mock_environment(
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     jwks = {"keys": [jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key(), as_dict=True)]}
     secrets = {
-        "AI_DB_PASSWORD": existing.get("AI_DB_PASSWORD") or token_hex(16),
         "AI_LLM_API_KEY": existing.get("AI_LLM_API_KEY") or "",
     }
     now = datetime.now(UTC)
@@ -55,10 +52,8 @@ def prepare_mock_environment(
             ("mock-outsider", "00000000-0000-4000-8000-000000000002"),
         )
     }
-    config_path.parent.mkdir(parents=True, exist_ok=True)
     tokens_path.mkdir(mode=0o700, exist_ok=refresh)
     secret_path.touch(mode=0o600, exist_ok=True)
-    config_path.touch(exist_ok=True)
     for key, value in secrets.items():
         set_key(secret_path, key, value)
     for key, value in {
@@ -68,9 +63,8 @@ def prepare_mock_environment(
         "AI_JWT_AUDIENCE": "utask-ai",
         "AI_JWT_ALGORITHM": "RS256",
     }.items():
-        set_key(config_path, key, value)
+        set_key(secret_path, key, value)
     secret_path.chmod(0o600)
-    config_path.chmod(0o644)
     jwks_path = tokens_path / "jwks.json"
     jwks_path.write_text(json.dumps(jwks), encoding="utf-8")
     jwks_path.chmod(0o600)

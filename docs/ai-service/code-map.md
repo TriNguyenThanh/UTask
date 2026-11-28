@@ -27,9 +27,13 @@ src/
 
 ## API
 
-- `config.py`: nạp ai-service.env + .env root, cờ môi trường/mock; cấu hình
-  mặc định ba URL authorize và 10 URL context Work qua DNS `work-service:8000`;
-  biến môi trường URL là override tùy chọn, giá trị rỗng dùng mặc định.
+- `config.py`: Host Settings đọc `.env` root và biến process (process ưu tiên);
+  trong Compose, `env_file` nạp mapping chung `infra/env/ai-service.env` cho
+  mọi process AI. URL DB/broker phải được cấu hình theo môi trường; không có
+  URL tự dựng theo topology.
+  Cấu hình có cờ môi trường/mock, mặc định ba URL authorize và 10 URL context Work qua DNS `work-service:8000`;
+  biến môi trường map Work/context là override tùy chọn, giá trị rỗng dùng
+  mặc định trong source.
   `AI_IDENTITY_BASE_URL` (mặc định `http://identity-service:8000`) và
   `AI_IDENTITY_SERVICE_KEY`; `AI_WORK_SERVICE_AUTH_ENABLED=false` mặc định,
   chỉ bắt buộc Work key khi bật cờ. Cấm mock ngoài development/test; staging/
@@ -242,6 +246,14 @@ minh gateway/domain hoặc production đã tích hợp; xem [architecture](archi
 [`compose.yaml`](../../apps/ai-service/compose.yaml) của riêng AI lắp API,
 dispatcher, worker, beat, PostgreSQL và Redis; API entrypoint chạy Alembic trước
 Uvicorn, worker/dispatcher/beat chờ API và broker healthy. Không còn service migrate
-riêng; cấu hình mẫu ở
-[cấu hình AI](../../infra/env/ai-service.env) và [mẫu secret root](../../.env.example). Đây là stack local,
+riêng; cấu hình mẫu ở [mapping Compose AI](../../infra/env/ai-service.env),
+[mapping PostgreSQL chung](../../infra/env/database.env) và
+[mẫu root](../../.env.example). `AI_DATABASE_URL` và `AI_BROKER_URL` phải được
+đặt cho môi trường chạy; mẫu root minh họa URL dùng PostgreSQL/Redis Compose.
+`AI_DB_NAME` phải khớp database trong URL root. PostgreSQL standalone dùng
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` từ `.env` qua mapping chung;
+URL AI phải khớp các giá trị đó và password cần percent-encode. `AI_HTTP_PORT` chỉ nội suy cổng host,
+còn `AI_WORKER_CONCURRENCY` chỉ nội suy tham số worker Compose (mặc định 2);
+cả hai không được truyền vào process runtime.
+Đây là stack local,
 không là integration test Identity/Work/Integration hoặc gateway root.

@@ -6,11 +6,10 @@ from string import Formatter
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = (Path(__file__).resolve().parents[1] / "../..").resolve()
-ENV_DIR = ROOT_DIR / "infra" / "env"
 WORK_CONTEXT_PAIRS = frozenset(
     f"{target}:{domain}"
     for target in ("project", "task", "sprint")
@@ -46,7 +45,7 @@ def valid_internal_url(template: str) -> bool:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="AI_",
-        env_file=(ENV_DIR / "ai-service.env", ROOT_DIR / ".env"),
+        env_file=ROOT_DIR / ".env",
         extra="ignore",
         populate_by_name=True,
         hide_input_in_errors=True,
@@ -61,8 +60,14 @@ class Settings(BaseSettings):
     app_name: str = "utask-ai-service"
     database_url: str = "postgresql+psycopg://localhost/ai_context_db"
     broker_url: str = "redis://localhost:6379/0"
-    jwt_issuer: str = "https://identity.utask.internal"
-    jwt_audience: str = "utask-platform"
+    jwt_issuer: str = Field(
+        default="https://identity.utask.internal",
+        validation_alias=AliasChoices("AI_JWT_ISSUER", "IDENTITY_JWT_ISSUER"),
+    )
+    jwt_audience: str = Field(
+        default="utask-platform",
+        validation_alias=AliasChoices("AI_JWT_AUDIENCE", "IDENTITY_JWT_AUDIENCE"),
+    )
     jwt_algorithm: str = "RS256"
     identity_base_url: str = "http://identity-service:8000"
     identity_service_key: SecretStr | None = None
