@@ -1,26 +1,42 @@
 # Danh mục sự kiện Kafka
 
-**Trạng thái: Thiết kế mục tiêu.** Tên dưới đây là ví dụ theo baseline mục
-9 và phạm vi service, không xác nhận producer/consumer đã chạy. Schema máy
-đọc được thuộc `contracts/events/`; xem [baseline](architecture-baseline.md).
+**Trạng thái: Một phần (`Đã triển khai (local)` cho các topic đối ngoại của `core-service` theo [ADR-006](adr/006-consolidate-core-monolith.md); tổng thể hệ thống là thiết kế mục tiêu và staging `Chưa xác minh`).** Schema máy đọc được thuộc `contracts/events/`; xem [baseline](architecture-baseline.md).
 
-| Sự kiện ví dụ                                                                                                | Service phát | Service nhận dự kiến                              | Mục đích                               |
-| ------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------- | -------------------------------------- |
-| `user.created`                                                                                               | Identity     | Service cần thông tin user                        | Đồng bộ thông tin người dùng           |
-| `project.created`, `member.joined`, `sprint.started`                                                         | Work         | AI, Notification; Analytics giai đoạn sau khi cần | Báo thay đổi dự án/thành viên/sprint   |
-| `task.created`, `task.assigned`, `task.status.changed`, `task.completed`, `comment.created`                  | Work         | Notification, AI; Analytics khi được triển khai   | Báo thay đổi công việc                 |
-| `github.commit.received`, `github.pull_request.opened`, `github.pull_request.merged`, `github.issue.updated` | Integration  | Work, AI, Notification khi cần                    | Chia sẻ hoạt động GitHub đã chuẩn hóa  |
-| `ai.analysis.completed`, `ai.project.risk.detected`                                                          | AI           | Notification hoặc service đã đăng ký nhận         | Thông báo phân tích/rủi ro đã hoàn tất |
+## Các topic đang hoạt động với Core Service (`apps/core-service`)
 
-Classroom công bố sự kiện `classroom.group.membership.changed` khi thành viên
-nhóm thay đổi hoặc khi nhóm được giải thể/lưu trữ (`data.group_status` = `ACTIVE`
-hoặc `ARCHIVED`, trong đó nhóm `ARCHIVED` có 0 thành viên `ACTIVE`); xem
-[hợp đồng JSON Schema](../../contracts/events/classroom.group.membership.changed.v1.json).
-Work nhận ảnh chụp thành viên để cập nhật các dự án hoạt động của nhóm (khi nhóm
-`ARCHIVED`, Work đóng toàn bộ `ProjectMember` đang hoạt động và bảo toàn lịch sử dự án).
+Sau khi hợp nhất Identity, Classroom và Work theo [ADR-006](adr/006-consolidate-core-monolith.md),
+Kafka chỉ giữ vai trò truyền sự kiện bất đồng bộ giữa `core-service` và các
+service độc lập bên ngoài (`notification-service`, `integration-service`, và
+`ai-service` khi mở rộng):
 
-Work công bố sự kiện `work.project.created`; Classroom nhận sự kiện để ghi
-liên kết nhóm–dự án. Xem [hợp đồng JSON Schema](../../contracts/events/work.project.created.v1.json).
+| Topic | Chiều | `producer` giữ nguyên hợp đồng | Bên nhận | Ghi chú |
+| --- | --- | --- | --- | --- |
+| `utask.identity.events` | Outbound từ `core-service` (`core-worker`) | `"identity-service"` | `notification-service` | Gửi sự kiện email kích hoạt, đặt lại mật khẩu, import sinh viên, đổi email (`identity.email_change.requested`) và vòng đời user |
+| `utask.work.events` | Outbound từ `core-service` (`core-worker`) | `"work-service"` | `notification-service` | Gửi sự kiện giao task, đổi trạng thái, bình luận, nhắc hạn (`task.deadline.reminder`) và thay đổi thành viên dự án |
+| `utask.integration.events` | Inbound vào `core-service` (`core-consumer`: `consume_integration`) | `"integration-service"` | `core-service` | Nhận `integration.project.connection.changed`, `integration.github.account.changed`, `integration.github.reference.detected` |
+| `utask.work.integration.dlq` | DLQ của `core-consumer` | `"work-service"` | Vận hành / đối soát | Lưu bản ghi lỗi quá số lần thử từ `utask.integration.events` |
+
+## Sự kiện nội bộ cũ đã chuyển sang gọi trong tiến trình (ADR-006)
+
+Hai luồng Kafka cũ chỉ dùng giữa Classroom và Work nay **đã dừng ở runtime** vì
+cả hai miền chạy trong cùng `apps/core-service` trên `core_db` và đồng bộ nguyên
+tử qua `apps.groups.interface` / `apps.projects.interface`:
+
+- `classroom.group.membership.changed` ([schema lưu trữ lịch sử](../../contracts/events/classroom.group.membership.changed.v1.json))
+- `work.project.created` ([schema lưu trữ lịch sử](../../contracts/events/work.project.created.v1.json))
+- Consumer nội bộ cũ `utask.identity.events` → `UserProjection` trong Work cũng đã bị loại bỏ (truy cập trực tiếp qua `apps.accounts.interface`).
+
+Các tệp JSON Schema cũ vẫn được giữ nguyên trong `contracts/events/` để đối chiếu lịch sử.
+
+## Danh mục sự kiện tham chiếu theo baseline
+
+| Sự kiện ví dụ | Service / Miền phát | Service nhận dự kiến | Mục đích |
+| --- | --- | --- | --- |
+| `user.created` | Core (Identity) | Service cần thông tin user | Đồng bộ thông tin người dùng |
+| `project.created`, `member.joined`, `sprint.started` | Core (Work) | AI, Notification; Analytics giai đoạn sau khi cần | Báo thay đổi dự án/thành viên/sprint |
+| `task.created`, `task.assigned`, `task.status.changed`, `task.completed`, `comment.created` | Core (Work) | Notification, AI; Analytics khi được triển khai | Báo thay đổi công việc |
+| `github.commit.received`, `github.pull_request.opened`, `github.pull_request.merged`, `github.issue.updated` | Integration | Core (Work), AI, Notification khi cần | Chia sẻ hoạt động GitHub đã chuẩn hóa |
+| `ai.analysis.completed`, `ai.project.risk.detected` | AI | Notification hoặc service đã đăng ký nhận | Thông báo phân tích/rủi ro đã hoàn tất |
 
 Baseline dùng cả ví dụ `comment.created` và `task.comment.created`; tên sự
 kiện cuối cùng cần được chốt bằng hợp đồng cụ thể.

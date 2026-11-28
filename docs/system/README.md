@@ -21,7 +21,7 @@ và kiểm thử.
 
 ## Tài liệu theo service
 
-- [Identity](../identity-service/README.md) · [Classroom](../classroom-service/README.md) · [Work](../project-service/README.md)
+- **Core Modular Monolith (`apps/core-service`)** theo [ADR-006](adr/006-consolidate-core-monolith.md) — gồm 3 miền tài liệu: [Identity](../identity-service/README.md) · [Classroom](../classroom-service/README.md) · [Work](../project-service/README.md)
 - [Integration](../integration-service/README.md) · [Notification](../notification-service/README.md)
 - [AI](../ai-service/README.md) · [Web](../web/README.md)
 

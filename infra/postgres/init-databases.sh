@@ -12,16 +12,12 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database_name')
 SQL
 }
 
-: "${IDENTITY_DB_NAME:?Missing IDENTITY_DB_NAME}"
-: "${WORK_DB_NAME:?Missing WORK_DB_NAME}"
-: "${CLASSROOM_DB_NAME:?Missing CLASSROOM_DB_NAME}"
+: "${CORE_DB_NAME:?Missing CORE_DB_NAME}"
 : "${INTEGRATION_DB_NAME:?Missing INTEGRATION_DB_NAME}"
 : "${NOTIFICATION_DB_NAME:?Missing NOTIFICATION_DB_NAME}"
 : "${AI_DB_NAME:?Missing AI_DB_NAME}"
 
-create_database "$IDENTITY_DB_NAME"
-create_database "$WORK_DB_NAME"
-create_database "$CLASSROOM_DB_NAME"
+create_database "$CORE_DB_NAME"
 create_database "$INTEGRATION_DB_NAME"
 create_database "$NOTIFICATION_DB_NAME"
 create_database "$AI_DB_NAME"

@@ -12,3 +12,4 @@ tài liệu vận hành hoặc danh mục API/sự kiện.
 - [ADR-003 — Quyền và hợp đồng nền của Integration](003-integration-auth-and-contracts.md).
 - [ADR-004 — Integration sở hữu tài khoản GitHub đã liên kết](004-integration-github-account-ownership.md).
 - [ADR-005 — Hợp đồng Integration với Work và AI](005-integration-work-ai-contracts.md).
+- [ADR-006 — Hợp nhất Identity, Classroom và Work thành Core Modular Monolith](006-consolidate-core-monolith.md).

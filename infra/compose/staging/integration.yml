@@ -1,0 +1,82 @@
+# Integration Service on single-VPS staging: 1 pinned image, 2 runtime containers.
+# scripts/deploy_staging.sh runs `manage.py migrate --noinput` + `migrate --check`
+# explicitly (and the API entrypoint also runs migrate), removing the redundant
+# `integration-migrate` container. Worker embeds Beat (`-B`) for single-replica
+# staging; split standalone Beat before scaling > 1 replica in production.
+x-logging: &default_logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-integration-runtime: &integration_runtime
+  <<: *default_logging
+  profiles: [integration-service]
+  image: ${UTASK_IMAGE_PREFIX:?Set staging image prefix}/integration-service:${UTASK_IMAGE_TAG:?Set release SHA tag}
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./infra/env/django.env
+    - ./infra/env/integration-service.env
+  volumes:
+    - type: bind
+      source: ./infra/env
+      target: /run/kafka-certificates
+      read_only: true
+  environment:
+    INTEGRATION_REDIS_URL: ${INTEGRATION_REDIS_URL:-redis://redis:6379/4}
+  depends_on: &integration_dependencies
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  integration-service:
+    <<: *integration_runtime
+    x-deploy:
+      gateway_health_path: /api/integrations/healthz
+    x-ci:
+      test_env:
+        INTEGRATION_TEST_DB_USER: utask_ci
+        INTEGRATION_TEST_DB_PASSWORD: ci-only-postgres-password
+        INTEGRATION_TEST_DB_NAME: integration_test
+        TEST_DATABASE_NAME: integration_test
+        INTEGRATION_TEST_DB_HOST: 127.0.0.1
+        INTEGRATION_TEST_DB_PORT: "5432"
+        INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  integration-worker:
+    <<: *integration_runtime
+    x-deploy:
+      role: worker
+      application: integration-service
+    command: ["celery", "-A", "config", "worker", "-B", "-Q", "integration", "--concurrency=1", "--schedule=/tmp/integration-celerybeat"]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    depends_on:
+      <<: *integration_dependencies
+      integration-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect --timeout=3 --destination=celery@$$HOSTNAME ping"]
+      interval: 45s
+      timeout: 10s
+      retries: 4
+      start_period: 20s

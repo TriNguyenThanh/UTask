@@ -118,14 +118,15 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           uv run --no-project --with PyYAML==6.0.3 python - <<'PY'
-          import json, os, re
+          import json, os, re, sys
           from pathlib import Path
-          import yaml
+          sys.path.insert(0, str(Path.cwd()))
+          from scripts.discover_services import load_compose_services
           digest = os.environ["DIGEST"]
           if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
               raise SystemExit("Build returned an invalid image digest")
           service = os.environ["SERVICE"]
-          compose = yaml.safe_load(Path("docker-compose.staging.yml").read_text())["services"]
+          compose = load_compose_services(Path("docker-compose.staging.yml"))
           images = {name: {"image": os.environ["IMAGE"] + "@" + digest}
                     for name, config in compose.items()
                     if name == service or config.get("x-deploy", {}).get("application") == service}
@@ -245,9 +246,10 @@ jobs:
           target="${STAGING_USER}@${STAGING_HOST}"
           printf '%s\n' "$STAGING_WORKDIR" | ssh "$target" '
             IFS= read -r workdir
-            mkdir -p -- "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets" "$workdir/scripts"
+            mkdir -p -- "$workdir/infra/compose/staging" "$workdir/infra/postgres" "$workdir/infra/nginx" "$workdir/infra/env" "$workdir/datasets" "$workdir/scripts"
           '
           scp docker-compose.staging.yml "$target:${STAGING_WORKDIR}/docker-compose.staging.yml"
+          scp infra/compose/staging/*.yml "$target:${STAGING_WORKDIR}/infra/compose/staging/"
           scp staging-images.json "$target:${STAGING_WORKDIR}/staging-images.json"
           scp .env.example "$target:${STAGING_WORKDIR}/.env.example"
           scp infra/env/*.env "$target:${STAGING_WORKDIR}/infra/env/"

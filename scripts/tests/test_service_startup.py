@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVICES = ("identity-service", "work-service", "classroom-service")
+SERVICES = ("core-service",)
 SHELL = shutil.which("sh") or (
     "C:/Program Files/Git/bin/bash.exe"
     if Path("C:/Program Files/Git/bin/bash.exe").is_file()
@@ -35,11 +35,7 @@ class ServiceImageStartupTests(unittest.TestCase):
                         if line.startswith("CMD ")
                     )
                 )
-                executable = (
-                    "/app/.venv/bin/gunicorn"
-                    if service == "identity-service"
-                    else "gunicorn"
-                )
+                executable = "gunicorn"
                 self.assertEqual(command[0], executable)
                 self.assertEqual(command[1], "config.wsgi:application")
                 self.assertNotIn(b"\r", (app / "docker-entrypoint.sh").read_bytes())
@@ -143,9 +139,9 @@ class ServiceEntrypointTests(unittest.TestCase):
         commands = (
             ["celery", "-A", "config", "worker"],
             ["celery", "-A", "config", "beat"],
-            ["python", "manage.py", "consume_identity"],
-            ["python", "manage.py", "consume_classroom"],
-            ["python", "manage.py", "consume_work"],
+            ["python", "manage.py", "consume_integration"],
+            ["python", "manage.py", "cleanup_core"],
+            ["python", "manage.py", "export_api_contracts"],
             ["python", "manage.py", "migrate", "--noinput"],
             ["absolute-python", "manage.py", "migrate", "--noinput"],
             ["python", "manage.py", "shell", "-c", "print('hello world')"],

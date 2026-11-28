@@ -101,7 +101,7 @@ jobs:
         env:
           SERVICE: ${{ inputs.service }}
         run: |
-          touched=$(git diff --name-status --diff-filter=MDR HEAD^1 HEAD -- ':(glob)**/migrations/*.py')
+          touched=$(git diff --name-status --diff-filter=MDR HEAD^1 HEAD -- ":(glob)apps/${SERVICE}/**/migrations/*.py")
           if [[ -n "$touched" ]]; then
             echo "::error::${SERVICE}: add a migration instead of editing, deleting or renaming merged migrations."
             printf '%s\n' "$touched"

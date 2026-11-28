@@ -26,9 +26,9 @@ INPUT_NAMES = (
 @contextmanager
 def deployment_runtime(
     *,
-    services="identity-service",
-    migrations="identity-service",
-    paths="/api/auth/healthz",
+    services="core-service",
+    migrations="core-service",
+    paths="/api/auth/healthz /api/classroom/healthz /api/work/healthz",
     fail_on="",
     fail_code=1,
 ):
@@ -88,7 +88,7 @@ def deployment_runtime(
             "EXPECTED_REGISTRY_TOKEN": "test-token",
             "EXPECTED_SERVICE_NAMES": services
             + (
-                " ai-worker ai-dispatcher ai-beat"
+                " ai-worker ai-dispatcher"
                 if "ai-service" in services.split()
                 else ""
             ),

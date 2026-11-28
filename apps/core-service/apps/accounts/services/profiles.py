@@ -1,0 +1,89 @@
+from django.db import IntegrityError, transaction
+from django.db.models import Q
+from rest_framework import serializers
+
+from apps.accounts.models import AccountStatus, User
+from apps.accounts.services.account_access import account_audit, lock_accounts
+from apps.messaging.services.outbox import emit_identity_user
+
+
+def public_users():
+    return (
+        User.objects.filter(deleted_at__isnull=True)
+        .select_related("profile")
+        .prefetch_related("global_role_assignments__role", "emailaddress_set", "socialaccount_set")
+    )
+
+
+def admin_users(deleted: str = "active"):
+    queryset = User.objects.all()
+    if deleted == "active":
+        queryset = queryset.filter(deleted_at__isnull=True)
+    elif deleted == "deleted":
+        queryset = queryset.filter(deleted_at__isnull=False)
+    return queryset.select_related("profile").prefetch_related(
+        "global_role_assignments__role", "emailaddress_set", "socialaccount_set"
+    )
+
+
+def search_active_users(query: str, *, role: str | None = None, limit: int = 10) -> list[User]:
+    queryset = (
+        public_users()
+        .filter(account_status=AccountStatus.ACTIVE)
+        .filter(
+            Q(email__icontains=query)
+            | Q(username__icontains=query)
+            | Q(student_id__icontains=query)
+            | Q(profile__display_name__icontains=query)
+        )
+    )
+    if role:
+        queryset = queryset.filter(global_role_assignments__role__code=role)
+    return list(queryset.distinct().order_by("profile__display_name", "email", "id")[:limit])
+
+
+def update_profile(request, changes):
+    with transaction.atomic():
+        user = lock_accounts(request)[request.user.pk]
+        profile = user.profile
+        profile_changes = dict(changes)
+        student_id = profile_changes.pop("student_id", user.student_id)
+        student_id_changed = student_id != user.student_id
+        changed = [
+            field for field, value in profile_changes.items() if getattr(profile, field) != value
+        ]
+        changed_fields = [*changed]
+
+        if student_id_changed:
+            if (
+                student_id is not None
+                and User.objects.filter(student_id=student_id).exclude(pk=user.pk).exists()
+            ):
+                raise serializers.ValidationError(
+                    {"student_id": "MSSV này đã được gán cho tài khoản khác."}
+                )
+            try:
+                with transaction.atomic():
+                    user.student_id = student_id
+                    user.save(update_fields=("student_id", "updated_at"))
+            except IntegrityError as error:
+                if (
+                    student_id is None
+                    or not User.objects.filter(student_id=student_id).exclude(pk=user.pk).exists()
+                ):
+                    raise
+                raise serializers.ValidationError(
+                    {"student_id": "MSSV này đã được gán cho tài khoản khác."}
+                ) from error
+            changed_fields.append("student_id")
+
+        if changed:
+            for field in changed:
+                setattr(profile, field, profile_changes[field])
+            profile.save(update_fields=(*changed, "updated_at"))
+            profile.refresh_from_db()  # PostgreSQL display_name trigger is authoritative.
+
+        if changed_fields:
+            account_audit(request, user, "PROFILE_UPDATED", fields=changed_fields)
+            emit_identity_user(user, "identity.user.updated")
+        return profile

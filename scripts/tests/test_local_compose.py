@@ -10,20 +10,20 @@ from pathlib import Path
 
 import yaml
 
+from scripts.discover_services import load_compose_services
+
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = shutil.which("sh") or (
     "C:/Program Files/Git/bin/bash.exe"
     if Path("C:/Program Files/Git/bin/bash.exe").is_file()
     else None
 )
-DATABASES = ("IDENTITY", "WORK", "CLASSROOM", "INTEGRATION", "NOTIFICATION", "AI")
+DATABASES = ("CORE", "INTEGRATION", "NOTIFICATION", "AI")
 
 
 class LocalComposeTests(unittest.TestCase):
     def setUp(self):
-        self.services = yaml.safe_load((ROOT / "docker-compose.yml").read_text())[
-            "services"
-        ]
+        self.services = load_compose_services(ROOT / "docker-compose.yml")
 
     def test_default_cluster_has_no_dependency_on_optional_backends(self):
         default = {
@@ -37,16 +37,12 @@ class LocalComposeTests(unittest.TestCase):
                 "postgres",
                 "redis",
                 "nginx",
-                "identity-service",
-                "work-service",
-                "work-publisher",
-                "work-beat",
-                "work-consumer",
-                "classroom-service",
-                "classroom-publisher",
-                "classroom-beat",
-                "classroom-work-consumer",
+                "core-service",
+                "core-worker",
             },
+        )
+        self.assertEqual(
+            self.services["core-consumer"]["profiles"], ["integration-service"]
         )
         for name in default:
             with self.subTest(process=name):
@@ -69,25 +65,42 @@ class LocalComposeTests(unittest.TestCase):
             self.assertEqual(self.services[name]["profiles"], ["ai-service"])
 
     def test_database_workers_wait_for_healthy_matching_api(self):
-        for app in ("identity", "work", "classroom"):
-            api = self.services[f"{app}-service"]
-            self.assertNotIn(f"{app}-migrate", self.services)
-            self.assertEqual(
-                api["depends_on"]["postgres"]["condition"],
-                "service_healthy",
-            )
-            self.assertNotIn("command", api)
+        api = self.services["core-service"]
+        self.assertNotIn("core-migrate", self.services)
+        self.assertEqual(
+            api["depends_on"]["postgres"]["condition"],
+            "service_healthy",
+        )
+        self.assertNotIn("command", api)
+        for name, process in self.services.items():
+            if not name.startswith("core-") or name == "core-service":
+                continue
+            with self.subTest(process=name):
+                self.assertEqual(
+                    process["depends_on"]["core-service"]["condition"],
+                    "service_healthy",
+                )
+                self.assertNotIn(name, api["depends_on"])
+                self.assertNotIn("build", process)
+                for key in ("image", "env_file"):
+                    self.assertEqual(process[key], api[key])
+        # Bake-safe single `build:` per image across all 4 modular app stacks, plus log/memory caps.
+        for api_name, prefix in (
+            ("core-service", "core-"),
+            ("integration-service", "integration-"),
+            ("notification-service", "notification-"),
+            ("ai-service", "ai-"),
+        ):
+            self.assertIn("build", self.services[api_name])
             for name, process in self.services.items():
-                if not name.startswith(f"{app}-") or name == f"{app}-service":
-                    continue
-                with self.subTest(process=name):
-                    self.assertEqual(
-                        process["depends_on"][f"{app}-service"]["condition"],
-                        "service_healthy",
-                    )
-                    self.assertNotIn(name, api["depends_on"])
-                    for key in ("image", "build", "env_file"):
-                        self.assertEqual(process[key], api[key])
+                if name.startswith(prefix) and name != api_name:
+                    self.assertNotIn("build", process, f"{name} duplicates build target")
+        for name, process in self.services.items():
+            if name.endswith("-migrate"):
+                continue
+            with self.subTest(hardening=name):
+                self.assertEqual(process["logging"]["driver"], "json-file")
+                self.assertIn("memory", process["deploy"]["resources"]["limits"])
 
     def test_preparation_runs_inside_existing_infrastructure_containers(self):
         self.assertNotIn("postgres-setup", self.services)
@@ -116,19 +129,13 @@ class LocalComposeTests(unittest.TestCase):
         mapping = (ROOT / "infra/env/kafka-startup.env").read_text()
         script = (ROOT / "infra/kafka/start-kafka.sh").read_text()
         for variable in (
+            "IDENTITY_KAFKA_TOPIC",
             "WORK_KAFKA_TOPIC",
-            "CLASSROOM_KAFKA_TOPIC",
-            "CLASSROOM_WORK_KAFKA_DLQ_TOPIC",
-            "WORK_CLASSROOM_KAFKA_DLQ_TOPIC",
+            "WORK_INTEGRATION_DLQ_TOPIC",
         ):
-            self.assertIn(f'"${variable}"', script)
+            self.assertIn(variable, script)
             self.assertIn(f"{variable}=${{{variable}:-", mapping)
-        for name in (
-            "work-publisher",
-            "work-consumer",
-            "classroom-publisher",
-            "classroom-work-consumer",
-        ):
+        for name in ("core-worker", "core-consumer"):
             self.assertEqual(
                 self.services[name]["depends_on"]["kafka"]["condition"],
                 "service_healthy",
@@ -142,8 +149,8 @@ class LocalComposeTests(unittest.TestCase):
             if not key.startswith(("COMPOSE_", "UTASK_"))
         }
         env.update(
+            IDENTITY_KAFKA_TOPIC="local.identity.custom",
             WORK_KAFKA_TOPIC="local.work.custom",
-            CLASSROOM_KAFKA_TOPIC="local.classroom.custom",
             KAFKA_BOOTSTRAP_SERVERS="broker.custom:19092",
         )
         result = subprocess.run(
@@ -167,46 +174,43 @@ class LocalComposeTests(unittest.TestCase):
         self.assertNotIn("ai-service", services)
         self.assertNotIn("integration-service", services)
         self.assertNotIn("notification-service", services)
-        self.assertEqual(len(services), 13)
+        self.assertNotIn("core-consumer", services)
+        self.assertEqual(len(services), 6)
         topics = services["kafka"]["environment"]
         self.assertEqual(topics["KAFKA_BOOTSTRAP_SERVERS"], "broker.custom:19092")
-        for name in ("work-consumer", "classroom-work-consumer"):
+        for name in ("core-worker",):
             self.assertEqual(
                 topics["KAFKA_BOOTSTRAP_SERVERS"],
                 services[name]["environment"]["KAFKA_BOOTSTRAP_SERVERS"],
             )
-        self.assertEqual(
-            topics["WORK_KAFKA_TOPIC"],
-            services["classroom-work-consumer"]["environment"][
-                "CLASSROOM_WORK_KAFKA_TOPIC"
-            ],
-        )
-        self.assertEqual(
-            topics["CLASSROOM_KAFKA_TOPIC"],
-            services["work-consumer"]["environment"]["WORK_CLASSROOM_KAFKA_TOPIC"],
-        )
+            self.assertEqual(
+                topics["IDENTITY_KAFKA_TOPIC"],
+                services[name]["environment"]["IDENTITY_KAFKA_TOPIC"],
+            )
+            self.assertEqual(
+                topics["WORK_KAFKA_TOPIC"],
+                services[name]["environment"]["WORK_KAFKA_TOPIC"],
+            )
 
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose is unavailable")
-    def test_work_kafka_mappings_use_defaults_and_custom_values(self):
+    def test_core_kafka_mappings_use_defaults_and_custom_values(self):
         defaults = {
+            "IDENTITY_KAFKA_TOPIC": "utask.identity.events",
             "WORK_KAFKA_TOPIC": "utask.work.events",
-            "WORK_CLASSROOM_KAFKA_TOPIC": "utask.classroom.events",
-            "WORK_CLASSROOM_KAFKA_GROUP": "work-classroom-groups-v1",
-            "WORK_CLASSROOM_KAFKA_DLQ_TOPIC": "utask.work.classroom.dlq",
-            "WORK_CLASSROOM_CONSUMER_MAX_RETRIES": "5",
+            "WORK_INTEGRATION_KAFKA_GROUP": "work-integration-connections-v1",
+            "WORK_INTEGRATION_DLQ_TOPIC": "utask.work.integration.dlq",
         }
         overrides = {
+            "IDENTITY_KAFKA_TOPIC": "custom.identity.events",
             "WORK_KAFKA_TOPIC": "custom.work.events",
-            "CLASSROOM_KAFKA_TOPIC": "custom.classroom.events",
-            "WORK_CLASSROOM_KAFKA_GROUP": "custom-work-classroom-group",
-            "WORK_CLASSROOM_KAFKA_DLQ_TOPIC": "custom.work.classroom.dlq",
-            "WORK_CLASSROOM_CONSUMER_MAX_RETRIES": "9",
+            "WORK_INTEGRATION_KAFKA_GROUP": "custom-work-integration-group",
+            "WORK_INTEGRATION_DLQ_TOPIC": "custom.work.integration.dlq",
         }
         env = {
             key: value
             for key, value in os.environ.items()
             if not key.startswith(
-                ("COMPOSE_", "UTASK_", "KAFKA_", "WORK_", "CLASSROOM_")
+                ("COMPOSE_", "UTASK_", "KAFKA_", "WORK_", "IDENTITY_", "CORE_")
             )
         }
         env.update(UTASK_IMAGE_PREFIX="test/utask", UTASK_IMAGE_TAG="test")
@@ -222,7 +226,9 @@ class LocalComposeTests(unittest.TestCase):
                             "-f",
                             base,
                             "--profile",
-                            "work-service",
+                            "core-service",
+                            "--profile",
+                            "integration-service",
                             "config",
                             "--format",
                             "json",
@@ -235,20 +241,8 @@ class LocalComposeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     services = json.loads(result.stdout)["services"]
-                    expected = dict(defaults)
-                    if custom:
-                        expected.update(
-                            {k: v for k, v in overrides.items() if k in expected}
-                        )
-                        expected["WORK_CLASSROOM_KAFKA_TOPIC"] = overrides[
-                            "CLASSROOM_KAFKA_TOPIC"
-                        ]
-                    for name in (
-                        "work-service",
-                        "work-publisher",
-                        "work-beat",
-                        "work-consumer",
-                    ):
+                    expected = dict(overrides if custom else defaults)
+                    for name in ("core-service", "core-worker", "core-consumer"):
                         for variable, value in expected.items():
                             with self.subTest(process=name, variable=variable):
                                 self.assertEqual(
@@ -266,7 +260,7 @@ class PostgresSetupScriptTests(unittest.TestCase):
             env[f"{prefix}_DB_NAME"] = f"{prefix.lower()} database's"
         if missing:
             env.pop(
-                f"{missing if isinstance(missing, str) else 'CLASSROOM'}_DB_NAME", None
+                f"{missing if isinstance(missing, str) else 'CORE'}_DB_NAME", None
             )
         env["PATH"] = str(directory) + os.pathsep + env["PATH"]
         env["PSQL_LOG"] = (directory / "calls").as_posix()
@@ -294,10 +288,10 @@ class PostgresSetupScriptTests(unittest.TestCase):
                 result = self.run_setup(directory)
                 self.assertEqual(result.returncode, 0, result.stderr)
             calls = (Path(directory) / "calls").read_text()
-            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 12)
-            self.assertEqual(calls.count("-X\n"), 12)
+            self.assertEqual(calls.count("--set=ON_ERROR_STOP=1\n"), 8)
+            self.assertEqual(calls.count("-X\n"), 8)
             self.assertIn("--set=database_name=ai database's\n", calls)
-            self.assertIn("--set=database_name=classroom database's\n", calls)
+            self.assertIn("--set=database_name=core database's\n", calls)
             self.assertIn("WHERE NOT EXISTS (SELECT 1 FROM pg_database", calls)
             self.assertIn("format('CREATE DATABASE %I'", calls)
 
@@ -313,7 +307,7 @@ class PostgresSetupScriptTests(unittest.TestCase):
             )
 
     def test_missing_database_name_fails_before_psql(self):
-        for missing in ("CLASSROOM", "AI"):
+        for missing in ("CORE", "AI"):
             with (
                 self.subTest(missing=missing),
                 tempfile.TemporaryDirectory() as directory,

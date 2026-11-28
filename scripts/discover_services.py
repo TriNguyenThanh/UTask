@@ -12,6 +12,25 @@ from pathlib import Path
 import yaml
 
 
+def load_compose_services(compose_path: Path) -> dict:
+    """Load Compose services, recursively resolving top-level `include:` entries."""
+    document = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
+    merged: dict = {}
+    for entry in document.get("include") or []:
+        paths = (
+            entry["path"]
+            if isinstance(entry, dict)
+            else entry
+        )
+        if isinstance(paths, str):
+            paths = [paths]
+        for rel in paths:
+            included = (compose_path.parent / rel).resolve()
+            merged.update(load_compose_services(included))
+    merged.update(document.get("services") or {})
+    return merged
+
+
 def read_python_services(root: Path, compose: dict):
     """Read runnable app manifests, without loading any service dependencies."""
     services = {}
@@ -149,9 +168,7 @@ def validate_runtime(compose: dict, services: dict):
 
 
 def discover_services(root: Path, changed_files=(), *, shared=False, deployment=False):
-    compose = yaml.safe_load(
-        (root / "docker-compose.staging.yml").read_text(encoding="utf-8")
-    )["services"]
+    compose = load_compose_services(root / "docker-compose.staging.yml")
     services = read_python_services(root, compose)
     infrastructure_services, gateway, dependencies = validate_runtime(compose, services)
 
@@ -160,15 +177,23 @@ def discover_services(root: Path, changed_files=(), *, shared=False, deployment=
     for name, service in services.items():
         runtime = service["runtime"]
         post_deploy = runtime.get("x-deploy", {})
-        if (
-            not isinstance(post_deploy, dict)
-            or "gateway_health_path" not in post_deploy
+        if not isinstance(post_deploy, dict) or (
+            "gateway_health_path" not in post_deploy
+            and "gateway_health_paths" not in post_deploy
         ):
             raise ValueError(
                 f"{name}: declare x-deploy.gateway_health_path (null for internal services)"
             )
-        health_path = post_deploy["gateway_health_path"]
-        if health_path is not None:
+        if "gateway_health_paths" in post_deploy:
+            raw_paths = post_deploy["gateway_health_paths"]
+            if not isinstance(raw_paths, list) or not raw_paths:
+                raise ValueError(
+                    f"{name}: gateway_health_paths must be a non-empty list of absolute HTTP paths"
+                )
+        else:
+            health_path = post_deploy["gateway_health_path"]
+            raw_paths = [] if health_path is None else [health_path]
+        for health_path in raw_paths:
             if (
                 not isinstance(health_path, str)
                 or not re.fullmatch(r"/[A-Za-z0-9._/-]+", health_path)

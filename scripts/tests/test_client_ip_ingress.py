@@ -98,8 +98,8 @@ class ClientIPIngressTests(unittest.TestCase):
         self.assertIn('add_header Vary "Origin" always;', self.nginx)
         self.assertIn('if ($request_method = OPTIONS) { return 204; }', self.nginx)
 
-    def test_identity_docker_mapping_has_overridable_bridge_default(self):
-        source = (ROOT / "infra/env/identity-service.env").read_text(encoding="utf-8")
+    def test_core_docker_mapping_has_overridable_bridge_default(self):
+        source = (ROOT / "infra/env/core-service.env").read_text(encoding="utf-8")
         values = re.findall(
             r"^IDENTITY_TRUSTED_PROXY_CIDRS=(.*)$", source, re.MULTILINE
         )
@@ -108,11 +108,16 @@ class ClientIPIngressTests(unittest.TestCase):
         template = (ROOT / ".env.example").read_text(encoding="utf-8")
         self.assertNotRegex(template, r"(?m)^IDENTITY_TRUSTED_PROXY_CIDRS=")
         # Both entrypoints must consume this mapping, without overriding it.
+        from scripts.discover_services import load_compose_services
+
         for name in ("docker-compose.yml", "docker-compose.staging.yml"):
             with self.subTest(compose=name):
-                compose = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn("./infra/env/identity-service.env", compose)
-                self.assertNotIn("IDENTITY_TRUSTED_PROXY_CIDRS", compose)
+                services = load_compose_services(ROOT / name)
+                core = services["core-service"]
+                self.assertIn("./infra/env/core-service.env", core["env_file"])
+                self.assertNotIn(
+                    "IDENTITY_TRUSTED_PROXY_CIDRS", core.get("environment", {})
+                )
 
 
 if __name__ == "__main__":

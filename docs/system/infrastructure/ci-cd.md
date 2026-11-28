@@ -105,9 +105,11 @@ thì CI dừng. Đây là cấu hình runtime vốn phải khai báo khi thêm s
 sách bật CI thứ hai. Web chưa có source thì không chạy; khi có thư mục Web, thiếu
 manifest/lockfile cũng là lỗi.
 
-Service được nhận diện phải khai báo
-`x-deploy.gateway_health_path`: path health qua gateway, ví dụ Identity dùng
-`/api/auth/healthz`. Service chỉ dùng nội bộ khai báo giá trị `null`; workflow vẫn
+Service được nhận diện phải khai báo `x-deploy.gateway_health_path` (một đường
+dẫn hoặc `null` cho service nội bộ) hoặc `x-deploy.gateway_health_paths` (danh
+sách đường dẫn cho service phục vụ nhiều tiền tố gateway; ví dụ `core-service`
+khai báo `["/api/auth/healthz", "/api/classroom/healthz", "/api/work/healthz"]`).
+Service chỉ dùng nội bộ khai báo giá trị `null`; workflow vẫn
 chờ healthcheck của container nhưng không gọi nó qua gateway. Discovery cũng kiểm tra
 healthcheck của mọi container runtime được profile ứng dụng kích hoạt, gồm app, worker,
 scheduler, Nginx và dependency; migration một lần được kiểm tra bằng exit status.
@@ -122,29 +124,29 @@ migration một lần. Worker/migration khai báo thêm `x-deploy.application` l
 image. Discovery kiểm tra quan hệ này, không đoán vai trò từ chuỗi image. App nội bộ
 khai báo `x-deploy.gateway_health_path: null`; app có route health qua gateway khai báo
 path tuyệt đối. Stack staging có một gateway; tên lấy từ Compose.
-
 ### Quy ước dùng chung cấu hình Compose
 
-Compose local và staging dùng YAML extension field `x-*` kết hợp anchor để
-gom cấu hình runtime lặp lại giữa các container của cùng service. Đặt anchor
-gần đầu file Compose, theo trách nhiệm như `x-work-runtime`,
-`x-classroom-runtime` hoặc `x-ai-runtime`, rồi kế thừa bằng `<<: *...` trong
-từng mục `services`. Có thể tách anchor phụ cho dependency hoặc metadata dùng
-chung nếu nhiều container cùng cần.
+Compose local (`infra/compose/*.yml`) và staging (`infra/compose/staging/*.yml`)
+dùng YAML extension field `x-*` kết hợp anchor để gom cấu hình runtime lặp lại
+giữa các container của cùng service (kèm `x-logging` xoay vòng log). Đặt anchor
+gần đầu từng file Compose theo trách nhiệm như `x-core-runtime`,
+`x-integration-runtime`, `x-notification-runtime` hoặc `x-ai-runtime` / `x-ai`,
+rồi kế thừa bằng `<<: *...` trong từng mục `services`. Có thể tách anchor phụ
+cho dependency hoặc metadata dùng chung nếu nhiều container cùng cần.
 
-Anchor chứa cấu hình nền giống nhau, thường gồm image/build, `env_file`,
-restart, volume và dependency nền. Mỗi container giữ command, healthcheck,
-metadata `x-deploy`/`x-ci` và dependency riêng theo vai trò; trường metadata
-thực sự dùng chung có thể đặt trong anchor phụ. Áp dụng cùng quy ước cho cả
-Compose local và staging để cấu hình service không bị lặp hoặc trôi khác nhau
-giữa hai môi trường. Compose resolve anchor trước khi tạo container; `x-*` tự
-nó không tạo service hay container.
+Anchor chứa cấu hình nền giống nhau, thường gồm image, `env_file`, `restart`,
+`logging`, volume và dependency nền. Mỗi container giữ `build` (chỉ đặt một lần
+trên service chính để an toàn với Bake), command, healthcheck, `deploy.resources`,
+metadata `x-deploy`/`x-ci` và dependency riêng theo vai trò. Áp dụng cùng quy
+ước cho cả Compose local và staging để cấu hình service không bị lặp hoặc trôi
+khác nhau giữa hai môi trường. Compose resolve anchor trước khi tạo container;
+`x-*` tự nó không tạo service hay container.
 
-Hai Compose dùng `x-identity-runtime`, `x-work-runtime`,
-`x-classroom-runtime`, `x-integration-runtime` và `x-notification-runtime` cho
-các process tương ứng; Compose local còn có `x-ai`. Dependency nền nằm trong
-anchor riêng khi nhiều process dùng chung; dependency đặc thù vẫn được khai
-báo tại từng process.
+Trong kiến trúc Modular Monolith ([ADR-006](../adr/006-consolidate-core-monolith.md)),
+`x-core-runtime` chia sẻ image (`utask/core-service`), env mappings
+(`infra/env/core-service.env`), volumes và dependency giữa `core-service`,
+`core-worker` và `core-consumer`; các service ngoại biên dùng
+`x-integration-runtime`, `x-notification-runtime` và `x-ai` / `x-ai-runtime`.
 
 Các script CI là automation chung của repository, không phải Python service hoặc
 project triển khai riêng. Khi chạy script cần đọc YAML, workflow dùng
@@ -163,12 +165,16 @@ Job lỗi hoặc bị hủy vẫn chặn release. Thay đổi scaffolding chưa 
 hoạt release. Django được nhận diện từ dependency trong `pyproject.toml` để chọn migration.
 Settings kiểm thử lấy từ `tool.pytest.ini_options.DJANGO_SETTINGS_MODULE`, dùng chung
 cho pytest và gate Django. CI chạy `check`, `makemigrations --check --dry-run` trước
-tests. PR kiểm diff với cha thứ nhất của merge commit để chặn sửa/xóa/đổi tên
-migration đã trên nhánh gốc; migration mới được phép thêm. Gate này bảo vệ lịch sử
-đã merge, không xác định migration nào đã áp dụng trên từng VPS.
+tests. PR kiểm diff trong phạm vi `apps/${SERVICE}/**/migrations/*.py` với cha thứ nhất
+của merge commit để chặn sửa/xóa/đổi tên migration đã trên nhánh gốc của chính
+service đó; migration mới được phép thêm. Gate này bảo vệ lịch sử đã merge, không
+xác định migration nào đã áp dụng trên từng VPS.
 
-Compose staging mặc định chạy PostgreSQL, Redis, Identity và Nginx. Các app còn lại dùng
-profile cùng tên service; Kafka Docker chỉ chạy khi bật profile `kafka`
+Compose staging mặc định chạy PostgreSQL, Redis, `core-service` (với network
+aliases `identity-service`, `classroom-service`, `work-service`) và Nginx.
+`core-worker`, `core-consumer` và các app ngoài (`ai-service`,
+`integration-service`, `notification-service`) dùng profile cùng tên service;
+Kafka Docker chỉ chạy khi bật profile `kafka`
 trong `COMPOSE_PROFILES` của `.env` trên VPS. Bỏ profile này khi dùng broker
 bên ngoài; worker không bắt buộc phụ thuộc broker Docker. Xem
 [cấu hình Kafka theo môi trường](environment.md#chọn-kafka-docker-hoặc-kafka-bên-ngoài).
@@ -178,14 +184,22 @@ Nginx dùng Docker DNS khi nhận request, không cần các app chưa chạy đ
 backend chưa khả dụng trả HTTP 503. Route Identity nội bộ vẫn bị gateway chặn bằng 404.
 
 `docker-compose.yml` dành cho local, có build context và port hỗ trợ phát triển.
-`docker-compose.staging.yml` là file độc lập dùng image đã phát hành, chỉ publish Nginx.
+`docker-compose.staging.yml` dùng cấu trúc mô-đun `include:` (Docker Compose v2.20+,
+`project_directory: .`) trỏ tới 5 tệp trong `infra/compose/staging/{infra,core,integration,notification,ai}.yml`
+(kèm `logging` rotation `json-file` 10 MB × 3 tệp và `deploy.resources.limits.memory`),
+chỉ dùng image đã phát hành và chỉ publish Nginx. Với staging 1 VPS đơn node, các worker
+(`core-worker`, `integration-worker`, `notification-worker`, `ai-worker`) nhúng Celery Beat
+(`worker -B`) và bỏ 2 container `*-migrate` dư thừa do `scripts/deploy_staging.sh` đã chạy
+`manage.py migrate --noinput` + `migrate --check` tường minh trước/sau rollout (giảm từ 20 xuống
+15 dịch vụ có thể chạy, 0 container migrate tồn dư; production đa replica bắt buộc tách Beat
+singleton riêng theo hướng dẫn chính thức của Celery).
 PostgreSQL/Redis vẫn thuộc stack staging; Kafka mặc định thuộc stack hoặc dùng
 broker bên ngoài theo profile `kafka`. Không dùng cấu hình này làm production.
 Hai file giữ project name `utask` và tên volume để server staging đang dùng có thể chuyển
 file mà không tạo một bộ dữ liệu khác. Không chạy cả hai stack trong cùng Docker host/project.
 
 Thay riêng Compose local chạy CI nhưng không kích hoạt deploy.
-Thay Compose staging, mapping `infra/env/*.env`, Nginx, init script hoặc datasets
+Thay Compose staging (`docker-compose.staging.yml` hoặc `infra/compose/staging/**`), mapping `infra/env/*.env`, Nginx, init script hoặc datasets
 có thể kích hoạt release trên push `main`. Đổi `ci.yml` hoặc `release-staging.yml` cũng
 kích hoạt release để áp dụng phạm vi/cách deploy mới và dựng image đang bật cho lần đầu.
 
@@ -212,10 +226,10 @@ môi trường dành cho các bước tiếp theo trong chính job đó). Các b
 kiểm thử, Django check và pytest nhận cùng cấu hình như CI local, không truyền
 credential qua output giữa các job và không in giá trị ra log.
 
-Job Identity bật cả hai dependency và truyền `POSTGRES_*`, `DATABASE_NAME=ci`,
-`IDENTITY_TEST_DB_NAME=test_identity_ci` cùng `IDENTITY_TEST_REDIS_URL` dùng Redis DB15.
-pytest-django tự tạo/migrate/xóa test database. Workflow chung chạy một bước
-`uv run pytest`, không rẽ nhánh theo tên service.
+Job `core-service` bật cả hai dependency PostgreSQL/Redis và truyền `CORE_TEST_DB_*`,
+`CORE_TEST_DATABASE=test_core_ci` cùng `CORE_REDIS_URL` dùng Redis DB15 qua
+`x-ci.test_env`. pytest-django tự tạo/migrate/xóa test database. Workflow chung
+chạy một bước `uv run pytest`, không rẽ nhánh theo tên service.
 
 Các service khác tự nhận dependency PostgreSQL/Redis theo Compose. Discovery nhận diện
 PostgreSQL từ image của dependency, không dựa vào tên service; service dùng database
@@ -231,21 +245,21 @@ repository; xem [cách xuất hợp đồng](../../../contracts/api/README.md).
 
 ## Kiểm tra CI local trước khi đẩy mã
 
-### Classroom dùng nền CI chung
+### Core Modular Monolith dùng nền CI chung
 
-Classroom được discovery nhận diện từ manifest, lockfile, Dockerfile và metadata
-Compose staging như các service khác. Thay đổi riêng AI chỉ chọn kiểm thử AI;
-thay đổi riêng Classroom chỉ chọn kiểm thử Classroom. Thay đổi cấu hình dùng
-chung chọn các service theo cơ chế hiện có. Matrix phát hành vẫn chứa mọi
-service đang bật như thiết kế gốc; không đổi chính sách phát hành trong lần
-tích hợp Classroom.
+Sau [ADR-006](../adr/006-consolidate-core-monolith.md), ba miền Identity,
+Classroom và Work được discovery nhận diện dưới một service duy nhất là
+`apps/core-service` (từ `pyproject.toml`, `uv.lock`, `Dockerfile` và metadata
+Compose staging). Thay đổi riêng AI chỉ chọn kiểm thử AI; thay đổi trong
+`apps/core-service` chọn kiểm thử `core-service`; thay đổi cấu hình dùng chung
+chọn tất cả các service hiện hữu (`core-service`, `ai-service`,
+`integration-service`, `notification-service`).
 
 Workflow Python chạy `uv run pytest` một lần cho collection mặc định của
-service; các thư mục unit/integration/contract chỉ tổ chức test, không tạo
-thêm matrix hoặc bước phân tầng chung. Các test E2E Classroom nằm riêng trong
-`apps/classroom-service/tests/e2e/`, được chạy khi chủ động gọi pytest với cấu
-hình E2E. CI và `ci_local.py` không tự khởi tạo cụm E2E và không cần image
-artifact mới để nối với release. Kết quả kiểm tra cấu hình không thay bằng
+service; các thư mục `unit/`, `integration/`, `contract/` chỉ tổ chức test, không tạo
+thêm matrix hoặc bước phân tầng chung. Các test gắn marker `external` hoặc `e2e`
+được bỏ qua trong chạy mặc định (`-m "not external and not e2e"`) và chỉ chạy khi
+chủ động gọi với hạ tầng tương ứng. Kết quả kiểm tra cấu hình không thay bằng
 chứng chạy GitHub Actions hoặc deploy staging thật.
 
 Chạy từ thư mục gốc repository:
@@ -341,12 +355,12 @@ riêng cho Identity. Dùng [.env.example](../../../.env.example) làm mẫu rồ
 giá trị local của service đang bật bằng cấu hình staging, gồm secrets, domain và đường dẫn
 PEM. Workflow không upload/ghi đè `.env` hoặc file PEM.
 
-Workflow upload `docker-compose.staging.yml`, `.env.example`, bộ ánh xạ dùng chung `infra/env/*.env`,
+Workflow upload `docker-compose.staging.yml`, các tệp mô-đun `infra/compose/staging/*.yml`, `.env.example`, bộ ánh xạ dùng chung `infra/env/*.env`,
 Nginx, init PostgreSQL và script deploy; datasets upload nếu thư mục có trong source,
 không rẽ nhánh theo tên AI. Các biến Google/GitHub/R2/caller keys nếu dùng
 được cung cấp trong `.env` server, không đặt giá trị bí mật vào file ánh xạ tracked.
 
-Các biến runtime trong `.env` staging khi chỉ bật Identity:
+Các biến runtime trong `.env` staging tối thiểu cho Core Service:
 
 ```dotenv
 POSTGRES_USER=utask
@@ -355,41 +369,44 @@ POSTGRES_DB=postgres
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
 
-IDENTITY_DB_NAME=identity_db
-IDENTITY_DJANGO_SECRET_KEY=<secret>
-WORK_DB_NAME=work_db
-CLASSROOM_DB_NAME=classroom_db
+CORE_DB_NAME=core_db
+CORE_DJANGO_SECRET_KEY=<secret>
+CLASSROOM_ACCESS_CODE_HMAC_KEY=<secret>
 INTEGRATION_DB_NAME=integration_db
 NOTIFICATION_DB_NAME=notification_db
+AI_DB_NAME=ai_context_db
 
 DJANGO_DEBUG=false
-DJANGO_ALLOWED_HOSTS=<staging-domain>,localhost,127.0.0.1,nginx,identity-service
+DJANGO_ALLOWED_HOSTS=<staging-domain>,localhost,127.0.0.1,nginx,core-service,identity-service,classroom-service,work-service
 IDENTITY_JWT_PRIVATE_KEY_HOST_PATH=/etc/utask/secrets/identity-jwt-private.pem
 ```
 
 Tên database của app chưa bật vẫn được script PostgreSQL dùng để tạo database rỗng;
-không chạy Django migration hoặc truyền secret của app đó. Khi bật app Django khác,
+không chạy Django migration hoặc truyền secret của app đó. Khi deploy `core-service`
+hoặc `ai-service`, `scripts/deploy_staging.sh` chạy lại `init-databases.sh` một
+cách idempotent trước bước migration để bảo đảm `core_db`/`ai_context_db` tồn tại
+ngay cả trên volume PostgreSQL cũ. Khi bật app Django khác,
 điền `<SERVICE>_DJANGO_SECRET_KEY` tương ứng trong cùng `.env`. Kafka cluster ID cần
 khi chủ động bật profile Kafka; việc đó không triển khai publisher/consumer của app.
 
-File PEM phải tồn tại và user trong container Identity (UID10001) đọc được; bind mount
+File PEM phải tồn tại và user trong container Core (UID 10001) đọc được; bind mount
 read-only không tự tạo đường dẫn còn thiếu. Không sinh khóa mặc định trên server khi deploy.
 Mail key/key ID cần cho đăng ký/recovery; OAuth/R2 cần cấu hình riêng khi bật flags.
 
-`UTASK_HTTP_PORT` mặc định8080. Workflow đặt `UTASK_IMAGE_PREFIX` và
+`UTASK_HTTP_PORT` mặc định 8080. Workflow đặt `UTASK_IMAGE_PREFIX` và
 `UTASK_IMAGE_TAG=sha-<commit>` để nội suy file Compose gốc; image app và worker thực tế
 được ghi đè bằng `image@sha256:...` trong `staging-images.json`. File này do workflow
 ghép từ artifact của đúng lần phát hành rồi upload, không phải file env hoặc danh sách
 service phải quản lý tay. Khi thao tác trên VPS sau deploy, giữ cả hai file Compose
 và cấp hai biến nội suy như lần phát hành; không chạy riêng file Compose gốc.
-Ví dụ với Identity:
+Ví dụ với `core-service`:
 
 ```bash
-compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json --profile identity-service)
+compose=(docker compose --env-file .env -f docker-compose.staging.yml -f staging-images.json --profile core-service)
 "${compose[@]}" config --quiet
 "${compose[@]}" pull
 "${compose[@]}" up -d --no-build --wait postgres redis
-"${compose[@]}" run --rm --no-deps --interactive=false identity-service /app/.venv/bin/python manage.py migrate --noinput < /dev/null
+"${compose[@]}" run --rm --no-deps --interactive=false core-service /app/.venv/bin/python manage.py migrate --noinput < /dev/null
 "${compose[@]}" up -d --no-build --wait --wait-timeout 120
 ```
 
@@ -480,14 +497,12 @@ Migration đã chạy vẫn còn, vì vậy phiên bản trước phải tương
 tại; kiểm tra lại health và nghiệp vụ sau phục hồi. Quy trình này không thay thế
 nghiệm thu từng API hoặc kiểm tra HTTPS bên ngoài. Health
 response không có mã định danh backend nên probe chưa chứng minh danh tính service
-ở đầu kia; route vẫn phải được đối chiếu với Nginx. Work publisher dùng Celery ping
-tới đúng node; beat kiểm tra PID còn sống và kết nối broker. Các phép kiểm tra này
-chưa chứng minh scheduler tiến triển, task được thực thi hay event tới Kafka.
-Work dùng duy nhất `work-consumer`, cùng profile/image pin của Work API.
-Command `consume_work` chạy các consumer Identity/Classroom/Integration trong
-cùng container, giữ group/offset/retry/DLQ riêng; không cần profile consumer.
-Integration chỉ chạy khi chọn adapter thật, vẫn chạy khi tắt nhận command mới.
-Chi tiết chuyển từ container cũ và kiểm chứng tại
+ở đầu kia; route vẫn phải được đối chiếu với Nginx. `core-worker` chạy `celery -A config worker -B -Q core-worker` (an toàn cho staging 1 VPS đơn node; tách riêng `core-beat` nếu scale `core-worker > 1`) và dùng heartbeat file `/tmp/core-worker.heartbeat` (qua signal `worker_ready`/`worker_shutdown` trong `config/celery.py`) để healthcheck không gây spike CPU định kỳ;
+`core-consumer` dùng cùng profile/image pin của `core-service` với command
+`python manage.py consume_integration` để tiêu thụ `utask.integration.events` (giữ
+group/offset/retry/DLQ riêng) khi chọn adapter thật. Các phép kiểm tra liveness/heartbeat
+này chưa chứng minh scheduler tiến triển, task được thực thi hay event tới Kafka.
+Chi tiết cấu hình GitHub Integration tại
 [Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 Không dùng `--remove-orphans` trong deploy; không tự xóa container hoặc volume của

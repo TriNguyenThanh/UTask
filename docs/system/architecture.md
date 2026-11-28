@@ -1,19 +1,17 @@
 # Kiến trúc UTask
 
-**Trạng thái: Thiết kế mục tiêu.** Tài liệu được cập nhật theo
-[architecture baseline](architecture-baseline.md), mục 2–4 và 26–29.
-Không xác nhận các service hoặc luồng nghiệp vụ đã chạy.
+**Trạng thái: Một phần (`Đã triển khai (local)` cho `core-service`; thiết kế mục tiêu cho toàn hệ thống và staging `Chưa xác minh`).** Tài liệu kết hợp [architecture baseline](architecture-baseline.md) với quyết định hợp nhất ba miền lõi tại [ADR-006](adr/006-consolidate-core-monolith.md). Không suy luận mọi service hoặc môi trường staging đã nghiệm thu hoàn chỉnh.
 
 ## Các thành phần
 
-UTask dùng coarse-grained microservices: chia service theo nhóm nghiệp vụ
-lớn, không chia theo bảng hay entity. Work là core domain (nghiệp vụ trung tâm).
+UTask áp dụng kiến trúc lai giữa **Modular Monolith (nguyên khối phân tách mô-đun)** cho ba miền nghiệp vụ lõi và **coarse-grained microservices** cho các dịch vụ biên độc lập. Work là core domain (nghiệp vụ trung tâm).
 
 ```text
 Web → Nginx / reverse proxy
-       ├── Identity Service
-       ├── Work Service
-       ├── Classroom Service
+       ├── Core Service (`apps/core-service`, alias: identity-service, classroom-service, work-service)
+       │     ├── Miền Identity (`/api/auth/*`)
+       │     ├── Miền Classroom (`/api/classroom/*`)
+       │     └── Miền Work (`/api/work/*`)
        ├── Integration Service → GitHub
        ├── Notification Service → email / kênh thông báo
        └── AI Service → nhà cung cấp LLM
@@ -21,14 +19,14 @@ Web → Nginx / reverse proxy
 Hạ tầng: PostgreSQL · Kafka · Redis · Cloudflare R2 ở production
 ```
 
-| Service      | Phạm vi sở hữu                                                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Identity     | User, profile, global role, xác thực, access/refresh token và OAuth đăng nhập                                                         |
-| Work         | Project, ProjectMember, backlog, Epic/UserStory, Sprint, Task, assignment, label, Comment, Workflow, Activity và tiến độ task/project |
-| Classroom    | Môn học, lớp, giảng viên/sinh viên, Group/GroupMember, điểm danh, điểm số và liên kết nhóm–project                                    |
-| Integration  | GitHub user/link/consent/credential, GitHub App, kết nối kỹ thuật repository, webhook, commit/branch/issue/PR và dữ kiện/ứng viên mapping task–GitHub |
-| Notification | Bản ghi thông báo, người nhận, kênh và trạng thái gửi                                                                                 |
-| AI           | Yêu cầu, context phục vụ phân tích và kết quả đề xuất; không sở hữu dữ liệu nghiệp vụ gốc                                             |
+| Service / Miền | Phạm vi sở hữu |
+| --- | --- |
+| **Core Service** (`apps/core-service`) — **Identity** | User, profile, global role, xác thực, access/refresh token và OAuth đăng nhập |
+| **Core Service** (`apps/core-service`) — **Work** | Project, ProjectMember, backlog, Epic/UserStory, Sprint, Task, assignment, label, Comment, Workflow, Activity và tiến độ task/project |
+| **Core Service** (`apps/core-service`) — **Classroom** | Môn học, lớp, giảng viên/sinh viên, Group/GroupMember, điểm danh, điểm số và liên kết nhóm–project |
+| **Integration** (`apps/integration-service`) | GitHub user/link/consent/credential, GitHub App, kết nối kỹ thuật repository, webhook, commit/branch/issue/PR và dữ kiện/ứng viên mapping task–GitHub |
+| **Notification** (`apps/notification-service`) | Bản ghi thông báo, người nhận, kênh và trạng thái gửi |
+| **AI** (`apps/ai-service`) | Yêu cầu, context phục vụ phân tích và kết quả đề xuất; không sở hữu dữ liệu nghiệp vụ gốc |
 
 Theo [ADR-004](adr/004-integration-github-account-ownership.md), mapping
 GitHub cá nhân nằm ở Integration. Identity xác thực tài khoản UTask/phiên qua
@@ -48,15 +46,24 @@ phụ thuộc AI. Không triển khai Progress Service riêng trong baseline ban
 Analytics và Realtime là khả năng giai đoạn sau khi có nhu cầu; chưa tạo
 service hoặc hạ tầng cho chúng chỉ từ sơ đồ mục tiêu.
 
-## Quan hệ Classroom và Work
+## Quan hệ Identity, Classroom và Work trong Core Service
 
-Classroom sở hữu Group/GroupMember; Work sở hữu Project/ProjectMember.
-Hai quan hệ không thay thế nhau. `class_id`, `group_id`, `user_id` là tham
-chiếu logic; kiểm tra qua API công bố khi cần, không join database service khác.
+Theo [ADR-006](adr/006-consolidate-core-monolith.md), ba miền Identity, Classroom
+và Work chạy trong cùng một Django Modular Monolith (`apps/core-service`) trên cơ
+sở dữ liệu thống nhất `core_db`, nhưng vẫn giữ ranh giới sở hữu rõ ràng ở cấp
+mô-đun:
 
-Classroom quản lý liên kết nhóm–project trong nghiệp vụ lớp học; Work giữ ID
-tham chiếu của project và nhóm. Chi tiết đồng bộ, ma trận quyền giảng viên và
-hỗ trợ project độc lập cần hợp đồng sản phẩm/API, không suy ra từ baseline.
+- Classroom sở hữu Group/GroupMember và liên kết nhóm–project trong nghiệp vụ lớp
+  học; Work sở hữu Project/ProjectMember; Identity sở hữu User/Profile/Role/Session.
+- Các miền bên trong `core-service` giao tiếp đồng bộ trong tiến trình (in-process)
+  qua các module giao diện công khai (`apps.accounts.interface`,
+  `apps.groups.interface`, `apps.projects.interface`) thay vì gọi HTTP hoặc đẩy
+  Kafka nội bộ; không tự ý truy vấn trực tiếp bảng thuộc quyền sở hữu của miền
+  khác (được kiểm soát bởi `tests/test_architecture_boundaries.py`).
+- Với các service bên ngoài (`ai-service`, `integration-service`,
+  `notification-service`), `core-service` vẫn giữ nguyên ranh giới vật lý qua
+  REST nội bộ (nhờ Docker network aliases `identity-service`, `classroom-service`,
+  `work-service`) và Kafka outbox/consumer.
 
 ## Công nghệ và runtime
 
@@ -104,6 +111,9 @@ service mesh hoặc realtime service riêng chỉ thêm khi có nhu cầu và qu
 ## Chuyển từ thiết kế cũ
 
 [ADR cập nhật baseline](adr/001-adopt-architecture-baseline.md) ghi việc
-thay Project/Progress bằng Work và cập nhật cách lấy context AI. Contract
-đã chốt được kiểm tra riêng; không tự đổi URL, producer hoặc envelope bằng
-cách thay tên trong tài liệu.
+thay Project/Progress bằng Work và cập nhật cách lấy context AI.
+[ADR-006](adr/006-consolidate-core-monolith.md) ghi quyết định hợp nhất
+Identity, Classroom và Work thành `apps/core-service` (Modular Monolith trên
+`core_db`) đồng thời giữ nguyên 100% đường dẫn Gateway, Docker aliases, Kafka
+producer và tệp hợp đồng trong `contracts/api/`. Contract đã chốt được kiểm tra
+riêng; không tự đổi URL, producer hoặc envelope bằng cách thay tên trong tài liệu.

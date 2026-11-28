@@ -1,27 +1,42 @@
 # Chạy môi trường local
 
-**Trạng thái: Đã triển khai local cho Identity–Classroom–Work.** Compose khai báo PostgreSQL, Redis, Kafka,
-Nginx và Identity, Classroom, Work cùng các worker. Lệnh khởi động chuẩn từ
+**Trạng thái: Đã triển khai local cho Core Modular Monolith (`apps/core-service`: Identity + Classroom + Work).**
+Theo [ADR-006](../adr/006-consolidate-core-monolith.md), `docker-compose.yml`
+dùng cấu trúc mô-đun `include:` (Docker Compose v2.20+) trỏ tới 5 tệp trong
+`infra/compose/{infra,core,integration,notification,ai}.yml` (kèm `logging`
+rotation và `deploy.resources.limits`). Mặc định `docker compose up --build -d`
+chỉ khởi động **5 container lõi** (`postgres`, `redis`, `nginx`, `core-service`,
+`core-worker`); `core-consumer` gắn theo profile `integration-service` để không
+tốn RAM khi chưa bật Integration, và các service biên (`kafka`, `integration-service`,
+`notification-service`, `ai-service`) bật theo `COMPOSE_PROFILES` hoặc `--profile`
+khi cần (cả local và staging 1 VPS đều nhúng `celery worker -B` để tiết kiệm tài
+nguyên cho cấu hình đơn replica; production đa replica cần tách Beat singleton
+riêng theo hướng dẫn Celery). Lệnh khởi động chuẩn từ
 repository root là `docker compose up --build -d`. Khi PostgreSQL chấp nhận
-kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm sáu database
-được khai báo tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
-`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo các topic nếu
-còn thiếu. Hai bước chuẩn bị nằm trong startup của PostgreSQL và Kafka, không
-có container chuẩn bị riêng. Compose chỉ báo hai service này healthy sau khi
-đã chuẩn bị xong và kiểm tra kết nối thực.
+kết nối, `start-postgres.sh` gọi `init-databases.sh` để bảo đảm bốn database
+được khai báo (`core_db`, `integration_db`, `notification_db`, `ai_context_db`)
+tồn tại, kể cả khi volume đã có dữ liệu. Kafka khởi động qua
+`start-kafka.sh`, đọc cấu hình trong `kafka-startup.env` và tạo các topic đối ngoại
+nếu còn thiếu (`utask.identity.events`, `utask.work.events`,
+`utask.integration.events`, `utask.work.integration.dlq`). Hai bước chuẩn bị nằm
+trong startup của PostgreSQL và Kafka, không có container chuẩn bị riêng. Compose
+chỉ báo hai service này healthy sau khi đã chuẩn bị xong và kiểm tra kết nối thực.
 
-Khi API container khởi động, entrypoint chạy migration Django rồi mới chạy
-Gunicorn. Worker dùng cùng image nhưng bỏ qua migration; Compose đợi API tương
-ứng healthy trước khi chạy worker. Đã kiểm build/khởi động, dừng/khởi động lại
-và luồng HTTP/Kafka trên volume local hiện có; xem
-nghiệm thu startup không có container chuẩn bị.
-Kết quả local không xác nhận staging hoặc các provider bên ngoài.
+Khi API container (`core-service`) khởi động, entrypoint chạy migration Django
+trên `core_db` rồi mới chạy Gunicorn. `core-worker` và `core-consumer` dùng cùng
+image nhưng bỏ qua migration; Compose đợi `core-service` healthy trước khi chạy
+hai tiến trình này. Kết quả kiểm thử local không xác nhận staging hoặc các
+provider bên ngoài.
 
 ## Khởi động Identity, Classroom và Work
 
+*(Ba miền nghiệp vụ lõi nay chạy trong cùng `core-service` trên cổng nội bộ `8000`,
+ánh xạ host `127.0.0.1:8001` và qua Nginx Gateway tại `/api/auth/`,
+`/api/classroom/`, `/api/work/`.)*
+
 Nối repository Work với Integration là lựa chọn bật riêng; cấu hình mặc định
-giữ tắt. Dùng image/worker/Beat Work hiện có và profile consumer mới theo
-[hướng dẫn Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
+giữ tắt (`WORK_INTEGRATION_ADAPTER=infrastructure.integration.UnavailableIntegration`).
+Xem [hướng dẫn Work GitHub](../../project-service/github-integration.md#cấu-hình-và-khởi-động).
 
 Các lệnh dưới đây dùng PowerShell. Tạo `.env` từ mẫu nếu máy chưa có tệp này;
 giữ lại `.env` hiện có để không ghi đè cấu hình local:
@@ -34,27 +49,24 @@ New-Item -ItemType Directory -Force .local-secrets | Out-Null
 ```
 
 Trước lần chạy đầu, sửa `.env`: thay các giá trị local mẫu cho mật khẩu
-PostgreSQL và khóa Django; đặt các khóa caller nhất quán giữa Identity, Work
-và Classroom. `IDENTITY_SERVICE_KEYS` phải là JSON có caller `classroom` và
-`work`, lần lượt khớp với `IDENTITY_CLASSROOM_SERVICE_KEY` và
-`IDENTITY_WORK_SERVICE_KEY`; `CLASSROOM_WORK_SERVICE_KEY` phải khớp ở Work và
-Classroom. Ví dụ cấu trúc trong `.env` (thay placeholder bằng cùng giá trị ở
-các biến ghép cặp):
+PostgreSQL, `CORE_DJANGO_SECRET_KEY` và `CLASSROOM_ACCESS_CODE_HMAC_KEY`. Sau
+[ADR-006](../adr/006-consolidate-core-monolith.md), **không còn cần** cấu hình
+các khóa caller nội bộ giữa Identity, Classroom và Work
+(`IDENTITY_CLASSROOM_SERVICE_KEY`, `IDENTITY_WORK_SERVICE_KEY`,
+`CLASSROOM_WORK_SERVICE_KEY`). Ví dụ tối thiểu cho Core local:
 
 ```dotenv
-IDENTITY_SERVICE_KEYS={"classroom":"<classroom-key>","work":"<work-key>"}
-IDENTITY_CLASSROOM_SERVICE_KEY=<classroom-key>
-IDENTITY_WORK_SERVICE_KEY=<work-key>
-CLASSROOM_WORK_SERVICE_KEY=<shared-work-classroom-key>
+CORE_DB_NAME=core_db
+CORE_DJANGO_SECRET_KEY=<local-django-secret>
 CLASSROOM_ACCESS_CODE_HMAC_KEY=<local-hmac-key>
 ```
 
 Đặt `CLASSROOM_ACCESS_CODE_HMAC_KEY` trước khi dùng mã lớp hoặc mã mời. Không
 dùng các giá trị mẫu cho môi trường dùng chung.
 
-Identity cần khóa riêng RSA tại đường dẫn `IDENTITY_JWT_PRIVATE_KEY_HOST_PATH`
-(mặc định `./.local-secrets/identity-jwt-private.pem`). Có thể tạo khóa local
-bằng OpenSSL:
+Miền Identity trong `core-service` cần khóa riêng RSA tại đường dẫn
+`IDENTITY_JWT_PRIVATE_KEY_HOST_PATH` (mặc định
+`./.local-secrets/identity-jwt-private.pem`). Có thể tạo khóa local bằng OpenSSL:
 
 ```powershell
 if (-not (Test-Path -LiteralPath .local-secrets/identity-jwt-private.pem)) {
@@ -71,13 +83,13 @@ docker compose up --build -d
 
 Lệnh này dùng Compose mặc định `utask`; không cần chọn tên service hoặc gọi
 migration riêng. Docker build chỉ chuẩn bị image, không kết nối PostgreSQL.
-Migration diễn ra lúc API container khởi động. Nếu migration lỗi, Gunicorn
-không chạy và API không đạt healthcheck, nên worker phụ thuộc API đó cũng chưa
-khởi chạy. Lần khởi động sau chạy lại migration; Django bỏ qua migration đã
-được ghi nhận là đã áp dụng. Các worker Classroom và Work chạy mặc định.
-Work có một container `work-consumer` dùng command `consume_work`: Classroom,
-Identity nếu có topic và Integration nếu chọn adapter thật. Không cần profile
-consumer riêng; group, offset và DLQ của từng nguồn giữ nguyên.
+Migration diễn ra lúc `core-service` khởi động. Nếu migration lỗi, Gunicorn
+không chạy và API không đạt healthcheck, nên `core-worker` và `core-consumer`
+cũng chưa khởi chạy. Lần khởi động sau chạy lại migration; Django bỏ qua
+migration đã được ghi nhận là đã áp dụng. `core-worker` chạy Celery worker tích
+hợp Beat (`-B`) cho outbox, deadline, dọn attachment và retention; `core-consumer`
+chạy `python manage.py consume_integration` (chỉ kết nối consumer Integration khi
+adapter thật được bật).
 
 Compose không nạp tài khoản mẫu. Đăng ký và kích hoạt tài khoản là luồng Identity;
 xem các điều kiện trong [tài liệu Identity](../../identity-service/README.md).
